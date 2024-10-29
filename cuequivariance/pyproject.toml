@@ -1,0 +1,65 @@
+# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cuequivariance"
+dynamic = ["version"]
+description = "CUDA accelerated equivariant operations"
+readme = "../README.md"
+license = { file = "../LICENSES/LICENSE" }
+authors = [{ name = "NVIDIA Corporation" }]
+requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+    "scipy",
+    "opt_einsum",
+    "sympy",
+    "networkx",
+]
+classifiers = [
+    "Intended Audience :: Developers",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+[tool.hatch.version]
+path = "cuequivariance/VERSION"
+pattern = "(?P<version>\\d+\\.\\d+\\.\\d+)"
+
+[tool.pydocstyle]
+select = ["D415", "D403"]
+
+[tool.black]
+target-version = ['py311']
+include = '\.pyi?$'
+exclude = '''
+/(
+    .git
+    | .venv
+    | _build
+    | build
+    | dist
+)/
+'''
+
+[tool.flake8]
+ignore = ["E741", "E203", "W503", "E731", "E721"]
+max-line-length = 127
+max-complexity = 64
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

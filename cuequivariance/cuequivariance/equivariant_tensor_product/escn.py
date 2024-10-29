@@ -1,0 +1,136 @@
+# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+from typing import *
+
+import numpy as np
+
+import cuequivariance as cue
+from cuequivariance import segmented_tensor_product as stp
+from cuequivariance import equivariant_tensor_product as etp
+
+
+# The function escn_iu_ju_ku below is a 1:1 adaptation of https://github.com/e3nn/e3nn-jax/blob/a2a81ab451b9cd597d7be27b3e1faba79457475d/e3nn_jax/experimental/linear_shtp.py#L38-L165
+# Copyright 2023 Mario Geiger
+#
+#    Licensed under the Apache License, Version 2.0 (the "License");
+#    you may not use this file except in compliance with the License.
+#    You may obtain a copy of the License at
+#
+#        http://www.apache.org/licenses/LICENSE-2.0
+#
+#    Unless required by applicable law or agreed to in writing, software
+#    distributed under the License is distributed on an "AS IS" BASIS,
+#    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#    See the License for the specific language governing permissions and
+#    limitations under the License.
+
+
+def escn_tp(
+    irreps_in: cue.Irreps,
+    irreps_out_filter: cue.Irreps,
+    m_max: Optional[int] = None,
+    l_max: Optional[int] = None,
+) -> etp.EquivariantTensorProduct:
+    """
+    subsrcipts: weights[u],input[u],output[u]
+
+    Tensor Product part of the eSCN convolution introduced in https://arxiv.org/pdf/2302.03655.pdf
+
+    Parameters
+    ----------
+    irreps_in : cue.Irreps
+        Irreps of the input.
+    irreps_out_filter : cue.Irreps
+        Irreps of the output.
+    m_max : int
+        Maximum angular resolution around the principal axis.
+    l_max : Optional[int], optional
+        Maximum angular resolution along the principal axis.
+
+    Returns
+    -------
+    stp.SegmentedTensorProduct
+        Descriptor of the tensor product part of the eSCN convolution.
+        Operand 0: weights
+        Operand 1: input
+        Operand 2: output
+    """
+    assert irreps_in.irrep_class == irreps_out_filter.irrep_class
+    G = irreps_in.irrep_class
+    if G not in [cue.SO3, cue.O3]:
+        # TODO: we could support SU2 since it shares the same Clebsch-Gordan coefficients as SO3 and O3
+        raise NotImplementedError("Only SO3 and O3 are supported")
+
+    if len(set(irreps_in.muls)) != 1:
+        raise ValueError("All multiplicities must be the same")
+
+    irreps_out = irreps_out_filter.set_mul(irreps_in.muls[0])
+
+    if l_max is not None:
+
+        def pr(mul_ir: cue.MulIrrep) -> bool:
+            ir = mul_ir.ir
+
+            return any(abs(other.l - ir.l) <= l_max for _, other in irreps_in)
+
+        irreps_out = irreps_out.filter(keep=pr)
+
+    d = stp.SegmentedTensorProduct.from_subscripts("iu_ju_ku+ijk")
+
+    for mul, ir in irreps_in:
+        d.add_segment(1, (ir.dim, mul))
+    for mul, ir in irreps_out:
+        d.add_segment(2, (ir.dim, mul))
+
+    for i1, (mul1, ir1) in enumerate(irreps_in):
+        for i2, (mul2, ir2) in enumerate(irreps_out):
+            if mul1 != mul2:
+                raise ValueError("Multiplicities must match")
+
+            l = min(ir1.l, ir2.l)
+
+            if l_max is not None:
+                if abs(ir1.l - ir2.l) > l_max:
+                    continue
+            if m_max is not None:
+                l = min(l, m_max)
+
+            # Scaled rotation (2 degrees of freedom per |m|)
+            c = np.zeros((2 * l + 1, ir1.dim, ir2.dim))
+            for m in range(-l, l + 1):
+                # "cosine" part
+                c[l - abs(m), ir1.l + m, ir2.l + m] = 1.0
+
+                # "sine" part
+                if m != 0:
+                    c[l + abs(m), ir1.l - m, ir2.l + m] = 1.0 if m > 0 else -1.0
+
+            if G == cue.SO3:
+                pass  # keep all the degrees of freedom
+            elif G == cue.O3:
+                if (-1) ** (ir1.l + ir2.l) == ir1.p * ir2.p:
+                    # Symmetric case: keep only the "cosine" part
+                    c = c[: l + 1]
+                elif l > 0:
+                    # Antisymmetric case: keep only the "sine" part
+                    c = c[l + 1 :]
+                else:
+                    c = None
+
+            if c is not None:
+                d.add_path(None, i1, i2, c=c)
+
+    d = d.normalize_paths_for_operand(2)
+    d = d.flatten_coefficient_modes()
+    return etp.EquivariantTensorProduct(
+        d,
+        [irreps_in.new_scalars(d.operands[0].size), irreps_in, irreps_out],
+        layout=cue.ir_mul,
+    )

@@ -1,0 +1,92 @@
+# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+import itertools
+import math
+from typing import *
+
+import cuequivariance.segmented_tensor_product as stp
+
+
+def dispatch(
+    descriptor: stp.SegmentedTensorProduct,
+    targets: list[stp.Subscripts],
+    permutation_mode: str,
+) -> Generator[Tuple[stp.SegmentedTensorProduct, Tuple[int, ...]], None, None]:
+    """Dispatch a descriptor to a target subscripts.
+
+    Parameters
+    ----------
+    descriptor : stp.SegmentedTensorProduct
+        The descriptor to dispatch.
+    targets : list[stp.Subscripts]
+        A list of target subscripts.
+    permutation_mode : str
+        The permutation mode. One of "permute_none", "permute_all", "permute_all_but_last".
+
+    Yields
+    ------
+    Tuple[stp.SegmentedTensorProduct, Tuple[int, ...]]
+        A tuple of the dispatched descriptor and the permutation of the operands.
+
+    Notes
+    -----
+    The function tries to dispatch the descriptor to the target subscripts. If the descriptor
+    is not dispatchable to the target subscripts, it will try to flatten the descriptor progressively
+    and dispatch the flattened descriptor to the target subscripts. The function will yield all the
+    possible dispatches found.
+    """
+    targets = [stp.Subscripts(subscripts) for subscripts in targets]
+    targets = [
+        subscripts
+        for subscripts in targets
+        if subscripts.num_operands == descriptor.num_operands
+    ]
+
+    if permutation_mode == "permute_none":
+        permutations = [tuple(range(descriptor.num_operands))]
+    elif permutation_mode == "permute_all":
+        permutations = list(itertools.permutations(range(descriptor.num_operands)))
+    elif permutation_mode == "permute_all_but_last":
+        permutations = [
+            p + (descriptor.num_operands - 1,)
+            for p in itertools.permutations(range(descriptor.num_operands - 1))
+        ]
+    else:
+        raise ValueError(f"unknown permutation_mode: {permutation_mode}")
+
+    # Squeeze all the channels of extent 1
+    descriptor = descriptor.squeeze_modes()
+
+    # Consolidate all the repeated channels e.g. ab -> a
+    descriptor = descriptor.consolidate_modes()
+
+    for subscripts in targets:
+        for perm in permutations:
+            d = descriptor.permute_operands(perm)
+
+            for mapping in d.subscripts.is_subset_of(subscripts):
+                d = d.add_or_rename_modes(subscripts, mapping=mapping)
+                yield d, perm
+
+    # Flatten one channel at a time, starting from the coefficients channel
+    flattenable_powerset = descriptor.subscripts.flattenable_powerset()
+    dims = descriptor.get_dimensions_dict()
+    flattenable_powerset = sorted(
+        flattenable_powerset,
+        key=lambda channels: (
+            len(channels),
+            sum(-1 for ch in channels if ch in descriptor.subscripts.coefficients),
+            math.prod(max(dims[ch]) for ch in channels),
+        ),
+    )
+
+    for channels in flattenable_powerset:
+        d = descriptor.flatten_modes(channels).remove_zero_paths()
+        yield from dispatch(d, targets, permutation_mode)

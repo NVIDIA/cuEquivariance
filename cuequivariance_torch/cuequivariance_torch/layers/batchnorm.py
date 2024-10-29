@@ -1,0 +1,237 @@
+# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+# Euclidean neural networks (e3nn) Copyright (c) 2020, The Regents of the
+# University of California, through Lawrence Berkeley National Laboratory
+# (subject to receipt of any required approvals from the U.S. Dept. of Energy),
+# Ecole Polytechnique Federale de Lausanne (EPFL), Free University of Berlin
+# and Kostiantyn Lapchevskyi. All rights reserved.
+from typing import *
+
+import torch
+
+import cuequivariance as cue
+from cuequivariance.irreps_array.misc_ui import default_irreps, default_layout
+
+
+class BatchNorm(torch.nn.Module):
+    """Batch normalization for orthonormal representations
+
+    It normalizes by the norm of the representations.
+    Note that the norm is invariant only for orthonormal representations.
+
+    Parameters
+    ----------
+    irreps : `Irreps`
+        input irreps
+    layout : `IrrepsLayout`, optional
+        layout of the input tensor, by default `IrrepsLayout.mul_ir`
+    eps : `float`, optional
+        epsilon value for numerical stability, by default 1e-5
+    momentum : `float`, optional
+        momentum for the running mean and variance, by default 0.1
+    affine : `bool`, optional
+        whether to apply an affine transformation, by default True
+    reduce : `str`, optional
+        how to reduce the norm of the representations, by default "mean"
+    instance : `bool`, optional
+        whether to use instance normalization, by default False
+    include_bias : `bool`, optional
+        whether to include a bias term, by default True
+    """
+
+    __constants__ = ["instance", "normalization", "irs", "affine"]
+
+    def __init__(
+        self,
+        irreps: cue.Irreps,
+        *,
+        layout: cue.IrrepsLayout = None,
+        eps: float = 1e-5,
+        momentum: float = 0.1,
+        affine: bool = True,
+        reduce: str = "mean",
+        instance: bool = False,
+        include_bias: bool = True,
+    ):
+        super().__init__()
+        self.layout = default_layout(layout)
+        (self.irreps,) = default_irreps(irreps)
+        self.eps = eps
+        self.momentum = momentum
+        self.affine = affine
+        self.instance = instance
+        self.include_bias = include_bias
+
+        num_scalar = sum(mul for mul, ir in self.irreps if ir.is_scalar())
+        num_features = self.irreps.num_irreps
+        self.features = []
+
+        if self.instance:
+            self.register_buffer("running_mean", None)
+            self.register_buffer("running_var", None)
+        else:
+            self.register_buffer("running_mean", torch.zeros(num_scalar))
+            self.register_buffer("running_var", torch.ones(num_features))
+
+        if affine:
+            self.weight = torch.nn.Parameter(torch.ones(num_features))
+            if self.include_bias:
+                self.bias = torch.nn.Parameter(torch.zeros(num_scalar))
+        else:
+            self.register_parameter("weight", None)
+            if self.include_bias:
+                self.register_parameter("bias", None)
+
+        assert isinstance(reduce, str), "reduce should be passed as a string value"
+        assert reduce in ["mean", "max"], "reduce needs to be 'mean' or 'max'"
+        self.reduce = reduce
+        irs = []
+        for mul, ir in self.irreps:
+            irs.append((mul, ir.dim, ir.is_scalar()))
+        self.irs = irs
+
+    def extra_repr(self) -> str:
+        return f"{self.irreps}, layout={self.layout}, eps={self.eps}, momentum={self.momentum}"
+
+    def _roll_avg(self, curr: torch.Tensor, update: torch.Tensor) -> torch.Tensor:
+        return (1 - self.momentum) * curr + self.momentum * update.detach()
+
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        """
+        Normalize the input tensor
+
+        Parameters
+        ----------
+        input : `torch.Tensor`
+            input tensor
+
+        Returns
+        -------
+        `torch.Tensor`
+            normalized tensor
+        """
+        orig_shape = input.shape
+        batch = input.shape[0]
+        dim = input.shape[-1]
+        input = input.reshape(batch, -1, dim)  # [batch, sample, stacked features]
+
+        if self.training and not self.instance:
+            new_means = []
+            new_vars = []
+
+        fields = []
+        ix = 0
+        irm = 0
+        irv = 0
+        iw = 0
+        ib = 0
+
+        for mul, d, is_scalar in self.irs:
+            field = input[:, :, ix : ix + mul * d]  # [batch, sample, mul * repr]
+            ix += mul * d
+
+            if self.layout == cue.mul_ir:
+                # [batch, sample, mul, repr]
+                field = field.reshape(batch, -1, mul, d)
+            elif self.layout == cue.ir_mul:
+                # [batch, sample, repr, mul]
+                field = field.reshape(batch, -1, d, mul).transpose(2, 3)
+            else:
+                raise ValueError(f"Invalid layout option {self.layout}")
+
+            if is_scalar:
+                if self.training or self.instance:
+                    if self.instance:
+                        field_mean = field.mean(1).reshape(batch, mul)  # [batch, mul]
+                    else:
+                        field_mean = field.mean([0, 1]).reshape(mul)  # [mul]
+                        new_means.append(
+                            self._roll_avg(
+                                self.running_mean[irm : irm + mul], field_mean
+                            )
+                        )
+                else:
+                    field_mean = self.running_mean[irm : irm + mul]
+                irm += mul
+
+                # [batch, sample, mul, repr]
+                field = field - field_mean.reshape(-1, 1, mul, 1)
+
+            if self.training or self.instance:
+                field_norm = field.pow(2).mean(3)  # [batch, sample, mul]
+
+                if self.reduce == "mean":
+                    field_norm = field_norm.mean(1)  # [batch, mul]
+                elif self.reduce == "max":
+                    field_norm = field_norm.max(1).values  # [batch, mul]
+                else:
+                    raise ValueError(f"Invalid reduce option {self.reduce}")
+
+                if not self.instance:
+                    field_norm = field_norm.mean(0)  # [mul]
+                    new_vars.append(
+                        self._roll_avg(self.running_var[irv : irv + mul], field_norm)
+                    )
+            else:
+                field_norm = self.running_var[irv : irv + mul]
+            irv += mul
+
+            field_norm = (field_norm + self.eps).pow(-0.5)  # [(batch,) mul]
+
+            if self.affine:
+                weight = self.weight[iw : iw + mul]  # [mul]
+                iw += mul
+
+                field_norm = field_norm * weight  # [(batch,) mul]
+
+            field = field * field_norm.reshape(
+                -1, 1, mul, 1
+            )  # [batch, sample, mul, repr]
+
+            if self.affine and self.include_bias and is_scalar:
+                bias = self.bias[ib : ib + mul]  # [mul]
+                ib += mul
+                field += bias.reshape(mul, 1)  # [batch, sample, mul, repr]
+
+            if self.layout == cue.mul_ir:
+                pass
+            elif self.layout == cue.ir_mul:
+                field = field.transpose(2, 3)
+
+            fields.append(
+                field.reshape(batch, -1, mul * d)
+            )  # [batch, sample, mul * repr]
+
+        torch._assert(
+            ix == dim,
+            f"`ix` should have reached input.size(-1) ({dim}), but it ended at {ix}",
+        )
+
+        if self.training and not self.instance:
+            torch._assert(
+                irm == self.running_mean.numel(), "irm == self.running_mean.numel()"
+            )
+            torch._assert(
+                irv == self.running_var.size(0), "irv == self.running_var.size(0)"
+            )
+        if self.affine:
+            torch._assert(iw == self.weight.size(0), "iw == self.weight.size(0)")
+            if self.include_bias:
+                torch._assert(ib == self.bias.numel(), "ib == self.bias.numel()")
+
+        if self.training and not self.instance:
+            if len(new_means) > 0:
+                torch.cat(new_means, out=self.running_mean)
+            if len(new_vars) > 0:
+                torch.cat(new_vars, out=self.running_var)
+
+        output = torch.cat(fields, dim=2)  # [batch, sample, stacked features]
+        return output.reshape(orig_shape)

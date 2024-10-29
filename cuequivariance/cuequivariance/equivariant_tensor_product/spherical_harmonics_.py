@@ -1,0 +1,102 @@
+# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+from functools import cache
+from typing import *
+
+import sympy as sp
+
+import cuequivariance as cue
+from cuequivariance import segmented_tensor_product as stp
+from cuequivariance import equivariant_tensor_product as etp
+from cuequivariance.misc.sympy_utils import sqrtQarray_to_sympy
+
+
+def spherical_harmonics(
+    ir_vec: cue.Irrep, ls: list[int], layout: cue.IrrepsLayout = cue.ir_mul
+) -> etp.EquivariantTensorProduct:
+    """
+    subscripts: ``vector[],...,vector[],Yl[]``
+    """
+    if len(ls) != 1:
+        return etp.EquivariantTensorProduct.stack(
+            [spherical_harmonics(ir_vec, [l], layout) for l in ls], [False, True]
+        )
+
+    [l] = ls
+    ir, formula = sympy_spherical_harmonics(ir_vec, l)
+
+    assert ir_vec.dim == 3
+    d = stp.SegmentedTensorProduct.empty_segments([3] * l + [ir.dim])
+    for i in range(ir.dim):
+        for degrees, coeff in sp.Poly(formula[i], sp.symbols("x:3")).as_dict().items():
+            indices = poly_degrees_to_path_indices(degrees)
+            d.add_path(*indices, i, c=coeff)
+
+    return etp.EquivariantTensorProduct([d], [ir_vec, ir], layout=layout)
+
+
+def poly_degrees_to_path_indices(degrees: tuple[int, ...]) -> tuple[int, ...]:
+    # (1, 0, 3) -> (0, 2, 2, 2)
+    # (3, 0, 1) -> (0, 0, 0, 2)
+    return sum(((i,) * d for i, d in enumerate(degrees)), ())
+
+
+# The function sympy_spherical_harmonics below is a 1:1 adaptation of https://github.com/e3nn/e3nn-jax/blob/c1a1adda485b8de756df56c656ce1d0cece73b64/e3nn_jax/_src/spherical_harmonics/recursive.py
+# Copyright 2023 Mario Geiger
+#
+#    Licensed under the Apache License, Version 2.0 (the "License");
+#    you may not use this file except in compliance with the License.
+#    You may obtain a copy of the License at
+#
+#        http://www.apache.org/licenses/LICENSE-2.0
+#
+#    Unless required by applicable law or agreed to in writing, software
+#    distributed under the License is distributed on an "AS IS" BASIS,
+#    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#    See the License for the specific language governing permissions and
+#    limitations under the License.
+@cache
+def sympy_spherical_harmonics(ir_vec: cue.Irrep, l: int) -> tuple[cue.Irrep, sp.Array]:
+    if l == 0:
+        return ir_vec.trivial(), sp.Array([1])
+
+    if l == 1:
+        assert ir_vec.dim == 3
+        x = sp.symbols("x:3")
+        return ir_vec, sp.sqrt(3) * sp.Array([x[0], x[1], x[2]])
+
+    l2 = l // 2
+    l1 = l - l2
+    ir1, yl1 = sympy_spherical_harmonics(ir_vec, l1)
+    ir2, yl2 = sympy_spherical_harmonics(ir_vec, l2)
+    ir = sorted(cue.selection_rule_product(ir1, ir2))[-1]
+
+    def sh_var(ir: cue.Irrep, l: int) -> list[sp.Symbol]:
+        return [sp.symbols(f"sh{l}_{m}") for m in range(ir.dim)]
+
+    cg = sqrtQarray_to_sympy(ir_vec.clebsch_gordan(ir1, ir2, ir).squeeze(0))
+    yl = sp.Array(
+        [
+            sum(
+                sh_var(ir1, l1)[i] * sh_var(ir2, l2)[j] * cg[i, j, k]
+                for i in range(ir1.dim)
+                for j in range(ir2.dim)
+            )
+            for k in range(ir.dim)
+        ]
+    )
+
+    y = yl.subs(zip(sh_var(ir1, l1), yl1)).subs(zip(sh_var(ir2, l2), yl2))
+
+    cst = y.subs({"x0": 0, "x1": 1, "x2": 0})
+    norm = sp.sqrt(sum(cst.applyfunc(lambda x: x**2)))
+
+    y = sp.sqrt(sp.Integer(ir.dim)) * y / norm
+    return ir, sp.simplify(y)
