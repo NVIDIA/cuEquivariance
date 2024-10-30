@@ -83,22 +83,3 @@ def test_y_rotation(l: int):
     y2 = A @ B @ C @ x
 
     np.testing.assert_allclose(y1, y2)
-
-
-def test_examples():
-    examples = etp.examples()
-
-    for name, f in examples.items():
-        d = f["STP"]
-        assert len(f["batch"]) == d.num_operands
-        assert len(f["buffer_index"]) == d.num_operands
-        assert len(f["dtypes"][0]) == d.num_operands
-
-
-def test_etp_examples():
-    examples = etp.etp_examples()
-
-    for name, f in examples.items():
-        e = f["ETP"]
-        assert len(f["batch"]) == e.num_operands
-        assert len(f["dtypes"][0]) == e.num_operands

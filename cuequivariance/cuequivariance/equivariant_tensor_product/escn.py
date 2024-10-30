@@ -34,12 +34,12 @@ from cuequivariance import equivariant_tensor_product as etp
 
 def escn_tp(
     irreps_in: cue.Irreps,
-    irreps_out_filter: cue.Irreps,
+    irreps_out: cue.Irreps,
     m_max: Optional[int] = None,
     l_max: Optional[int] = None,
 ) -> etp.EquivariantTensorProduct:
     """
-    subsrcipts: weights[u],input[u],output[u]
+    subsrcipts: weights[uv],input[u],output[v]
 
     Tensor Product part of the eSCN convolution introduced in https://arxiv.org/pdf/2302.03655.pdf
 
@@ -47,7 +47,7 @@ def escn_tp(
     ----------
     irreps_in : cue.Irreps
         Irreps of the input.
-    irreps_out_filter : cue.Irreps
+    irreps_out : cue.Irreps
         Irreps of the output.
     m_max : int
         Maximum angular resolution around the principal axis.
@@ -56,22 +56,17 @@ def escn_tp(
 
     Returns
     -------
-    stp.SegmentedTensorProduct
+    etp.EquivariantTensorProduct
         Descriptor of the tensor product part of the eSCN convolution.
         Operand 0: weights
         Operand 1: input
         Operand 2: output
     """
-    assert irreps_in.irrep_class == irreps_out_filter.irrep_class
+    assert irreps_in.irrep_class == irreps_out.irrep_class
     G = irreps_in.irrep_class
     if G not in [cue.SO3, cue.O3]:
         # TODO: we could support SU2 since it shares the same Clebsch-Gordan coefficients as SO3 and O3
         raise NotImplementedError("Only SO3 and O3 are supported")
-
-    if len(set(irreps_in.muls)) != 1:
-        raise ValueError("All multiplicities must be the same")
-
-    irreps_out = irreps_out_filter.set_mul(irreps_in.muls[0])
 
     if l_max is not None:
 
@@ -82,7 +77,7 @@ def escn_tp(
 
         irreps_out = irreps_out.filter(keep=pr)
 
-    d = stp.SegmentedTensorProduct.from_subscripts("iu_ju_ku+ijk")
+    d = stp.SegmentedTensorProduct.from_subscripts("iuv,ju,kv+ijk")
 
     for mul, ir in irreps_in:
         d.add_segment(1, (ir.dim, mul))
@@ -91,9 +86,6 @@ def escn_tp(
 
     for i1, (mul1, ir1) in enumerate(irreps_in):
         for i2, (mul2, ir2) in enumerate(irreps_out):
-            if mul1 != mul2:
-                raise ValueError("Multiplicities must match")
-
             l = min(ir1.l, ir2.l)
 
             if l_max is not None:
@@ -134,3 +126,73 @@ def escn_tp(
         [irreps_in.new_scalars(d.operands[0].size), irreps_in, irreps_out],
         layout=cue.ir_mul,
     )
+
+
+def escn_tp_compact(
+    irreps_in: cue.Irreps,
+    irreps_out: cue.Irreps,
+    m_max: Optional[int] = None,
+) -> stp.SegmentedTensorProduct:
+    """
+    subsrcipts: weights[uv],input[u],output[v]
+
+    Tensor Product part of the eSCN convolution introduced in https://arxiv.org/pdf/2302.03655.pdf
+
+    This "compact" implementation puts the L index contiguous in memory.
+    This allows to create bigger segments and less paths.
+
+    Parameters
+    ----------
+    irreps_in : cue.Irreps
+        Irreps of the input.
+    irreps_out : cue.Irreps
+        Irreps of the output.
+    m_max : int
+        Maximum angular resolution around the principal axis.
+
+    Returns
+    -------
+    stp.SegmentedTensorProduct
+        Descriptor of the tensor product part of the eSCN convolution.
+        Operand 0: weights
+        Operand 1: input
+        Operand 2: output
+    """
+    assert irreps_in.irrep_class == irreps_out.irrep_class
+    G = irreps_in.irrep_class
+    if G not in [cue.SO3]:
+        raise NotImplementedError("Only SO3 is supported")
+
+    d = stp.SegmentedTensorProduct.from_subscripts("uv,u,v")
+
+    l_max_in = max(ir.l for _, ir in irreps_in)
+    for m in range(-l_max_in, l_max_in + 1):
+        mulirs = [(mul, ir) for mul, ir in irreps_in if abs(m) <= ir.l]
+        mul = sum(mul for mul, _ in mulirs)
+        d.add_segment(1, (mul,))
+
+    l_max_out = max(ir.l for _, ir in irreps_out)
+    for m in range(-l_max_out, l_max_out + 1):
+        mulirs = [(mul, ir) for mul, ir in irreps_out if abs(m) <= ir.l]
+        mul = sum(mul for mul, _ in mulirs)
+        d.add_segment(2, (mul,))
+
+    if m_max is None:
+        m_max = min(l_max_in, l_max_out)
+
+    # m = 0
+    d.add_path(None, l_max_in, l_max_out, c=1.0)
+
+    for m in range(1, min(m_max, l_max_in, l_max_out) + 1):
+        # "cosine" part
+        d.add_path(None, l_max_in - m, l_max_out - m, c=1.0)
+        i = d.operands[0].num_segments - 1
+        d.add_path(i, l_max_in + m, l_max_out + m, c=1.0)
+
+        # "sine" part
+        d.add_path(None, l_max_in + m, l_max_out - m, c=1.0)
+        i = d.operands[0].num_segments - 1
+        d.add_path(i, l_max_in - m, l_max_out + m, c=-1.0)
+
+    d = d.normalize_paths_for_operand(2)
+    return d

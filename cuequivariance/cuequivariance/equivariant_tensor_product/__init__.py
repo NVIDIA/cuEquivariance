@@ -26,10 +26,8 @@ from .rotations import (
     yxy_rotation,
     inversion,
 )
-from .escn import escn_tp
+from .escn import escn_tp, escn_tp_compact
 from .spherical_harmonics_ import sympy_spherical_harmonics, spherical_harmonics
-from .stp_examples import examples
-from .etp_examples_ import etp_examples
 
 __all__ = [
     "Operand",
@@ -48,8 +46,7 @@ __all__ = [
     "yxy_rotation",
     "inversion",
     "escn_tp",
+    "escn_tp_compact",
     "sympy_spherical_harmonics",
     "spherical_harmonics",
-    "examples",
-    "etp_examples",
 ]
