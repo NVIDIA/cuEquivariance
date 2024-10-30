@@ -24,6 +24,13 @@ except ImportError:
         class Module:
             pass
 
+        def compact(self, f):
+            return f
+
+        class initializers:
+            class Initializer:
+                pass
+
 
 class Linear(nn.Module):
     irreps_out: cue.Irreps | str

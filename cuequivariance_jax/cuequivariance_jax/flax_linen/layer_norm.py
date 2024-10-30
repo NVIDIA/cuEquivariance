@@ -23,6 +23,9 @@ except ImportError:
         class Module:
             pass
 
+        def compact(self, f):
+            return f
+
 
 class LayerNorm(nn.Module):
     epsilon: float = 0.01
