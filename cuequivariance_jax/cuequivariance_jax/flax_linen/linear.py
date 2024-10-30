@@ -24,7 +24,8 @@ except ImportError:
         class Module:
             pass
 
-        def compact(self, f):
+        @staticmethod
+        def compact(f):
             return f
 
         class initializers:
