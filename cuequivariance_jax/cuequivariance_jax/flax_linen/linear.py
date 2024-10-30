@@ -9,13 +9,20 @@
 # its affiliates is strictly prohibited.
 from typing import *
 
-import flax.linen as nn
 import jax
 
 import cuequivariance as cue
 import cuequivariance.equivariant_tensor_product as etp
 import cuequivariance_jax as cuex
 from cuequivariance.irreps_array.misc_ui import assert_same_group
+
+try:
+    import flax.linen as nn
+except ImportError:
+
+    class nn:
+        class Module:
+            pass
 
 
 class Linear(nn.Module):

@@ -9,12 +9,19 @@
 # its affiliates is strictly prohibited.
 from typing import *
 
-import flax.linen as nn
 import jax
 import jax.numpy as jnp
 
 import cuequivariance as cue
 import cuequivariance_jax as cuex
+
+try:
+    import flax.linen as nn
+except ImportError:
+
+    class nn:
+        class Module:
+            pass
 
 
 class LayerNorm(nn.Module):

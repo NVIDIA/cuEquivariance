@@ -18,20 +18,13 @@ import cuequivariance_torch as cuet
 from cuequivariance.experimental.mace.e3nn_irreps import O3_e3nn
 
 
-@pytest.mark.parametrize("dtype", [torch.float64, torch.float32, torch.float16, torch.bfloat16])
+@pytest.mark.parametrize("dtype", [torch.float64, torch.float32])
 @pytest.mark.parametrize("layout", [cue.ir_mul, cue.mul_ir])
 @pytest.mark.parametrize("original_mace", [True, False])
 def test_symmetric_contraction(dtype, layout, original_mace):
     mul = 64
     irreps_in = mul * cue.Irreps("O3", "0e + 1o + 2e")
     irreps_out = mul * cue.Irreps("O3", "0e + 1o")
-
-    if dtype == torch.float16:
-        # Unsupported dtype for path_cg_values, expected torch.float32 or torch.float64, but got torch.float32
-        pytest.skip("float16 is not supported")
-    if dtype == torch.bfloat16:
-        # Unsupported dtype for path_cg_values, expected torch.float32 or torch.float64, but got torch.float32
-        pytest.skip("bfloat16 is not supported")
 
     m = cuet.SymmetricContraction(
         irreps_in,

@@ -105,13 +105,12 @@ class ChannelWiseTensorProduct(torch.nn.Module):
                 self.irreps_out, source=cue.ir_mul, target=cue.mul_ir, device=device
             )
 
-        self.f = cuet.TensorProduct(
-            descriptor,
+        self.f = cuet.EquivariantTensorProduct(
+            e,
             device=device,
             math_dtype=math_dtype,
             optimize_fallback=optimize_fallback,
         )
-        self.descriptor = descriptor
 
     def extra_repr(self) -> str:
         return (

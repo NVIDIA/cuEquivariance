@@ -69,16 +69,14 @@ class FullyConnectedTensorProduct(torch.nn.Module):
         )
         assert_same_group(irreps_in1, irreps_in2, irreps_out)
 
-        descriptor = etp.fully_connected_tensor_product(
-            irreps_in1, irreps_in2, irreps_out
-        ).d
-        assert descriptor.subscripts == "uvw,iu,jv,kw+ijk"
+        e = etp.fully_connected_tensor_product(irreps_in1, irreps_in2, irreps_out)
+        assert e.d.subscripts == "uvw,iu,jv,kw+ijk"
 
         self.irreps_in1 = irreps_in1
         self.irreps_in2 = irreps_in2
         self.irreps_out = irreps_out
 
-        self.weight_numel = descriptor.operands[0].size
+        self.weight_numel = e.d.operands[0].size
 
         self.shared_weights = shared_weights
         self.internal_weights = (
@@ -99,7 +97,6 @@ class FullyConnectedTensorProduct(torch.nn.Module):
         self.transpose_out = None
 
         if self.layout == cue.mul_ir:
-            # descriptor = descriptor.add_or_transpose_modes("uvw,ui,vj,wk+ijk")
             self.transpose_in1 = cuet.TransposeIrrepsLayout(
                 self.irreps_in1, source=cue.mul_ir, target=cue.ir_mul, device=device
             )
@@ -110,13 +107,12 @@ class FullyConnectedTensorProduct(torch.nn.Module):
                 self.irreps_out, source=cue.ir_mul, target=cue.mul_ir, device=device
             )
 
-        self.f = cuet.TensorProduct(
-            descriptor,
+        self.f = cuet.EquivariantTensorProduct(
+            e,
             device=device,
             math_dtype=math_dtype,
             optimize_fallback=optimize_fallback,
         )
-        self.descriptor = descriptor
 
     def extra_repr(self) -> str:
         return (

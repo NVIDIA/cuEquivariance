@@ -17,14 +17,10 @@ import cuequivariance_torch as cuet
 
 @pytest.mark.parametrize(
     "dtype, tol",
-    [(torch.float64, 1e-6), (torch.float32, 1e-4), (torch.float16, 0.1)],
+    [(torch.float64, 1e-6), (torch.float32, 1e-4)],
 )
 @pytest.mark.parametrize("l", [1, 2, 3])
 def test_spherical_harmonics(l: int, dtype, tol):
-    if dtype == torch.float16:
-        # Unsupported dtype for path_cg_values, expected torch.float32 or torch.float64, but got torch.float32
-        pytest.skip("float16 is not supported")
-
     vec = torch.randn(3, dtype=dtype)
     axis = np.random.randn(3)
     angle = np.random.rand()

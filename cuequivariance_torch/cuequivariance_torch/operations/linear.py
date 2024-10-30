@@ -57,8 +57,8 @@ class Linear(torch.nn.Module):
         irreps_in, irreps_out = default_irreps(irreps_in, irreps_out)
         assert_same_group(irreps_in, irreps_out)
 
-        descriptor = etp.linear(irreps_in, irreps_out).d
-        assert descriptor.subscripts == "uv,iu,iv"
+        e = etp.linear(irreps_in, irreps_out)
+        assert e.d.subscripts == "uv,iu,iv"
 
         self.irreps_in = irreps_in
         self.irreps_out = irreps_out
@@ -69,7 +69,6 @@ class Linear(torch.nn.Module):
         if layout == cue.ir_mul:
             pass
         elif layout == cue.mul_ir:
-            # descriptor_fx = descriptor.add_or_transpose_modes("uv_ui_vi")  # TODO benchmark if this is faster on fx than the transpose
             self.transpose_in = cuet.TransposeIrrepsLayout(
                 self.irreps_in, source=cue.mul_ir, target=cue.ir_mul, device=device
             )
@@ -79,7 +78,7 @@ class Linear(torch.nn.Module):
         else:
             raise ValueError(f"Unsupported layout {layout}")
 
-        self.weight_numel = descriptor.operands[0].size
+        self.weight_numel = e.inputs[0].irreps.dim
 
         self.shared_weights = shared_weights
         self.internal_weights = (
@@ -95,13 +94,12 @@ class Linear(torch.nn.Module):
         else:
             self.weight = None
 
-        self.f = cuet.TensorProduct(
-            descriptor,
+        self.f = cuet.EquivariantTensorProduct(
+            e,
             device=device,
             math_dtype=math_dtype,
             optimize_fallback=optimize_fallback,
         )
-        self.descriptor = descriptor
 
     def extra_repr(self) -> str:
         return f"{self.irreps_in} --> {self.irreps_out}, shared_weights={self.shared_weights}, internal_weights={self.internal_weights}, layout={self.layout}, weight_numel={self.weight_numel}"
