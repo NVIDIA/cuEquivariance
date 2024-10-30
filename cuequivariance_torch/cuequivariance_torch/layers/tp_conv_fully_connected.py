@@ -66,7 +66,10 @@ class FullyConnectedTensorProductConv(nn.Module):
         FullyConnectedTensorProductConv(
           (tp): FullyConnectedTensorProduct(
             4x0e+4x1o x 0e+1o --> 4x0e+4x1o, shared_weights=False, internal_weights=False, layout=(irrep,mul), weight_numel=64
-            (f): TensorProduct(uvw,iu,jv,kw+ijk sizes=64,16,4,16 num_segments=4,2,2,2 num_paths=4 i={1, 3} j={1, 3} k={1, 3} u=4 v=1 w=4 (with CUDA kernel))
+            (f): EquivariantTensorProduct(
+              EquivariantTensorProduct(64x0e x 4x0e+4x1o x 0e+1o -> 4x0e+4x1o)
+              (tp): TensorProduct(uvw,iu,jv,kw+ijk sizes=64,16,4,16 num_segments=4,2,2,2 num_paths=4 i={1, 3} j={1, 3} k={1, 3} u=4 v=1 w=4 (with CUDA kernel))
+            )
           )
           (batch_norm): BatchNorm(4x0e+4x1o, layout=(irrep,mul), eps=1e-05, momentum=0.1)
           (mlp): Sequential(
@@ -100,7 +103,10 @@ class FullyConnectedTensorProductConv(nn.Module):
         FullyConnectedTensorProductConv(
           (tp): FullyConnectedTensorProduct(
             4x0e+4x1o x 0e+1o --> 4x0e+4x1o, shared_weights=False, internal_weights=False, layout=(irrep,mul), weight_numel=64
-            (f): TensorProduct(uvw,iu,jv,kw+ijk sizes=64,16,4,16 num_segments=4,2,2,2 num_paths=4 i={1, 3} j={1, 3} k={1, 3} u=4 v=1 w=4 (with CUDA kernel))
+            (f): EquivariantTensorProduct(
+              EquivariantTensorProduct(64x0e x 4x0e+4x1o x 0e+1o -> 4x0e+4x1o)
+              (tp): TensorProduct(uvw,iu,jv,kw+ijk sizes=64,16,4,16 num_segments=4,2,2,2 num_paths=4 i={1, 3} j={1, 3} k={1, 3} u=4 v=1 w=4 (with CUDA kernel))
+            )
           )
           (batch_norm): BatchNorm(4x0e+4x1o, layout=(irrep,mul), eps=1e-05, momentum=0.1)
         )
