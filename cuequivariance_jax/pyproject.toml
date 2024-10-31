@@ -37,27 +37,3 @@ classifiers = [
 [tool.hatch.version]
 path = "cuequivariance_jax/VERSION"
 pattern = "(?P<version>\\d+\\.\\d+\\.\\d+)"
-
-[tool.pydocstyle]
-select = ["D415", "D403"]
-
-[tool.black]
-target-version = ['py311']
-include = '\.pyi?$'
-exclude = '''
-/(
-    .git
-    | .venv
-    | _build
-    | build
-    | dist
-)/
-'''
-
-[tool.flake8]
-ignore = ["E741", "E203", "W503", "E731", "E721"]
-max-line-length = 127
-max-complexity = 64
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
