@@ -58,7 +58,7 @@ def equivariant_tensor_product(
 
     for x, ope in zip(inputs, e.inputs):
         if isinstance(x, cuex.IrrepsArray):
-            assert x.is_simple
+            assert x.is_simple()
             assert x.irreps() == ope.irreps
             assert x.layout == ope.layout
         else:

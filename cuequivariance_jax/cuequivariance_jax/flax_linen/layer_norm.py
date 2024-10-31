@@ -33,7 +33,7 @@ class LayerNorm(nn.Module):
 
     @nn.compact
     def __call__(self, input: cuex.IrrepsArray) -> cuex.IrrepsArray:
-        assert input.is_simple
+        assert input.is_simple()
 
         def rms(v: jax.Array) -> jax.Array:
             # v [..., ir, mul] or [..., mul, ir]

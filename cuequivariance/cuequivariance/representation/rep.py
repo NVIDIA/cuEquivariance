@@ -113,7 +113,7 @@ class Rep:
 
     @property
     def X(self) -> np.ndarray:
-        """Generators of the representation"""
+        """Generators of the representation, (lie_dim, dim, dim)"""
         return self.continuous_generators()
 
     def discrete_generators(self) -> np.ndarray:
@@ -130,7 +130,7 @@ class Rep:
 
     @property
     def H(self) -> np.ndarray:
-        """Discrete generators of the representation"""
+        """Discrete generators of the representation, (len(H), dim, dim)"""
         return self.discrete_generators()
 
     def trivial(self) -> Rep:

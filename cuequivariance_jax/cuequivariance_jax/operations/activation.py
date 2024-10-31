@@ -34,22 +34,6 @@ import cuequivariance_jax as cuex
 ActFn = Callable[[float], float] | Callable[[jax.Array], jax.Array]
 
 
-def soft_odd(x: jax.Array) -> jax.Array:
-    """Smooth odd function that can be used as activation function for odd scalars.
-
-    .. math::
-
-        x (1 - e^{-x^2})
-
-    Note:
-        Odd scalars (l=0 and p=-1) has to be activated by functions with well defined parity:
-
-        * even (:math:`f(-x)=f(x)`)
-        * odd (:math:`f(-x)=-f(x)`).
-    """
-    return (1 - jnp.exp(-(x**2))) * x
-
-
 def normalspace(n: int) -> jax.Array:
     r"""Sequence of normally distributed numbers :math:`x_i` for :math:`i=1, \ldots, n` such that
 
@@ -95,7 +79,7 @@ def normalize_function(phi: ActFn) -> ActFn:
             return rho
 
 
-def parity_function(phi: ActFn) -> int:
+def function_parity(phi: ActFn) -> int:
     with jax.ensure_compile_time_eval():
         x = jnp.linspace(0.0, 10.0, 256)
 
@@ -119,7 +103,7 @@ def scalar_activation(
     """
     input = cuex.as_irreps_array(input)
     assert isinstance(input, cuex.IrrepsArray)
-    assert input.is_simple
+    assert input.is_simple()
 
     if isinstance(acts, dict):
         acts = [acts.get(ir, None) for mul, ir in input.irreps()]
@@ -137,18 +121,20 @@ def scalar_activation(
         x: jax.Array
 
         if act is not None:
-            assert np.all(np.imag(ir.H) == 0), "TODO: support complex scalars"
             assert ir.dim == 1, "Only scalars are supported"
+            assert np.allclose(ir.X, 0), "Only scalars are supported"
+            assert np.allclose(np.imag(ir.H), 0), "Only real scalars are supported"
 
             if normalize_act:
                 act = normalize_function(act)
 
-            p_act = parity_function(act)
+            p_act = function_parity(act)
 
             if np.allclose(ir.H, 1):
                 # if the input is even, we can apply any activation function
                 ir_out = ir
             else:
+                assert np.allclose(ir.H * ir.H, 1), "H should be -1 or 1"
                 if p_act == 0:
                     raise ValueError(
                         "Activation: the parity is violated! The input scalar is odd but the activation is neither even nor odd."

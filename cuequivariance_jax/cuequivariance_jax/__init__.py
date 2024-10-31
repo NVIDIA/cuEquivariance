@@ -27,10 +27,9 @@ from .primitives.symmetric_tensor_product import symmetric_tensor_product
 from .primitives.equivariant_tensor_product import equivariant_tensor_product
 
 from .operations.activation import (
-    soft_odd,
     normalspace,
     normalize_function,
-    parity_function,
+    function_parity,
     scalar_activation,
 )
 from .operations.spherical_harmonics import spherical_harmonics, normalize, norm
@@ -47,10 +46,9 @@ __all__ = [
     "tensor_product",
     "symmetric_tensor_product",
     "equivariant_tensor_product",
-    "soft_odd",
     "normalspace",
     "normalize_function",
-    "parity_function",
+    "function_parity",
     "scalar_activation",
     "spherical_harmonics",
     "normalize",

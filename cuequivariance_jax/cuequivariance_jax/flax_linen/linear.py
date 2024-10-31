@@ -46,7 +46,7 @@ class Linear(nn.Module):
         if not isinstance(input, cuex.IrrepsArray):
             raise ValueError(f"input must be of type IrrepsArray, got {type(input)}")
 
-        assert input.is_simple
+        assert input.is_simple()
 
         irreps_out = cue.Irreps(self.irreps_out)
         layout_out = cue.IrrepsLayout.as_layout(self.layout)

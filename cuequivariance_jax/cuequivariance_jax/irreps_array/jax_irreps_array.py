@@ -110,7 +110,6 @@ class IrrepsArray:
     def dtype(self) -> jax.numpy.dtype:
         return self.array.dtype
 
-    @property
     def is_simple(self) -> bool:
         if len(self.dirreps) != 1:
             return False
@@ -257,7 +256,7 @@ class IrrepsArray:
         if self.layout == cue.mul_ir:
             return IrrepsArray(dirreps, self.array, self.layout)
 
-        assert self.is_simple
+        assert self.is_simple()
         segments = []
         last_ir = None
         for x, (mul, ir) in zip(self.segments(), self.irreps()):
@@ -288,7 +287,7 @@ class IrrepsArray:
         ]
 
     def change_layout(self, layout: cue.IrrepsLayout | None = None) -> IrrepsArray:
-        assert self.is_simple
+        assert self.is_simple()
 
         if layout is None:
             layout = cue.get_layout_scope()
@@ -305,7 +304,7 @@ class IrrepsArray:
         )
 
     def move_axis_to_mul(self, axis: int) -> IrrepsArray:
-        assert self.is_simple
+        assert self.is_simple()
         assert self.layout == cue.ir_mul
         if axis < 0:
             axis += self.ndim
@@ -316,7 +315,7 @@ class IrrepsArray:
         return IrrepsArray(mul * self.irreps(), array, cue.ir_mul)
 
     def transform(self, v: jax.Array) -> IrrepsArray:
-        assert self.is_simple
+        assert self.is_simple()
 
         def f(segment: jax.Array, mul: int, ir: cue.Irrep) -> jax.Array:
             X = ir.X

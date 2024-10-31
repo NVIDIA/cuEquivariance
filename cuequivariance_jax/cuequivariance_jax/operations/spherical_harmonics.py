@@ -25,7 +25,7 @@ def spherical_harmonics(
 ) -> cuex.IrrepsArray:
     ls = list(ls)
     assert isinstance(vector, cuex.IrrepsArray)
-    assert vector.is_simple
+    assert vector.is_simple()
     irreps = vector.irreps()
     assert len(irreps) == 1
     mul, ir = irreps[0]
@@ -43,7 +43,7 @@ def spherical_harmonics(
 
 
 def normalize(array: cuex.IrrepsArray) -> cuex.IrrepsArray:
-    assert array.is_simple
+    assert array.is_simple()
 
     match array.layout:
         case cue.ir_mul:
@@ -71,7 +71,7 @@ _normalize = normalize
 
 def norm(array: cuex.IrrepsArray, *, squared: bool = False) -> cuex.IrrepsArray:
     """Norm of IrrepsArray."""
-    assert array.is_simple
+    assert array.is_simple()
 
     match array.layout:
         case cue.ir_mul:
