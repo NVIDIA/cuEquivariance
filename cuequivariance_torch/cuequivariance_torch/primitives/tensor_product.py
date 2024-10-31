@@ -338,7 +338,7 @@ def _tensor_product_cuda(
     # 1. try to use TensorProductUniform4x1d
     # 2. try to use FusedTensorProductOp3 or FusedTensorProductOp4
 
-    if descriptor.num_operands == 4 and math_dtype in [torch.float32, torch.float64]:
+    if math_dtype in [torch.float32, torch.float64]:
         d = descriptor
         d = d.flatten_coefficient_modes(force=True)
         d = d.squeeze_modes()
@@ -348,8 +348,17 @@ def _tensor_product_cuda(
             d = d.split_mode("u", math.gcd(*dims))
             u = next(iter(d.get_dims("u")))
 
-            if u % 32 == 0:
-                return TensorProductUniform4x1d(d, device, math_dtype)
+            import cuequivariance_ops_torch as ops
+
+            if ops.TensorProductUniform1d.is_supported(
+                operand_dim=[o.ndim for o in d.operands],
+                operand_extent=u,
+                operand_num_segments=[o.num_segments for o in d.operands]
+            ):
+                if descriptor.num_operands == 3:
+                    return TensorProductUniform3x1d(d, device, math_dtype)
+                else:
+                    return TensorProductUniform4x1d(d, device, math_dtype)
 
     supported_targets = [
         stp.Subscripts(subscripts)
@@ -517,6 +526,57 @@ class FusedTensorProductOp4(torch.nn.Module):
         return out.reshape(shape + (out.shape[-1],))
 
 
+class TensorProductUniform3x1d(torch.nn.Module):
+    def __init__(
+        self,
+        descriptor: stp.SegmentedTensorProduct,
+        device: Optional[torch.device],
+        math_dtype: torch.dtype,
+    ):
+        super().__init__()
+        import cuequivariance_ops_torch as ops
+
+        self.descriptor = descriptor
+
+        assert len(descriptor.subscripts.modes()) == 1
+        assert descriptor.all_same_segment_shape()
+        assert descriptor.coefficient_subscripts == ""
+        u = next(iter(descriptor.get_dims(descriptor.subscripts.modes()[0])))
+
+        self._f = ops.TensorProductUniform1d(
+            operand_dim=[ope.ndim for ope in descriptor.operands],
+            operand_extent=u,
+            operand_num_segments=[ope.num_segments for ope in descriptor.operands],
+            path_indices=[path.indices for path in descriptor.paths],
+            path_coefficients=[float(path.coefficients) for path in descriptor.paths],
+            math_dtype=math_dtype,
+        ).to(device=device)
+
+    def __repr__(self):
+        return f"TensorProductCUDA({self.descriptor} (output last operand))"
+
+    def forward(self, x0, x1):
+        assert x0.ndim >= 1, x0.ndim
+        assert x1.ndim >= 1, x1.ndim
+
+        shape = torch.broadcast_shapes(x0.shape[:-1], x1.shape[:-1])
+        x0 = _reshape(x0, shape)
+        x1 = _reshape(x1, shape)
+
+        if x0.ndim == 1:
+            x0 = x0.unsqueeze(0)
+        if x1.ndim == 1:
+            x1 = x1.unsqueeze(0)
+
+        logger.debug(
+            f"Calling TensorProductUniform3x1d: {self.descriptor}, input shapes: {x0.shape}, {x1.shape}"
+        )
+
+        out = self._f(x0, x1)
+
+        return out.reshape(shape + (out.shape[-1],))
+
+
 class TensorProductUniform4x1d(torch.nn.Module):
     def __init__(
         self,
@@ -533,9 +593,8 @@ class TensorProductUniform4x1d(torch.nn.Module):
         assert descriptor.all_same_segment_shape()
         assert descriptor.coefficient_subscripts == ""
         u = next(iter(descriptor.get_dims(descriptor.subscripts.modes()[0])))
-        assert u % 32 == 0
 
-        self._f = ops.TensorProductUniform4x1d(
+        self._f = ops.TensorProductUniform1d(
             operand_dim=[ope.ndim for ope in descriptor.operands],
             operand_extent=u,
             operand_num_segments=[ope.num_segments for ope in descriptor.operands],
