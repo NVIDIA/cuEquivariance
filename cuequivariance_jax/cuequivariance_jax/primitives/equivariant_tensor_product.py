@@ -47,8 +47,10 @@ def equivariant_tensor_product(
             *inputs,
             dtype_output=dtype_output,
             dtype_math=dtype_math,
-            algorithm=algorithm,
             precision=precision,
+            algorithm=algorithm,
+            use_custom_primitive=use_custom_primitive,
+            use_custom_kernels=use_custom_kernels,
         )
 
     if len(inputs) != len(e.inputs):
