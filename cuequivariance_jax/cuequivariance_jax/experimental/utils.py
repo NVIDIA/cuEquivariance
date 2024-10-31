@@ -9,15 +9,25 @@
 # its affiliates is strictly prohibited.
 from typing import *
 
-import flax
-import flax.linen
 import jax
 import jax.numpy as jnp
 
 import cuequivariance_jax as cuex
 
+try:
+    import flax.linen as nn
+except ImportError:
 
-class MultiLayerPerceptron(flax.linen.Module):
+    class nn:
+        class Module:
+            pass
+
+        @staticmethod
+        def compact(f):
+            return f
+
+
+class MultiLayerPerceptron(nn.Module):
     r"""Just a simple MLP for scalars. No equivariance here."""
 
     list_neurons: tuple[int, ...]
@@ -25,7 +35,7 @@ class MultiLayerPerceptron(flax.linen.Module):
     output_activation: Callable | bool = True
     with_bias: bool = False
 
-    @flax.linen.compact
+    @nn.compact
     def __call__(self, x: jax.Array, verbose: bool = False) -> jax.Array:
         """Evaluate the MLP
 
@@ -55,11 +65,11 @@ class MultiLayerPerceptron(flax.linen.Module):
         for i, h in enumerate(self.list_neurons):
             _matrices.append((x.shape[-1], h))
             alpha = 1 / x.shape[-1]
-            d = flax.linen.Dense(
+            d = nn.Dense(
                 features=h,
                 use_bias=self.with_bias,
-                kernel_init=flax.linen.initializers.normal(stddev=1.0),
-                bias_init=flax.linen.initializers.zeros,
+                kernel_init=nn.initializers.normal(stddev=1.0),
+                bias_init=nn.initializers.zeros,
                 param_dtype=x.dtype,
             )
             x = jnp.sqrt(alpha) * d(x)
