@@ -9,13 +9,12 @@
 # its affiliates is strictly prohibited.
 from __future__ import annotations
 
-import math
+from dataclasses import dataclass, field
 from typing import *
 
 import jax
 import jax.numpy as jnp
 import numpy as np
-from attr import attrib, attrs
 
 import cuequivariance as cue
 
@@ -53,7 +52,7 @@ def _check_args(
     return dirreps, layout
 
 
-@attrs(frozen=True, init=False, repr=False)
+@dataclass(frozen=True, init=False, repr=False)
 class IrrepsArray:
     """
     Wrapper around a jax array with a dict of Irreps for the non-trivial axes.
@@ -71,9 +70,9 @@ class IrrepsArray:
         irreps: cue.Irreps: Sugar syntax for the single Irreps if there is only one non-trivial axis.
     """
 
-    layout: cue.IrrepsLayout = attrib()
-    dirreps: dict[int, cue.Irreps] = attrib()
-    array: jax.Array = attrib()
+    layout: cue.IrrepsLayout = field()
+    dirreps: dict[int, cue.Irreps] = field()
+    array: jax.Array = field()
 
     def __init__(
         self,
@@ -578,11 +577,11 @@ def vmap(
     return outside_fun
 
 
-@attrs(frozen=True)
+@dataclass(frozen=True)
 class _wrapper:
-    layout: cue.IrrepsLayout = attrib()
-    dirreps: dict[int, cue.Irreps] = attrib()
-    array: jax.Array = attrib()
+    layout: cue.IrrepsLayout = field()
+    dirreps: dict[int, cue.Irreps] = field()
+    array: jax.Array = field()
 
 
 jax.tree_util.register_pytree_node(

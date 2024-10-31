@@ -17,7 +17,7 @@ ir_mul = IrrepsLayout.ir_mul
 from .context_layout import get_layout_scope
 from .context_decorator import assume
 
-from .irreps_array import NumpyIrrepsArray, from_segments, concatenate
+from .numpy_irreps_array import NumpyIrrepsArray, from_segments, concatenate
 from .reduced_tensor_product import (
     reduced_tensor_product_basis,
     reduced_symmetric_tensor_product_basis,
