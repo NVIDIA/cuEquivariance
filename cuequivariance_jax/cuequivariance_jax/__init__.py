@@ -24,8 +24,8 @@ from .irreps_array.concatenate import concatenate, randn
 
 from .primitives.tensor_product import tensor_product
 from .primitives.symmetric_tensor_product import symmetric_tensor_product
+from .primitives.equivariant_tensor_product import equivariant_tensor_product
 
-from .operations.equivariant_tensor_product import equivariant_tensor_product
 from .operations.activation import (
     soft_odd,
     normalspace,
