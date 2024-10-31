@@ -14,12 +14,7 @@ import torch
 import cuequivariance as cue
 import cuequivariance.equivariant_tensor_product as etp
 import cuequivariance_torch as cuet
-
-from cuequivariance.irreps_array.misc_ui import (
-    default_irreps,
-    default_layout,
-    assert_same_group,
-)
+from cuequivariance.irreps_array.misc_ui import assert_same_group, default_irreps
 
 
 class ChannelWiseTensorProduct(torch.nn.Module):
@@ -53,7 +48,10 @@ class ChannelWiseTensorProduct(torch.nn.Module):
         irreps_in2: cue.Irreps,
         filter_irreps_out: Sequence[cue.Irrep] = None,
         *,
-        layout: cue.IrrepsLayout = None,
+        layout: Optional[cue.IrrepsLayout] = None,
+        layout_in1: Optional[cue.IrrepsLayout] = None,
+        layout_in2: Optional[cue.IrrepsLayout] = None,
+        layout_out: Optional[cue.IrrepsLayout] = None,
         shared_weights: bool = True,
         internal_weights: bool = None,
         device: Optional[torch.device] = None,
@@ -62,7 +60,6 @@ class ChannelWiseTensorProduct(torch.nn.Module):
         optimize_fallback: Optional[bool] = None,
     ):
         super().__init__()
-        self.layout = layout = default_layout(layout)
         irreps_in1, irreps_in2 = default_irreps(irreps_in1, irreps_in2)
         assert_same_group(irreps_in1, irreps_in2)
 
@@ -90,23 +87,11 @@ class ChannelWiseTensorProduct(torch.nn.Module):
         else:
             self.weight = None
 
-        self.transpose_in1 = None
-        self.transpose_in2 = None
-        self.transpose_out = None
-
-        if self.layout == cue.mul_ir:
-            self.transpose_in1 = cuet.TransposeIrrepsLayout(
-                self.irreps_in1, source=cue.mul_ir, target=cue.ir_mul, device=device
-            )
-            self.transpose_in2 = cuet.TransposeIrrepsLayout(
-                self.irreps_in2, source=cue.mul_ir, target=cue.ir_mul, device=device
-            )
-            self.transpose_out = cuet.TransposeIrrepsLayout(
-                self.irreps_out, source=cue.ir_mul, target=cue.mul_ir, device=device
-            )
-
         self.f = cuet.EquivariantTensorProduct(
             e,
+            layout=layout,
+            layout_in=(cue.ir_mul, layout_in1, layout_in2),
+            layout_out=layout_out,
             device=device,
             math_dtype=math_dtype,
             optimize_fallback=optimize_fallback,
@@ -114,8 +99,8 @@ class ChannelWiseTensorProduct(torch.nn.Module):
 
     def extra_repr(self) -> str:
         return (
-            f"{self.irreps_in1} x {self.irreps_in2} --> {self.irreps_out}"
-            f", shared_weights={self.shared_weights}, internal_weights={self.internal_weights}, layout={self.layout}"
+            f"shared_weights={self.shared_weights}"
+            f", internal_weights={self.internal_weights}"
             f", weight_numel={self.weight_numel}"
         )
 
@@ -158,11 +143,6 @@ class ChannelWiseTensorProduct(torch.nn.Module):
             If shared weights are used and weight is not a 1D tensor.
             If shared weights are not used and weight is not a 2D tensor.
         """
-        if self.transpose_in1 is not None:
-            x1 = self.transpose_in1(x1, use_fallback=use_fallback)
-        if self.transpose_in2 is not None:
-            x2 = self.transpose_in2(x2, use_fallback=use_fallback)
-
         if self.internal_weights:
             if weight is not None:
                 raise ValueError("Internal weights are used, weight should be None")
@@ -174,9 +154,4 @@ class ChannelWiseTensorProduct(torch.nn.Module):
         if not self.shared_weights and weight.ndim != 2:
             raise ValueError("Weights should be 2D tensor")
 
-        out = self.f(weight, x1, x2, use_fallback=use_fallback)
-
-        if self.transpose_out is not None:
-            out = self.transpose_out(out, use_fallback=use_fallback)
-
-        return out
+        return self.f(weight, x1, x2, use_fallback=use_fallback)

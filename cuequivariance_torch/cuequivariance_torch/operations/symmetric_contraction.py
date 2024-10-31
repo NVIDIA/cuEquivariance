@@ -16,11 +16,7 @@ import cuequivariance_torch as cuet
 from cuequivariance.experimental.mace.symmetric_contractions import (
     symmetric_contraction,
 )
-from cuequivariance.irreps_array.misc_ui import (
-    assert_same_group,
-    default_irreps,
-    default_layout,
-)
+from cuequivariance.irreps_array.misc_ui import assert_same_group, default_irreps
 
 
 class SymmetricContraction(torch.nn.Module):
@@ -69,9 +65,9 @@ class SymmetricContraction(torch.nn.Module):
         contraction_degree: int,
         num_elements: int,
         *,
-        layout: cue.IrrepsLayout = None,
-        layout_in: cue.IrrepsLayout = None,
-        layout_out: cue.IrrepsLayout = None,
+        layout: Optional[cue.IrrepsLayout] = None,
+        layout_in: Optional[cue.IrrepsLayout] = None,
+        layout_out: Optional[cue.IrrepsLayout] = None,
         device: Optional[torch.device] = None,
         dtype: Optional[torch.dtype] = None,
         math_dtype: Optional[torch.dtype] = None,
@@ -83,12 +79,6 @@ class SymmetricContraction(torch.nn.Module):
         if dtype is None:
             dtype = torch.get_default_dtype()
 
-        if layout is not None:
-            layout_in = layout_out = layout
-        del layout
-
-        self.layout_in = layout_in = default_layout(layout_in)
-        self.layout_out = layout_out = default_layout(layout_out)
         irreps_in, irreps_out = default_irreps(irreps_in, irreps_out)
         assert_same_group(irreps_in, irreps_out)
         self.contraction_degree = contraction_degree
@@ -100,27 +90,6 @@ class SymmetricContraction(torch.nn.Module):
 
         self.irreps_in = irreps_in
         self.irreps_out = irreps_out
-
-        self.transpose_in = None
-        self.transpose_out = None
-
-        if layout_in == cue.ir_mul:
-            pass
-        elif layout_in == cue.mul_ir:
-            self.transpose_in = cuet.TransposeIrrepsLayout(
-                self.irreps_in, source=cue.mul_ir, target=cue.ir_mul, device=device
-            )
-        else:
-            raise ValueError(f"Unsupported layout {layout_in}")
-
-        if layout_out == cue.ir_mul:
-            pass
-        elif layout_out == cue.mul_ir:
-            self.transpose_out = cuet.TransposeIrrepsLayout(
-                self.irreps_out, source=cue.ir_mul, target=cue.mul_ir, device=device
-            )
-        else:
-            raise ValueError(f"Unsupported layout {layout_out}")
 
         self.etp, p = symmetric_contraction(
             irreps_in, irreps_out, range(1, contraction_degree + 1)
@@ -143,6 +112,9 @@ class SymmetricContraction(torch.nn.Module):
 
         self.f = cuet.EquivariantTensorProduct(
             self.etp,
+            layout=layout,
+            layout_in=layout_in,
+            layout_out=layout_out,
             device=device,
             math_dtype=math_dtype or dtype,
             optimize_fallback=optimize_fallback,
@@ -150,8 +122,7 @@ class SymmetricContraction(torch.nn.Module):
 
     def extra_repr(self) -> str:
         return (
-            f"{self.irreps_in} --> {self.irreps_out}"
-            f", contraction_degree={self.contraction_degree}"
+            f"contraction_degree={self.contraction_degree}"
             f", weight_shape={self.weight_shape}"
         )
 
@@ -182,9 +153,6 @@ class SymmetricContraction(torch.nn.Module):
         torch.Tensor
             The output tensor. It has shape (batch, irreps_out.dim)
         """
-        if self.transpose_in is not None:
-            x = self.transpose_in(x, use_fallback=use_fallback)
-
         torch._assert(
             x.shape[-1] == self.irreps_in.dim,
             f"Input tensor must have shape (..., {self.irreps_in.dim}), got {x.shape}",
@@ -196,9 +164,4 @@ class SymmetricContraction(torch.nn.Module):
             weight = self.weight
         weight = weight.flatten(1)
 
-        output = self.f(weight, x, indices=indices, use_fallback=use_fallback)
-
-        if self.transpose_out is not None:
-            output = self.transpose_out(output, use_fallback=use_fallback)
-
-        return output
+        return self.f(weight, x, indices=indices, use_fallback=use_fallback)

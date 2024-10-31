@@ -14,11 +14,7 @@ import torch
 import cuequivariance as cue
 import cuequivariance.equivariant_tensor_product as etp
 import cuequivariance_torch as cuet
-from cuequivariance.irreps_array.misc_ui import (
-    assert_same_group,
-    default_irreps,
-    default_layout,
-)
+from cuequivariance.irreps_array.misc_ui import assert_same_group, default_irreps
 
 
 class Linear(torch.nn.Module):
@@ -44,7 +40,9 @@ class Linear(torch.nn.Module):
         irreps_in: cue.Irreps,
         irreps_out: cue.Irreps,
         *,
-        layout: cue.IrrepsLayout = None,
+        layout: Optional[cue.IrrepsLayout] = None,
+        layout_in: Optional[cue.IrrepsLayout] = None,
+        layout_out: Optional[cue.IrrepsLayout] = None,
         shared_weights: bool = True,
         internal_weights: bool = None,
         device: Optional[torch.device] = None,
@@ -53,7 +51,6 @@ class Linear(torch.nn.Module):
         optimize_fallback: Optional[bool] = None,
     ):
         super().__init__()
-        self.layout = layout = default_layout(layout)
         irreps_in, irreps_out = default_irreps(irreps_in, irreps_out)
         assert_same_group(irreps_in, irreps_out)
 
@@ -62,21 +59,6 @@ class Linear(torch.nn.Module):
 
         self.irreps_in = irreps_in
         self.irreps_out = irreps_out
-
-        self.transpose_in = None
-        self.transpose_out = None
-
-        if layout == cue.ir_mul:
-            pass
-        elif layout == cue.mul_ir:
-            self.transpose_in = cuet.TransposeIrrepsLayout(
-                self.irreps_in, source=cue.mul_ir, target=cue.ir_mul, device=device
-            )
-            self.transpose_out = cuet.TransposeIrrepsLayout(
-                self.irreps_out, source=cue.ir_mul, target=cue.mul_ir, device=device
-            )
-        else:
-            raise ValueError(f"Unsupported layout {layout}")
 
         self.weight_numel = e.inputs[0].irreps.dim
 
@@ -96,13 +78,16 @@ class Linear(torch.nn.Module):
 
         self.f = cuet.EquivariantTensorProduct(
             e,
+            layout=layout,
+            layout_in=layout_in,
+            layout_out=layout_out,
             device=device,
             math_dtype=math_dtype,
             optimize_fallback=optimize_fallback,
         )
 
     def extra_repr(self) -> str:
-        return f"{self.irreps_in} --> {self.irreps_out}, shared_weights={self.shared_weights}, internal_weights={self.internal_weights}, layout={self.layout}, weight_numel={self.weight_numel}"
+        return f"shared_weights={self.shared_weights}, internal_weights={self.internal_weights}, weight_numel={self.weight_numel}"
 
     def forward(
         self,
@@ -148,12 +133,4 @@ class Linear(torch.nn.Module):
         if not self.shared_weights and weight.ndim != 2:
             raise ValueError("Weights should be 2D tensor")
 
-        if self.transpose_in is not None:
-            x = self.transpose_in(x, use_fallback=use_fallback)
-
-        out = self.f(weight, x, use_fallback=use_fallback)
-
-        if self.transpose_out is not None:
-            out = self.transpose_out(out, use_fallback=use_fallback)
-
-        return out
+        return self.f(weight, x, use_fallback=use_fallback)

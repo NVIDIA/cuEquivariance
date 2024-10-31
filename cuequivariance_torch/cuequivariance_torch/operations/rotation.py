@@ -14,7 +14,7 @@ import torch
 import cuequivariance as cue
 import cuequivariance.equivariant_tensor_product as etp
 import cuequivariance_torch as cuet
-from cuequivariance.irreps_array.misc_ui import default_irreps, default_layout
+from cuequivariance.irreps_array.misc_ui import default_irreps
 
 
 class Rotation(torch.nn.Module):
@@ -33,13 +33,14 @@ class Rotation(torch.nn.Module):
         self,
         irreps: cue.Irreps,
         *,
-        layout: cue.IrrepsLayout = None,
+        layout: Optional[cue.IrrepsLayout] = None,
+        layout_in: Optional[cue.IrrepsLayout] = None,
+        layout_out: Optional[cue.IrrepsLayout] = None,
         device: Optional[torch.device] = None,
         math_dtype: Optional[torch.dtype] = None,
         optimize_fallback: Optional[bool] = None,
     ):
         super().__init__()
-        self.layout = layout = default_layout(layout)
         (irreps,) = default_irreps(irreps)
 
         if irreps.irrep_class not in [cue.SO3, cue.O3]:
@@ -47,33 +48,18 @@ class Rotation(torch.nn.Module):
                 f"Unsupported irrep class {irreps.irrep_class}. Must be SO3 or O3."
             )
 
-        self.transpose_in = None
-        self.transpose_out = None
-
-        if layout == cue.ir_mul:
-            pass
-        elif layout == cue.mul_ir:
-            self.transpose_in = cuet.TransposeIrrepsLayout(
-                irreps, source=cue.mul_ir, target=cue.ir_mul, device=device
-            )
-            self.transpose_out = cuet.TransposeIrrepsLayout(
-                irreps, source=cue.ir_mul, target=cue.mul_ir, device=device
-            )
-        else:
-            raise ValueError(f"Unsupported layout {layout}")
-
         self.irreps = irreps
+        self.lmax = max(ir.l for _, ir in irreps)
 
         self.f = cuet.EquivariantTensorProduct(
             etp.yxy_rotation(irreps),
+            layout=layout,
+            layout_in=layout_in,
+            layout_out=layout_out,
             device=device,
             math_dtype=math_dtype,
             optimize_fallback=optimize_fallback,
         )
-        self.lmax = max(ir.l for _, ir in irreps)
-
-    def extra_repr(self) -> str:
-        return f"{self.irreps}, layout={self.layout}"
 
     def forward(
         self,
@@ -107,9 +93,6 @@ class Rotation(torch.nn.Module):
         torch.Tensor
             The rotated tensor.
         """
-        if self.transpose_in is not None:
-            x = self.transpose_in(x)
-
         gamma = torch.as_tensor(gamma, dtype=x.dtype, device=x.device)
         beta = torch.as_tensor(beta, dtype=x.dtype, device=x.device)
         alpha = torch.as_tensor(alpha, dtype=x.dtype, device=x.device)
@@ -118,18 +101,13 @@ class Rotation(torch.nn.Module):
         encodings_beta = encode_rotation_angle(beta, self.lmax)
         encodings_alpha = encode_rotation_angle(alpha, self.lmax)
 
-        out = self.f(
+        return self.f(
             encodings_gamma,
             encodings_beta,
             encodings_alpha,
             x,
             use_fallback=use_fallback,
         )
-
-        if self.transpose_out is not None:
-            out = self.transpose_out(out)
-
-        return out
 
 
 def encode_rotation_angle(angle: torch.Tensor, l: int) -> torch.Tensor:
@@ -173,6 +151,9 @@ class Inversion(torch.nn.Module):
         self,
         irreps: cue.Irreps,
         *,
+        layout: Optional[cue.IrrepsLayout] = None,
+        layout_in: Optional[cue.IrrepsLayout] = None,
+        layout_out: Optional[cue.IrrepsLayout] = None,
         device: Optional[torch.device] = None,
         math_dtype: Optional[torch.dtype] = None,
     ):
@@ -186,11 +167,13 @@ class Inversion(torch.nn.Module):
 
         self.irreps = irreps
         self.f = cuet.EquivariantTensorProduct(
-            etp.inversion(irreps), device=device, math_dtype=math_dtype
+            etp.inversion(irreps),
+            layout=layout,
+            layout_in=layout_in,
+            layout_out=layout_out,
+            device=device,
+            math_dtype=math_dtype,
         )
-
-    def extra_repr(self) -> str:
-        return f"{self.irreps}"
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.f(x)

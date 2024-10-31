@@ -50,6 +50,7 @@ def spherical_harmonics(
     x = vectors.reshape(-1, 3)
     m = cuet.EquivariantTensorProduct(
         etp.spherical_harmonics(cue.SO3(1), ls),
+        layout=cue.ir_mul,
         device=x.device,
         math_dtype=x.dtype,
         optimize_fallback=optimize_fallback,

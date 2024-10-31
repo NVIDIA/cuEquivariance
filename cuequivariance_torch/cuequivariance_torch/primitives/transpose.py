@@ -49,8 +49,13 @@ class TransposeIrrepsLayout(torch.nn.Module):
         else:
             self.f = _Identity()
 
+        self.source, self.target = source, target
+
+    # def extra_repr(self) -> str:
+    #     return f"{self.source} -> {self.target}"
+
     def __repr__(self):
-        return f"TransposeIrrepsLayout()"
+        return f"TransposeIrrepsLayout({self.source} -> {self.target})"
 
     def forward(
         self, x: torch.Tensor, *, use_fallback: Optional[bool] = None

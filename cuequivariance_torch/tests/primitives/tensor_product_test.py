@@ -42,17 +42,17 @@ def make_descriptors():
     yield d
 
     for subscripts in [
-        "u__uw_w",
-        "u_v_uv_u",
-        "u_v_uv_v",
-        "u_u_uw_w",
-        "u_v_uvw_w",
-        "_v_vw_w",
-        "u_u_u",
-        "u_v_uv",
-        "u_uv_v",
-        "u__u",
-        "_v_v",
+        "u,,uw,w",
+        "u,v,uv,u",
+        "u,v,uv,v",
+        "u,u,uw,w",
+        "u,v,uvw,w",
+        ",v,vw,w",
+        "u,u,u",
+        "u,v,uv",
+        "u,uv,v",
+        "u,,u",
+        ",v,v",
     ]:
         d = stp.SegmentedTensorProduct.from_subscripts(subscripts)
         for i in range(3):
@@ -85,10 +85,6 @@ def test_primitive_tensor_product_cuda_vs_fx(
     math_dtype: torch.dtype,
     tol: float,
 ):
-    # Make sure to run with CUDA_LAUNCH_BLOCKING=1 to catch the correct errors
-    if (dtype, math_dtype) == (torch.float32, torch.float64):
-        pytest.skip("no attribute 'fused_tensor_product_fwd_fp32_fp32_fp32_fp32_fp64'")
-
     device = torch.device("cuda:0")
 
     m = cuet.TensorProduct(

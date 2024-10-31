@@ -135,7 +135,7 @@ def _tensor_product_fx(
 
     num_inputs = descriptor.num_operands - 1
 
-    if num_inputs > 0:
+    if num_inputs > 0 and descriptor.num_paths > 0:
         graph = torch.fx.Graph()
         tracer = torch.fx.proxy.GraphAppendingTracer(graph)
         constants = OrderedDict()
@@ -236,7 +236,7 @@ def _tensor_product_fx(
                 graphmod = opt_einsum_fx.optimize_einsums_full(graphmod, example_inputs)
     else:
 
-        class _no_input(torch.nn.Module):
+        class _no_input_or_no_paths(torch.nn.Module):
             def __init__(self, descriptor: stp.SegmentedTensorProduct):
                 super().__init__()
 
@@ -248,9 +248,12 @@ def _tensor_product_fx(
                         ),
                     )
 
-            def forward(self):
+            def forward(self, *args):
+                shape = torch.broadcast_shapes(*[arg.shape[:-1] for arg in args])
                 output = torch.zeros(
-                    descriptor.operands[-1].size, device=device, dtype=math_dtype
+                    shape + (descriptor.operands[-1].size,),
+                    device=device,
+                    dtype=math_dtype,
                 )
                 for pid in range(descriptor.num_paths):
                     output += torch.einsum(
@@ -261,7 +264,7 @@ def _tensor_product_fx(
                     )
                 return output
 
-        graphmod = _no_input(descriptor)
+        graphmod = _no_input_or_no_paths(descriptor)
 
     return _Wrapper(graphmod, descriptor)
 
@@ -315,6 +318,9 @@ def _tensor_product_cuda(
     math_dtype: Optional[torch.dtype],
 ) -> torch.nn.Module:
     logger.debug(f"Starting search for a cuda kernel for {descriptor}")
+
+    if descriptor.num_paths == 0:
+        raise NotImplementedError("No cuda kernel for empty paths.")
 
     if descriptor.num_operands not in (3, 4):
         raise NotImplementedError(
