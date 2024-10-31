@@ -43,7 +43,7 @@ def test_vector_to_euler_angles():
 def test_inversion():
     irreps = cue.Irreps("O3", "2x1e + 1o")
     torch.testing.assert_close(
-        cuet.Inversion(irreps)(
+        cuet.Inversion(irreps, layout=cue.ir_mul)(
             torch.tensor([1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
         ),
         torch.tensor([1.0, 1.0, 1.0, 1.0, 1.0, 1.0, -1.0, -1.0, -1.0]),
