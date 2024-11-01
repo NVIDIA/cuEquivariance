@@ -26,7 +26,6 @@ jobs:
         python -m pip install --upgrade pip
         python -m pip install pytest
         python -m pip install ./cuequivariance
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
     - name: Test with pytest
       run: |
         pytest --doctest-modules cuequivariance
@@ -51,7 +50,6 @@ jobs:
         python -m pip install pytest
         python -m pip install ./cuequivariance
         python -m pip install ./cuequivariance_jax
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
     - name: Test with pytest
       run: |
         pytest --doctest-modules cuequivariance_jax
@@ -77,7 +75,7 @@ jobs:
         python -m pip install torch
         python -m pip install ./cuequivariance
         python -m pip install ./cuequivariance_torch
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        python -m pip install e3nn
     - name: Test with pytest
       run: |
         pytest --doctest-modules cuequivariance_torch
