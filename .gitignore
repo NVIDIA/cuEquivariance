@@ -1,2 +1,4 @@
 __pycache__
 docs/api/generated/
+docs/public/
+docs/jupyter_execute/

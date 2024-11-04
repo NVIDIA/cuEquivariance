@@ -37,6 +37,14 @@ You can install cuEquivariance from PyPI with:
    pip install cuequivariance-jax
    pip install cuequivariance-torch
 
+Organization
+------------
+
+.. image:: _static/main_components.png
+   :alt: Main components of cuEquivariance
+   :align: center
+
+Most tensor products are defined using the :class:`~cuequivariance.EquivariantTensorProduct` class, which encapsulates the :class:`~cuequivariance.Irreps` and :class:`~cuequivariance.IrrepsLayout` for each input and the output. It also includes one or more instances of :class:`~cuequivariance.SegmentedTensorProduct`, which define the tensor product operations.
 
 .. toctree::
    :maxdepth: 1
