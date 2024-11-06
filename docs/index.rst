@@ -23,7 +23,7 @@ Equivariance is the mathematical formalization of the concept of "respecting sym
 Installation
 ------------
 
-The easiest way toinstall cuEquivariance is from PyPI with:
+The easiest way to install cuEquivariance is from PyPi with:
 
 .. code-block:: bash
 
