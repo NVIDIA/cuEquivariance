@@ -13,8 +13,8 @@ import pytest
 import torch
 
 import cuequivariance as cue
-import cuequivariance.descriptors
 import cuequivariance_torch as cuet
+from cuequivariance import descriptors
 
 
 def make_descriptors():

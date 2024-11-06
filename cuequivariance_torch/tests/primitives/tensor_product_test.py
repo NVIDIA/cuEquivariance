@@ -7,14 +7,15 @@
 # disclosure or distribution of this material and related documentation
 # without an express license agreement from NVIDIA CORPORATION or
 # its affiliates is strictly prohibited.
+import itertools
+
 import pytest
 import torch
 
 import cuequivariance as cue
 import cuequivariance.segmented_tensor_product as stp
-import cuequivariance.descriptors
 import cuequivariance_torch as cuet
-import itertools
+from cuequivariance import descriptors
 
 
 def make_descriptors():

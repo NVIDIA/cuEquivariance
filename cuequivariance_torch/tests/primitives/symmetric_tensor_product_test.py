@@ -12,8 +12,8 @@ import torch
 
 import cuequivariance as cue
 import cuequivariance.segmented_tensor_product as stp
-import cuequivariance.descriptors
 import cuequivariance_torch as cuet
+from cuequivariance import descriptors
 
 
 def make_descriptors():
