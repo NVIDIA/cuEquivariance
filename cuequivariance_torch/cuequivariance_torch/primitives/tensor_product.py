@@ -353,7 +353,7 @@ def _tensor_product_cuda(
             if ops.TensorProductUniform1d.is_supported(
                 operand_dim=[o.ndim for o in d.operands],
                 operand_extent=u,
-                operand_num_segments=[o.num_segments for o in d.operands]
+                operand_num_segments=[o.num_segments for o in d.operands],
             ):
                 if descriptor.num_operands == 3:
                     return TensorProductUniform3x1d(d, device, math_dtype)

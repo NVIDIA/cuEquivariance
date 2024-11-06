@@ -17,20 +17,20 @@
 .. autosummary::
    :toctree: generated/
 
+   Irreps
+   Irrep
    Rep
    SU2
    SO3
    O3
-   Irrep
-   clebsch_gordan
-   Irreps
    IrrepsLayout
+   SegmentedTensorProduct
+   EquivariantTensorProduct
+   clebsch_gordan
    NumpyIrrepsArray
    segmented_tensor_product.Subscripts
    segmented_tensor_product.Operand
    segmented_tensor_product.Path
-   segmented_tensor_product.SegmentedTensorProduct
-   equivariant_tensor_product.EquivariantTensorProduct
    equivariant_tensor_product.spherical_harmonics
    equivariant_tensor_product.fully_connected_tensor_product
    equivariant_tensor_product.channelwise_tensor_product
