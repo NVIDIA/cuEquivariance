@@ -42,8 +42,7 @@ extensions = [
 ]
 
 templates_path = ["_templates"]
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
-
+exclude_patterns = ["README.md", "_build", "Thumbs.db", ".DS_Store"]
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
@@ -53,11 +52,9 @@ pygments_style = "sphinx"
 
 # The theme to use for HTML
 html_theme = "sphinx_rtd_theme"
-html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 html_theme_options = {
     "style_nav_header_background": "#000000",
     "logo_only": False,
-    "display_version": True,
 }
 html_context = {
     "display_github": True,
