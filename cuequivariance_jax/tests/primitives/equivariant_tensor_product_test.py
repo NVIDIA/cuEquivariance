@@ -14,7 +14,7 @@ import cuequivariance_jax as cuex
 
 
 def test_special_double_backward():
-    e = cue.equivariant_tensor_product.symmetric_contraction(
+    e = cue.descriptors.symmetric_contraction(
         2 * cue.Irreps("O3", "0e + 1o + 2e"), 2 * cue.Irreps("O3", "0e + 1o"), [1, 2]
     )
     irreps_w = e.inputs[0].irreps

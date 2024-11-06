@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 import cuequivariance as cue
-import cuequivariance.equivariant_tensor_product as etp
+from cuequivariance import descriptors
 import cuequivariance.segmented_tensor_product as stp
 
 
@@ -20,19 +20,19 @@ def test_commutativity_squeeze_flatten():
     irreps2 = cue.Irreps("O3", "1x0e + 1x1o")
     irreps3 = cue.Irreps("O3", "32x0e + 32x1o")
 
-    d = etp.fully_connected_tensor_product(irreps1, irreps2, irreps3).d
+    d = descriptors.fully_connected_tensor_product(irreps1, irreps2, irreps3).d
     assert (
         d.squeeze_modes().flatten_coefficient_modes()
         == d.flatten_coefficient_modes().squeeze_modes()
     )
 
-    d = etp.channelwise_tensor_product(irreps1, irreps2, irreps3).d
+    d = descriptors.channelwise_tensor_product(irreps1, irreps2, irreps3).d
     assert (
         d.squeeze_modes().flatten_coefficient_modes()
         == d.flatten_coefficient_modes().squeeze_modes()
     )
 
-    d = etp.linear(irreps1, irreps2).d
+    d = descriptors.linear(irreps1, irreps2).d
     assert (
         d.squeeze_modes().flatten_coefficient_modes()
         == d.flatten_coefficient_modes().squeeze_modes()
@@ -41,7 +41,7 @@ def test_commutativity_squeeze_flatten():
 
 @pytest.mark.parametrize("l", [1, 2, 3, 4])
 def test_spherical_harmonics(l: int):
-    d = etp.spherical_harmonics(cue.SO3(1), [l]).d
+    d = descriptors.spherical_harmonics(cue.SO3(1), [l]).d
 
     vec = np.random.randn(3)
     axis = np.random.randn(3)
@@ -66,7 +66,7 @@ def test_y_rotation(l: int):
     gamma = -0.5
 
     irrep = cue.SO3(l)
-    d = etp.yxy_rotation(cue.Irreps("SO3", [irrep])).d
+    d = descriptors.yxy_rotation(cue.Irreps("SO3", [irrep])).d
 
     def enc(th: float):
         m = np.arange(1, l + 1)

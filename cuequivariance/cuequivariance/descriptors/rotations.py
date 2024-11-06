@@ -13,12 +13,12 @@ import numpy as np
 
 import cuequivariance as cue
 from cuequivariance import segmented_tensor_product as stp
-from cuequivariance import equivariant_tensor_product as etp
+from cuequivariance import descriptors
 
 
 def fixed_axis_angle_rotation(
     irreps: cue.Irreps, axis: np.ndarray, angle: float
-) -> etp.EquivariantTensorProduct:
+) -> cue.EquivariantTensorProduct:
     """
     subsrcipts: ``input[u],output[u]``
 
@@ -38,12 +38,12 @@ def fixed_axis_angle_rotation(
         )
 
     d = d.flatten_coefficient_modes()
-    return etp.EquivariantTensorProduct(d, [irreps, irreps], layout=cue.ir_mul)
+    return cue.EquivariantTensorProduct(d, [irreps, irreps], layout=cue.ir_mul)
 
 
 def yxy_rotation(
     irreps: cue.Irreps, lmax: Optional[int] = None
-) -> etp.EquivariantTensorProduct:
+) -> cue.EquivariantTensorProduct:
     """
     subsrcipts: ``gamma[],beta[],alpha[],input[u],output[u]``
 
@@ -58,7 +58,7 @@ def yxy_rotation(
     aio = y_rotation(irreps, lmax).d  # alpha, A, output
     cbiao = stp.dot(cbio, aio, (3, 1))  # gamma, beta, input, alpha, output
     cbaio = cbiao.move_operand(2, 3)  # gamma, beta, alpha, input, output
-    return etp.EquivariantTensorProduct(
+    return cue.EquivariantTensorProduct(
         cbaio,
         [
             irreps.new_scalars(cbaio.operands[0].size),
@@ -73,7 +73,7 @@ def yxy_rotation(
 
 def xy_rotation(
     irreps: cue.Irreps, lmax: Optional[int] = None
-) -> etp.EquivariantTensorProduct:
+) -> cue.EquivariantTensorProduct:
     """
     subsrcipts: ``gamma[],beta[],input[u],output[u]``
 
@@ -83,7 +83,7 @@ def xy_rotation(
     bio = x_rotation(irreps, lmax).d  # beta, A, output
     cibo = stp.dot(cio, bio, (2, 1))  # gamma, input, beta, output
     cbio = cibo.move_operand(1, 2)  # gamma, beta, input, output
-    return etp.EquivariantTensorProduct(
+    return cue.EquivariantTensorProduct(
         cbio,
         [
             irreps.new_scalars(cbio.operands[0].size),
@@ -97,7 +97,7 @@ def xy_rotation(
 
 def yx_rotation(
     irreps: cue.Irreps, lmax: Optional[int] = None
-) -> etp.EquivariantTensorProduct:
+) -> cue.EquivariantTensorProduct:
     """
     subsrcipts: ``phi[],theta[],input[u],output[u]``
 
@@ -107,7 +107,7 @@ def yx_rotation(
     bio = y_rotation(irreps, lmax).d
     cibo = stp.dot(cio, bio, (2, 1))
     cbio = cibo.move_operand(1, 2)
-    return etp.EquivariantTensorProduct(
+    return cue.EquivariantTensorProduct(
         cbio,
         [
             irreps.new_scalars(cbio.operands[0].size),
@@ -121,7 +121,7 @@ def yx_rotation(
 
 def y_rotation(
     irreps: cue.Irreps, lmax: Optional[int] = None
-) -> etp.EquivariantTensorProduct:
+) -> cue.EquivariantTensorProduct:
     """
     subsrcipts: ``phi[],input[u],output[u]``
 
@@ -175,14 +175,14 @@ def y_rotation(
         d.add_path(phc, slo, slo, c=c)
 
     d = d.flatten_coefficient_modes()
-    return etp.EquivariantTensorProduct(
+    return cue.EquivariantTensorProduct(
         d, [irreps.new_scalars(d.operands[0].size), irreps, irreps], layout=cue.ir_mul
     )
 
 
 def x_rotation(
     irreps: cue.Irreps, lmax: Optional[int] = None
-) -> etp.EquivariantTensorProduct:
+) -> cue.EquivariantTensorProduct:
     """
     subsrcipts: ``phi[],input[u],output[u]``
 
@@ -197,12 +197,12 @@ def x_rotation(
     dz90 = fixed_axis_angle_rotation(irreps, np.array([0.0, 0.0, 1.0]), np.pi / 2.0).d
     d = stp.dot(stp.dot(dy, dz90, (1, 1)), dz90, (1, 1))
 
-    return etp.EquivariantTensorProduct(
+    return cue.EquivariantTensorProduct(
         d, [irreps.new_scalars(d.operands[0].size), irreps, irreps], layout=cue.ir_mul
     )
 
 
-def inversion(irreps: cue.Irreps) -> etp.EquivariantTensorProduct:
+def inversion(irreps: cue.Irreps) -> cue.EquivariantTensorProduct:
     """
     subsrcipts: ``input[u],output[u]``
     """
@@ -212,4 +212,4 @@ def inversion(irreps: cue.Irreps) -> etp.EquivariantTensorProduct:
         H = ir.H[0]
         assert np.allclose(H @ H, np.eye(ir.dim), atol=1e-6)
         d.add_path(None, None, c=H, dims={"u": mul})
-    return etp.EquivariantTensorProduct(d, [irreps, irreps], layout=cue.ir_mul)
+    return cue.EquivariantTensorProduct(d, [irreps, irreps], layout=cue.ir_mul)

@@ -12,7 +12,7 @@ from typing import *
 import torch
 
 import cuequivariance as cue
-import cuequivariance.equivariant_tensor_product as etp
+from cuequivariance import descriptors
 import cuequivariance_torch as cuet
 from cuequivariance.irreps_array.misc_ui import assert_same_group, default_irreps
 
@@ -54,7 +54,7 @@ class Linear(torch.nn.Module):
         irreps_in, irreps_out = default_irreps(irreps_in, irreps_out)
         assert_same_group(irreps_in, irreps_out)
 
-        e = etp.linear(irreps_in, irreps_out)
+        e = descriptors.linear(irreps_in, irreps_out)
         assert e.d.subscripts == "uv,iu,iv"
 
         self.irreps_in = irreps_in

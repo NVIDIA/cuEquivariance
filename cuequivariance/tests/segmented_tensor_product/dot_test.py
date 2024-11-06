@@ -11,7 +11,7 @@ import numpy as np
 
 import cuequivariance as cue
 import cuequivariance.segmented_tensor_product as stp
-import cuequivariance.equivariant_tensor_product as etp
+from cuequivariance import descriptors
 
 
 def test_dot1():
@@ -40,13 +40,13 @@ def test_dot1():
 
 def make_examples():
     irreps_middle = cue.Irreps("SO3", "2x0 + 3x1")
-    dx = etp.fully_connected_tensor_product(
+    dx = descriptors.fully_connected_tensor_product(
         cue.Irreps("SO3", "4x0 + 3x1"),
         cue.Irreps("SO3", "3x0 + 5x1"),
         irreps_middle,
     ).d
     assert dx.subscripts == "uvw,iu,jv,kw+ijk"
-    dy = etp.channelwise_tensor_product(
+    dy = descriptors.channelwise_tensor_product(
         irreps_middle, cue.Irreps("SO3", "0 + 1 + 2"), cue.Irreps("SO3", "0 + 1")
     ).d
     dy = dy.squeeze_modes("v")

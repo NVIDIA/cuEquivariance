@@ -14,18 +14,18 @@ import sympy as sp
 
 import cuequivariance as cue
 from cuequivariance import segmented_tensor_product as stp
-from cuequivariance import equivariant_tensor_product as etp
+from cuequivariance import descriptors
 from cuequivariance.misc.sympy_utils import sqrtQarray_to_sympy
 
 
 def spherical_harmonics(
     ir_vec: cue.Irrep, ls: list[int], layout: cue.IrrepsLayout = cue.ir_mul
-) -> etp.EquivariantTensorProduct:
+) -> cue.EquivariantTensorProduct:
     """
     subscripts: ``vector[],...,vector[],Yl[]``
     """
     if len(ls) != 1:
-        return etp.EquivariantTensorProduct.stack(
+        return cue.EquivariantTensorProduct.stack(
             [spherical_harmonics(ir_vec, [l], layout) for l in ls], [False, True]
         )
 
@@ -39,7 +39,7 @@ def spherical_harmonics(
             indices = poly_degrees_to_path_indices(degrees)
             d.add_path(*indices, i, c=coeff)
 
-    return etp.EquivariantTensorProduct([d], [ir_vec, ir], layout=layout)
+    return cue.EquivariantTensorProduct([d], [ir_vec, ir], layout=layout)
 
 
 def poly_degrees_to_path_indices(degrees: tuple[int, ...]) -> tuple[int, ...]:

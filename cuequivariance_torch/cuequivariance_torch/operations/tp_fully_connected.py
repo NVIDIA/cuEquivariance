@@ -12,15 +12,9 @@ from typing import *
 import torch
 
 import cuequivariance as cue
-import cuequivariance.segmented_tensor_product as stp
-import cuequivariance.equivariant_tensor_product as etp
 import cuequivariance_torch as cuet
-
-from cuequivariance.irreps_array.misc_ui import (
-    default_irreps,
-    default_layout,
-    assert_same_group,
-)
+from cuequivariance import descriptors
+from cuequivariance.irreps_array.misc_ui import assert_same_group, default_irreps
 
 
 class FullyConnectedTensorProduct(torch.nn.Module):
@@ -71,7 +65,9 @@ class FullyConnectedTensorProduct(torch.nn.Module):
         )
         assert_same_group(irreps_in1, irreps_in2, irreps_out)
 
-        e = etp.fully_connected_tensor_product(irreps_in1, irreps_in2, irreps_out)
+        e = descriptors.fully_connected_tensor_product(
+            irreps_in1, irreps_in2, irreps_out
+        )
         assert e.d.subscripts == "uvw,iu,jv,kw+ijk"
 
         self.irreps_in1 = irreps_in1
