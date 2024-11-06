@@ -1363,6 +1363,12 @@ class SegmentedTensorProduct:
                 stp.Operand(segments=new_segments, subscripts=new_subscripts)
             )
 
+        def ravel_multi_index(indices: tuple[int, ...], shape: tuple[int, ...]) -> int:
+            if len(indices) == 0:
+                # case not supported by some older numpy versions
+                return 0
+            return np.ravel_multi_index(indices, shape)
+
         def make_new_path(
             old_indices: tuple[int, ...],  # old segment indices (one per operand)
             sub_indices: dict[str, int],
@@ -1371,7 +1377,7 @@ class SegmentedTensorProduct:
             return stp.Path(
                 [
                     offsets[sid]
-                    + np.ravel_multi_index(
+                    + ravel_multi_index(
                         tuple(sub_indices[m] for m in rm_modes),
                         rm_shapes[sid],
                     )
