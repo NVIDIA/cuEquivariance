@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 
 import cuequivariance as cue
-import cuequivariance.equivariant_tensor_product as etp
+import cuequivariance.descriptors
 import cuequivariance.segmented_tensor_product as stp
 import cuequivariance_jax as cuex
 

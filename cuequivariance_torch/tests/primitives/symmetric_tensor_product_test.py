@@ -12,18 +12,18 @@ import torch
 
 import cuequivariance as cue
 import cuequivariance.segmented_tensor_product as stp
-import cuequivariance.equivariant_tensor_product as etp
+import cuequivariance.descriptors
 import cuequivariance_torch as cuet
 
 
 def make_descriptors():
-    yield etp.symmetric_contraction(
+    yield descriptors.symmetric_contraction(
         cue.Irreps("SO3", "0 + 1 + 2"), cue.Irreps("SO3", "0"), [3]
     ).ds
-    yield etp.symmetric_contraction(
+    yield descriptors.symmetric_contraction(
         cue.Irreps("O3", "0e + 1o + 2e"), cue.Irreps("O3", "0e + 1o"), [4]
     ).ds
-    yield etp.symmetric_contraction(
+    yield descriptors.symmetric_contraction(
         cue.Irreps("SU2", "0 + 1/2"), cue.Irreps("SU2", "0 + 1/2"), [5]
     ).ds
 
@@ -101,7 +101,7 @@ def test_math_dtype(
 ):
     device = torch.device("cuda:0")
 
-    ds = etp.symmetric_contraction(
+    ds = descriptors.symmetric_contraction(
         cue.Irreps("SO3", "0 + 1 + 2"), cue.Irreps("SO3", "0"), [1, 2, 3]
     ).ds
     m = cuet.IWeightedSymmetricTensorProduct(ds, math_dtype=math_dtype, device=device)

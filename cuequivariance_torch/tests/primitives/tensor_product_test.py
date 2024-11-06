@@ -12,29 +12,29 @@ import torch
 
 import cuequivariance as cue
 import cuequivariance.segmented_tensor_product as stp
-import cuequivariance.equivariant_tensor_product as etp
+import cuequivariance.descriptors
 import cuequivariance_torch as cuet
 import itertools
 
 
 def make_descriptors():
-    yield etp.fully_connected_tensor_product(
+    yield descriptors.fully_connected_tensor_product(
         cue.Irreps("O3", "4x0e + 4x1o"),
         cue.Irreps("O3", "6x0e + 6x1o"),
         cue.Irreps("O3", "5x0e + 5x1o + 5x2e + 5x1e"),
     ).d
 
-    yield etp.spherical_harmonics(cue.SO3(1), [2]).d
-    yield etp.spherical_harmonics(cue.SO3(1), [3]).d
+    yield descriptors.spherical_harmonics(cue.SO3(1), [2]).d
+    yield descriptors.spherical_harmonics(cue.SO3(1), [3]).d
 
-    d = etp.channelwise_tensor_product(
+    d = descriptors.channelwise_tensor_product(
         cue.Irreps("SU2", "3x1/2 + 4x1"),
         cue.Irreps("SU2", "1/2 + 1 + 3/2"),
         cue.Irreps("SU2", "1/2 + 1"),
     ).d
     yield d
 
-    d = etp.channelwise_tensor_product(
+    d = descriptors.channelwise_tensor_product(
         cue.Irreps("SO3", "32x1 + 32x2"),
         cue.Irreps("SO3", "0 + 1"),
         cue.Irreps("SO3", "0 + 1"),

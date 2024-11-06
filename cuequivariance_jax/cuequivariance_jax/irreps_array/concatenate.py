@@ -12,6 +12,7 @@ import jax.numpy as jnp
 
 import cuequivariance as cue
 import cuequivariance_jax as cuex
+from cuequivariance.equivariant_tensor_product import Operand
 from cuequivariance.irreps_array.misc_ui import assert_same_group
 
 
@@ -47,12 +48,12 @@ def concatenate(arrays: list[cuex.IrrepsArray], axis: int = -1) -> cuex.IrrepsAr
 
 def randn(
     key: jax.Array,
-    irreps: cue.Irreps | cue.equivariant_tensor_product.Operand,
+    irreps: cue.Irreps | Operand,
     leading_shape: tuple[int, ...] = (),
     layout: cue.IrrepsLayout | None = None,
     dtype: jnp.dtype | None = None,
 ) -> cuex.IrrepsArray:
-    if isinstance(irreps, cue.equivariant_tensor_product.Operand):
+    if isinstance(irreps, Operand):
         assert layout is None
         irreps, layout = irreps.irreps, irreps.layout
 

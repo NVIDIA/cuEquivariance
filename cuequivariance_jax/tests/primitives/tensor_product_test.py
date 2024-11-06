@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 
 import cuequivariance as cue
-import cuequivariance.equivariant_tensor_product as etp
+from cuequivariance import descriptors
 import cuequivariance.segmented_tensor_product as stp
 import cuequivariance_jax as cuex
 
@@ -23,7 +23,7 @@ jax.config.update("jax_enable_x64", True)
 
 
 def list_of_stp() -> Generator[stp.SegmentedTensorProduct, None, None]:
-    d = etp.channelwise_tensor_product(
+    d = descriptors.channelwise_tensor_product(
         32 * cue.Irreps("O3", "0e + 1o + 2e"),
         cue.Irreps("O3", "0e + 1o"),
         cue.Irreps("O3", "0e + 1o + 2e + 3o"),
@@ -31,13 +31,13 @@ def list_of_stp() -> Generator[stp.SegmentedTensorProduct, None, None]:
     yield d
     yield d.move_operand_last(2)
 
-    d = etp.fixed_axis_angle_rotation(
+    d = descriptors.fixed_axis_angle_rotation(
         cue.Irreps("O3", "64x0e + 64x1o"), np.array([1.0, 0.0, 0.0]), np.pi / 2
     ).d
     yield d
     yield d.move_operand_last(0)
 
-    yield from etp.symmetric_contraction(
+    yield from descriptors.symmetric_contraction(
         32 * cue.Irreps("O3", "0e + 1o + 2e"),
         32 * cue.Irreps("O3", "0e + 1o"),
         [0, 1, 2],
@@ -162,7 +162,7 @@ def test_edge_cases():
 
 
 def test_UnshapedArray_bug():
-    e = cue.equivariant_tensor_product.symmetric_contraction(
+    e = cue.descriptors.symmetric_contraction(
         cue.Irreps("O3", "0e"), cue.Irreps("O3", "0e"), [0, 1]
     )
     w = jnp.ones((1, 2))

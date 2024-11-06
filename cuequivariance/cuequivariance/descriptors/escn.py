@@ -13,7 +13,7 @@ import numpy as np
 
 import cuequivariance as cue
 from cuequivariance import segmented_tensor_product as stp
-from cuequivariance import equivariant_tensor_product as etp
+from cuequivariance import descriptors
 
 
 # The function escn_iu_ju_ku below is a 1:1 adaptation of https://github.com/e3nn/e3nn-jax/blob/a2a81ab451b9cd597d7be27b3e1faba79457475d/e3nn_jax/experimental/linear_shtp.py#L38-L165
@@ -37,7 +37,7 @@ def escn_tp(
     irreps_out: cue.Irreps,
     m_max: Optional[int] = None,
     l_max: Optional[int] = None,
-) -> etp.EquivariantTensorProduct:
+) -> cue.EquivariantTensorProduct:
     """
     subsrcipts: weights[uv],input[u],output[v]
 
@@ -56,7 +56,7 @@ def escn_tp(
 
     Returns
     -------
-    etp.EquivariantTensorProduct
+    cue.EquivariantTensorProduct
         Descriptor of the tensor product part of the eSCN convolution.
         Operand 0: weights
         Operand 1: input
@@ -121,7 +121,7 @@ def escn_tp(
 
     d = d.normalize_paths_for_operand(2)
     d = d.flatten_coefficient_modes()
-    return etp.EquivariantTensorProduct(
+    return cue.EquivariantTensorProduct(
         d,
         [irreps_in.new_scalars(d.operands[0].size), irreps_in, irreps_out],
         layout=cue.ir_mul,

@@ -11,7 +11,7 @@ import pytest
 import torch
 
 import cuequivariance as cue
-import cuequivariance.equivariant_tensor_product as etp
+import cuequivariance.descriptors
 import cuequivariance_torch as cuet
 
 list_of_irreps = [
@@ -48,7 +48,7 @@ def test_fully_connected(
 
     out1 = m(x1, x2, use_fallback=use_fallback)
 
-    d = etp.fully_connected_tensor_product(irreps1, irreps2, irreps3).d
+    d = descriptors.fully_connected_tensor_product(irreps1, irreps2, irreps3).d
     if layout == cue.mul_ir:
         d = d.add_or_transpose_modes("uvw,ui,vj,wk+ijk")
     mfx = cuet.TensorProduct(d).cuda()

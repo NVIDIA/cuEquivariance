@@ -20,14 +20,14 @@ from typing import *
 import numpy as np
 
 import cuequivariance as cue
-import cuequivariance.equivariant_tensor_product as etp
+from cuequivariance import descriptors
 import cuequivariance.segmented_tensor_product as stp
 from cuequivariance.misc.linalg import round_to_sqrt_rational, triu_array
 
 
 def symmetric_contraction(
     irreps_in: cue.Irreps, irreps_out: cue.Irreps, degrees: list[int]
-) -> tuple[etp.EquivariantTensorProduct, np.ndarray]:
+) -> tuple[cue.EquivariantTensorProduct, np.ndarray]:
     r"""
     subscripts: ``weights[u],input[u],output[u]``
 
@@ -47,9 +47,9 @@ def symmetric_contraction(
         cuex.equivariant_tensor_product(e, w, cuex.randn(jax.random.key(1), e.inputs[1]))
     """
     assert max(degrees) > 0
-    e1 = etp.EquivariantTensorProduct.stack(
+    e1 = cue.EquivariantTensorProduct.stack(
         [
-            etp.EquivariantTensorProduct.stack(
+            cue.EquivariantTensorProduct.stack(
                 [
                     _symmetric_contraction(irreps_in, irreps_out[i : i + 1], deg)
                     for deg in reversed(degrees)
@@ -60,7 +60,7 @@ def symmetric_contraction(
         ],
         [True, False, True],
     )
-    e2 = etp.symmetric_contraction(irreps_in, irreps_out, degrees)
+    e2 = descriptors.symmetric_contraction(irreps_in, irreps_out, degrees)
     a1, a2 = [
         np.concatenate(
             [
@@ -115,7 +115,7 @@ def _stp_to_matrix(
 
 def _symmetric_contraction(
     irreps_in: cue.Irreps, irreps_out: cue.Irreps, degree: int
-) -> etp.EquivariantTensorProduct:
+) -> cue.EquivariantTensorProduct:
     mul = irreps_in.muls[0]
     assert all(mul == m for m in irreps_in.muls)
     assert all(mul == m for m in irreps_out.muls)
@@ -146,7 +146,7 @@ def _symmetric_contraction(
 
     d = d.flatten_coefficient_modes()
     d = d.append_modes_to_all_operands("u", {"u": mul})
-    return etp.EquivariantTensorProduct(
+    return cue.EquivariantTensorProduct(
         [d],
         [irreps_in.new_scalars(d.operands[0].size), mul * irreps_in, mul * irreps_out],
         layout=cue.ir_mul,

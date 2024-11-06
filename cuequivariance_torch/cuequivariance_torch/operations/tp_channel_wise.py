@@ -12,7 +12,7 @@ from typing import *
 import torch
 
 import cuequivariance as cue
-import cuequivariance.equivariant_tensor_product as etp
+import cuequivariance.descriptors
 import cuequivariance_torch as cuet
 from cuequivariance.irreps_array.misc_ui import assert_same_group, default_irreps
 
@@ -63,7 +63,9 @@ class ChannelWiseTensorProduct(torch.nn.Module):
         irreps_in1, irreps_in2 = default_irreps(irreps_in1, irreps_in2)
         assert_same_group(irreps_in1, irreps_in2)
 
-        e = etp.channelwise_tensor_product(irreps_in1, irreps_in2, filter_irreps_out)
+        e = descriptors.channelwise_tensor_product(
+            irreps_in1, irreps_in2, filter_irreps_out
+        )
         descriptor, irreps_out = e.d, e.operands[-1].irreps
         assert descriptor.subscripts == "uv,iu,jv,kuv+ijk"
 

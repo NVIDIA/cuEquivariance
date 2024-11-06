@@ -11,12 +11,12 @@ from typing import *
 
 import cuequivariance as cue
 from cuequivariance import segmented_tensor_product as stp
-from cuequivariance import equivariant_tensor_product as etp
+from cuequivariance.equivariant_tensor_product import Operand
 
 
 def transpose(
     irreps: cue.Irreps, source: cue.IrrepsLayout, target: cue.IrrepsLayout
-) -> etp.EquivariantTensorProduct:
+) -> cue.EquivariantTensorProduct:
     """Transpose the irreps layout of a tensor."""
     d = stp.SegmentedTensorProduct(
         operands=[
@@ -26,6 +26,6 @@ def transpose(
     )
     for mul, ir in irreps:
         d.add_path(None, None, c=1, dims={"u": mul, "i": ir.dim})
-    return etp.EquivariantTensorProduct(
-        d, [etp.Operand(irreps, source), etp.Operand(irreps, target)]
+    return cue.EquivariantTensorProduct(
+        d, [Operand(irreps, source), Operand(irreps, target)]
     )

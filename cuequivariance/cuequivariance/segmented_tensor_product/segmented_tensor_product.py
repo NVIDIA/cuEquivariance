@@ -584,7 +584,11 @@ class SegmentedTensorProduct:
         for oid, s in enumerate(segments):
             subscripts = self.operands[oid].subscripts
             if isinstance(s, int):
-                if not (0 <= s < self.operands[oid].num_segments):
+                if not (
+                    -self.operands[oid].num_segments
+                    <= s
+                    < self.operands[oid].num_segments
+                ):
                     raise ValueError(
                         f"segment index {s} out of bounds for operand {oid}."
                     )
@@ -618,7 +622,12 @@ class SegmentedTensorProduct:
             path_index,
             stp.Path(
                 [
-                    s if isinstance(s, int) else self.add_segment(oid, dims)
+                    (
+                        (s + self.operands[oid].num_segments)
+                        % self.operands[oid].num_segments
+                        if isinstance(s, int)
+                        else self.add_segment(oid, dims)
+                    )
                     for oid, s in enumerate(segments)
                 ],
                 coefficients,

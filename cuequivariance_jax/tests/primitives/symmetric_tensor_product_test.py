@@ -12,18 +12,16 @@ from typing import *
 import jax
 import jax.numpy as jnp
 import numpy as np
-import pytest
 
 import cuequivariance as cue
-import cuequivariance.equivariant_tensor_product as etp
-import cuequivariance.segmented_tensor_product as stp
+from cuequivariance import descriptors
 import cuequivariance_jax as cuex
 
 jax.config.update("jax_enable_x64", True)
 
 
 def test_custom_jvp():
-    e = etp.symmetric_contraction(
+    e = descriptors.symmetric_contraction(
         3 * cue.Irreps(cue.O3, "0e + 1o"),
         3 * cue.Irreps(cue.O3, "0e"),
         [0, 1, 2, 3, 4],
@@ -46,7 +44,7 @@ def test_custom_jvp():
 
 
 def test_shapes():
-    ds = etp.symmetric_contraction(
+    ds = descriptors.symmetric_contraction(
         cue.Irreps(cue.O3, "0e + 1o"), cue.Irreps(cue.O3, "0e"), [4]
     ).ds
     W = ds[0].operands[0].size

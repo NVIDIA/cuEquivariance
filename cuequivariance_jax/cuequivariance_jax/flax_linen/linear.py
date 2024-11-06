@@ -12,7 +12,7 @@ from typing import *
 import jax
 
 import cuequivariance as cue
-import cuequivariance.equivariant_tensor_product as etp
+from cuequivariance import descriptors
 import cuequivariance_jax as cuex
 from cuequivariance.irreps_array.misc_ui import assert_same_group
 
@@ -55,7 +55,7 @@ class Linear(nn.Module):
         if not self.force:
             irreps_out = irreps_out.filter(keep=input.irreps())
 
-        e = etp.linear(input.irreps(), irreps_out)
+        e = descriptors.linear(input.irreps(), irreps_out)
         e = e.change_layout([cue.ir_mul, input.layout, layout_out])
 
         # Flattening mode i does slow down the computation a bit

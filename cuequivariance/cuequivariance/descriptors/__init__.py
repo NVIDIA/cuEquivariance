@@ -7,10 +7,8 @@
 # disclosure or distribution of this material and related documentation
 # without an express license agreement from NVIDIA CORPORATION or
 # its affiliates is strictly prohibited.
-from .equivariant_tensor_product import Operand, EquivariantTensorProduct
-
 from .transposition import transpose
-from .basic_tp import (
+from .irreps_tp import (
     fully_connected_tensor_product,
     channelwise_tensor_product,
     elementwise_tensor_product,
@@ -28,10 +26,9 @@ from .rotations import (
 )
 from .escn import escn_tp, escn_tp_compact
 from .spherical_harmonics_ import sympy_spherical_harmonics, spherical_harmonics
+from .gatr import gatr_linear
 
 __all__ = [
-    "Operand",
-    "EquivariantTensorProduct",
     "transpose",
     "fully_connected_tensor_product",
     "channelwise_tensor_product",
@@ -49,4 +46,5 @@ __all__ = [
     "escn_tp_compact",
     "sympy_spherical_harmonics",
     "spherical_harmonics",
+    "gatr_linear",
 ]
