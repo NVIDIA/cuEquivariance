@@ -12,15 +12,9 @@ from typing import *
 import torch
 
 import cuequivariance as cue
-import cuequivariance.segmented_tensor_product as stp
-import cuequivariance.descriptors
 import cuequivariance_torch as cuet
-
-from cuequivariance.irreps_array.misc_ui import (
-    default_irreps,
-    default_layout,
-    assert_same_group,
-)
+from cuequivariance import descriptors
+from cuequivariance.irreps_array.misc_ui import assert_same_group, default_irreps
 
 
 class FullyConnectedTensorProduct(torch.nn.Module):

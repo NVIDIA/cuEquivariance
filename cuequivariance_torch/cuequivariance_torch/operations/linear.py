@@ -12,7 +12,7 @@ from typing import *
 import torch
 
 import cuequivariance as cue
-import cuequivariance.descriptors
+from cuequivariance import descriptors
 import cuequivariance_torch as cuet
 from cuequivariance.irreps_array.misc_ui import assert_same_group, default_irreps
 
