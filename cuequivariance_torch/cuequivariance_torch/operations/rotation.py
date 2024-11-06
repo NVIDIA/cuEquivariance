@@ -12,7 +12,7 @@ from typing import *
 import torch
 
 import cuequivariance as cue
-import cuequivariance.equivariant_tensor_product as etp
+from cuequivariance import descriptors
 import cuequivariance_torch as cuet
 from cuequivariance.irreps_array.misc_ui import default_irreps
 
@@ -52,7 +52,7 @@ class Rotation(torch.nn.Module):
         self.lmax = max(ir.l for _, ir in irreps)
 
         self.f = cuet.EquivariantTensorProduct(
-            etp.yxy_rotation(irreps),
+            descriptors.yxy_rotation(irreps),
             layout=layout,
             layout_in=layout_in,
             layout_out=layout_out,
@@ -167,7 +167,7 @@ class Inversion(torch.nn.Module):
 
         self.irreps = irreps
         self.f = cuet.EquivariantTensorProduct(
-            etp.inversion(irreps),
+            descriptors.inversion(irreps),
             layout=layout,
             layout_in=layout_in,
             layout_out=layout_out,

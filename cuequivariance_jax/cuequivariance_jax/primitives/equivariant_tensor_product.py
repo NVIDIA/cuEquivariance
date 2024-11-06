@@ -12,12 +12,12 @@ from typing import *
 import jax
 import jax.numpy as jnp
 
-import cuequivariance.equivariant_tensor_product as etp
 import cuequivariance_jax as cuex
+import cuequivariance as cue
 
 
 def equivariant_tensor_product(
-    e: etp.EquivariantTensorProduct,
+    e: cue.EquivariantTensorProduct,
     *inputs: cuex.IrrepsArray | jax.Array,
     dtype_output: jnp.dtype | None = None,
     dtype_math: jnp.dtype | None = None,
@@ -29,7 +29,7 @@ def equivariant_tensor_product(
     """Compute the equivariant tensor product of the input arrays.
 
     Args:
-        e (etp.EquivariantTensorProduct): The equivariant tensor product descriptor.
+        e (cue.EquivariantTensorProduct): The equivariant tensor product descriptor.
         *inputs (cuex.IrrepsArray | jax.Array): The input arrays.
         dtype_output (jnp.dtype, optional): The data type for the output array. Defaults to None.
         dtype_math (jnp.dtype, optional): The data type for computational operations. Defaults to None.

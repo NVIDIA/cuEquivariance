@@ -47,7 +47,7 @@ from cuequivariance.tensor_product_execution import TensorProductExecution
 
 from cuequivariance import (
     segmented_tensor_product,
-    equivariant_tensor_product,
+    descriptors,
     tensor_product_execution,
 )
 
@@ -78,6 +78,6 @@ __all__ = [
     "EquivariantTensorProduct",
     "TensorProductExecution",
     "segmented_tensor_product",
-    "equivariant_tensor_product",
+    "descriptors",
     "tensor_product_execution",
 ]

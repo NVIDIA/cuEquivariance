@@ -11,8 +11,8 @@ import pytest
 import torch
 
 import cuequivariance as cue
-import cuequivariance.equivariant_tensor_product as etp
 import cuequivariance_torch as cuet
+from cuequivariance import descriptors
 
 list_of_irreps = [
     cue.Irreps("O3", "4x0e + 4x1o"),
@@ -48,7 +48,7 @@ def test_channel_wise(
 
     out1 = m(x1, x2, use_fallback=use_fallback)
 
-    d = etp.channelwise_tensor_product(irreps1, irreps2, irreps3).d
+    d = descriptors.channelwise_tensor_product(irreps1, irreps2, irreps3).d
     d = d.squeeze_modes("v")
     assert d.subscripts == "u,iu,j,ku+ijk"
     if layout == cue.mul_ir:

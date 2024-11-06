@@ -13,7 +13,7 @@ import jax
 import jax.numpy as jnp
 
 import cuequivariance as cue
-import cuequivariance.equivariant_tensor_product as etp
+from cuequivariance import descriptors
 import cuequivariance_jax as cuex
 
 
@@ -38,7 +38,9 @@ def spherical_harmonics(
         vector = _normalize(vector)
 
     return cuex.equivariant_tensor_product(
-        etp.spherical_harmonics(ir, ls, vector.layout), vector, algorithm=algorithm
+        descriptors.spherical_harmonics(ir, ls, vector.layout),
+        vector,
+        algorithm=algorithm,
     )
 
 

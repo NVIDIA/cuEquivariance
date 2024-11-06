@@ -383,13 +383,13 @@ The MACE layer is composed of two types of linear layers: those that depend on t
 .. jupyter-execute::
 
     def lin(irreps: cue.Irreps, input: cuex.IrrepsArray, name: str):
-        e = etp.linear(input.irreps(), irreps)
+        e = descriptors.linear(input.irreps(), irreps)
         w = param(name, jax.random.normal, (e.inputs[0].irreps.dim,), dtype)
         return cuex.equivariant_tensor_product(e, w, input, precision="HIGH")
 
 
     def linZ(irreps: cue.Irreps, input: cuex.IrrepsArray, name: str):
-        e = etp.linear(input.irreps(), irreps)
+        e = descriptors.linear(input.irreps(), irreps)
         w = param(
             name,
             jax.random.normal,
@@ -413,7 +413,7 @@ Next, we implement the convolutional part.
 
     messages = node_feats[senders]
     sph = cuex.spherical_harmonics(range(max_ell + 1), vectors)
-    e = etp.channelwise_tensor_product(messages.irreps(), sph.irreps(), interaction_irreps)
+    e = descriptors.channelwise_tensor_product(messages.irreps(), sph.irreps(), interaction_irreps)
     e = e.squeeze_modes().flatten_coefficient_modes()
 
     mlp = MultiLayerPerceptron(

@@ -1,3 +1,3 @@
-# cuEquivariance 0.1.0 (19th of October 2024)
+# cuEquivariance 0.6.4
 
-- Initial release of cuEquivariance.
+- Add STP descriptors for the Geometric Algebra Transformer architecture.

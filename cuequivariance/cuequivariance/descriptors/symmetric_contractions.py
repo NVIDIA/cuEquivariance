@@ -10,7 +10,7 @@
 from typing import *
 
 import cuequivariance as cue
-from cuequivariance import equivariant_tensor_product as etp
+from cuequivariance import descriptors
 from cuequivariance import segmented_tensor_product as stp
 
 
@@ -18,7 +18,7 @@ def symmetric_contraction(
     irreps_in: cue.Irreps,
     irreps_out: cue.Irreps,
     degrees: list[int],
-) -> etp.EquivariantTensorProduct:
+) -> cue.EquivariantTensorProduct:
     r"""
     subscripts: ``weights[u],input[u],output[u]``
 
@@ -37,13 +37,13 @@ def symmetric_contraction(
 
     Returns
     -------
-    etp.EquivariantTensorProduct
+    cue.EquivariantTensorProduct
         The descriptor of the symmetric contraction.
         The operands are the weights, the input degree times and the output.
     """
     degrees = list(degrees)
     if len(degrees) != 1:
-        return etp.EquivariantTensorProduct.stack(
+        return cue.EquivariantTensorProduct.stack(
             [
                 symmetric_contraction(irreps_in, irreps_out, [degree])
                 for degree in degrees
@@ -95,7 +95,7 @@ def symmetric_contraction(
         d = d.flatten_coefficient_modes()
 
     d = d.append_modes_to_all_operands("u", {"u": mul})
-    return etp.EquivariantTensorProduct(
+    return cue.EquivariantTensorProduct(
         [d],
         [irreps_in.new_scalars(d.operands[0].size), mul * irreps_in, mul * irreps_out],
         layout=cue.ir_mul,

@@ -12,7 +12,6 @@ from typing import *
 import torch
 
 import cuequivariance as cue
-import cuequivariance.equivariant_tensor_product as etp
 import cuequivariance_torch as cuet
 from cuequivariance.irreps_array.misc_ui import default_layout
 
@@ -20,7 +19,7 @@ from cuequivariance.irreps_array.misc_ui import default_layout
 class EquivariantTensorProduct(torch.nn.Module):
     def __init__(
         self,
-        e: etp.EquivariantTensorProduct,
+        e: cue.EquivariantTensorProduct,
         *,
         layout: Optional[cue.IrrepsLayout] = None,
         layout_in: Optional[

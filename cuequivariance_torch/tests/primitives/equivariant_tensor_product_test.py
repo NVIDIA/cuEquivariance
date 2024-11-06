@@ -13,28 +13,28 @@ import pytest
 import torch
 
 import cuequivariance as cue
-import cuequivariance.equivariant_tensor_product as etp
 import cuequivariance_torch as cuet
+from cuequivariance import descriptors
 
 
 def make_descriptors():
     # This ETP will trigger the fusedTP kernel
-    yield etp.fully_connected_tensor_product(
+    yield descriptors.fully_connected_tensor_product(
         cue.Irreps("O3", "32x0e + 32x1o"),
         cue.Irreps("O3", "0e + 1o + 2e"),
         cue.Irreps("O3", "32x0e + 32x1o"),
     ).flatten_coefficient_modes()
 
     # This ETP will trigger the uniform1dx4 kernel
-    yield etp.channelwise_tensor_product(
+    yield descriptors.channelwise_tensor_product(
         cue.Irreps("O3", "32x0e + 32x1o"),
         cue.Irreps("O3", "0e + 1o + 2e"),
         cue.Irreps("O3", "0e + 1o"),
     ).flatten_coefficient_modes().squeeze_modes()
 
     # These ETPs will trigger the symmetricContraction kernel
-    yield etp.spherical_harmonics(cue.SO3(1), [1, 2, 3])
-    yield etp.symmetric_contraction(
+    yield descriptors.spherical_harmonics(cue.SO3(1), [1, 2, 3])
+    yield descriptors.symmetric_contraction(
         cue.Irreps("O3", "32x0e + 32x1o"), cue.Irreps("O3", "32x0e + 32x1o"), [1, 2, 3]
     )
 

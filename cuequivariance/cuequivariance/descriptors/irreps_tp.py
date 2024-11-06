@@ -11,14 +11,14 @@ import itertools
 from typing import *
 
 import cuequivariance as cue
-from cuequivariance import equivariant_tensor_product as etp
+from cuequivariance import descriptors
 from cuequivariance import segmented_tensor_product as stp
 from cuequivariance.irreps_array.irrep_utils import into_list_of_irrep
 
 
 def fully_connected_tensor_product(
     irreps1: cue.Irreps, irreps2: cue.Irreps, irreps3: cue.Irreps
-) -> etp.EquivariantTensorProduct:
+) -> cue.EquivariantTensorProduct:
     """
     subscripts: ``weights[uvw],lhs[iu],rhs[jv],output[kw]``
 
@@ -65,7 +65,7 @@ def fully_connected_tensor_product(
             d.add_path((mul1, mul2, mul3), i1, i2, i3, c=cg)
 
     d = d.normalize_paths_for_operand(-1)
-    return etp.EquivariantTensorProduct(
+    return cue.EquivariantTensorProduct(
         d,
         [irreps1.new_scalars(d.operands[0].size), irreps1, irreps2, irreps3],
         layout=cue.ir_mul,
@@ -76,7 +76,7 @@ def channelwise_tensor_product(
     irreps1: cue.Irreps,
     irreps2: cue.Irreps,
     irreps3_filter: Optional[Sequence[cue.Irrep]] = None,
-) -> etp.EquivariantTensorProduct:
+) -> cue.EquivariantTensorProduct:
     """
     subscripts: ``weights[uv],lhs[iu],rhs[jv],output[kuv]``
 
@@ -133,7 +133,7 @@ def channelwise_tensor_product(
     d = d.permute_segments(3, inv)
 
     d = d.normalize_paths_for_operand(-1)
-    return etp.EquivariantTensorProduct(
+    return cue.EquivariantTensorProduct(
         d,
         [irreps1.new_scalars(d.operands[0].size), irreps1, irreps2, irreps3],
         layout=cue.ir_mul,
@@ -173,7 +173,7 @@ def elementwise_tensor_product(
     irreps1: cue.Irreps,
     irreps2: cue.Irreps,
     irreps3_filter: Optional[Sequence[cue.Irrep]] = None,
-) -> etp.EquivariantTensorProduct:
+) -> cue.EquivariantTensorProduct:
     """
     subscripts: ``lhs[iu],rhs[ju],output[ku]``
     """
@@ -204,14 +204,14 @@ def elementwise_tensor_product(
 
     irreps3 = cue.Irreps(G, irreps3)
     d = d.normalize_paths_for_operand(-1)
-    return etp.EquivariantTensorProduct(
+    return cue.EquivariantTensorProduct(
         d, [irreps1, irreps2, irreps3], layout=cue.ir_mul
     )
 
 
 def linear(
     irreps_in: cue.Irreps, irreps_out: cue.Irreps
-) -> etp.EquivariantTensorProduct:
+) -> cue.EquivariantTensorProduct:
     """
     subscripts: ``weights[uv],input[iu],output[iv]``
 
@@ -226,7 +226,7 @@ def linear(
 
     Returns
     -------
-    etp.EquivariantTensorProduct
+    cue.EquivariantTensorProduct
         Descriptor of the linear transformation.
     """
     d = stp.SegmentedTensorProduct.from_subscripts("uv_iu_iv")
@@ -243,7 +243,7 @@ def linear(
 
     d = d.normalize_paths_for_operand(-1)
 
-    return etp.EquivariantTensorProduct(
+    return cue.EquivariantTensorProduct(
         d,
         [irreps_in.new_scalars(d.operands[0].size), irreps_in, irreps_out],
         layout=cue.ir_mul,

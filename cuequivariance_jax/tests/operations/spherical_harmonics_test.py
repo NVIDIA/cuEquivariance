@@ -10,13 +10,10 @@
 from typing import *
 
 import jax
-import jax.numpy as jnp
 import numpy as np
 import pytest
 
 import cuequivariance as cue
-import cuequivariance.equivariant_tensor_product as etp
-import cuequivariance.segmented_tensor_product as stp
 import cuequivariance_jax as cuex
 
 jax.config.update("jax_enable_x64", True)
