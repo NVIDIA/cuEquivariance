@@ -27,15 +27,15 @@ The easiest way to install cuEquivariance is from PyPi with:
 
 .. code-block:: bash
 
-   pip install cuequivariance
+   # Choose the frontend you want to use
+   pip install cuequivariance-jax
+   pip install cuequivariance-torch
+   pip install cuequivariance  # Installs only the core non-ML components
 
    # CUDA kernels for different CUDA versions
    pip install cuequivariance-ops-torch-cu11
    pip install cuequivariance-ops-torch-cu12
 
-   # Frontend for different ML frameworks
-   pip install cuequivariance-jax
-   pip install cuequivariance-torch
 
 Organization
 ------------
