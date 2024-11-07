@@ -8,8 +8,8 @@
    without an express license agreement from NVIDIA CORPORATION or
    its affiliates is strictly prohibited.
 
-How to use the :code:`Irreps` class
-===================================
+Group representations: :code:`Irreps` class
+===========================================
 
 What Is a Group Representation?
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

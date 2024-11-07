@@ -39,7 +39,7 @@ The easiest way to install cuEquivariance is from `PyPi <https://pypi.org/>`_ us
 Supported platforms
 -------------------
 
-`cuequivariance-ops-torch-*` packages are only available for Linux x86_64.
+``cuequivariance-ops-torch-*`` packages are only available for Linux x86_64.
 
 Organization
 ------------
@@ -53,9 +53,10 @@ This descriptor is then used to create a :class:`~cuequivariance_torch.Equivaria
 
 .. toctree::
    :maxdepth: 1
-   :caption: FAQ
+   :caption: Tutorials
 
    tutorials/irreps
+   tutorials/layout
    tutorials/stp
    tutorials/mace
 
