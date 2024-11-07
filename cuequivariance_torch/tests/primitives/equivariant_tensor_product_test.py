@@ -105,19 +105,26 @@ def test_precision_cuda_vs_fx(
 ):
     device = torch.device("cuda:0")
 
+    inputs = [
+        torch.randn((1024, inp.irreps.dim), device=device, dtype=dtype)
+        for inp in e.inputs
+    ]
     m = cuet.EquivariantTensorProduct(
         e,
         layout=cue.ir_mul,
         device=device,
         math_dtype=math_dtype,
+    )
+    y0 = m(*inputs, use_fallback=False)
+
+    m = cuet.EquivariantTensorProduct(
+        e,
+        layout=cue.ir_mul,
+        device=device,
+        math_dtype=torch.float64,
         optimize_fallback=True,
     )
-    inputs = [
-        torch.randn((1024, inp.irreps.dim), device=device, dtype=dtype)
-        for inp in e.inputs
-    ]
-
-    y0 = m(*inputs, use_fallback=False)
-    y1 = m(*inputs, use_fallback=True)
+    inputs = map(lambda x: x.to(torch.float64), inputs)
+    y1 = m(*inputs, use_fallback=True).to(dtype)
 
     torch.testing.assert_close(y0, y1, atol=atol, rtol=rtol)

@@ -54,6 +54,8 @@ class Linear(torch.nn.Module):
         irreps_in, irreps_out = default_irreps(irreps_in, irreps_out)
         assert_same_group(irreps_in, irreps_out)
 
+        math_dtype = math_dtype or dtype
+
         e = descriptors.linear(irreps_in, irreps_out)
         assert e.d.subscripts == "uv,iu,iv"
 

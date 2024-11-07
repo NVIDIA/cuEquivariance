@@ -88,10 +88,6 @@ def test_primitive_tensor_product_cuda_vs_fx(
 ):
     device = torch.device("cuda:0")
 
-    m = cuet.TensorProduct(
-        d, device=device, math_dtype=math_dtype, optimize_fallback=False
-    )
-
     for batches in itertools.product([(16,), (), (4, 1)], repeat=d.num_operands - 1):
         inputs = [
             torch.randn(
@@ -103,23 +99,29 @@ def test_primitive_tensor_product_cuda_vs_fx(
             for i in range(d.num_operands - 1)
         ]
 
+        m = cuet.TensorProduct(
+            d, device=device, math_dtype=math_dtype, optimize_fallback=False
+        )
         out1 = m(*inputs, use_fallback=False)
-        out2 = m(*inputs, use_fallback=True)
+        m = cuet.TensorProduct(
+            d, device=device, math_dtype=torch.float64, optimize_fallback=False
+        )
+        inputs_ = [inp.clone().to(torch.float64) for inp in inputs]
+        out2 = m(*inputs_, use_fallback=True)
 
         assert out1.shape[:-1] == torch.broadcast_shapes(*batches)
         assert out1.dtype == dtype
-        assert out2.dtype == dtype
 
-        torch.testing.assert_close(out1, out2, atol=tol, rtol=tol)
+        torch.testing.assert_close(out1, out2.to(dtype), atol=tol, rtol=tol)
 
         grad1 = torch.autograd.grad(out1.sum(), inputs, create_graph=True)
-        grad2 = torch.autograd.grad(out2.sum(), inputs, create_graph=True)
+        grad2 = torch.autograd.grad(out2.sum(), inputs_, create_graph=True)
 
         for g1, g2 in zip(grad1, grad2):
-            torch.testing.assert_close(g1, g2, atol=10 * tol, rtol=10 * tol)
+            torch.testing.assert_close(g1, g2.to(dtype), atol=10 * tol, rtol=10 * tol)
 
         double_grad1 = torch.autograd.grad(sum(g.sum() for g in grad1), inputs)
-        double_grad2 = torch.autograd.grad(sum(g.sum() for g in grad2), inputs)
+        double_grad2 = torch.autograd.grad(sum(g.sum() for g in grad2), inputs_)
 
         for g1, g2 in zip(double_grad1, double_grad2):
-            torch.testing.assert_close(g1, g2, atol=100 * tol, rtol=100 * tol)
+            torch.testing.assert_close(g1, g2.to(dtype), atol=100 * tol, rtol=100 * tol)

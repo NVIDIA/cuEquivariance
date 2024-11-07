@@ -63,26 +63,30 @@ def test_primitive_indexed_symmetric_tensor_product_cuda_vs_fx(
     x1 = torch.randn(
         (i0.size(0), m.x1_size), device=device, dtype=dtype, requires_grad=True
     )
+    x0_ = x0.clone().to(torch.float64)
+    x1_ = x1.clone().to(torch.float64)
 
     out1 = m(x0, i0, x1, use_fallback=False)
-    out2 = m(x0, i0, x1, use_fallback=True)
+    m = cuet.IWeightedSymmetricTensorProduct(
+        ds, math_dtype=torch.float64, device=device, optimize_fallback=True
+    )
+    out2 = m(x0_, i0, x1_, use_fallback=True)
 
     assert out1.dtype == dtype
-    assert out2.dtype == dtype
 
-    torch.testing.assert_close(out1, out2, atol=tol, rtol=tol)
+    torch.testing.assert_close(out1, out2.to(dtype), atol=tol, rtol=tol)
 
     grad1 = torch.autograd.grad(out1.sum(), (x0, x1), create_graph=True)
-    grad2 = torch.autograd.grad(out2.sum(), (x0, x1), create_graph=True)
+    grad2 = torch.autograd.grad(out2.sum(), (x0_, x1_), create_graph=True)
 
     for g1, g2 in zip(grad1, grad2):
-        torch.testing.assert_close(g1, g2, atol=10 * tol, rtol=10 * tol)
+        torch.testing.assert_close(g1, g2.to(dtype), atol=10 * tol, rtol=10 * tol)
 
     double_grad1 = torch.autograd.grad(sum(g.sum() for g in grad1), (x0, x1))
-    double_grad2 = torch.autograd.grad(sum(g.sum() for g in grad2), (x0, x1))
+    double_grad2 = torch.autograd.grad(sum(g.sum() for g in grad2), (x0_, x1_))
 
     for g1, g2 in zip(double_grad1, double_grad2):
-        torch.testing.assert_close(g1, g2, atol=100 * tol, rtol=100 * tol)
+        torch.testing.assert_close(g1, g2.to(dtype), atol=100 * tol, rtol=100 * tol)
 
 
 @pytest.mark.parametrize(

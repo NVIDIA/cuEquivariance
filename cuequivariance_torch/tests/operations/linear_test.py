@@ -27,28 +27,27 @@ list_of_irreps = [
 @pytest.mark.parametrize("irreps_out", list_of_irreps)
 @pytest.mark.parametrize("layout", [cue.mul_ir, cue.ir_mul])
 @pytest.mark.parametrize("shared_weights", [True, False])
-def test_linear(
+def test_linear_fwd(
     irreps_in: cue.Irreps,
     irreps_out: cue.Irreps,
     layout: cue.IrrepsLayout,
     shared_weights: bool,
 ):
-    logging.basicConfig(level=logging.DEBUG)
-
     linear = cuet.Linear(
         irreps_in,
         irreps_out,
         layout=layout,
         shared_weights=shared_weights,
         device="cuda",
+        dtype=torch.float64,
     )
-    x = torch.randn(10, irreps_in.dim).cuda()
+    x = torch.randn(10, irreps_in.dim, dtype=torch.float64).cuda()
 
     if shared_weights:
         y = linear(x)
         y_fx = linear(x, use_fallback=True)
     else:
-        w = torch.randn(10, linear.weight_numel).cuda()
+        w = torch.randn(10, linear.weight_numel, dtype=torch.float64).cuda()
         y = linear(x, w)
         y_fx = linear(x, w, use_fallback=True)
 
@@ -67,26 +66,30 @@ def test_linear_bwd_bwd(
     layout: cue.IrrepsLayout,
     shared_weights: bool,
 ):
-    logging.basicConfig(level=logging.DEBUG)
-
     linear = cuet.Linear(
         irreps_in,
         irreps_out,
         layout=layout,
         shared_weights=shared_weights,
-    ).cuda()
+        device="cuda",
+        dtype=torch.float64,
+    )
 
     outputs = dict()
     for use_fallback in [True, False]:
         # reset the seed to ensure the same initialization
         torch.manual_seed(0)
 
-        x = torch.randn(10, irreps_in.dim, requires_grad=True, device="cuda")
+        x = torch.randn(
+            10, irreps_in.dim, requires_grad=True, device="cuda", dtype=torch.float64
+        )
 
         if shared_weights:
             y = linear(x, use_fallback=use_fallback)
         else:
-            w = torch.randn(10, linear.weight_numel, requires_grad=True).cuda()
+            w = torch.randn(
+                10, linear.weight_numel, requires_grad=True, dtype=torch.float64
+            ).cuda()
             y = linear(x, w, use_fallback=use_fallback)
 
         (grad,) = torch.autograd.grad(
@@ -125,14 +128,12 @@ def test_no_layout_warning():
 @pytest.mark.parametrize("irreps_out", list_of_irreps)
 @pytest.mark.parametrize("layout", [cue.mul_ir, cue.ir_mul])
 @pytest.mark.parametrize("shared_weights", [True, False])
-def test_linear(
+def test_linear_copy(
     irreps_in: cue.Irreps,
     irreps_out: cue.Irreps,
     layout: cue.IrrepsLayout,
     shared_weights: bool,
 ):
-    logging.basicConfig(level=logging.DEBUG)
-
     linear = cuet.Linear(
         irreps_in,
         irreps_out,
