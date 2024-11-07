@@ -27,14 +27,12 @@ list_of_irreps = [
 @pytest.mark.parametrize("irreps_out", list_of_irreps)
 @pytest.mark.parametrize("layout", [cue.mul_ir, cue.ir_mul])
 @pytest.mark.parametrize("shared_weights", [True, False])
-def test_linear(
+def test_linear_fwd(
     irreps_in: cue.Irreps,
     irreps_out: cue.Irreps,
     layout: cue.IrrepsLayout,
     shared_weights: bool,
 ):
-    logging.basicConfig(level=logging.DEBUG)
-
     linear = cuet.Linear(
         irreps_in,
         irreps_out,
@@ -67,8 +65,6 @@ def test_linear_bwd_bwd(
     layout: cue.IrrepsLayout,
     shared_weights: bool,
 ):
-    logging.basicConfig(level=logging.DEBUG)
-
     linear = cuet.Linear(
         irreps_in,
         irreps_out,
@@ -125,14 +121,12 @@ def test_no_layout_warning():
 @pytest.mark.parametrize("irreps_out", list_of_irreps)
 @pytest.mark.parametrize("layout", [cue.mul_ir, cue.ir_mul])
 @pytest.mark.parametrize("shared_weights", [True, False])
-def test_linear(
+def test_linear_copy(
     irreps_in: cue.Irreps,
     irreps_out: cue.Irreps,
     layout: cue.IrrepsLayout,
     shared_weights: bool,
 ):
-    logging.basicConfig(level=logging.DEBUG)
-
     linear = cuet.Linear(
         irreps_in,
         irreps_out,
