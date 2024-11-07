@@ -79,9 +79,7 @@ If compatibility with old models is desired, it is possible to enforce the use o
     new_irreps = cue.Irreps(O3_e3nn, '1x0e+1x1o')
 
 
-Here is some snippets useful for accelerating MACE:
-    - `Using PyTorch <#pytorch>`_
-    - `Using JAX <#jax>`_
+Here are some snippets useful for accelerating MACE, in PyTorch and JAX.
 
 .. _pytorch:
 
