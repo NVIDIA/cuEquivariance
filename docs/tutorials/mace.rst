@@ -342,7 +342,7 @@ First, we import the necessary libraries.
     import cuequivariance_jax as cuex
     import jax
     import jax.numpy as jnp
-    from cuequivariance import equivariant_tensor_product as etp
+    from cuequivariance import descriptors
     from cuequivariance.experimental.mace import symmetric_contraction
     from cuequivariance_jax.experimental.utils import MultiLayerPerceptron, gather
 
