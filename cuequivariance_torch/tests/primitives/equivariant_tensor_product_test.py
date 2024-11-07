@@ -39,18 +39,21 @@ def make_descriptors():
     )
 
 
-@pytest.mark.parametrize("e", make_descriptors())
-@pytest.mark.parametrize(
-    "dtype, math_dtype",
-    [
-        (torch.float16, torch.float32),
+settings1 = [
+    (torch.float16, torch.float32),
+    (torch.float32, torch.float64),
+    (torch.float64, torch.float32),
+    (torch.float32, torch.float32),
+    (torch.float64, torch.float64),
+]
+if torch.cuda.get_device_capability()[0] >= 8:
+    settings1 += [
         (torch.bfloat16, torch.float32),
-        (torch.float32, torch.float64),
-        (torch.float64, torch.float32),
-        (torch.float32, torch.float32),
-        (torch.float64, torch.float64),
-    ],
-)
+    ]
+
+
+@pytest.mark.parametrize("e", make_descriptors())
+@pytest.mark.parametrize("dtype, math_dtype", settings1)
 def test_performance_cuda_vs_fx(
     e: cue.EquivariantTensorProduct,
     dtype: torch.dtype,
@@ -84,18 +87,21 @@ def test_performance_cuda_vs_fx(
     assert t0 < t1
 
 
-@pytest.mark.parametrize("e", make_descriptors())
-@pytest.mark.parametrize(
-    "dtype, math_dtype, atol, rtol",
-    [
-        (torch.float16, torch.float32, 1, 0.2),
+settings2 = [
+    (torch.float16, torch.float32, 1, 0.2),
+    (torch.float32, torch.float32, 1e-4, 1e-6),
+    (torch.float32, torch.float64, 1e-5, 1e-6),
+    (torch.float64, torch.float32, 1e-5, 1e-6),
+    (torch.float64, torch.float64, 1e-12, 0),
+]
+if torch.cuda.get_device_capability()[0] >= 8:
+    settings2 += [
         (torch.bfloat16, torch.float32, 1, 0.2),
-        (torch.float32, torch.float32, 1e-4, 1e-6),
-        (torch.float32, torch.float64, 1e-5, 1e-6),
-        (torch.float64, torch.float32, 1e-5, 1e-6),
-        (torch.float64, torch.float64, 1e-12, 0),
-    ],
-)
+    ]
+
+
+@pytest.mark.parametrize("e", make_descriptors())
+@pytest.mark.parametrize("dtype, math_dtype, atol, rtol", settings2)
 def test_precision_cuda_vs_fx(
     e: cue.EquivariantTensorProduct,
     dtype: torch.dtype,

@@ -68,18 +68,20 @@ def make_descriptors():
             yield d.move_operand_first(2)
 
 
+settings = [
+    (torch.float16, torch.float32, 1.0),
+    (torch.float32, torch.float64, 1e-5),
+    (torch.float64, torch.float32, 1e-5),
+    (torch.float32, torch.float32, 1e-5),
+    (torch.float64, torch.float64, 1e-12),
+]
+
+if torch.cuda.get_device_capability()[0] >= 8:
+    settings += [(torch.bfloat16, torch.float32, 1.0)]
+
+
 @pytest.mark.parametrize("d", make_descriptors())
-@pytest.mark.parametrize(
-    "dtype, math_dtype, tol",
-    [
-        (torch.float16, torch.float32, 1.0),
-        (torch.bfloat16, torch.float32, 1.0),
-        (torch.float32, torch.float64, 1e-5),
-        (torch.float64, torch.float32, 1e-5),
-        (torch.float32, torch.float32, 1e-5),
-        (torch.float64, torch.float64, 1e-12),
-    ],
-)
+@pytest.mark.parametrize("dtype, math_dtype, tol", settings)
 def test_primitive_tensor_product_cuda_vs_fx(
     d: stp.SegmentedTensorProduct,
     dtype: torch.dtype,

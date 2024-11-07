@@ -36,19 +36,23 @@ def make_descriptors():
     yield [d1, d3]
 
 
-@pytest.mark.parametrize("ds", make_descriptors())
-@pytest.mark.parametrize(
-    "dtype, math_dtype, tol",
-    [
-        (torch.float64, torch.float64, 1e-12),
-        (torch.float32, torch.float32, 1e-5),
-        (torch.float32, torch.float64, 1e-5),
-        (torch.float16, torch.float32, 1.0),
-        (torch.float16, torch.float64, 0.1),
+settings1 = [
+    (torch.float64, torch.float64, 1e-12),
+    (torch.float32, torch.float32, 1e-5),
+    (torch.float32, torch.float64, 1e-5),
+    (torch.float16, torch.float32, 1.0),
+    (torch.float16, torch.float64, 0.1),
+]
+
+if torch.cuda.get_device_capability()[0] >= 8:
+    settings1 += [
         (torch.bfloat16, torch.float32, 1.0),
         (torch.bfloat16, torch.float64, 0.5),
-    ],
-)
+    ]
+
+
+@pytest.mark.parametrize("ds", make_descriptors())
+@pytest.mark.parametrize("dtype, math_dtype, tol", settings1)
 def test_primitive_indexed_symmetric_tensor_product_cuda_vs_fx(
     ds: list[stp.SegmentedTensorProduct], dtype, math_dtype, tol: float
 ):
@@ -89,16 +93,20 @@ def test_primitive_indexed_symmetric_tensor_product_cuda_vs_fx(
         torch.testing.assert_close(g1, g2.to(dtype), atol=100 * tol, rtol=100 * tol)
 
 
-@pytest.mark.parametrize(
-    "dtype, math_dtype",
-    [
-        (torch.float64, torch.float64),
-        (torch.float32, torch.float32),
-        (torch.float16, torch.float32),
-        (torch.float32, torch.float64),
+settings2 = [
+    (torch.float64, torch.float64),
+    (torch.float32, torch.float32),
+    (torch.float16, torch.float32),
+    (torch.float32, torch.float64),
+]
+
+if torch.cuda.get_device_capability()[0] >= 8:
+    settings2 += [
         (torch.bfloat16, torch.float32),
-    ],
-)
+    ]
+
+
+@pytest.mark.parametrize("dtype, math_dtype", settings2)
 def test_math_dtype(
     dtype: torch.dtype,
     math_dtype: torch.dtype,

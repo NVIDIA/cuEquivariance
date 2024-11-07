@@ -12,11 +12,13 @@ import cuequivariance_torch as cuet
 
 import pytest
 
+dtypes = [torch.float32, torch.float64, torch.float16]
+if torch.cuda.get_device_capability()[0] >= 8:
+    dtypes += [torch.bfloat16]
+
 
 @pytest.mark.parametrize("use_fallback", [False, True])
-@pytest.mark.parametrize(
-    "dtype", [torch.float64, torch.float32, torch.float16, torch.bfloat16]
-)
+@pytest.mark.parametrize("dtype", dtypes)
 def test_transpose(use_fallback: bool, dtype: torch.dtype):
     """
     1 2 3       1 4
