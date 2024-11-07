@@ -41,10 +41,11 @@ def test_channel_wise(
         internal_weights=True,
         layout=layout,
         device="cuda",
+        dtype=torch.float64,
     )
 
-    x1 = torch.randn(32, irreps1.dim).cuda()
-    x2 = torch.randn(32, irreps2.dim).cuda()
+    x1 = torch.randn(32, irreps1.dim, dtype=torch.float64).cuda()
+    x2 = torch.randn(32, irreps2.dim, dtype=torch.float64).cuda()
 
     out1 = m(x1, x2, use_fallback=use_fallback)
 
@@ -72,11 +73,12 @@ def test_channel_wise_bwd_bwd():
         internal_weights=False,
         layout=cue.ir_mul,
         device="cuda",
+        dtype=torch.float64,
     )
 
-    x1 = torch.randn(32, irreps1.dim, device="cuda", requires_grad=True)
-    x2 = torch.randn(32, irreps2.dim, device="cuda", requires_grad=True)
-    w = torch.randn(m.weight_numel, device="cuda", requires_grad=True)
+    x1 = torch.randn(32, irreps1.dim, device="cuda", requires_grad=True, dtype=torch.float64)
+    x2 = torch.randn(32, irreps2.dim, device="cuda", requires_grad=True, dtype=torch.float64)
+    w = torch.randn(m.weight_numel, device="cuda", requires_grad=True, dtype=torch.float64)
 
     outputs = {}
     for use_fallback in [True, False]:
@@ -90,11 +92,11 @@ def test_channel_wise_bwd_bwd():
         outputs[use_fallback] = (ggrad1, ggrad2, ggrad3)
 
     torch.testing.assert_close(
-        outputs[True][0], outputs[False][0], atol=1e-3, rtol=1e-5
+        outputs[True][0], outputs[False][0], atol=1e-5, rtol=1e-5
     )
     torch.testing.assert_close(
-        outputs[True][1], outputs[False][1], atol=1e-3, rtol=1e-5
+        outputs[True][1], outputs[False][1], atol=1e-5, rtol=1e-5
     )
     torch.testing.assert_close(
-        outputs[True][2], outputs[False][2], atol=1e-3, rtol=1e-5
+        outputs[True][2], outputs[False][2], atol=1e-5, rtol=1e-5
     )
