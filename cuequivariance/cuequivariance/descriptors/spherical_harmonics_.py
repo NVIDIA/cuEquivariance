@@ -14,7 +14,6 @@ import sympy as sp
 
 import cuequivariance as cue
 from cuequivariance import segmented_tensor_product as stp
-from cuequivariance import descriptors
 from cuequivariance.misc.sympy_utils import sqrtQarray_to_sympy
 
 

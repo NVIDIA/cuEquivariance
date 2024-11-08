@@ -57,6 +57,7 @@ This descriptor is then used to create a :class:`~cuequivariance_torch.Equivaria
 
    tutorials/irreps
    tutorials/layout
+   tutorials/etp
    tutorials/stp
    tutorials/mace
 
