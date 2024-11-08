@@ -16,6 +16,6 @@ When representing a collection of irreps with multiplicities there is two ways t
    * **(ir, mul)** - Irreps are the outermost dimension.
    * **(mul, ir)** - Multiplicities are the outermost dimension. This is the layout used by ``e3nn``.
 
-.. image:: _static/layout.png
+.. image:: /_static/layout.png
    :alt: Illustration of data layouts
    :align: center
