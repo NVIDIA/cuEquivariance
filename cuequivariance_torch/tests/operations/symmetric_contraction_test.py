@@ -17,6 +17,10 @@ import cuequivariance as cue
 import cuequivariance_torch as cuet
 from cuequivariance.experimental.mace.e3nn_irreps import O3_e3nn
 
+USE_TF32 = False
+torch.backends.cuda.matmul.allow_tf32 = USE_TF32
+torch.backends.cudnn.allow_tf32 = USE_TF32
+
 
 @pytest.mark.parametrize("dtype", [torch.float64, torch.float32])
 @pytest.mark.parametrize("layout", [cue.ir_mul, cue.mul_ir])
@@ -88,6 +92,7 @@ def test_mace_compatibility():
         original_mace=True,
         device="cuda",
         dtype=torch.float32,
+        math_dtype=torch.float64,
     )
     n_sc.weight.data = from64(
         (2, 164 // mul, mul),
@@ -95,4 +100,4 @@ def test_mace_compatibility():
     )
     output = n_sc(x, i)
 
-    assert torch.allclose(output, expected_output, atol=1e-5, rtol=1e-5)
+    torch.testing.assert_close(output, expected_output, atol=1e-5, rtol=1e-5)
