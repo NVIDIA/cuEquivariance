@@ -58,17 +58,23 @@ def tensor_product(
         jax.Array: The result of the tensor product computation.
 
     See Also:
-        :func:`SegmentedTensorProduct <cuequivariance.segmented_tensor_product.SegmentedTensorProduct>`
+        :class:`cuequivariance.SegmentedTensorProduct`
 
-
-    Algorithms       | Requires Identical Segment Shapes | Compilation     | Execution
-    -----------------+-----------------------------------+-----------------+-----------
-    sliced           | No                                | Several minutes | It depends
-    stacked          | Yes                               | Several minutes | It depends
-    compact_stacked  | Yes                               | Few seconds     | It depends
-    indexed_compact  | Yes                               | Few seconds     | It depends
-    indexed_vmap     | Yes                               | Few seconds     | Probably the second slowest
-    indexed_for_loop | Yes                               | Few seconds     | Probably the slowest
+    +-----------------+-----------------------------------+-----------------+----------------------------+
+    | Algorithms      | Requires Identical Segment Shapes | Compilation     | Execution                  |
+    +=================+===================================+=================+============================+
+    |sliced           | No                                | Several minutes | It depends                 |
+    +-----------------+-----------------------------------+-----------------+----------------------------+
+    |stacked          | Yes                               | Several minutes | It depends                 |
+    +-----------------+-----------------------------------+-----------------+----------------------------+
+    |compact_stacked  | Yes                               | Few seconds     | It depends                 |
+    +-----------------+-----------------------------------+-----------------+----------------------------+
+    |indexed_compact  | Yes                               | Few seconds     | It depends                 |
+    +-----------------+-----------------------------------+-----------------+----------------------------+
+    |indexed_vmap     | Yes                               | Few seconds     | Probably the second slowest|
+    +-----------------+-----------------------------------+-----------------+----------------------------+
+    |indexed_for_loop | Yes                               | Few seconds     | Probably the slowest       |
+    +-----------------+-----------------------------------+-----------------+----------------------------+
     """
     if isinstance(precision, str):
         precision = jax.lax.Precision[precision]

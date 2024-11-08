@@ -27,14 +27,14 @@ class FullyConnectedTensorProductConv(nn.Module):
     The left operand of tensor product is the node features; the right operand
     consists of the spherical harmonic of edge vector.
 
-    Mathematical formulation::
+    Mathematical formulation:
 
     .. math::
 
         \sum_{b \in \mathcal{N}_a} \mathbf{h}_b \otimes_{\psi_{a b}} Y\left(\hat{r}_{a b}\right)
 
     where the path weights \psi_{a b} can be constructed from edge
-    embeddings and scalar features using an MLP::
+    embeddings and scalar features using an MLP:
 
     .. math::
 
@@ -57,7 +57,7 @@ class FullyConnectedTensorProductConv(nn.Module):
         >>> sh_irreps = cue.Irreps("O3", "0e + 1o")
         >>> out_irreps = cue.Irreps("O3", "4x0e + 4x1o")
 
-        Case 1: MLP with the input layer having 6 channels and 2 hidden layers
+        **Case 1**: MLP with the input layer having 6 channels and 2 hidden layers
         having 16 channels. edge_emb.size(1) must match the size of the input layer: 6
 
         >>> conv1 = FullyConnectedTensorProductConv(in_irreps, sh_irreps, out_irreps,
@@ -86,7 +86,7 @@ class FullyConnectedTensorProductConv(nn.Module):
         )
         >>> # out = conv1(src_features, edge_sh, edge_emb, graph)
 
-        Case 2: If edge_emb is constructed by concatenating scalar features from
+        **Case 2**: If edge_emb is constructed by concatenating scalar features from
         edges, sources and destinations, as in DiffDock, the layer can accept each
         scalar component separately:
 
@@ -99,7 +99,7 @@ class FullyConnectedTensorProductConv(nn.Module):
         >>> # edge_emb = torch.hstack((edge_scalars, src_scalars[src], dst_scalars[dst]))
         >>> # out = conv1(src_features, edge_sh, edge_emb, graph)
 
-        Case 3: No MLP, edge_emb will be directly used as the tensor product weights:
+        **Case 3**: No MLP, edge_emb will be directly used as the tensor product weights:
 
         >>> conv3 = FullyConnectedTensorProductConv(in_irreps, sh_irreps, out_irreps,
         ...     mlp_channels=None, layout=cue.ir_mul).cuda()
