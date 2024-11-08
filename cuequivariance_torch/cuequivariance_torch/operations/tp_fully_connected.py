@@ -65,6 +65,8 @@ class FullyConnectedTensorProduct(torch.nn.Module):
         )
         assert_same_group(irreps_in1, irreps_in2, irreps_out)
 
+        math_dtype = math_dtype or dtype
+
         e = descriptors.fully_connected_tensor_product(
             irreps_in1, irreps_in2, irreps_out
         )

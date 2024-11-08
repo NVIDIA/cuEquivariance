@@ -63,6 +63,8 @@ class ChannelWiseTensorProduct(torch.nn.Module):
         irreps_in1, irreps_in2 = default_irreps(irreps_in1, irreps_in2)
         assert_same_group(irreps_in1, irreps_in2)
 
+        math_dtype = math_dtype or dtype
+
         e = descriptors.channelwise_tensor_product(
             irreps_in1, irreps_in2, filter_irreps_out
         )

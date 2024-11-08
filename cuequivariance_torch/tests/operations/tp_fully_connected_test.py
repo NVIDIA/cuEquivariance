@@ -41,17 +41,18 @@ def test_fully_connected(
         internal_weights=True,
         layout=layout,
         device="cuda",
+        dtype=torch.float64,
     )
 
-    x1 = torch.randn(32, irreps1.dim).cuda()
-    x2 = torch.randn(32, irreps2.dim).cuda()
+    x1 = torch.randn(32, irreps1.dim, dtype=torch.float64).cuda()
+    x2 = torch.randn(32, irreps2.dim, dtype=torch.float64).cuda()
 
     out1 = m(x1, x2, use_fallback=use_fallback)
 
     d = descriptors.fully_connected_tensor_product(irreps1, irreps2, irreps3).d
     if layout == cue.mul_ir:
         d = d.add_or_transpose_modes("uvw,ui,vj,wk+ijk")
-    mfx = cuet.TensorProduct(d).cuda()
+    mfx = cuet.TensorProduct(d, math_dtype=torch.float64).cuda()
     out2 = mfx(
         m.weight.to(torch.float64),
         x1.to(torch.float64),

@@ -54,7 +54,7 @@ def test_channel_wise(
     assert d.subscripts == "u,iu,j,ku+ijk"
     if layout == cue.mul_ir:
         d = d.add_or_transpose_modes("u,ui,j,uk+ijk")
-    mfx = cuet.TensorProduct(d).cuda()
+    mfx = cuet.TensorProduct(d, math_dtype=torch.float64).cuda()
     out2 = mfx(m.weight, x1, x2, use_fallback=True)
 
     torch.testing.assert_close(out1, out2, atol=1e-5, rtol=1e-5)
@@ -76,9 +76,15 @@ def test_channel_wise_bwd_bwd():
         dtype=torch.float64,
     )
 
-    x1 = torch.randn(32, irreps1.dim, device="cuda", requires_grad=True, dtype=torch.float64)
-    x2 = torch.randn(32, irreps2.dim, device="cuda", requires_grad=True, dtype=torch.float64)
-    w = torch.randn(m.weight_numel, device="cuda", requires_grad=True, dtype=torch.float64)
+    x1 = torch.randn(
+        32, irreps1.dim, device="cuda", requires_grad=True, dtype=torch.float64
+    )
+    x2 = torch.randn(
+        32, irreps2.dim, device="cuda", requires_grad=True, dtype=torch.float64
+    )
+    w = torch.randn(
+        m.weight_numel, device="cuda", requires_grad=True, dtype=torch.float64
+    )
 
     outputs = {}
     for use_fallback in [True, False]:
