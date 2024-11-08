@@ -67,8 +67,6 @@ html_show_sphinx = False
 
 # Logo and favicon
 html_static_path = ["_static"]
-html_logo = "_static/cuequivariance-240x240.png"
-html_favicon = "_static/cuequivariance-32x32.png"
 
 # -- Other options -----------------------------------------------------------
 

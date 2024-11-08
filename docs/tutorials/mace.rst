@@ -8,19 +8,22 @@
    without an express license agreement from NVIDIA CORPORATION or
    its affiliates is strictly prohibited.
 
-How to accelerate MACE
+In depth example: MACE
 ======================
 
-
+Data Structure
+--------------
 
 The layout
-----------
+^^^^^^^^^^
+*(check the layout guide for more information about this)*
+
 *cuEquivariance* offers the possibility to use a more efficient layout for the irreps.
 The old layout, compatible with ``e3nn`` operations, is called ``cue.mul_ir``, while the new layout is called ``cue.ir_mul``.
 
 
 Irreps
-------
+^^^^^^
 *(check the irreps guide for more information about this)*
 
 If we stick to the old layout, we can equivalently define ``e3nn`` and ``cue`` Irreps as:
@@ -76,14 +79,12 @@ If compatibility with old models is desired, it is possible to enforce the use o
     new_irreps = cue.Irreps(O3_e3nn, '1x0e+1x1o')
 
 
-Here is some snippets useful for accelerating MACE:
-    - `Using PyTorch <#pytorch>`_
-    - `Using JAX <#jax>`_
+Here are some snippets useful for accelerating MACE, in PyTorch and JAX.
 
 .. _pytorch:
 
 Using PyTorch
-^^^^^^^^^^^^^
+-------------
 
   **Note:** in the following we will refer to the ``cuequivariance`` library as ``cue`` and to the   ``cuequivariance_torch`` library as ``cuet``.
 
@@ -101,7 +102,7 @@ The layout can be changed throughout the code, but this requires all operations 
 For the operations where the kernel is not yet optimized, we can fall back to the FX implementation (implementation using ``torch.fx`` like in *e3nn*) with a simple flag.
 
 Common options
---------------
+^^^^^^^^^^^^^^
 These general rules are valid for most operations:
 
 ``layout``
@@ -129,7 +130,7 @@ We can thus set some of this common options:
 .. _mace_tutorial_pytorch_symmetric_contraction:
 
 SymmetricContraction
---------------------
+^^^^^^^^^^^^^^^^^^^^
 
 The original SymmetricContraction was an operation written specifically for MACE.
 It performs operations on a single input_feature repeated multiple times, but uses a second input (or attribute, 1-hot encoded) to select weights depending on the atomic species.
@@ -185,7 +186,7 @@ The flag ``original_mace`` ensures compatibility with the old SymmetricContracti
 .. _mace_tutorial_pytorch_channel_wise:
 
 ChannelWiseTensorProduct
-------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^
 
 The ``ChannelWiseTensorProduct`` replaces the custom operation that was obtained in MACE by defining custom instructions and calling a ``TensorProduct``.
 This particular operation was also called with external weights computed through a MLP. The same can be done in ``cuet``.
@@ -241,7 +242,7 @@ The new version for this part of the code will thus read:
 .. _mace_tutorial_pytorch_linear:
 
 Linear
-------
+^^^^^^
 
 This is one of the simplest operations, and it is essentially unchanged.
 Depending on the irreps size, the kernel might not improve above the naive implementation, we thus show an example where the fallback is employed.
@@ -281,7 +282,7 @@ Depending on the irreps size, the kernel might not improve above the naive imple
 .. _mace_tutorial_pytorch_fully_connected_tp:
 
 FullyConnectedTensorProduct
----------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The ``FullyConnectedTensorProduct`` is used in MACE for the ``skip-tp`` operation.
 In this case, the "node attributes" used to select the weights are still accepted as 1-hot.
@@ -328,7 +329,7 @@ This operation is also essentially unchanged, and we show a version using the fa
 .. _jax:
 
 Using JAX
-^^^^^^^^^
+---------
 
   **Note:** In the following, we will refer to the ``cuequivariance`` library as ``cue`` and the ``cuequivariance_jax`` library as ``cuex``.
 
@@ -342,7 +343,7 @@ First, we import the necessary libraries.
     import cuequivariance_jax as cuex
     import jax
     import jax.numpy as jnp
-    from cuequivariance import equivariant_tensor_product as etp
+    from cuequivariance import descriptors
     from cuequivariance.experimental.mace import symmetric_contraction
     from cuequivariance_jax.experimental.utils import MultiLayerPerceptron, gather
 

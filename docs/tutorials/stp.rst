@@ -8,8 +8,8 @@
    without an express license agreement from NVIDIA CORPORATION or
    its affiliates is strictly prohibited.
 
-How to create a custom Segmented Tensor Product
-===============================================
+Segmented Tensor Product
+========================
 
 In this example, we will show how to create a custom tensor product descriptor and execute it.
 First we need to import the necessary modules.

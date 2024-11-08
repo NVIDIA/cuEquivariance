@@ -12,13 +12,14 @@ import cuequivariance as cue
 
 def gatr_linear(mul_in: int, mul_out: int) -> cue.SegmentedTensorProduct:
     """
-    subsrcipts: weights[uv],input[iu],output[iv]
+    subsrcipts: ``weights[uv],input[iu],output[iv]``
 
     references:
-    - https://arxiv.org/pdf/2305.18415
-    - https://github.com/Qualcomm-AI-research/geometric-algebra-transformer/blob/3f967c978445648ef83d87190d32176f7fd91565/gatr/primitives/linear.py#L33-L43
+      * https://arxiv.org/pdf/2305.18415
+      * `Source code <https://github.com/Qualcomm-AI-research/geometric-algebra-transformer/blob/3f967c978445648ef83d87190d32176f7fd91565/gatr/primitives/linear.py#L33-L43>`_
 
-    Example:
+    Example
+    -------
     >>> d = gatr_linear(32, 32)
     >>> d
     uv,iu,iv sizes=9216,512,512 num_segments=9,8,8 num_paths=12 i={1, 3} u=32 v=32
@@ -50,13 +51,14 @@ def gatr_linear(mul_in: int, mul_out: int) -> cue.SegmentedTensorProduct:
 
 def gatr_geometric_product() -> cue.SegmentedTensorProduct:
     """
-    subsrcipts: input1[i],input2[j],output[k]+ijk
+    subsrcipts: ``input1[i],input2[j],output[k]+ijk``
 
     references:
-    - https://arxiv.org/pdf/2305.18415
-    - https://github.com/Qualcomm-AI-research/geometric-algebra-transformer/blob/3f967c978445648ef83d87190d32176f7fd91565/gatr/primitives/bilinear.py#L63
+      * https://arxiv.org/pdf/2305.18415
+      * `Source code <https://github.com/Qualcomm-AI-research/geometric-algebra-transformer/blob/3f967c978445648ef83d87190d32176f7fd91565/gatr/primitives/bilinear.py#L63>`_
 
-    Example:
+    Example
+    -------
     >>> d = gatr_geometric_product(); d
     i,j,k+ijk sizes=16,16,16 num_segments=8,8,8 num_paths=60 i={1, 3} j={1, 3} k={1, 3}
 
@@ -87,13 +89,14 @@ def gatr_geometric_product() -> cue.SegmentedTensorProduct:
 
 def gatr_outer_product() -> cue.SegmentedTensorProduct:
     """
-    subsrcipts: input1[i],input2[j],output[k]+ijk
+    subsrcipts: ``input1[i],input2[j],output[k]+ijk``
 
     references:
-    - https://arxiv.org/pdf/2305.18415
-    - https://github.com/Qualcomm-AI-research/geometric-algebra-transformer/blob/3f967c978445648ef83d87190d32176f7fd91565/gatr/primitives/bilinear.py#L88
+      * https://arxiv.org/pdf/2305.18415
+      * `Source code <https://github.com/Qualcomm-AI-research/geometric-algebra-transformer/blob/3f967c978445648ef83d87190d32176f7fd91565/gatr/primitives/bilinear.py#L88>`_
 
-    Example:
+    Example
+    -------
     >>> d = gatr_outer_product(); d
     i,j,k+ijk sizes=16,16,16 num_segments=8,8,8 num_paths=30 i={1, 3} j={1, 3} k={1, 3}
     """

@@ -13,29 +13,33 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-cuEquivariance Documentation
-============================
+NVIDIA cuEquivariance Documentation
+===================================
+
+cuEquivariance is a Python library designed to facilitate the construction of high-performance equivariant neural networks using segmented tensor products. cuEquivariance provides a comprehensive API for describing segmented tensor products and optimized CUDA kernels for their execution. Additionally, cuEquivariance offers bindings for both PyTorch and JAX, ensuring broad compatibility and ease of integration.
 
 Equivariance is the mathematical formalization of the concept of "respecting symmetries." Robust physical models exhibit equivariance with respect to rotations and translations in three-dimensional space. Artificial intelligence models that incorporate equivariance are often more data-efficient.
-
-cuEquivariance is a Python library designed to facilitate the construction of high-performance equivariant neural networks using segmented tensor products. It provides a comprehensive API for describing segmented tensor products and optimized CUDA kernels for their execution. Additionally, cuEquivariance offers bindings for both PyTorch and JAX, ensuring broad compatibility and ease of integration.
 
 Installation
 ------------
 
-You can install cuEquivariance from PyPI with:
+The easiest way to install cuEquivariance is from `PyPi <https://pypi.org/>`_ using `pip <https://pip.pypa.io/en/stable/>`_.
 
 .. code-block:: bash
 
-   pip install cuequivariance
+   # Choose the frontend you want to use
+   pip install cuequivariance-jax
+   pip install cuequivariance-torch
+   pip install cuequivariance  # Installs only the core non-ML components
 
    # CUDA kernels for different CUDA versions
    pip install cuequivariance-ops-torch-cu11
    pip install cuequivariance-ops-torch-cu12
 
-   # Frontend for different ML frameworks
-   pip install cuequivariance-jax
-   pip install cuequivariance-torch
+Supported platforms
+-------------------
+
+``cuequivariance-ops-torch-*`` packages are only available for Linux x86_64.
 
 Organization
 ------------
@@ -49,9 +53,10 @@ This descriptor is then used to create a :class:`~cuequivariance_torch.Equivaria
 
 .. toctree::
    :maxdepth: 1
-   :caption: FAQ
+   :caption: Tutorials
 
    tutorials/irreps
+   tutorials/layout
    tutorials/stp
    tutorials/mace
 
