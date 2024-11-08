@@ -17,6 +17,40 @@ from cuequivariance.irreps_array.misc_ui import default_layout
 
 
 class EquivariantTensorProduct(torch.nn.Module):
+    r"""Equivariant tensor product.
+
+    Args:
+        e (cuequivariance.EquivariantTensorProduct): Equivariant tensor product.
+        layout (cuequivariance.IrrepsLayout): layout for inputs and output.
+        layout_in (cuequivariance.IrrepsLayout): layout for inputs.
+        layout_out (cuequivariance.IrrepsLayout): layout for output.
+        device (torch.device): device of the Module.
+        math_dtype (torch.dtype): dtype for internal computations.
+        optimize_fallback (bool): whether to optimize the fallback implementation.
+
+    Example:
+        >>> e = cue.descriptors.fully_connected_tensor_product(
+        ...    cue.Irreps("SO3", "2x1"), cue.Irreps("SO3", "2x1"), cue.Irreps("SO3", "2x1")
+        ... )
+        >>> w = torch.ones(e.inputs[0].irreps.dim)
+        >>> x1 = torch.ones(17, e.inputs[1].irreps.dim)
+        >>> x2 = torch.ones(17, e.inputs[2].irreps.dim)
+        >>> tp = cuet.EquivariantTensorProduct(e)
+        >>> tp(w, x1, x2)
+        tensor([[0., 0., 0., 0., 0., 0.],
+        ...
+                [0., 0., 0., 0., 0., 0.]])
+
+        You can optionally index the first input tensor:
+        
+        >>> w = torch.ones(3, e.inputs[0].irreps.dim)
+        >>> indices = torch.randint(3, (17,))
+        >>> tp(w, x1, x2, indices=indices)
+        tensor([[0., 0., 0., 0., 0., 0.],
+        ...
+                [0., 0., 0., 0., 0., 0.]])
+    """
+
     def __init__(
         self,
         e: cue.EquivariantTensorProduct,
@@ -31,7 +65,9 @@ class EquivariantTensorProduct(torch.nn.Module):
         optimize_fallback: Optional[bool] = None,
     ):
         super().__init__()
-
+        cue.descriptors.fully_connected_tensor_product(
+            cue.Irreps("SO3", "2x1"), cue.Irreps("SO3", "2x1"), cue.Irreps("SO3", "2x1")
+        )
         if not isinstance(layout_in, tuple):
             layout_in = (layout_in,) * e.num_inputs
         if len(layout_in) != e.num_inputs:
