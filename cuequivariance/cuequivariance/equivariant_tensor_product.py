@@ -320,7 +320,7 @@ class EquivariantTensorProduct:
             for iz, bs, operand in zip(itemsize, batch_sizes, self.operands)
         )
 
-    def backward(self, input: int) -> EquivariantTensorProduct:
+    def backward(self, input: int) -> tuple[EquivariantTensorProduct, tuple[int, ...]]:
         """
         The backward tensor product.
         """
@@ -350,18 +350,23 @@ class EquivariantTensorProduct:
                         * (d.num_operands - self.num_inputs)
                     )
 
+        ii = list(range(self.num_inputs))
         if remove_input:
-            return EquivariantTensorProduct(
+            old_oid = [self.num_operands - 1] + ii[:input] + ii[input + 1 :] + [ii[input]]
+            e =  EquivariantTensorProduct(
                 ds,
                 (self.output,)
                 + self.inputs[:input]
                 + self.inputs[input + 1 :]
                 + (self.inputs[input],),
             )
+            return e, tuple(old_oid)
         else:
-            return EquivariantTensorProduct(
+            old_oid = [self.num_operands - 1] + ii + [ii[input]]
+            e = EquivariantTensorProduct(
                 ds, (self.output,) + self.inputs + (self.inputs[input],)
             )
+            return e, tuple(old_oid)
 
     def stp_operand(self, oid: int) -> Optional[stp.Operand]:
         # output
