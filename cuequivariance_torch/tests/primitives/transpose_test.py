@@ -12,9 +12,9 @@ import cuequivariance_torch as cuet
 
 import pytest
 
-dtypes = [torch.float32, torch.float64, torch.float16]
+dtypes = [torch.float32, torch.float64]
 if torch.cuda.get_device_capability()[0] >= 8:
-    dtypes += [torch.bfloat16]
+    dtypes += [torch.float16, torch.bfloat16]
 
 
 @pytest.mark.parametrize("use_fallback", [False, True])

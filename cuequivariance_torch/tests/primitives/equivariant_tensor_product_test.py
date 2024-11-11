@@ -26,11 +26,15 @@ def make_descriptors():
     ).flatten_coefficient_modes()
 
     # This ETP will trigger the uniform1dx4 kernel
-    yield descriptors.channelwise_tensor_product(
-        cue.Irreps("O3", "32x0e + 32x1o"),
-        cue.Irreps("O3", "0e + 1o + 2e"),
-        cue.Irreps("O3", "0e + 1o"),
-    ).flatten_coefficient_modes().squeeze_modes()
+    yield (
+        descriptors.channelwise_tensor_product(
+            cue.Irreps("O3", "32x0e + 32x1o"),
+            cue.Irreps("O3", "0e + 1o + 2e"),
+            cue.Irreps("O3", "0e + 1o"),
+        )
+        .flatten_coefficient_modes()
+        .squeeze_modes()
+    )
 
     # These ETPs will trigger the symmetricContraction kernel
     yield descriptors.spherical_harmonics(cue.SO3(1), [1, 2, 3])
@@ -40,7 +44,6 @@ def make_descriptors():
 
 
 settings1 = [
-    (torch.float16, torch.float32),
     (torch.float32, torch.float64),
     (torch.float64, torch.float32),
     (torch.float32, torch.float32),
@@ -48,6 +51,7 @@ settings1 = [
 ]
 if torch.cuda.get_device_capability()[0] >= 8:
     settings1 += [
+        (torch.float16, torch.float32),
         (torch.bfloat16, torch.float32),
     ]
 
@@ -88,7 +92,6 @@ def test_performance_cuda_vs_fx(
 
 
 settings2 = [
-    (torch.float16, torch.float32, 1, 0.2),
     (torch.float32, torch.float32, 1e-4, 1e-6),
     (torch.float32, torch.float64, 1e-5, 1e-6),
     (torch.float64, torch.float32, 1e-5, 1e-6),
@@ -96,6 +99,7 @@ settings2 = [
 ]
 if torch.cuda.get_device_capability()[0] >= 8:
     settings2 += [
+        (torch.float16, torch.float32, 1, 0.2),
         (torch.bfloat16, torch.float32, 1, 0.2),
     ]
 

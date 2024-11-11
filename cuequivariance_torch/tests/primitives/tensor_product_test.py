@@ -69,7 +69,6 @@ def make_descriptors():
 
 
 settings = [
-    (torch.float16, torch.float32, 1.0),
     (torch.float32, torch.float64, 1e-5),
     (torch.float64, torch.float32, 1e-5),
     (torch.float32, torch.float32, 1e-5),
@@ -77,7 +76,10 @@ settings = [
 ]
 
 if torch.cuda.get_device_capability()[0] >= 8:
-    settings += [(torch.bfloat16, torch.float32, 1.0)]
+    settings += [
+        (torch.float16, torch.float32, 1.0),
+        (torch.bfloat16, torch.float32, 1.0),
+    ]
 
 
 @pytest.mark.parametrize("d", make_descriptors())

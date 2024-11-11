@@ -40,12 +40,12 @@ settings1 = [
     (torch.float64, torch.float64, 1e-12),
     (torch.float32, torch.float32, 1e-5),
     (torch.float32, torch.float64, 1e-5),
-    (torch.float16, torch.float32, 1.0),
-    (torch.float16, torch.float64, 0.1),
 ]
 
 if torch.cuda.get_device_capability()[0] >= 8:
     settings1 += [
+        (torch.float16, torch.float32, 1.0),
+        (torch.float16, torch.float64, 0.1),
         (torch.bfloat16, torch.float32, 1.0),
         (torch.bfloat16, torch.float64, 0.5),
     ]
@@ -96,12 +96,12 @@ def test_primitive_indexed_symmetric_tensor_product_cuda_vs_fx(
 settings2 = [
     (torch.float64, torch.float64),
     (torch.float32, torch.float32),
-    (torch.float16, torch.float32),
     (torch.float32, torch.float64),
 ]
 
 if torch.cuda.get_device_capability()[0] >= 8:
     settings2 += [
+        (torch.float16, torch.float32),
         (torch.bfloat16, torch.float32),
     ]
 
@@ -126,7 +126,7 @@ def test_math_dtype(
     # .to should have no effect
     for param in m.parameters():
         assert False  # no parameters
-    m = m.to(torch.float16)
+    m = m.to(torch.float64)
 
     out2 = m(x0, i0, x1, use_fallback=False)
 
