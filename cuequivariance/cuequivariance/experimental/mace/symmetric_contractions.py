@@ -1,19 +1,7 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
-#
-# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
-# property and proprietary rights in and to this material, related
-# documentation and any modifications thereto. Any use, reproduction,
-# disclosure or distribution of this material and related documentation
-# without an express license agreement from NVIDIA CORPORATION or
-# its affiliates is strictly prohibited.
-
-###########################################################################################
-# Higher Order Real Clebsch Gordan (based on e3nn by Mario Geiger)
-# Authors: Ilyes Batatia
-# This program is distributed under the MIT License (see MIT.md)
-###########################################################################################
-
+# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES
+# SPDX-FileCopyrightText: Copyright (c) 2022 ACEsuit/mace
+# SPDX-FileCopyrightText: Copyright (c) 2020 The Regents of the University of California, through Lawrence Berkeley National Laboratory (subject to receipt of any required approvals from the U.S. Dept. of Energy), Ecole Polytechnique Federale de Lausanne (EPFL), Free University of Berlin and Kostiantyn Lapchevskyi
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 from functools import cache
 from typing import *
 

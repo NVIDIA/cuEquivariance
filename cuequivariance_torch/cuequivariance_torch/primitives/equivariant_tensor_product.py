@@ -1,12 +1,5 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
-#
-# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
-# property and proprietary rights in and to this material, related
-# documentation and any modifications thereto. Any use, reproduction,
-# disclosure or distribution of this material and related documentation
-# without an express license agreement from NVIDIA CORPORATION or
-# its affiliates is strictly prohibited.
+# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES
+# SPDX-License-Identifier: Apache-2.0
 from typing import *
 
 import torch
@@ -42,7 +35,7 @@ class EquivariantTensorProduct(torch.nn.Module):
                 [0., 0., 0., 0., 0., 0.]])
 
         You can optionally index the first input tensor:
-        
+
         >>> w = torch.ones(3, e.inputs[0].irreps.dim)
         >>> indices = torch.randint(3, (17,))
         >>> tp(w, x1, x2, indices=indices)

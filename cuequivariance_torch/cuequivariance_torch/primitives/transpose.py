@@ -1,12 +1,5 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
-#
-# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
-# property and proprietary rights in and to this material, related
-# documentation and any modifications thereto. Any use, reproduction,
-# disclosure or distribution of this material and related documentation
-# without an express license agreement from NVIDIA CORPORATION or
-# its affiliates is strictly prohibited.
+# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES
+# SPDX-License-Identifier: Apache-2.0
 from typing import *
 
 import torch
@@ -87,7 +80,6 @@ class _Identity(torch.nn.Module):
 
 
 class TransposeSegments(torch.nn.Module):
-
     def __init__(
         self, segments: list[tuple[int, int]], device: Optional[torch.device] = None
     ):
