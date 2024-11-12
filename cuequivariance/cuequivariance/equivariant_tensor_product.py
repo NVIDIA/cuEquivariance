@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import copy
 import dataclasses
-from typing import *
+from typing import Optional, Sequence, Union
 
 import cuequivariance as cue
 from cuequivariance import segmented_tensor_product as stp
@@ -258,7 +258,7 @@ class EquivariantTensorProduct:
         else:
             layouts = [layout] * self.num_operands
         del layout
-        layouts = [cue.IrrepsLayout.as_layout(l) for l in layouts]
+        layouts = [cue.IrrepsLayout.as_layout(layout) for layout in layouts]
 
         def f(d: stp.SegmentedTensorProduct) -> stp.SegmentedTensorProduct:
             ii = self._map_operands_from_stp_to_etp(d)
@@ -297,7 +297,10 @@ class EquivariantTensorProduct:
 
         return EquivariantTensorProduct(
             [f(d) for d in self.ds],
-            [Operand(ope.irreps, l) for ope, l in zip(self.operands, layouts)],
+            [
+                Operand(ope.irreps, layout)
+                for ope, layout in zip(self.operands, layouts)
+            ],
         )
 
     def flop_cost(self, batch_size: int) -> int:
@@ -352,21 +355,12 @@ class EquivariantTensorProduct:
 
         ii = list(range(self.num_inputs))
         if remove_input:
-            old_oid = [self.num_operands - 1] + ii[:input] + ii[input + 1 :] + [ii[input]]
-            e =  EquivariantTensorProduct(
-                ds,
-                (self.output,)
-                + self.inputs[:input]
-                + self.inputs[input + 1 :]
-                + (self.inputs[input],),
-            )
-            return e, tuple(old_oid)
+            oids = [self.num_operands - 1] + ii[:input] + ii[input + 1 :] + [ii[input]]
         else:
-            old_oid = [self.num_operands - 1] + ii + [ii[input]]
-            e = EquivariantTensorProduct(
-                ds, (self.output,) + self.inputs + (self.inputs[input],)
-            )
-            return e, tuple(old_oid)
+            oids = [self.num_operands - 1] + ii + [ii[input]]
+
+        e = EquivariantTensorProduct(ds, tuple(self.operands[i] for i in oids))
+        return e, tuple(oids)
 
     def stp_operand(self, oid: int) -> Optional[stp.Operand]:
         # output
