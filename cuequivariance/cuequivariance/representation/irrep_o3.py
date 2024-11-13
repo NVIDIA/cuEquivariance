@@ -107,3 +107,10 @@ class O3(Irrep):
 
     def rotation(rep: O3, axis: np.ndarray, angle: float) -> np.ndarray:
         return SO3(l=rep.l).rotation(axis, angle)
+
+    # def exp_map(
+    #     self, continuous_params: np.ndarray, discrete_params: np.ndarray
+    # ) -> np.ndarray:
+    #     I = (-1) ** discrete_params[0]
+    #     R = SO3(l=self.l).exp_map(continuous_params, [])
+    #     return I * R

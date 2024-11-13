@@ -124,6 +124,7 @@ class SO3(Irrep):
         return SU2.algebra(rep)
 
     def rotation(self, axis: np.ndarray, angle: float) -> np.ndarray:
+        """Rotation matrix for the representation."""
         l = self.l
         m = np.arange(-l, l + 1)
 
@@ -144,3 +145,13 @@ class SO3(Irrep):
             R = round_to_sqrt_rational(R, 2**40 + 1)
 
         return R
+
+    # def exp_map(
+    #     self, continuous_params: np.ndarray, discrete_params: np.ndarray
+    # ) -> np.ndarray:
+    #     axis = continuous_params
+    #     angle = np.linalg.norm(axis)
+    #     if angle == 0:
+    #         return np.eye(self.dim)
+
+    #     return self.rotation(axis, angle)
