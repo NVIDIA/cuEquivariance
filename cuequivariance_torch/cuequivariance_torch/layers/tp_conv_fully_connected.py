@@ -95,6 +95,7 @@ class FullyConnectedTensorProductConv(nn.Module):
         This allows a smaller GEMM in the first MLP layer by performing GEMM on each
         component before indexing. The first-layer weights are split into sections
         for edges, sources and destinations, in that order. This is equivalent to
+        
         >>> # src, dst = graph.edge_index
         >>> # edge_emb = torch.hstack((edge_scalars, src_scalars[src], dst_scalars[dst]))
         >>> # out = conv1(src_features, edge_sh, edge_emb, graph)
