@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES
 # SPDX-FileCopyrightText: Copyright (c) 2020 The Regents of the University of California, through Lawrence Berkeley National Laboratory (subject to receipt of any required approvals from the U.S. Dept. of Energy), Ecole Polytechnique Federale de Lausanne (EPFL), Free University of Berlin and Kostiantyn Lapchevskyi
-# SPDX-License-Identifier: Apache-2.0 OR MIT
+# SPDX-License-Identifier: Apache-2.0
 from typing import *
 
 import torch

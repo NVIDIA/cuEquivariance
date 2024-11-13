@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES
 # SPDX-FileCopyrightText: Copyright (c) 2023 lie-nn
-# SPDX-License-Identifier: Apache-2.0 OR MIT
+# SPDX-License-Identifier: Apache-2.0 
 from __future__ import annotations
 
 import numpy as np
