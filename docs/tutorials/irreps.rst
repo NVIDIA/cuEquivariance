@@ -8,6 +8,8 @@
    without an express license agreement from NVIDIA CORPORATION or
    its affiliates is strictly prohibited.
 
+.. _tuto_irreps:
+
 Group representations: :code:`Irreps` class
 ===========================================
 
@@ -75,6 +77,18 @@ Here are some useful properties of the :code:`Irreps` object:
 .. jupyter-execute::
 
    irreps.filter(drop="0e")
+
+
+Assume context manager
+^^^^^^^^^^^^^^^^^^^^^^
+
+You can use the :code:`assume` context manager to fix the group.
+
+.. jupyter-execute::
+
+   with cue.assume(cue.SU2):
+      irreps = cue.Irreps("6x1/2")
+      print(irreps)
 
 
 .. _custom-irreps:

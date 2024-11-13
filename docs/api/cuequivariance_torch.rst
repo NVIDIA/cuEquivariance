@@ -31,5 +31,9 @@
    vector_to_euler_angles
    Inversion
    spherical_harmonics
-   layers.BatchNorm
-   layers.FullyConnectedTensorProductConv
+
+.. toctree::
+   :maxdepth: 0
+
+   manual/cuequivariance_torch.layers.BatchNorm
+   manual/cuequivariance_torch.layers.FullyConnectedTensorProductConv

@@ -64,8 +64,6 @@ html_context = {
     "conf_py_path": "/docs/",
 }
 html_show_sphinx = False
-
-# Logo and favicon
 html_static_path = ["_static"]
 
 # -- Other options -----------------------------------------------------------

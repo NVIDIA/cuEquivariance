@@ -28,25 +28,13 @@ First we need to import the necessary modules.
 
 .. currentmodule:: cuequivariance
 
-*cuEquivariance* provides a class :class:`Irreps` to represent direct sums (a list) of irreducible representations of a group.
-Let's create an equivariant linear layer between two group representations.
-Let's consider the following representations of the group :math:`O(3)`:
+Now, we will create a custom tensor product descriptor that represents the tensor product of the two representations. See :ref:`tuto_irreps` for more information on irreps.
 
 .. jupyter-execute::
 
    irreps1 = cue.Irreps("O3", "32x0e + 32x1o")
    irreps2 = cue.Irreps("O3", "16x0e + 48x1o")
 
-If we don't want to always specify the group, we can create a scope in which the group is fixed.
-
-.. jupyter-execute::
-
-   with cue.assume("O3"):
-      irreps1 = cue.Irreps("32x0e + 32x1o")
-      irreps2 = cue.Irreps("16x0e + 48x1o")
-
-
-Now, we will create a custom tensor product descriptor that represents the tensor product of the two representations.
 The tensor product descriptor is created step by step. First, we create an empty descriptor given its subscripts.
 In the case of the linear layer, we have 3 operands: the weight, the input, and the output.
 The subscripts of this tensor product are "uv,iu,iv" where "uv" represents the modes of the weight, "iu" represents the modes of the input, and "iv" represents the modes of the output.
