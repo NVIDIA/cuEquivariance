@@ -41,13 +41,14 @@ from cuequivariance.representation import Rep
 
 @dataclasses.dataclass(frozen=True)
 class Irrep(Rep):
-    r"""Abstract Class, Irreducible representation of a Lie group.
+    r"""Subclass of :class:`Rep` for an irreducible representation of a Lie group.
 
-    This class inherits from :class:`Rep`. It extends the base class by adding:
-    * a regular expression pattern for parsing the string representation
-    * the selection rule for the tensor product of two irreps
-    * a ordering relation for sorting the irreps
-    * a clebsch-gordan method for computing the Clebsch-Gordan coefficients
+    It extends the base class by adding:
+
+    - A regular expression pattern for parsing the string representation.
+    - The selection rule for the tensor product of two irreps.
+    - An ordering relation for sorting the irreps.
+    - A Clebsch-Gordan method for computing the Clebsch-Gordan coefficients.
     """
 
     @classmethod

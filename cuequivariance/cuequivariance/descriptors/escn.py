@@ -39,7 +39,7 @@ def escn_tp(
     l_max: Optional[int] = None,
 ) -> cue.EquivariantTensorProduct:
     """
-    subsrcipts: weights[uv],input[u],output[v]
+    subsrcipts: ``weights[uv],input[u],output[v]``
 
     Tensor Product part of the eSCN convolution introduced in https://arxiv.org/pdf/2302.03655.pdf
 

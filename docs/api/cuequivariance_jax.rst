@@ -14,16 +14,31 @@
 =========================================
 
 .. currentmodule:: cuequivariance_jax
+
+The data objects
+
 .. autosummary::
    :toctree: generated/
 
    IrrepsArray
-   equivariant_tensor_product
    from_segments
    as_irreps_array
    concatenate
    randn
-   tensor_product
+
+The functions to compute the tensor products
+
+.. autosummary::
+   :toctree: generated/
+
+   equivariant_tensor_product
    symmetric_tensor_product
+   tensor_product
+
+Some high-level modules
+
+.. autosummary::
+   :toctree: generated/
+
    flax_linen.Linear
    flax_linen.LayerNorm
