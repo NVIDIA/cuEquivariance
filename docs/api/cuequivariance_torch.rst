@@ -14,8 +14,12 @@
 ===========================================
 
 .. currentmodule:: cuequivariance_torch
+
+The PyTorch modules
+
 .. autosummary::
    :toctree: generated/
+   :template: pytorch_module_template.rst
 
    EquivariantTensorProduct
    TensorProduct
@@ -27,13 +31,15 @@
    Linear
    SymmetricContraction
    Rotation
+   Inversion
+   layers.BatchNorm
+   layers.FullyConnectedTensorProductConv
+
+The functions
+
+.. autosummary::
+   :toctree: generated/
+
+   spherical_harmonics
    encode_rotation_angle
    vector_to_euler_angles
-   Inversion
-   spherical_harmonics
-
-.. toctree::
-   :maxdepth: 0
-
-   manual/cuequivariance_torch.layers.BatchNorm
-   manual/cuequivariance_torch.layers.FullyConnectedTensorProductConv
