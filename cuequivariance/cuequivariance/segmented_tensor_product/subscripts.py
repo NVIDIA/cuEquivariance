@@ -12,10 +12,9 @@ class Subscripts(str):
     """
     Represent the subscripts of a Segmented Tensor Product.
 
-    Examples
-    --------
-    * "ui,uv,vi" could be the subscripts of an equivariant linear layer with shared weights.
-    * "ui,vj,uvk+ijk" could be the subscripts of a full tensor product (without weights but with Clebsch-Gordan coefficients).
+    Examples:
+        - "ui,uv,vi" could be the subscripts of an equivariant linear layer with shared weights.
+        - "ui,vj,uvk+ijk" could be the subscripts of a full tensor product (without weights but with Clebsch-Gordan coefficients).
     """
 
     def __new__(cls, subscripts: Union[str, list[str]]):
@@ -34,15 +33,11 @@ class Subscripts(str):
         """
         Verify if a given string is a valid tensor product subscripts.
 
-        Parameters
-        ----------
-        subscripts : str
-            The subscripts string.
+        Args:
+            subscripts (str): The subscripts string.
 
-        Returns
-        -------
-        bool
-            Whether the subscripts is valid.
+        Returns:
+            bool: Whether the subscripts is valid.
         """
         if not isinstance(subscripts, str):
             return False
@@ -60,22 +55,16 @@ class Subscripts(str):
         """
         Create a subscripts from a list of operands.
 
-        Parameters
-        ----------
-        operands : list of str
-            The list of operands.
-        coefficients : str, optional
-            The coefficients, by default "".
+        Args:
+            operands (list of str): The list of operands.
+            coefficients (str, optional): The coefficients, by default "".
 
-        Returns
-        -------
-        Subscripts
-            The subscripts.
+        Returns:
+            Subscripts: The subscripts.
 
-        Examples
-        --------
-        >>> Subscripts.from_operands(["ui", "uv", "vi"], "ijk")
-        'ui,uv,vi+ijk'
+        Examples:
+            >>> Subscripts.from_operands(["ui", "uv", "vi"], "ijk")
+            'ui,uv,vi+ijk'
         """
         if coefficients:
             return cls(SEP.join(operands) + "+" + coefficients)
@@ -113,15 +102,12 @@ class Subscripts(str):
         """
         Return the list of modes in the subscripts.
 
-        Returns
-        -------
-        list of str
-            The list of modes.
+        Returns:
+            list of str: The list of modes.
 
-        Examples
-        --------
-        >>> Subscripts("ui,uv,vi").modes()
-        ['u', 'i', 'v']
+        Examples:
+            >>> Subscripts("ui,uv,vi").modes()
+            ['u', 'i', 'v']
         """
         modes = []
         for m in self:
@@ -133,20 +119,15 @@ class Subscripts(str):
         """
         Remove a mode from the subscripts.
 
-        Parameters
-        ----------
-        mode : str
-            The mode to remove.
+        Args:
+            mode (str): The mode to remove.
 
-        Returns
-        -------
-        Subscripts
-            The subscripts without the mode.
+        Returns:
+            Subscripts: The subscripts without the mode.
 
-        Examples
-        --------
-        >>> Subscripts("ui,uv,vi").remove_mode("u")
-        'i,v,vi'
+        Examples:
+            >>> Subscripts("ui,uv,vi").remove_mode("u")
+            'i,v,vi'
         """
         assert len(mode) == 1
         return Subscripts(str(self).replace(mode, ""))
@@ -155,15 +136,12 @@ class Subscripts(str):
         """
         Return the canonical form of the subscripts.
 
-        Returns
-        -------
-        Subscripts
-            The canonical form of the subscripts.
+        Returns:
+            Subscripts: The canonical form of the subscripts.
 
-        Examples
-        --------
-        >>> Subscripts("ab,b,a").canonicalize()
-        'uv,v,u'
+        Examples:
+            >>> Subscripts("ab,b,a").canonicalize()
+            'uv,v,u'
         """
         canonical_modes = "uvwabcdefghxyz"
         canonical_coeff = "ijklmnopqrst"
@@ -199,20 +177,15 @@ class Subscripts(str):
         """
         Check if two subscripts are equivalent.
 
-        Parameters
-        ----------
-        other : Subscripts
-            The other subscripts.
+        Args:
+            other (Subscripts): The other subscripts.
 
-        Returns
-        -------
-        bool
-            Whether the two subscripts are equivalent.
+        Returns:
+            bool: Whether the two subscripts are equivalent.
 
-        Examples
-        --------
-        >>> Subscripts("ui,uv,vi").is_equivalent("aj,ab,bj")
-        True
+        Examples:
+            >>> Subscripts("ui,uv,vi").is_equivalent("aj,ab,bj")
+            True
         """
         return self.canonicalize() == Subscripts(other).canonicalize()
 
@@ -221,15 +194,12 @@ class Subscripts(str):
         """
         Return the coefficients part of the subscripts.
 
-        Returns
-        -------
-        Subscripts
-            The coefficients part of the subscripts.
+        Returns:
+            Subscripts: The coefficients part of the subscripts.
 
-        Examples
-        --------
-        >>> Subscripts("ui_uv_vj+ij").coefficients
-        'ij'
+        Examples:
+            >>> Subscripts("ui_uv_vj+ij").coefficients
+            'ij'
         """
         if "+" in self:
             return Subscripts(self.split("+")[1])
@@ -240,15 +210,12 @@ class Subscripts(str):
         """
         Return the subscripts of the operands.
 
-        Returns
-        -------
-        tuple of Subscripts
-            The subscripts of the operands.
+        Returns:
+            tuple of Subscripts: The subscripts of the operands.
 
-        Examples
-        --------
-        >>> Subscripts("ui,uv,vj+ij").operands
-        ('ui', 'uv', 'vj')
+        Examples:
+            >>> Subscripts("ui,uv,vj+ij").operands
+            ('ui', 'uv', 'vj')
         """
         x = self
         if "+" in x:
@@ -260,15 +227,12 @@ class Subscripts(str):
         """
         Return the operands and coefficients of the subscripts.
 
-        Returns
-        -------
-        tuple of Subscripts
-            The operands and coefficients of the subscripts.
+        Returns:
+            tuple of Subscripts: The operands and coefficients of the subscripts.
 
-        Examples
-        --------
-        >>> Subscripts("ui,uv,vj+ij").operands_and_coefficients
-        ('ui', 'uv', 'vj', 'ij')
+        Examples:
+            >>> Subscripts("ui,uv,vj+ij").operands_and_coefficients
+            ('ui', 'uv', 'vj', 'ij')
         """
         return self.operands + (self.coefficients,)
 
@@ -277,15 +241,12 @@ class Subscripts(str):
         """
         Return the number of operands.
 
-        Returns
-        -------
-        int
-            The number of operands.
+        Returns:
+            int: The number of operands.
 
-        Examples
-        --------
-        >>> Subscripts("ui,uv,vj+ij").num_operands
-        3
+        Examples:
+            >>> Subscripts("ui,uv,vj+ij").num_operands
+            3
         """
         return len(self.operands)
 
@@ -293,26 +254,21 @@ class Subscripts(str):
         """
         Check if the subscripts is a subset of another subscripts.
 
-        Parameters
-        ----------
-        other : Subscripts
-            The other subscripts.
+        Args:
+            other (Subscripts): The other subscripts.
 
-        Returns
-        -------
-        list of dict of str, str
-            A list of dictionaries mapping characters from the subset to the other subscripts.
+        Returns:
+            list of dict of str, str: A list of dictionaries mapping characters from the subset to the other subscripts.
 
-        Examples
-        --------
-        >>> Subscripts("a_a").is_subset_of("u,u")
-        [{'a': 'u'}]
+        Examples:
+            >>> Subscripts("a_a").is_subset_of("u,u")
+            [{'a': 'u'}]
 
-        >>> Subscripts("a_a").is_subset_of("uv_vu")
-        [{'a': 'v'}, {'a': 'u'}]
+            >>> Subscripts("a_a").is_subset_of("uv_vu")
+            [{'a': 'v'}, {'a': 'u'}]
 
-        >>> Subscripts("ab_b_a").is_subset_of("uv_u_v")
-        []
+            >>> Subscripts("ab_b_a").is_subset_of("uv_u_v")
+            []
         """
         other = Subscripts(other)
 
@@ -340,25 +296,18 @@ class Subscripts(str):
         """
         Compute the product of two subscripts.
 
-        Parameters
-        ----------
-        other : Subscripts
-            The other subscripts.
+        Args:
+            other (Subscripts): The other subscripts.
 
-        Returns
-        -------
-        Subscripts
-            The product of the two subscripts.
+        Returns:
+            Subscripts: The product of the two subscripts.
 
-        Examples
-        --------
-        >>> Subscripts("c,c") * Subscripts("ab,ba")
-        'cab,cba'
+        Examples:
+            >>> Subscripts("c,c") * Subscripts("ab,ba")
+            'cab,cba'
 
-        Raises
-        ------
-        ValueError
-            If the subscripts do not have the same number of operands.
+        Raises:
+            ValueError: If the subscripts do not have the same number of operands.
         """
         other = Subscripts(other)
 

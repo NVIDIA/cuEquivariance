@@ -18,15 +18,16 @@ class IrrepsLayout(Enum):
         ir_mul: Irreducible representation first, then multiplicity.
             This layout differs from the one used in `e3nn` but can be more convenient in some cases.
 
-    >>> mulir = cue.MulIrrep(32, cue.O3(2, -1))
-    >>> mulir
-    32x2o
+    Examples:
+        >>> mulir = cue.MulIrrep(32, cue.O3(2, -1))
+        >>> mulir
+        32x2o
 
-    >>> cue.mul_ir.shape(mulir)
-    (32, 5)
+        >>> cue.mul_ir.shape(mulir)
+        (32, 5)
 
-    >>> cue.ir_mul.shape(mulir)
-    (5, 32)
+        >>> cue.ir_mul.shape(mulir)
+        (5, 32)
     """
 
     mul_ir = auto()
