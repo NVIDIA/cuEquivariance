@@ -1,5 +1,4 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES
-# SPDX-FileCopyrightText: Copyright (c) 2020 The Regents of the University of California, through Lawrence Berkeley National Laboratory (subject to receipt of any required approvals from the U.S. Dept. of Energy), Ecole Polytechnique Federale de Lausanne (EPFL), Free University of Berlin and Kostiantyn Lapchevskyi
 # SPDX-License-Identifier: Apache-2.0
 from typing import *
 
@@ -10,29 +9,20 @@ from cuequivariance.irreps_array.misc_ui import default_irreps, default_layout
 
 
 class BatchNorm(torch.nn.Module):
-    """Batch normalization for orthonormal representations
+    """Batch normalization for orthonormal representations.
 
     It normalizes by the norm of the representations.
     Note that the norm is invariant only for orthonormal representations.
 
-    Parameters
-    ----------
-    irreps : `Irreps`
-        input irreps
-    layout : `IrrepsLayout`, optional
-        layout of the input tensor, by default `IrrepsLayout.mul_ir`
-    eps : `float`, optional
-        epsilon value for numerical stability, by default 1e-5
-    momentum : `float`, optional
-        momentum for the running mean and variance, by default 0.1
-    affine : `bool`, optional
-        whether to apply an affine transformation, by default True
-    reduce : `str`, optional
-        how to reduce the norm of the representations, by default "mean"
-    instance : `bool`, optional
-        whether to use instance normalization, by default False
-    include_bias : `bool`, optional
-        whether to include a bias term, by default True
+    Args:
+        irreps (Irreps): Input irreps.
+        layout (IrrepsLayout, optional): Layout of the input tensor, by default `IrrepsLayout.mul_ir`.
+        eps (float, optional): Epsilon value for numerical stability, by default 1e-5.
+        momentum (float, optional): Momentum for the running mean and variance, by default 0.1.
+        affine (bool, optional): Whether to apply an affine transformation, by default True.
+        reduce (str, optional): How to reduce the norm of the representations, by default "mean".
+        instance (bool, optional): Whether to use instance normalization, by default False.
+        include_bias (bool, optional): Whether to include a bias term, by default True.
     """
 
     __constants__ = ["instance", "normalization", "irs", "affine"]
@@ -94,17 +84,13 @@ class BatchNorm(torch.nn.Module):
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         """
-        Normalize the input tensor
+        Normalize the input tensor.
 
-        Parameters
-        ----------
-        input : `torch.Tensor`
-            input tensor
+        Args:
+            input (torch.Tensor): Input tensor. The last dimension should match with the input irreps.
 
-        Returns
-        -------
-        `torch.Tensor`
-            normalized tensor
+        Returns:
+            torch.Tensor: Normalized tensor.
         """
         orig_shape = input.shape
         batch = input.shape[0]

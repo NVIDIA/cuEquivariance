@@ -9,7 +9,7 @@ Data Structure
 
 The layout
 ^^^^^^^^^^
-*(check the layout guide for more information about this)*
+check :ref:`tuto_layout` guide for more information about this.
 
 *cuEquivariance* offers the possibility to use a more efficient layout for the irreps.
 The old layout, compatible with ``e3nn`` operations, is called ``cue.mul_ir``, while the new layout is called ``cue.ir_mul``.
@@ -17,7 +17,7 @@ The old layout, compatible with ``e3nn`` operations, is called ``cue.mul_ir``, w
 
 Irreps
 ^^^^^^
-*(check the irreps guide for more information about this)*
+Check :ref:`tuto_irreps` guide for more information about this.
 
 If we stick to the old layout, we can equivalently define ``e3nn`` and ``cue`` Irreps as:
 

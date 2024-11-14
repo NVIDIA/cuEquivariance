@@ -10,10 +10,9 @@ __version__ = (
 from .irreps_array.jax_irreps_array import (
     IrrepsArray,
     from_segments,
-    as_irreps_array,
     vmap,
 )
-from .irreps_array.concatenate import concatenate, randn
+from .irreps_array.utils import concatenate, randn, as_irreps_array
 
 from .primitives.tensor_product import tensor_product
 from .primitives.symmetric_tensor_product import symmetric_tensor_product

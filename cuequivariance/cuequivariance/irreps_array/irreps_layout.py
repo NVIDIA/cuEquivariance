@@ -12,14 +12,21 @@ class IrrepsLayout(Enum):
     """
     Enum for the possible layouts of an :class:`IrrepsArray`.
 
-    Attributes
-    ----------
-    mul_ir : str
-        Multiplicity first, then irreducible representation.
-        This layout corresponds to the layout used in the library `e3nn`.
-    ir_mul : str
-        Irreducible representation first, then multiplicity.
-        This layout differs from the one used in `e3nn` but can be more convenient in some cases.
+    Attributes:
+        mul_ir: Multiplicity first, then irreducible representation.
+            This layout corresponds to the layout used in the library `e3nn`.
+        ir_mul: Irreducible representation first, then multiplicity.
+            This layout differs from the one used in `e3nn` but can be more convenient in some cases.
+
+    >>> mulir = cue.MulIrrep(32, cue.O3(2, -1))
+    >>> mulir
+    32x2o
+
+    >>> cue.mul_ir.shape(mulir)
+    (32, 5)
+
+    >>> cue.ir_mul.shape(mulir)
+    (5, 32)
     """
 
     mul_ir = auto()
@@ -28,6 +35,7 @@ class IrrepsLayout(Enum):
     def shape(
         self, mulir: Union[cue.MulIrrep, tuple[int, cue.Irrep]]
     ) -> tuple[int, int]:
+        """The shape of the tensor for the given layout."""
         mul, ir = mulir
         if self == IrrepsLayout.mul_ir:
             return (mul, ir.dim)

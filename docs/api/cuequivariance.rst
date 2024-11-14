@@ -7,23 +7,34 @@
 ====================================
 
 .. currentmodule:: cuequivariance
+
+Here are the functions and classes concerning group theory.
+
+.. autosummary::
+   :toctree: generated/
+
+   Rep
+   Irrep
+   SO3
+   O3
+   SU2
+   clebsch_gordan
+
+The following classes are used to define equivariant tensor products.
+
 .. autosummary::
    :toctree: generated/
 
    Irreps
-   Irrep
-   Rep
-   SU2
-   SO3
-   O3
    IrrepsLayout
    SegmentedTensorProduct
    EquivariantTensorProduct
-   clebsch_gordan
-   NumpyIrrepsArray
-   segmented_tensor_product.Subscripts
-   segmented_tensor_product.Operand
-   segmented_tensor_product.Path
+
+These functions create specific instances of tensor products.
+
+.. autosummary::
+   :toctree: generated/
+
    descriptors.spherical_harmonics
    descriptors.fully_connected_tensor_product
    descriptors.channelwise_tensor_product

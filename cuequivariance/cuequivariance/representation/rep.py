@@ -16,7 +16,7 @@ class Rep:
 
     @property
     def lie_dim(self) -> int:
-        """Dimension of the Lie algebra.
+        """Dimension of the Lie algebra
 
         Returns:
             int: The dimension of the Lie algebra.
@@ -27,7 +27,7 @@ class Rep:
 
     @property
     def dim(self) -> int:
-        """Dimension of the representation.
+        """Dimension of the representation
 
         Returns:
             int: The dimension of the representation.
@@ -37,8 +37,7 @@ class Rep:
         return d
 
     def algebra(self) -> np.ndarray:
-        """
-        Algebra of the Lie group.
+        """Algebra of the Lie group
 
         The algebra of the Lie group is defined by the following equation:
 
@@ -56,16 +55,11 @@ class Rep:
 
     @property
     def A(self) -> np.ndarray:
-        """Algebra of the Lie group.
-
-        Returns:
-            np.ndarray: The algebra of the Lie group.
-        """
+        """Algebra of the Lie group, ``(lie_dim, lie_dim, lie_dim)``"""
         return self.algebra()
 
     def continuous_generators(self) -> np.ndarray:
-        r"""
-        Generators of the representation.
+        r"""Generators of the representation
 
         The generators of the representation are defined by the following equation:
 
@@ -87,7 +81,7 @@ class Rep:
 
     @property
     def X(self) -> np.ndarray:
-        """Generators of the representation, (lie_dim, dim, dim)"""
+        """Generators of the representation, ``(lie_dim, dim, dim)``"""
         return self.continuous_generators()
 
     def discrete_generators(self) -> np.ndarray:
@@ -104,7 +98,7 @@ class Rep:
 
     @property
     def H(self) -> np.ndarray:
-        """Discrete generators of the representation, (len(H), dim, dim)"""
+        """Discrete generators of the representation, ``(len(H), dim, dim)``"""
         return self.discrete_generators()
 
     def trivial(self) -> Rep:
@@ -114,8 +108,7 @@ class Rep:
     def exp_map(
         self, continuous_params: np.ndarray, discrete_params: np.ndarray
     ) -> np.ndarray:
-        """
-        Exponential map of the representation.
+        """Exponential map of the representation
 
         Args:
             continuous_params (np.ndarray): An array of shape (lie_dim,).

@@ -354,6 +354,7 @@ def from_segments(
     dtype: jnp.dtype | None = None,
     axis: int = -1,
 ) -> IrrepsArray:
+    """Construct an IrrepsArray from a list of segments."""
     ndim = len(shape)
     dirreps, layout = _check_args(dirreps, layout, ndim)
     if axis < 0:
@@ -388,64 +389,6 @@ def from_segments(
         array = jnp.zeros(shape, dtype=dtype)
 
     return IrrepsArray(dirreps, array, layout)
-
-
-def as_irreps_array(
-    input: Any,
-    layout: cue.IrrepsLayout | None = None,
-    axis: int | Sequence[int] = -1,
-    like: IrrepsArray | None = None,
-) -> IrrepsArray:
-    # We need first to define axes and layout
-    if like is not None:
-        assert layout is None
-        assert axis == -1
-        layout = like.layout
-        axes = {
-            axis - like.ndim: irreps.irrep_class.trivial()
-            for axis, irreps in like.dirreps.items()
-        }
-    else:
-        if isinstance(input, IrrepsArray):
-            axes = {
-                axis: input.irreps(axis).irrep_class.trivial()
-                for axis in (axis if isinstance(axis, Sequence) else [axis])
-            }
-        else:
-            ir = cue.get_irrep_scope().trivial()
-            axes = {
-                axis: ir for axis in (axis if isinstance(axis, Sequence) else [axis])
-            }
-        if layout is None:
-            if isinstance(input, IrrepsArray):
-                layout = input.layout
-            else:
-                layout = cue.get_layout_scope()
-    del like, axis
-
-    if isinstance(input, IrrepsArray):
-        if input.layout != layout:
-            raise ValueError(
-                f"as_irreps_array: layout mismatch {input.layout} != {layout}"
-            )
-        for axis, ir in axes.items():
-            if input.irreps(axis).irrep_class != type(ir):
-                raise ValueError(
-                    f"as_irreps_array: irrep mismatch {input.irreps(axis).irrep_class} != {type(ir)}"
-                )
-        return input
-
-    input: jax.Array = jnp.asarray(input)
-    # if max(axes.keys()) >= input.ndim:
-    #     raise ValueError(
-    #         f"as_irreps_array: input has {input.ndim} dimensions, but axes are {axes.keys()}"
-    #     )
-
-    dirreps = {
-        axis: cue.Irreps(type(ir), [(input.shape[axis], ir)])
-        for axis, ir in axes.items()
-    }
-    return IrrepsArray(dirreps, input, layout)
 
 
 def take_slice(x: jax.Array, s: slice, axis: int) -> jax.Array:
