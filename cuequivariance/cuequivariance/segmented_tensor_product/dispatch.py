@@ -14,26 +14,20 @@ def dispatch(
 ) -> Generator[Tuple[stp.SegmentedTensorProduct, Tuple[int, ...]], None, None]:
     """Dispatch a descriptor to a target subscripts.
 
-    Parameters
-    ----------
-    descriptor : stp.SegmentedTensorProduct
-        The descriptor to dispatch.
-    targets : list[stp.Subscripts]
-        A list of target subscripts.
-    permutation_mode : str
-        The permutation mode. One of "permute_none", "permute_all", "permute_all_but_last".
+    Args:
+        descriptor (SegmentedTensorProduct): The descriptor to dispatch.
+        targets (list of stp.Subscripts): A list of target subscripts.
+        permutation_mode (str): The permutation mode. One of "permute_none", "permute_all", "permute_all_but_last".
 
-    Yields
-    ------
-    Tuple[stp.SegmentedTensorProduct, Tuple[int, ...]]
-        A tuple of the dispatched descriptor and the permutation of the operands.
+    Yields:
+        Tuple[stp.SegmentedTensorProduct, Tuple[int, ...]]:
+            A tuple of the dispatched descriptor and the permutation of the operands.
 
-    Notes
-    -----
-    The function tries to dispatch the descriptor to the target subscripts. If the descriptor
-    is not dispatchable to the target subscripts, it will try to flatten the descriptor progressively
-    and dispatch the flattened descriptor to the target subscripts. The function will yield all the
-    possible dispatches found.
+    Note:
+        The function tries to dispatch the descriptor to the target subscripts. If the descriptor
+        is not dispatchable to the target subscripts, it will try to flatten the descriptor progressively
+        and dispatch the flattened descriptor to the target subscripts. The function will yield all the
+        possible dispatches found.
     """
     targets = [stp.Subscripts(subscripts) for subscripts in targets]
     targets = [

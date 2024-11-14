@@ -17,16 +17,11 @@ class TensorProduct(torch.nn.Module):
     """
     PyTorch module that computes the last operand of the segmented tensor product defined by the descriptor.
 
-    Parameters
-    ----------
-    descriptor : stp.SegmentedTensorProduct
-        The descriptor of the segmented tensor product
-    math_dtype : torch.dtype, optional
-        The data type of the coefficients and calculations
-    device : torch.device, optional
-        The device on which the calculations are performed
-    optimize_fallback : bool, optional
-        If `True`, the fallback method is optimized. If `False`, the fallback method is used without optimization.
+    Args:
+        descriptor (SegmentedTensorProduct): The descriptor of the segmented tensor product.
+        math_dtype (torch.dtype, optional): The data type of the coefficients and calculations.
+        device (torch.device, optional): The device on which the calculations are performed.
+        optimize_fallback (bool, optional): If `True`, the fallback method is optimized. If `False`, the fallback method is used without optimization.
     """
 
     def __init__(
@@ -64,27 +59,22 @@ class TensorProduct(torch.nn.Module):
         r"""
         Perform the tensor product based on the specified descriptor.
 
-        Parameters
-        ----------
-        args : list[torch.Tensor]
-            The input tensors. The number of input tensors should match the number of operands in the descriptor minus one.
-            Each input tensor should have a shape of ((batch,) operand_size), where `operand_size` corresponds to the size
-            of each operand as defined in the tensor product descriptor.
-        use_fallback : Optional[bool], optional
-            Determines the computation method. If `None` (default), a CUDA kernel will be used if available and the input
-            is on CUDA. If `False`, a CUDA kernel will be used, and an exception is raised if it's not available or the
-            input is not on CUDA. If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
+        Args:
+            args (list of torch.Tensor): The input tensors. The number of input tensors should match the number of operands in the descriptor minus one.
+                Each input tensor should have a shape of ((batch,) operand_size), where `operand_size` corresponds to the size
+                of each operand as defined in the tensor product descriptor.
+            use_fallback (bool, optional):  Determines the computation method. If `None` (default), a CUDA kernel will be used if available and the input
+                is on CUDA. If `False`, a CUDA kernel will be used, and an exception is raised if it's not available or the
+                input is not on CUDA. If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
 
-        Returns
-        -------
-        torch.Tensor
-            The output tensor resulting from the tensor product. It has a shape of (batch, last_operand_size), where
-            `last_operand_size` is the size of the last operand in the descriptor.
+        Returns:
+            torch.Tensor: 
+                The output tensor resulting from the tensor product.
+                It has a shape of (batch, last_operand_size), where
+                `last_operand_size` is the size of the last operand in the descriptor.
 
-        Raises
-        ------
-        RuntimeError
-            If `use_fallback` is `False` and either no CUDA kernel is available or the input tensor is not on CUDA.
+        Raises:
+            RuntimeError: If `use_fallback` is `False` and either no CUDA kernel is available or the input tensor is not on CUDA.
         """
         if (
             args

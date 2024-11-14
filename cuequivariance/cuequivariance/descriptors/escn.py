@@ -21,24 +21,19 @@ def escn_tp(
 
     Tensor Product part of the eSCN convolution introduced in https://arxiv.org/pdf/2302.03655.pdf
 
-    Parameters
-    ----------
-    irreps_in : cue.Irreps
-        Irreps of the input.
-    irreps_out : cue.Irreps
-        Irreps of the output.
-    m_max : int
-        Maximum angular resolution around the principal axis.
-    l_max : Optional[int], optional
-        Maximum angular resolution along the principal axis.
+    Args:
+        irreps_in (Irreps): Irreps of the input.
+        irreps_out (Irreps): Irreps of the output.
+        m_max (int, optional): Maximum angular resolution around the principal axis.
+        l_max (int, optional): Maximum angular resolution along the principal axis.
 
-    Returns
-    -------
-    cue.EquivariantTensorProduct
-        Descriptor of the tensor product part of the eSCN convolution.
-        Operand 0: weights
-        Operand 1: input
-        Operand 2: output
+    Returns:
+        cue.EquivariantTensorProduct:
+            Descriptor of the tensor product part of the eSCN convolution.
+
+            - Operand 0: weights
+            - Operand 1: input
+            - Operand 2: output
     """
     assert irreps_in.irrep_class == irreps_out.irrep_class
     G = irreps_in.irrep_class
@@ -119,22 +114,18 @@ def escn_tp_compact(
     This "compact" implementation puts the L index contiguous in memory.
     This allows to create bigger segments and less paths.
 
-    Parameters
-    ----------
-    irreps_in : cue.Irreps
-        Irreps of the input.
-    irreps_out : cue.Irreps
-        Irreps of the output.
-    m_max : int
-        Maximum angular resolution around the principal axis.
+    Args:
+        irreps_in (Irreps): Irreps of the input.
+        irreps_out (Irreps): Irreps of the output.
+        m_max (int, optional): Maximum angular resolution around the principal axis.
 
-    Returns
-    -------
-    stp.SegmentedTensorProduct
-        Descriptor of the tensor product part of the eSCN convolution.
-        Operand 0: weights
-        Operand 1: input
-        Operand 2: output
+    Returns:
+        stp.SegmentedTensorProduct:
+            Descriptor of the tensor product part of the eSCN convolution.
+
+            - Operand 0: weights
+            - Operand 1: input
+            - Operand 2: output
     """
     assert irreps_in.irrep_class == irreps_out.irrep_class
     G = irreps_in.irrep_class

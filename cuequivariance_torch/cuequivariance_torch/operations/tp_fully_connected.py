@@ -14,25 +14,17 @@ class FullyConnectedTensorProduct(torch.nn.Module):
     """
     Fully connected tensor product layer.
 
-    Parameters
-    ----------
-    irreps_in1 : cue.Irreps
-        Input irreps for the first operand.
-    irreps_in2 : cue.Irreps
-        Input irreps for the second operand.
-    irreps_out : cue.Irreps
-        Output irreps.
-    layout : cue.IrrepsLayout, optional
-        The layout of the input and output irreps. Default is `cue.mul_ir` which is the layout corresponding to e3nn.
-    shared_weights : bool, optional
-        Whether to share weights across the batch dimension. Default is True.
-    internal_weights : bool, optional
-        Whether to create module parameters for weights. Default is None.
+    Args:
+        irreps_in1 (Irreps): Input irreps for the first operand.
+        irreps_in2 (Irreps): Input irreps for the second operand.
+        irreps_out (Irreps): Output irreps.
+        layout (IrrepsLayout, optional): The layout of the input and output irreps. Default is ``cue.mul_ir`` which is the layout corresponding to e3nn.
+        shared_weights (bool, optional): Whether to share weights across the batch dimension. Default is True.
+        internal_weights (bool, optional): Whether to create module parameters for weights. Default is None.
 
-    Notes
-    -----
-    In e3nn there was a irrep_normalization and path_normalization parameters.
-    This module currently only supports "component" irrep normalization and "element" path normalization.
+    Note:
+        In e3nn there was a irrep_normalization and path_normalization parameters.
+        This module currently only supports "component" irrep normalization and "element" path normalization.
     """
 
     def __init__(
@@ -113,33 +105,25 @@ class FullyConnectedTensorProduct(torch.nn.Module):
         """
         Perform the forward pass of the fully connected tensor product operation.
 
-        Parameters
-        ----------
-        x1 : torch.Tensor
-            Input tensor for the first operand. It should have the shape (batch_size, irreps_in1.dim).
-        x2 : torch.Tensor
-            Input tensor for the second operand. It should have the shape (batch_size, irreps_in2.dim).
-        weight : torch.Tensor, optional
-            Weights for the tensor product. It should have the shape (batch_size, weight_numel)
-            if shared_weights is False, or (weight_numel,) if shared_weights is True.
-            If None, the internal weights are used.
-        use_fallback : Optional[bool], optional
-            If `None` (default), a CUDA kernel will be used if available.
-            If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
-            If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
+        Args:
+            x1 (torch.Tensor): Input tensor for the first operand. It should have the shape (batch_size, irreps_in1.dim).
+            x2 (torch.Tensor): Input tensor for the second operand. It should have the shape (batch_size, irreps_in2.dim).
+            weight (torch.Tensor, optional): Weights for the tensor product. It should have the shape (batch_size, weight_numel)
+                if shared_weights is False, or (weight_numel,) if shared_weights is True.
+                If None, the internal weights are used.
+            use_fallback (bool, optional): If `None` (default), a CUDA kernel will be used if available.
+                If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
+                If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
 
-        Returns
-        -------
-        torch.Tensor
-            Output tensor resulting from the fully connected tensor product operation. It will have the shape
-            (batch_size, irreps_out.dim).
+        Returns:
+            torch.Tensor:
+                Output tensor resulting from the fully connected tensor product operation.
+                It will have the shape (batch_size, irreps_out.dim).
 
-        Raises
-        ------
-        ValueError
-            If internal weights are used and weight is not None.
-            If shared weights are used and weight is not a 1D tensor.
-            If shared weights are not used and weight is not a 2D tensor.
+        Raises:
+            ValueError: If internal weights are used and weight is not None,
+                or if shared weights are used and weight is not a 1D tensor,
+                or if shared weights are not used and weight is not a 2D tensor.
         """
         if self.internal_weights:
             if weight is not None:

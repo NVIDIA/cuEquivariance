@@ -18,10 +18,10 @@ def spherical_harmonics(
     r"""Compute the spherical harmonics of the input vectors.
 
     Args:
-        ls (list[int]): List of spherical harmonic degrees.
+        ls (list of int): List of spherical harmonic degrees.
         vectors (torch.Tensor): Input vectors of shape (..., 3).
         normalize (bool, optional): Whether to normalize the input vectors. Defaults to True.
-        optimize_fallback (Optional[bool], optional): Whether to optimize fallback. Defaults to None.
+        optimize_fallback (bool, optional): Whether to optimize fallback. Defaults to None.
 
     Returns:
         torch.Tensor: The spherical harmonics of the input vectors of shape (..., dim)

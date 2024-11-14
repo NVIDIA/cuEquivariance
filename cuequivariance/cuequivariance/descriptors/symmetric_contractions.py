@@ -19,20 +19,15 @@ def symmetric_contraction(
 
     The symmetric contraction is a weighted sum of the input contracted with itself degree times.
 
-    Parameters
-    ----------
-    irreps_in : cue.Irreps
-        The input irreps, the multiplicity are treated in parallel
-    irreps_out : cue.Irreps
-        The output irreps
-    degree : int
-        The degree of the symmetric contraction
+    Args:
+        irreps_in (Irreps): The input irreps, the multiplicity are treated in parallel.
+        irreps_out (Irreps): The output irreps.
+        degree (int): The degree of the symmetric contraction.
 
-    Returns
-    -------
-    cue.EquivariantTensorProduct
-        The descriptor of the symmetric contraction.
-        The operands are the weights, the input degree times and the output.
+    Returns:
+        cue.EquivariantTensorProduct:
+            The descriptor of the symmetric contraction.
+            The operands are the weights, the input degree times and the output.
     """
     degrees = list(degrees)
     if len(degrees) != 1:
