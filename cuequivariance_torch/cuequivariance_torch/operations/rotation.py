@@ -16,7 +16,7 @@ class Rotation(torch.nn.Module):
 
     Args:
         irreps (Irreps): The irreducible representations of the tensor to rotate.
-        layout (IrrepsLayout, optional): The memory layout of the tensor, `cue.ir_mul` is preferred.
+        layout (IrrepsLayout, optional): The memory layout of the tensor, ``cue.ir_mul`` is preferred.
     """
 
     def __init__(

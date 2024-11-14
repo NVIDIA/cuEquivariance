@@ -18,7 +18,7 @@ class ChannelWiseTensorProduct(torch.nn.Module):
         irreps_in1 (Irreps): Input irreps for the first operand.
         irreps_in2 (Irreps): Input irreps for the second operand.
         filter_irreps_out (Sequence of Irrep, optional): Filter for the output irreps. Default is None.
-        layout (IrrepsLayout, optional): The layout of the input and output irreps. Default is `cue.mul_ir` which is the layout corresponding to e3nn.
+        layout (IrrepsLayout, optional): The layout of the input and output irreps. Default is ``cue.mul_ir`` which is the layout corresponding to e3nn.
         shared_weights (bool, optional): Whether to share weights across the batch dimension. Default is True.
         internal_weights (bool, optional): Whether to create module parameters for weights. Default is None.
 

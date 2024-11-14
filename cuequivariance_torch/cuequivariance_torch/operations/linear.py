@@ -17,7 +17,7 @@ class Linear(torch.nn.Module):
     Args:
         irreps_in (Irreps): The input irreducible representations.
         irreps_out (Irreps): The output irreducible representations.
-        layout (IrrepsLayout, optional): The layout of the irreducible representations, by default `cue.mul_ir`. This is the layout used in the e3nn library.
+        layout (IrrepsLayout, optional): The layout of the irreducible representations, by default ``cue.mul_ir``. This is the layout used in the e3nn library.
         shared_weights (bool, optional): Whether to use shared weights, by default True.
         internal_weights (bool, optional): Whether to use internal weights, by default True if shared_weights is True, otherwise False.
     """
