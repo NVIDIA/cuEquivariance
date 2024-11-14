@@ -5,6 +5,7 @@ Equivariant Tensor Product
 ==========================
 
 The submodule :class:`cuequivariance.descriptors` contains many descriptors of Equivariant Tensor Products (:class:`cuequivariance.EquivariantTensorProduct`).
+Here are some examples:
 
 .. jupyter-execute::
 
@@ -26,9 +27,31 @@ The object returned contains a description of the inputs and output of the tenso
 
     e = cue.descriptors.linear(
         cue.Irreps("O3", "32x0e + 32x1o"),
-        cue.Irreps("O3", "16x0e + 48x1o")
+        cue.Irreps("O3", "8x0e + 4x1o")
     )
     e.inputs, e.output
+
+Execution on JAX
+----------------
+
+.. jupyter-execute::
+
+    import jax
+    import jax.numpy as jnp
+    import cuequivariance_jax as cuex
+
+    w = cuex.randn(jax.random.key(0), e.inputs[0])
+    x = cuex.randn(jax.random.key(1), e.inputs[1])
+
+    cuex.equivariant_tensor_product(e, w, x)
+
+The function :func:`cuex.randn <cuequivariance_jax.randn>` generates random :class:`cuex.IrrepsArray <cuequivariance_jax.IrrepsArray>` objects.
+The function :func:`cuex.equivariant_tensor_product <cuequivariance_jax.equivariant_tensor_product>` executes the tensor product.
+The output is a :class:`cuex.IrrepsArray <cuequivariance_jax.IrrepsArray>` object.
+
+
+Execution on PyTorch
+--------------------
 
 We can execute an :class:`cuequivariance.EquivariantTensorProduct` with PyTorch.
 

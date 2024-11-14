@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES
 # SPDX-License-Identifier: Apache-2.0
-from typing import *
+from typing import Any, Sequence
 
 import jax
 import jax.numpy as jnp
@@ -12,7 +12,20 @@ from cuequivariance.irreps_array.misc_ui import assert_same_group
 
 
 def concatenate(arrays: list[cuex.IrrepsArray], axis: int = -1) -> cuex.IrrepsArray:
-    """Concatenate a list of IrrepsArrays."""
+    """Concatenate a list of :class:`cuex.IrrepsArray <cuequivariance_jax.IrrepsArray>`
+
+    Args:
+        arrays (list of IrrepsArray): List of arrays to concatenate.
+        axis (int, optional): Axis along which to concatenate. Defaults to -1.
+
+    Example:
+
+        >>> with cue.assume(cue.SO3, cue.ir_mul):
+        ...     x = cuex.IrrepsArray("3x0", jnp.array([1.0, 2.0, 3.0]))
+        ...     y = cuex.IrrepsArray("1x1", jnp.array([0.0, 0.0, 0.0]))
+        >>> cuex.concatenate([x, y])
+        {0: 3x0+1} [1. 2. 3. 0. 0. 0.]
+    """
     if len(arrays) == 0:
         raise ValueError(
             "Must provide at least one array to concatenate"
@@ -49,7 +62,7 @@ def randn(
     layout: cue.IrrepsLayout | None = None,
     dtype: jnp.dtype | None = None,
 ) -> cuex.IrrepsArray:
-    r"""Generate a random IrrepsArray.
+    r"""Generate a random :class:`cuex.IrrepsArrays <cuequivariance_jax.IrrepsArrays>`.
 
     Args:
         key (jax.Array): Random key.
@@ -63,10 +76,10 @@ def randn(
 
     Example:
 
-    >>> key = jax.random.key(0)
-    >>> irreps = cue.Irreps("O3", "2x1o")
-    >>> cuex.randn(key, irreps, (), cue.ir_mul)
-    {0: 2x1o} [...]
+        >>> key = jax.random.key(0)
+        >>> irreps = cue.Irreps("O3", "2x1o")
+        >>> cuex.randn(key, irreps, (), cue.ir_mul)
+        {0: 2x1o} [...]
     """
     if isinstance(irreps, Operand):
         assert layout is None
@@ -88,7 +101,14 @@ def as_irreps_array(
     axis: int | Sequence[int] = -1,
     like: cuex.IrrepsArray | None = None,
 ) -> cuex.IrrepsArray:
-    """Converts input to an IrrepsArray. Arrays are assumed to be scalars."""
+    """Converts input to an IrrepsArray. Arrays are assumed to be scalars.
+
+    Examples:
+
+        >>> with cue.assume(cue.O3):
+        ...     cuex.as_irreps_array([1.0], layout=cue.ir_mul)
+        {0: 0e} [1.]
+    """
     # We need first to define axes and layout
     if like is not None:
         assert layout is None

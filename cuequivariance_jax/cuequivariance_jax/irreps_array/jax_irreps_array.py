@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import *
+from typing import Any, Callable, Sequence
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 
 import cuequivariance as cue
+import cuequivariance_jax as cuex  # noqa: F401
 
 
 def _check_args(
@@ -50,16 +51,54 @@ class IrrepsArray:
     """
     Wrapper around a jax array with a dict of Irreps for the non-trivial axes.
 
-    >>> IrrepsArray({-1: cue.Irreps("SO3", "2x0")}, jnp.array([1.0, 2.0]), cue.ir_mul)
+    Creation
+    --------
+
+    >>> cuex.IrrepsArray(
+    ...     {-1: cue.Irreps("SO3", "2x0")}, jnp.array([1.0, 2.0]), cue.ir_mul
+    ... )
     {0: 2x0} [1. 2.]
 
+    If you don't specify the axis it will default to the last axis:
+
+    >>> cuex.IrrepsArray(
+    ...     cue.Irreps("SO3", "2x0"), jnp.array([1.0, 2.0]), cue.ir_mul
+    ... )
+    {0: 2x0} [1. 2.]
+
+    You can use a default group and layout:
+
+    >>> with cue.assume(cue.SO3, cue.ir_mul):
+    ...     cuex.IrrepsArray("2x0", jnp.array([1.0, 2.0]))
+    {0: 2x0} [1. 2.]
+
+    Arithmetic
+    ----------
+
+    Basic arithmetic operations are supported, as long as they are equivariant:
+
+    >>> with cue.assume(cue.SO3, cue.ir_mul):
+    ...     x = cuex.IrrepsArray("2x0", jnp.array([1.0, 2.0]))
+    ...     y = cuex.IrrepsArray("2x0", jnp.array([3.0, 4.0]))
+    ...     x + y
+    {0: 2x0} [4. 6.]
+
+    >>> 3.0 * x
+    {0: 2x0} [3. 6.]
+
+    Attributes
+    ----------
 
     Attributes:
-        dirreps: Irreps for the non-trivial axes
+        dirreps: Irreps for the non-trivial axes, see also :func:`irreps() <cuequivariance_jax.IrrepsArray.irreps>` below.
         array: JAX array
         layout: Data layout
         shape: Shape of the array
         ndim: Number of dimensions of the array
+        dtype: Data type of the array
+
+    Methods
+    -------
     """
 
     layout: cue.IrrepsLayout = field()
@@ -103,13 +142,30 @@ class IrrepsArray:
         return self.array.dtype
 
     def is_simple(self) -> bool:
-        """Return True if the IrrepsArray has only the last axis non-trivial."""
+        """Return True if the IrrepsArray has only the last axis non-trivial.
+
+        Examples:
+
+            >>> cuex.IrrepsArray(
+            ...     cue.Irreps("SO3", "2x0"), jnp.array([1.0, 2.0]), cue.ir_mul
+            ... ).is_simple()
+            True
+        """
         if len(self.dirreps) != 1:
             return False
         axis = next(iter(self.dirreps.keys()))
         return axis == self.ndim - 1
 
     def irreps(self, axis: int = -1) -> cue.Irreps:
+        """Return the Irreps for a given axis.
+
+        Examples:
+
+            >>> cuex.IrrepsArray(
+            ...     cue.Irreps("SO3", "2x0"), jnp.array([1.0, 2.0]), cue.ir_mul
+            ... ).irreps()
+            2x0
+        """
         axis = axis if axis >= 0 else axis + self.ndim
         if axis not in self.dirreps:
             raise ValueError(f"No Irreps for axis {axis}")
@@ -140,7 +196,17 @@ class IrrepsArray:
         )
 
     def slice_by_mul(self, axis: int = -1) -> _MulIndexSliceHelper:
-        r"""Return the slice with respect to the multiplicities."""
+        r"""Return the slice with respect to the multiplicities.
+
+        Examples:
+
+            >>> x = cuex.IrrepsArray(
+            ...     cue.Irreps("SO3", "2x0 + 1"),
+            ...     jnp.array([1.0, 2.0, 0.0, 0.0, 0.0]), cue.ir_mul
+            ... )
+            >>> x.slice_by_mul()[1:4]
+            {0: 0+1} [2. 0. 0. 0.]
+        """
         return _MulIndexSliceHelper(self, axis)
 
     def __neg__(self) -> IrrepsArray:
@@ -195,6 +261,27 @@ class IrrepsArray:
         mask: Sequence[bool] | None = None,
         axis: int = -1,
     ) -> IrrepsArray:
+        """Filter the irreps.
+
+        Args:
+            keep: Irreps to keep.
+            drop: Irreps to drop.
+            mask: Boolean mask for segments to keep.
+            axis: Axis to filter.
+
+        Examples:
+
+            >>> x = cuex.IrrepsArray(
+            ...     cue.Irreps("SO3", "2x0 + 1"),
+            ...     jnp.array([1.0, 2.0, 0.0, 0.0, 0.0]), cue.ir_mul
+            ... )
+            >>> x.filter(keep="0")
+            {0: 2x0} [1. 2.]
+            >>> x.filter(drop="0")
+            {0: 1} [0. 0. 0.]
+            >>> x.filter(mask=[True, False])
+            {0: 2x0} [1. 2.]
+        """
         if mask is None:
             mask = self.irreps(axis).filter_mask(keep=keep, drop=drop)
 
@@ -224,6 +311,17 @@ class IrrepsArray:
         )
 
     def sort(self, axis: int = -1) -> IrrepsArray:
+        """Sort the irreps.
+
+        Examples:
+
+            >>> x = cuex.IrrepsArray(
+            ...     cue.Irreps("SO3", "1 + 2x0"),
+            ...     jnp.array([1.0, 1.0, 1.0, 2.0, 3.0]), cue.ir_mul
+            ... )
+            >>> x.sort()
+            {0: 2x0+1} [2. 3. 1. 1. 1.]
+        """
         if axis < 0:
             axis += self.ndim
 
@@ -268,9 +366,35 @@ class IrrepsArray:
         )
 
     def regroup(self, axis: int = -1) -> IrrepsArray:
+        """Clean up the irreps.
+
+        Examples:
+
+            >>> x = cuex.IrrepsArray(
+            ...     cue.Irreps("SO3", "0 + 1 + 0"), jnp.array([0., 1., 2., 3., -1.]),
+            ...     cue.ir_mul
+            ... )
+            >>> x.regroup()
+            {0: 2x0+1} [ 0. -1.  1.  2.  3.]
+        """
         return self.sort(axis).simplify(axis)
 
     def segments(self, axis: int = -1) -> list[jax.Array]:
+        """Split the array into segments.
+
+        Examples:
+
+            >>> x = cuex.IrrepsArray(
+            ...     cue.Irreps("SO3", "2x0 + 1"), jnp.array([1.0, 2.0, 0.0, 0.0, 0.0]),
+            ...     cue.ir_mul
+            ... )
+            >>> x.segments()
+            [Array(...), Array(...)]
+
+        Note:
+
+            See also :func:`cuex.from_segments <cuequivariance_jax.from_segments>`.
+        """
         irreps = self.irreps(axis)
         return [
             take_slice(self.array, s, axis).reshape(
@@ -354,7 +478,31 @@ def from_segments(
     dtype: jnp.dtype | None = None,
     axis: int = -1,
 ) -> IrrepsArray:
-    """Construct an IrrepsArray from a list of segments."""
+    """Construct an :class:`cuex.IrrepsArrays <cuequivariance_jax.IrrepsArrays>` from a list of segments.
+
+    Args:
+        dirreps: final Irreps.
+        segments: list of segments.
+        shape: shape of the final array.
+        layout: layout of the final array.
+        dtype: data type
+        axis: axis to concatenate the segments.
+
+    Returns:
+        IrrepsArray: IrrepsArray.
+
+    Examples:
+
+        >>> cuex.from_segments(
+        ...     cue.Irreps("SO3", "2x0 + 1"),
+        ...     [jnp.array([[1.0], [2.0]]), jnp.array([[0.0], [0.0], [0.0]])],
+        ...     (-1,), cue.ir_mul)
+        {0: 2x0+1} [1. 2. 0. 0. 0.]
+
+    Note:
+
+        See also :func:`cuex.IrrepsArray.segments <cuequivariance_jax.IrrepsArray.segments>`.
+    """
     ndim = len(shape)
     dirreps, layout = _check_args(dirreps, layout, ndim)
     if axis < 0:

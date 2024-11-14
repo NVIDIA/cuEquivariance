@@ -32,32 +32,49 @@ Supported platforms
 Organization
 ------------
 
+cuEquivariance is split into three packages:
+
+.. jupyter-execute::
+
+   import cuequivariance as cue
+   # All the non-ML components
+
+   import cuequivariance_jax as cuex
+   # For the JAX implementations
+
+   import cuequivariance_torch as cuet
+   # For the PyTorch implementations
+
+
 .. image:: _static/main_components.png
    :alt: Main components of cuEquivariance
    :align: center
 
-Most tensor products are defined using the :class:`~cuequivariance.EquivariantTensorProduct` class, which encapsulates the :class:`~cuequivariance.Irreps` and :class:`~cuequivariance.IrrepsLayout` for each input and the output. It also includes one or more instances of :class:`~cuequivariance.SegmentedTensorProduct`, which define the tensor product operations.
-This descriptor is then used to create a :class:`~cuequivariance_torch.EquivariantTensorProduct` module, which can be used in PyTorch models. Or used to execute the tensor product operations using :class:`~cuequivariance_jax.equivariant_tensor_product` in JAX.
+Most tensor products are defined using the :class:`cue.EquivariantTensorProduct <cuequivariance.EquivariantTensorProduct>` class, which encapsulates the :class:`cue.Irreps <cuequivariance.Irreps>` and :class:`cue.IrrepsLayout <cuequivariance.IrrepsLayout>` for each input and the output. It also includes one or more instances of :class:`cue.SegmentedTensorProduct <cuequivariance.SegmentedTensorProduct>`, which define the tensor product operations.
+This descriptor is then used to create a :class:`cuet.EquivariantTensorProduct <cuequivariance_torch.EquivariantTensorProduct>` module, which can be used in PyTorch models. Or used to execute the tensor product operations using :class:`cuex.equivariant_tensor_product <cuequivariance_jax.equivariant_tensor_product>` in JAX.
+
+Tutorials
+---------
+
+.. toctree::
+   :maxdepth: 2
+
+   tutorials/index
+
+API Reference
+-------------
 
 .. toctree::
    :maxdepth: 1
-   :caption: Tutorials
-
-   tutorials/irreps
-   tutorials/layout
-   tutorials/etp
-   tutorials/stp
-
-.. toctree::
-   :maxdepth: 1
-   :caption: API Reference
 
    api/cuequivariance
    api/cuequivariance_jax
    api/cuequivariance_torch
 
+What's New
+----------
+
 .. toctree::
-   :maxdepth: 1
-   :caption: Change Log
+   :maxdepth: 2
 
    changelog
