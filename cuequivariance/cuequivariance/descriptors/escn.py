@@ -1,5 +1,4 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES
-# SPDX-FileCopyrightText: Copyright (c) 2021-2023 Mario Geiger
 # SPDX-License-Identifier: Apache-2.0
 from typing import *
 

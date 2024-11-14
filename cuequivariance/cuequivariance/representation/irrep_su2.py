@@ -1,5 +1,4 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES
-# SPDX-FileCopyrightText: Copyright (c) 2023 lie-nn
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 import itertools
@@ -13,6 +12,7 @@ import numpy as np
 from cuequivariance.representation import Irrep
 
 
+# This class is an adaptation of https://github.com/lie-nn/lie-nn/blob/70adebce44e3197ee17f780585c6570d836fc2fe/lie_nn/_src/irreps/su2.py
 @dataclass(frozen=True)
 class SU2(Irrep):
     r"""Subclass of :class:`Irrep`, irreducible representations of the Lie group :math:`SU(2)`.

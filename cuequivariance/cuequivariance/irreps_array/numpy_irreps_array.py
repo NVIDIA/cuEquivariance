@@ -1,5 +1,4 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES
-# SPDX-FileCopyrightText: Copyright (c) 2021-2023 Mario Geiger
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -12,6 +11,7 @@ import cuequivariance as cue
 from cuequivariance.irreps_array.irrep_utils import into_list_of_irrep
 
 
+# This class is inspired by https://github.com/e3nn/e3nn-jax/blob/245e17eb23deaccad9f2c9cfd40fe40515e3c074/e3nn_jax/_src/irreps_array.py
 @dataclass(frozen=True, init=False)
 class NumpyIrrepsArray:
     r"""

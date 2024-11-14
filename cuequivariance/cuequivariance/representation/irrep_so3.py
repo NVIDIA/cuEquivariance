@@ -1,5 +1,4 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES
-# SPDX-FileCopyrightText: Copyright (c) 2023 lie-nn
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -14,6 +13,7 @@ from cuequivariance.misc.linalg import round_to_sqrt_rational
 from cuequivariance.representation import Irrep, SU2
 
 
+# This function is copied from https://github.com/lie-nn/lie-nn/blob/70adebce44e3197ee17f780585c6570d836fc2fe/lie_nn/_src/irreps/so3_real.py
 def change_basis_real_to_complex(l: int) -> np.ndarray:
     # https://en.wikipedia.org/wiki/Spherical_harmonics#Real_form
     q = np.zeros((2 * l + 1, 2 * l + 1), dtype=np.complex128)
@@ -29,6 +29,7 @@ def change_basis_real_to_complex(l: int) -> np.ndarray:
     return q * (-1j) ** l
 
 
+# This class is adapted from https://github.com/lie-nn/lie-nn/blob/70adebce44e3197ee17f780585c6570d836fc2fe/lie_nn/_src/irreps/so3_real.py
 @dataclass(frozen=True)
 class SO3(Irrep):
     r"""Subclass of :class:`Irrep`, real irreducible representations of the 3D rotation group :math:`SO(3)`.

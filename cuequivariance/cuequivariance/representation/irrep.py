@@ -1,5 +1,4 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES
-# SPDX-FileCopyrightText: Copyright (c) 2023 lie-nn
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -13,6 +12,7 @@ import numpy as np
 from cuequivariance.representation import Rep
 
 
+# This class is inspired from https://github.com/lie-nn/lie-nn/blob/70adebce44e3197ee17f780585c6570d836fc2fe/lie_nn/_src/irrep.py
 @dataclasses.dataclass(frozen=True)
 class Irrep(Rep):
     r"""Subclass of :class:`Rep` for an irreducible representation of a Lie group.

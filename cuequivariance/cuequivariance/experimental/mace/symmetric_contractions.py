@@ -1,6 +1,4 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES
-# SPDX-FileCopyrightText: Copyright (c) 2022 ACEsuit/mace
-# SPDX-FileCopyrightText: Copyright (c) 2020 The Regents of the University of California, through Lawrence Berkeley National Laboratory (subject to receipt of any required approvals from the U.S. Dept. of Energy), Ecole Polytechnique Federale de Lausanne (EPFL), Free University of Berlin and Kostiantyn Lapchevskyi
 # SPDX-License-Identifier: Apache-2.0
 from functools import cache
 from typing import *
@@ -101,6 +99,7 @@ def _stp_to_matrix(
     return m
 
 
+# This function is an adaptation of https://github.com/ACEsuit/mace/blob/bd412319b11c5f56c37cec6c4cfae74b2a49ff43/mace/modules/symmetric_contraction.py
 def _symmetric_contraction(
     irreps_in: cue.Irreps, irreps_out: cue.Irreps, degree: int
 ) -> cue.EquivariantTensorProduct:
@@ -141,6 +140,7 @@ def _symmetric_contraction(
     )
 
 
+# This function is an adaptation of https://github.com/ACEsuit/mace/blob/bd412319b11c5f56c37cec6c4cfae74b2a49ff43/mace/tools/cg.py
 def U_matrix_real(
     irreps_in: cue.Irreps, ir_out: cue.Irrep, correlation: int
 ) -> np.ndarray:
@@ -165,6 +165,7 @@ def U_matrix_real(
         return np.zeros((ir_out.dim,) + (irreps_in.dim,) * correlation + (0,))
 
 
+# This function is an adaptation of https://github.com/ACEsuit/mace/blob/bd412319b11c5f56c37cec6c4cfae74b2a49ff43/mace/tools/cg.py
 @cache
 def _wigner_nj(
     irreps_in: cue.Irreps, degree: int, filter_ir_mid: Optional[frozenset[cue.Irrep]]

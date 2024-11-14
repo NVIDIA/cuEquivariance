@@ -1,12 +1,12 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES
-# SPDX-FileCopyrightText: Copyright (c) 2023 lie-nn
-# SPDX-License-Identifier: Apache-2.0 
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import numpy as np
 import scipy.linalg
 
 
+# This class is adapted from https://github.com/lie-nn/lie-nn/blob/70adebce44e3197ee17f780585c6570d836fc2fe/lie_nn/_src/rep.py
 class Rep:
     r"""Abstract Class, Representation of a Lie group.
 

@@ -1,5 +1,4 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES
-# SPDX-FileCopyrightText: Copyright (c) 2021-2023 Mario Geiger
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -24,6 +23,7 @@ class MulIrrep:
         return iter((self.mul, self.ir))
 
 
+# This class is inspired from https://github.com/e3nn/e3nn-jax/blob/245e17eb23deaccad9f2c9cfd40fe40515e3c074/e3nn_jax/_src/irreps.py
 @dataclasses.dataclass(init=False, frozen=True)
 class Irreps:
     """

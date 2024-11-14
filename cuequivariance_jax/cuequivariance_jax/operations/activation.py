@@ -1,5 +1,4 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES
-# SPDX-FileCopyrightText: Copyright (c) 2021-2023 Mario Geiger
 # SPDX-License-Identifier: Apache-2.0
 from typing import *
 
@@ -10,6 +9,9 @@ import numpy as np
 
 import cuequivariance as cue
 import cuequivariance_jax as cuex
+
+# The code below is adapted from https://github.com/e3nn/e3nn-jax/blob/245e17eb23deaccad9f2c9cfd40fe40515e3c074/e3nn_jax/_src/activation.py
+
 
 ActFn = Callable[[float], float] | Callable[[jax.Array], jax.Array]
 
