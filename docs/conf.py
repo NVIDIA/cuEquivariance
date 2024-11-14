@@ -14,9 +14,13 @@ import nvidia_sphinx_theme
 
 current_year = datetime.datetime.now().year
 
-project = "NVIDIA cuEquivariance"
-copyright = f"2024-{current_year}, NVIDIA Corporation & Affiliates"
+project = "cuEquivariance"
 author = "NVIDIA Corporation & Affiliates"
+
+if current_year == 2024:
+    copyright = f"2024, {author}"
+else:
+    copyright = f"2024-{current_year}, {author}"
 
 with open("../VERSION") as version_file:
     version = version_file.read().strip()
@@ -45,15 +49,6 @@ pygments_style = "sphinx"
 
 # The theme to use for HTML
 html_theme = "nvidia_sphinx_theme"
-
-html_context = {
-    "display_github": True,
-    "github_user": "NVIDIA",
-    "github_repo": "cuEquivariance",
-    "github_version": "main",
-    "conf_py_path": "/docs/",
-}
-html_show_sphinx = False
 html_static_path = ["_static"]
 
 # -- Other options -----------------------------------------------------------
@@ -67,10 +62,3 @@ intersphinx_mapping = {
 
 napoleon_google_docstring = True
 napoleon_numpy_docstring = False
-
-doctest_global_setup = """
-import numpy as np
-import torch
-import jax
-import jax.numpy as jnp
-"""
