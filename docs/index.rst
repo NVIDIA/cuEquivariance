@@ -47,7 +47,6 @@ This descriptor is then used to create a :class:`~cuequivariance_torch.Equivaria
    tutorials/layout
    tutorials/etp
    tutorials/stp
-   tutorials/mace
 
 .. toctree::
    :maxdepth: 1

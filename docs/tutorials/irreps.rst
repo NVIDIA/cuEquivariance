@@ -74,7 +74,7 @@ Here are some useful properties of the :code:`Irreps` object:
    irreps.filter(drop="0e")
 
 
-.. _irreps-of-so3
+.. _irreps-of-so3:
 
 Irreps of :math:`SO(3)`
 ^^^^^^^^^^^^^^^^^^^^^^^

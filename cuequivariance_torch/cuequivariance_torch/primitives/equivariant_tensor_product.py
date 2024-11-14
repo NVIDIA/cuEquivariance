@@ -21,14 +21,14 @@ class EquivariantTensorProduct(torch.nn.Module):
         math_dtype (torch.dtype): dtype for internal computations.
         optimize_fallback (bool): whether to optimize the fallback implementation.
 
-    Example:
+    Examples:
         >>> e = cue.descriptors.fully_connected_tensor_product(
         ...    cue.Irreps("SO3", "2x1"), cue.Irreps("SO3", "2x1"), cue.Irreps("SO3", "2x1")
         ... )
         >>> w = torch.ones(e.inputs[0].irreps.dim)
         >>> x1 = torch.ones(17, e.inputs[1].irreps.dim)
         >>> x2 = torch.ones(17, e.inputs[2].irreps.dim)
-        >>> tp = cuet.EquivariantTensorProduct(e)
+        >>> tp = cuet.EquivariantTensorProduct(e, layout=cue.ir_mul)
         >>> tp(w, x1, x2)
         tensor([[0., 0., 0., 0., 0., 0.],
         ...
