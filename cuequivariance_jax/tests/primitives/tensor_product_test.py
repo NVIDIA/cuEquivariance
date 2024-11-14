@@ -1,12 +1,5 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
-#
-# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
-# property and proprietary rights in and to this material, related
-# documentation and any modifications thereto. Any use, reproduction,
-# disclosure or distribution of this material and related documentation
-# without an express license agreement from NVIDIA CORPORATION or
-# its affiliates is strictly prohibited.
+# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES
+# SPDX-License-Identifier: Apache-2.0
 from typing import *
 
 import jax
@@ -140,7 +133,6 @@ def test_tensor_product_double_backward(d: stp.SegmentedTensorProduct, algorithm
         dict(algorithm="sliced", use_custom_primitive=False),
         dict(algorithm=algorithm, use_custom_primitive=True),
     ]:
-
         f0 = lambda *x: cuex.tensor_product(d, *x, **options).sum()
         f1 = lambda *x: jax.grad(f0)(*x).sum()
         f2 = lambda *x: jax.grad(f1)(*x).sum()

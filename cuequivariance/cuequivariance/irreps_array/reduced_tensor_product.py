@@ -1,34 +1,5 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
-#
-# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
-# property and proprietary rights in and to this material, related
-# documentation and any modifications thereto. Any use, reproduction,
-# disclosure or distribution of this material and related documentation
-# without an express license agreement from NVIDIA CORPORATION or
-# its affiliates is strictly prohibited.
-
-# Copyright 2023 Mario Geiger
-#
-#    Licensed under the Apache License, Version 2.0 (the "License");
-#    you may not use this file except in compliance with the License.
-#    You may obtain a copy of the License at
-#
-#        http://www.apache.org/licenses/LICENSE-2.0
-#
-#    Unless required by applicable law or agreed to in writing, software
-#    distributed under the License is distributed on an "AS IS" BASIS,
-#    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#    See the License for the specific language governing permissions and
-#    limitations under the License.
-"""
-History of the different versions of the code:
-- Initially developed by Mario Geiger in `e3nn`
-- Ported in julia by Song Kim https://github.com/songk42/ReducedTensorProduct.jl
-- Ported in `e3nn-jax` by Mario Geiger
-- Optimized the symmetric case by Ameya Daigavane and Mario Geiger
-- imported in cuequivariance by Mario Geiger
-"""
+# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES
+# SPDX-License-Identifier: Apache-2.0
 import functools
 import itertools
 import logging
@@ -50,6 +21,18 @@ from cuequivariance.misc.linalg import (
 from cuequivariance.irreps_array.irrep_utils import into_list_of_irrep
 
 logger = logging.getLogger(__name__)
+
+
+# The code below is adapted from https://github.com/e3nn/e3nn-jax/blob/245e17eb23deaccad9f2c9cfd40fe40515e3c074/e3nn_jax/_src/reduced_tensor_product.py
+
+"""
+History of the different versions of the code:
+- Initially developed by Mario Geiger in `e3nn`
+- Ported in julia by Song Kim https://github.com/songk42/ReducedTensorProduct.jl
+- Ported in `e3nn-jax` by Mario Geiger
+- Optimized the symmetric case by Ameya Daigavane and Mario Geiger
+- imported and modified in cuequivariance by NVIDIA Corporation & Affiliates
+"""
 
 
 ###### Frontend functions ######

@@ -1,17 +1,5 @@
-.. SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-   SPDX-License-Identifier: LicenseRef-NvidiaProprietary
-
-   NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
-   property and proprietary rights in and to this material, related
-   documentation and any modifications thereto. Any use, reproduction,
-   disclosure or distribution of this material and related documentation
-   without an express license agreement from NVIDIA CORPORATION or
-   its affiliates is strictly prohibited.
-
-.. cuEquivariance documentation master file, created by
-   sphinx-quickstart on Tue Apr 30 02:19:35 2024.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+.. SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES
+   SPDX-License-Identifier: Apache-2.0
 
 NVIDIA cuEquivariance Documentation
 ===================================

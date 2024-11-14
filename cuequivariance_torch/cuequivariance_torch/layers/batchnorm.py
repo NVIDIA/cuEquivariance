@@ -1,18 +1,5 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
-#
-# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
-# property and proprietary rights in and to this material, related
-# documentation and any modifications thereto. Any use, reproduction,
-# disclosure or distribution of this material and related documentation
-# without an express license agreement from NVIDIA CORPORATION or
-# its affiliates is strictly prohibited.
-
-# Euclidean neural networks (e3nn) Copyright (c) 2020, The Regents of the
-# University of California, through Lawrence Berkeley National Laboratory
-# (subject to receipt of any required approvals from the U.S. Dept. of Energy),
-# Ecole Polytechnique Federale de Lausanne (EPFL), Free University of Berlin
-# and Kostiantyn Lapchevskyi. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES
+# SPDX-License-Identifier: Apache-2.0
 from typing import *
 
 import torch
@@ -21,6 +8,7 @@ import cuequivariance as cue
 from cuequivariance.irreps_array.misc_ui import default_irreps, default_layout
 
 
+# This implementation is an adaptation of https://github.com/e3nn/e3nn/blob/ef93f876c9985b3816aefb2982b3cf4325df6ba4/e3nn/nn/_batchnorm.py
 class BatchNorm(torch.nn.Module):
     """Batch normalization for orthonormal representations.
 

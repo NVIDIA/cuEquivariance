@@ -1,19 +1,5 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
-#
-# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
-# property and proprietary rights in and to this material, related
-# documentation and any modifications thereto. Any use, reproduction,
-# disclosure or distribution of this material and related documentation
-# without an express license agreement from NVIDIA CORPORATION or
-# its affiliates is strictly prohibited.
-
-###########################################################################################
-# Higher Order Real Clebsch Gordan (based on e3nn by Mario Geiger)
-# Authors: Ilyes Batatia
-# This program is distributed under the MIT License (see MIT.md)
-###########################################################################################
-
+# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES
+# SPDX-License-Identifier: Apache-2.0
 from functools import cache
 from typing import *
 
@@ -113,6 +99,7 @@ def _stp_to_matrix(
     return m
 
 
+# This function is an adaptation of https://github.com/ACEsuit/mace/blob/bd412319b11c5f56c37cec6c4cfae74b2a49ff43/mace/modules/symmetric_contraction.py
 def _symmetric_contraction(
     irreps_in: cue.Irreps, irreps_out: cue.Irreps, degree: int
 ) -> cue.EquivariantTensorProduct:
@@ -153,6 +140,7 @@ def _symmetric_contraction(
     )
 
 
+# This function is an adaptation of https://github.com/ACEsuit/mace/blob/bd412319b11c5f56c37cec6c4cfae74b2a49ff43/mace/tools/cg.py
 def U_matrix_real(
     irreps_in: cue.Irreps, ir_out: cue.Irrep, correlation: int
 ) -> np.ndarray:
@@ -177,6 +165,7 @@ def U_matrix_real(
         return np.zeros((ir_out.dim,) + (irreps_in.dim,) * correlation + (0,))
 
 
+# This function is an adaptation of https://github.com/ACEsuit/mace/blob/bd412319b11c5f56c37cec6c4cfae74b2a49ff43/mace/tools/cg.py
 @cache
 def _wigner_nj(
     irreps_in: cue.Irreps, degree: int, filter_ir_mid: Optional[frozenset[cue.Irrep]]
