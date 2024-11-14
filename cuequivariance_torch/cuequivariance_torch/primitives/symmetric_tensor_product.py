@@ -19,15 +19,10 @@ class SymmetricTensorProduct(torch.nn.Module):
     """
     PyTorch module
 
-    Parameters
-    ----------
-    descriptors : list[stp.SegmentedTensorProduct]
-        The list of SegmentedTensorProduct descriptors
-    math_dtype : torch.dtype, optional
-        The data type of the coefficients and calculations
-    optimize_fallback : bool, optional
-        If `True`, the torch.fx graph will be optimized before execution
-        Because the optimization takes time, it is turned off by default.
+    Args:
+        descriptors (list of SegmentedTensorProduct): The list of SegmentedTensorProduct descriptors.
+        math_dtype (torch.dtype, optional): The data type of the coefficients and calculations.
+        optimize_fallback (bool, optional): If `True`, the torch.fx graph will be optimized before execution. Because the optimization takes time, it is turned off by default.
     """
 
     def __init__(
@@ -86,21 +81,16 @@ class SymmetricTensorProduct(torch.nn.Module):
         r"""
         Perform the forward pass of the indexed symmetric tensor product operation.
 
-        Parameters
-        ----------
+        Args:
+            x0 (torch.Tensor): The input tensor for the first operand. It should have the shape (batch, x0_size).
+            use_fallback (bool, optional):  If `None` (default), a CUDA kernel will be used if available.
+                If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
+                If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
 
-        x0 : torch.Tensor
-            The input tensor for the first operand. It should have the shape (batch, x0_size).
-        use_fallback : Optional[bool], optional
-            If `None` (default), a CUDA kernel will be used if available.
-            If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
-            If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
-
-        Returns
-        -------
-        torch.Tensor
-            The output tensor resulting from the indexed symmetric tensor product operation.
-            It will have the shape (batch, x1_size).
+        Returns:
+            torch.Tensor:
+                The output tensor resulting from the indexed symmetric tensor product operation.
+                It will have the shape (batch, x1_size).
         """
         out = self.f(
             torch.ones((1, 1), dtype=x0.dtype, device=x0.device),

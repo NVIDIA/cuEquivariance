@@ -7,6 +7,7 @@
 
 .. autoclass:: {{ objname }}
 
+   .. rubric:: Forward Pass
    {% block methods %}
    .. automethod:: forward
    {% endblock %}

@@ -11,14 +11,10 @@ import cuequivariance as cue
 class TransposeIrrepsLayout(torch.nn.Module):
     """Transpose the irreps layout of a tensor.
 
-    Parameters
-    ----------
-    irreps : Irreps
-        The irreps of the tensor.
-    source : IrrepsLayout
-        The source layout.
-    target : IrrepsLayout
-        The target layout.
+    Args:
+        irreps (Irreps): The irreps of the tensor.
+        source (IrrepsLayout): The source layout.
+        target (IrrepsLayout): The target layout.
     """
 
     def __init__(
@@ -56,19 +52,14 @@ class TransposeIrrepsLayout(torch.nn.Module):
         r"""
         Perform the transposition.
 
-        Parameters
-        ----------
-        x : torch.Tensor
-            The input tensor.
-        use_fallback : Optional[bool], optional
-            If `None` (default), a CUDA kernel will be used if available.
-            If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
-            If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
+        Args:
+            x (torch.Tensor): The input tensor.
+            use_fallback (bool, optional): If `None` (default), a CUDA kernel will be used if available.
+                If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
+                If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
 
-        Returns
-        -------
-        torch.Tensor
-            The transposed tensor.
+        Returns:
+            torch.Tensor: The transposed tensor.
         """
 
         return self.f(x, use_fallback=use_fallback)

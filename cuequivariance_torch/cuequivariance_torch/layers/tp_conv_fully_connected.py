@@ -41,8 +41,8 @@ class FullyConnectedTensorProductConv(nn.Module):
         sh_irreps (Irreps): Irreps for the spherical harmonic representations of edge vectors.
         out_irreps (Irreps): Irreps for the output.
         batch_norm (bool, optional): If true, batch normalization is applied. Defaults to True.
-        mlp_channels (sequence of ints, optional): A sequence of integers defining the number of neurons in each layer in MLP before the output layer. If None, no MLP will be added. The input layer contains edge embeddings and node scalar features. Defaults to None.
-        mlp_activation (``nn.Module`` or sequence of ``nn.Module``, optional): A sequence of functions to be applied in between linear layers in MLP, e.g., ``nn.Sequential(nn.ReLU(), nn.Dropout(0.4))``. Defaults to ``nn.GELU()``.
+        mlp_channels (Sequence of int, optional): A sequence of integers defining the number of neurons in each layer in MLP before the output layer. If None, no MLP will be added. The input layer contains edge embeddings and node scalar features. Defaults to None.
+        mlp_activation (``nn.Module`` or Sequence of ``nn.Module``, optional): A sequence of functions to be applied in between linear layers in MLP, e.g., ``nn.Sequential(nn.ReLU(), nn.Dropout(0.4))``. Defaults to ``nn.GELU()``.
         layout (IrrepsLayout, optional): The layout of the input and output irreps. Default is ``cue.mul_ir`` which is the layout corresponding to e3nn.
 
     Examples:
@@ -191,8 +191,7 @@ class FullyConnectedTensorProductConv(nn.Module):
                 Shape: (num_edges,)
 
         Returns:
-            torch.Tensor: Output node features.
-                Shape: (num_dst_nodes, out_irreps.dim)
+            torch.Tensor: Output node features. Shape: (num_dst_nodes, out_irreps.dim)
         """
         edge_emb_size = edge_emb.size(-1)
         src_scalars_size = 0 if src_scalars is None else src_scalars.size(-1)

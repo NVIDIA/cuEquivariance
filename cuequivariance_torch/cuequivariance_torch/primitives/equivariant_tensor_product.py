@@ -14,9 +14,9 @@ class EquivariantTensorProduct(torch.nn.Module):
 
     Args:
         e (cuequivariance.EquivariantTensorProduct): Equivariant tensor product.
-        layout (cuequivariance.IrrepsLayout): layout for inputs and output.
-        layout_in (cuequivariance.IrrepsLayout): layout for inputs.
-        layout_out (cuequivariance.IrrepsLayout): layout for output.
+        layout (IrrepsLayout): layout for inputs and output.
+        layout_in (IrrepsLayout): layout for inputs.
+        layout_out (IrrepsLayout): layout for output.
         device (torch.device): device of the Module.
         math_dtype (torch.dtype): dtype for internal computations.
         optimize_fallback (bool): whether to optimize the fallback implementation.

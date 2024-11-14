@@ -14,12 +14,9 @@ class Rotation(torch.nn.Module):
     """
     A class that represents a rotation layer for SO3 or O3 representations.
 
-    Parameters
-    ----------
-    irreps : cue.Irreps
-        The irreducible representations of the tensor to rotate.
-    layout : cue.IrrepsLayout, optional
-        The memory layout of the tensor, cue.ir_mul is preferred.
+    Args:
+        irreps (Irreps): The irreducible representations of the tensor to rotate.
+        layout (IrrepsLayout, optional): The memory layout of the tensor, `cue.ir_mul` is preferred.
     """
 
     def __init__(
@@ -66,25 +63,17 @@ class Rotation(torch.nn.Module):
         """
         Forward pass of the rotation layer.
 
-        Parameters
-        ----------
-        gamma : torch.Tensor
-            The gamma angles. First rotation around the y-axis.
-        beta : torch.Tensor
-            The beta angles. Second rotation around the x-axis.
-        alpha : torch.Tensor
-            The alpha angles. Third rotation around the y-axis.
-        x : torch.Tensor
-            The input tensor.
-        use_fallback : Optional[bool], optional
-            If `None` (default), a CUDA kernel will be used if available.
-            If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
-            If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
+        Args:
+            gamma (torch.Tensor): The gamma angles. First rotation around the y-axis.
+            beta (torch.Tensor): The beta angles. Second rotation around the x-axis.
+            alpha (torch.Tensor): The alpha angles. Third rotation around the y-axis.
+            x (torch.Tensor): The input tensor.
+            use_fallback (bool, optional): If `None` (default), a CUDA kernel will be used if available.
+                If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
+                If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
 
-        Returns
-        -------
-        torch.Tensor
-            The rotated tensor.
+        Returns:
+            torch.Tensor: The rotated tensor.
         """
         gamma = torch.as_tensor(gamma, dtype=x.dtype, device=x.device)
         beta = torch.as_tensor(beta, dtype=x.dtype, device=x.device)

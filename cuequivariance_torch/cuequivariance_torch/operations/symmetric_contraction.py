@@ -24,7 +24,7 @@ class SymmetricContraction(torch.nn.Module):
             polynomial in the symmetric contraction.
         num_elements (int): The number of elements for the weight tensor.
         layout (IrrepsLayout, optional): The layout of the input and output irreps. If not provided, a default layout is used.
-        math_dtype (Optional[torch.dtype], optional): The data type for mathematical operations. If not specified, the default data type
+        math_dtype (torch.dtype, optional): The data type for mathematical operations. If not specified, the default data type
             from the torch environment is used.
 
     Examples:
