@@ -212,9 +212,9 @@ The new version for this part of the code will thus read:
 
     # NEW FUNCTION DEFINITION (single function)
     conv_tp = cuet.ChannelWiseTensorProduct(
-        feats_irreps,
-        cue.Irreps("O3", edge_attrs_irreps),
-        cue.Irreps("O3", target_irreps),
+        irreps_in1=feats_irreps,
+        irreps_in2=cue.Irreps("O3", edge_attrs_irreps),
+        filter_irreps_out=cue.Irreps("O3", target_irreps),
         shared_weights=False,
         internal_weights=False,
         layout=cue.mul_ir,
@@ -254,8 +254,8 @@ Depending on the irreps size, the kernel might not improve above the naive imple
 
     # NEW FUNCTION DEFINITION:
     linear = cuet.Linear(
-        feats_irreps,
-        feats_irreps,
+        irreps_in=feats_irreps,
+        irreps_out=feats_irreps,
         layout=cue.mul_ir,
         internal_weights=True,
         shared_weights=True,
