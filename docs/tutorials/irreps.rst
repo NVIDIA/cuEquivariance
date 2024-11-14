@@ -3,15 +3,15 @@
 
 .. _tuto_irreps:
 
-Group representations: :code:`Irreps` class
-===========================================
+Group representations
+=====================
 
 What Is a Group Representation?
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Imagine a set of operations that can be performed on an object—such as rotating a 3D model, flipping bits in a binary string, or shuffling elements in a list. These operations can be combined: performing one after another is equivalent to some single operation. In mathematics, especially in abstract algebra, such a set with an operation is called a *group*.
+Imagine a set of operations that can be performed on an object—such as rotating a 3D model, flipping bits in a binary string, or shuffling elements in a list. These operations can be combined: performing one after another is equivalent to some single operation. In mathematics, especially in abstract algebra, such a set (of operations) with a composition law is called a *group*.
 
-A **group** is a collection of elements (which could be numbers, functions, transformations, etc.) combined with an operation (like addition or multiplication) that satisfies certain rules:
+A **group** is a collection of elements (which could be numbers, functions, transformations, etc.) combined with a composition law (like addition or multiplication) that satisfies certain rules:
 
 1. **Closure**: Combining any two elements produces another element in the group.
 2. **Associativity**: The way operations are grouped does not change the result.
@@ -47,6 +47,8 @@ Note that the ordering of the representations is (often) meaningful, for example
 
    cue.Irreps("SO3", "32x0 + 16x1") != cue.Irreps("SO3", "16x1 + 32x0")
 
+because the order of the representations is different. In the first case we have 32 copies of the trivial representation followed by 16 copies of vector representation, while in the second case we have 16 copies of the vector representation followed by 32 copies of the trivial representation.
+
 cuEquivariance provides irreps for the following groups: :math:`SO(3)`, :math:`O(3)` and :math:`SU(2)`.
 
 .. jupyter-execute::
@@ -72,8 +74,23 @@ Here are some useful properties of the :code:`Irreps` object:
    irreps.filter(drop="0e")
 
 
-Assume context manager
-^^^^^^^^^^^^^^^^^^^^^^
+.. _irreps-of-so3:
+
+Irreps of :math:`SO(3)`
+^^^^^^^^^^^^^^^^^^^^^^^
+
+The group :math:`SO(3)` is the group of rotations in 3D space. It has a countable number of irreducible representations, each labeled by a non-negative integer. The irreps of :math:`SO(3)` are indexed by the non-negative integers :math:`l = 0, 1, 2, \ldots`. The dimension of the :math:`l`-th irrep is :math:`2l + 1`.
+Some of the irreps of :math:`SO(3)` are well-known and have special names:
+
+- The trivial representation (0) is one-dimensional and corresponds to scalar quantities that do not transform under rotations (e.g., mass, charge, etc.).
+- The vector representation (1) is three-dimensional and corresponds to vectors in 3D space (e.g., position, velocity, force, etc.).
+
+The higher-dimensional irreps are less common but are still important in physics and mathematics. They appear when we consider tensor products of vector representations.
+For instance the :math:`l = 2` irrep is a five-dimensional representation that corresponds to rank-2 symmetric traceless tensors. The remaining degrees of freedom in a rank-2 tensor are captured by the :math:`l = 0` (the trace) and :math:`l = 1` (the antisymmetric part) irreps.
+
+
+Set a default group
+^^^^^^^^^^^^^^^^^^^
 
 You can use the :code:`assume` context manager to fix the group.
 

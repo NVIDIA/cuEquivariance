@@ -8,7 +8,7 @@ import torch
 
 import cuequivariance as cue
 import cuequivariance_torch as cuet
-from cuequivariance.experimental.mace.e3nn_irreps import O3_e3nn
+from cuequivariance.experimental.e3nn import O3_e3nn
 
 USE_TF32 = False
 torch.backends.cuda.matmul.allow_tf32 = USE_TF32

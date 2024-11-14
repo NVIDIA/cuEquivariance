@@ -1,3 +1,3 @@
-# cuEquivariance 0.6.4
+# 0.1.0 (2024-11-18)
 
-- Add STP descriptors for the Geometric Algebra Transformer architecture.
+- Beta version of cuEquivariance released.

@@ -50,17 +50,16 @@ class IrrepsArray:
     """
     Wrapper around a jax array with a dict of Irreps for the non-trivial axes.
 
-    Args:
-        dirreps: dict[int, cue.Irreps] | cue.Irreps: Irreps for each non-trivial axis.
-        array: jax.Array: Array to wrap.
+    >>> IrrepsArray({-1: cue.Irreps("SO3", "2x0")}, jnp.array([1.0, 2.0]), cue.ir_mul)
+    {0: 2x0} [1. 2.]
+
 
     Attributes:
-        layout: Layout of the array.
-        dirreps: dict[int, cue.Irreps]: Irreps for the non-trivial axes.
-        array: jax.Array: Array to wrap.
-        shape: tuple[int, ...]: Shape of the array.
-        ndim: int: Number of dimensions of the array.
-        irreps: cue.Irreps: Sugar syntax for the single Irreps if there is only one non-trivial axis.
+        dirreps: Irreps for the non-trivial axes
+        array: JAX array
+        layout: Data layout
+        shape: Shape of the array
+        ndim: Number of dimensions of the array
     """
 
     layout: cue.IrrepsLayout = field()
@@ -104,6 +103,7 @@ class IrrepsArray:
         return self.array.dtype
 
     def is_simple(self) -> bool:
+        """Return True if the IrrepsArray has only the last axis non-trivial."""
         if len(self.dirreps) != 1:
             return False
         axis = next(iter(self.dirreps.keys()))

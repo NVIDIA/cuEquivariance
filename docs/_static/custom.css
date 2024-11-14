@@ -1,9 +1,0 @@
-/* SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES
-   SPDX-License-Identifier: Apache-2.0
-*/
-
-/* fix from: https://github.com/readthedocs/sphinx_rtd_theme/issues/1505#issuecomment-2258832864 */
-.wy-table-responsive table td,
-.wy-table-responsive table th {
-  white-space: normal;
-}

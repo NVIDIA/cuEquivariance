@@ -9,14 +9,18 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 import datetime
-import sphinx_rtd_theme
+import nvidia_sphinx_theme
 
 
 current_year = datetime.datetime.now().year
 
-project = "NVIDIA cuEquivariance"
-copyright = f"2024-{current_year}, NVIDIA Corporation & Affiliates"
+project = "cuEquivariance"
 author = "NVIDIA Corporation & Affiliates"
+
+if current_year == 2024:
+    copyright = f"2024, {author}"
+else:
+    copyright = f"2024-{current_year}, {author}"
 
 with open("../VERSION") as version_file:
     version = version_file.read().strip()
@@ -44,21 +48,8 @@ exclude_patterns = ["README.md", "_build", "Thumbs.db", ".DS_Store"]
 pygments_style = "sphinx"
 
 # The theme to use for HTML
-html_theme = "sphinx_rtd_theme"
-html_theme_options = {
-    "style_nav_header_background": "#000000",
-    "logo_only": False,
-}
-html_context = {
-    "display_github": True,
-    "github_user": "NVIDIA",
-    "github_repo": "cuEquivariance",
-    "github_version": "main",
-    "conf_py_path": "/docs/",
-}
-html_show_sphinx = False
+html_theme = "nvidia_sphinx_theme"
 html_static_path = ["_static"]
-html_css_files = ["custom.css"]
 
 # -- Other options -----------------------------------------------------------
 
@@ -71,10 +62,3 @@ intersphinx_mapping = {
 
 napoleon_google_docstring = True
 napoleon_numpy_docstring = False
-
-doctest_global_setup = """
-import numpy as np
-import torch
-import jax
-import jax.numpy as jnp
-"""

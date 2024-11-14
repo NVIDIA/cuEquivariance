@@ -3,36 +3,64 @@
 
 .. module:: cuequivariance_torch
 
-:code:`import cuequivariance_torch as cuet`
-===========================================
+cuequivariance-torch
+====================
 
 .. currentmodule:: cuequivariance_torch
 
-The PyTorch modules
+Tensor Products
+---------------
 
 .. autosummary::
    :toctree: generated/
    :template: pytorch_module_template.rst
 
    EquivariantTensorProduct
-   TensorProduct
    SymmetricTensorProduct
-   IWeightedSymmetricTensorProduct
-   TransposeIrrepsLayout
+   TensorProduct
+
+Special Cases of Tensor Products
+--------------------------------
+
+.. autosummary::
+   :toctree: generated/
+   :template: pytorch_module_template.rst
+
    ChannelWiseTensorProduct
    FullyConnectedTensorProduct
    Linear
    SymmetricContraction
-   Rotation
-   Inversion
-   layers.BatchNorm
-   layers.FullyConnectedTensorProductConv
-
-The functions
+   TransposeIrrepsLayout
 
 .. autosummary::
    :toctree: generated/
+   :template: function_template.rst
 
    spherical_harmonics
+
+Euclidean Operations
+--------------------
+
+.. autosummary::
+   :toctree: generated/
+   :template: pytorch_module_template.rst
+
+   Rotation
+   Inversion
+
+.. autosummary::
+   :toctree: generated/
+   :template: function_template.rst
+
    encode_rotation_angle
    vector_to_euler_angles
+
+Extra Modules
+-------------
+
+.. autosummary::
+   :toctree: generated/
+   :template: pytorch_module_template.rst
+
+   layers.BatchNorm
+   layers.FullyConnectedTensorProductConv
