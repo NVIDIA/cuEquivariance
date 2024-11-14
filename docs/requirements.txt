@@ -1,5 +1,7 @@
+jax
+torch
 sphinx
-sphinx-rtd-theme
+nvidia-sphinx-theme
 autodocsumm
 myst-parser
 ipykernel

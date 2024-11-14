@@ -3,8 +3,8 @@
 
 .. _tuto_irreps:
 
-Group representations: :code:`Irreps` class
-===========================================
+Group representations
+=====================
 
 What Is a Group Representation?
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

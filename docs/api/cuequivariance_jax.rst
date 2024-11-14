@@ -3,35 +3,46 @@
 
 .. module:: cuequivariance_jax
 
-:code:`import cuequivariance_jax as cuex`
-=========================================
+cuequivariance-jax
+==================
 
 .. currentmodule:: cuequivariance_jax
 
-The data objects
+IrrepsArray
+-----------
 
 .. autosummary::
    :toctree: generated/
+   :template: class_template.rst
 
    IrrepsArray
+
+.. autosummary::
+   :toctree: generated/
+   :template: function_template.rst
+
    from_segments
    as_irreps_array
    concatenate
    randn
 
-The functions to compute the tensor products
+Tensor Products
+---------------
 
 .. autosummary::
    :toctree: generated/
+   :template: function_template.rst
 
    equivariant_tensor_product
    symmetric_tensor_product
    tensor_product
 
-Some high-level modules
+Extra Modules
+-------------
 
 .. autosummary::
    :toctree: generated/
+   :template: class_template.rst
 
    flax_linen.Linear
    flax_linen.LayerNorm

@@ -6,7 +6,3 @@
 .. currentmodule:: {{ module }}
 
 .. autoclass:: {{ objname }}
-
-   {% block methods %}
-   .. automethod:: forward
-   {% endblock %}

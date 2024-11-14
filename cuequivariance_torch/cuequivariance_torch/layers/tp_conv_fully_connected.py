@@ -37,13 +37,13 @@ class FullyConnectedTensorProductConv(nn.Module):
     MLP parameters and scalar features from edges and nodes.
 
     Args:
-        in_irreps (cue.Irreps): Irreps for the input node features.
-        sh_irreps (cue.Irreps): Irreps for the spherical harmonic representations of edge vectors.
-        out_irreps (cue.Irreps): Irreps for the output.
+        in_irreps (Irreps): Irreps for the input node features.
+        sh_irreps (Irreps): Irreps for the spherical harmonic representations of edge vectors.
+        out_irreps (Irreps): Irreps for the output.
         batch_norm (bool, optional): If true, batch normalization is applied. Defaults to True.
         mlp_channels (sequence of ints, optional): A sequence of integers defining the number of neurons in each layer in MLP before the output layer. If None, no MLP will be added. The input layer contains edge embeddings and node scalar features. Defaults to None.
         mlp_activation (``nn.Module`` or sequence of ``nn.Module``, optional): A sequence of functions to be applied in between linear layers in MLP, e.g., ``nn.Sequential(nn.ReLU(), nn.Dropout(0.4))``. Defaults to ``nn.GELU()``.
-        layout (cue.IrrepsLayout, optional): The layout of the input and output irreps. Default is ``cue.mul_ir`` which is the layout corresponding to e3nn.
+        layout (IrrepsLayout, optional): The layout of the input and output irreps. Default is ``cue.mul_ir`` which is the layout corresponding to e3nn.
 
     Examples:
         >>> in_irreps = cue.Irreps("O3", "4x0e + 4x1o")

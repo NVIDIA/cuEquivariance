@@ -3,37 +3,52 @@
 
 .. module:: cuequivariance
 
-:code:`import cuequivariance as cue`
-====================================
+cuequivariance
+==============
 
 .. currentmodule:: cuequivariance
 
-Here are the functions and classes concerning group theory.
+Group Representations
+---------------------
 
 .. autosummary::
    :toctree: generated/
+   :template: class_template.rst
 
    Rep
    Irrep
    SO3
    O3
    SU2
-   clebsch_gordan
-
-The following classes are used to define equivariant tensor products.
 
 .. autosummary::
    :toctree: generated/
+   :template: function_template.rst
+
+   clebsch_gordan
+
+Equivariant Tensor Products
+---------------------------
+
+These classes represent tensor products.
+
+.. autosummary::
+   :toctree: generated/
+   :template: class_template.rst
 
    Irreps
    IrrepsLayout
    SegmentedTensorProduct
    EquivariantTensorProduct
 
+Descriptors
+-----------
+
 These functions create specific instances of tensor products.
 
 .. autosummary::
    :toctree: generated/
+   :template: function_template.rst
 
    descriptors.spherical_harmonics
    descriptors.fully_connected_tensor_product

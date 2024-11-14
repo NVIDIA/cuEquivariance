@@ -9,7 +9,7 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 import datetime
-import sphinx_rtd_theme
+import nvidia_sphinx_theme
 
 
 current_year = datetime.datetime.now().year
@@ -44,11 +44,8 @@ exclude_patterns = ["README.md", "_build", "Thumbs.db", ".DS_Store"]
 pygments_style = "sphinx"
 
 # The theme to use for HTML
-html_theme = "sphinx_rtd_theme"
-html_theme_options = {
-    "style_nav_header_background": "#000000",
-    "logo_only": False,
-}
+html_theme = "nvidia_sphinx_theme"
+
 html_context = {
     "display_github": True,
     "github_user": "NVIDIA",
@@ -58,7 +55,6 @@ html_context = {
 }
 html_show_sphinx = False
 html_static_path = ["_static"]
-html_css_files = ["custom.css"]
 
 # -- Other options -----------------------------------------------------------
 
