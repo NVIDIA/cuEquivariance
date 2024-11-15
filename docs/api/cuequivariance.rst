@@ -43,8 +43,9 @@ These classes represent tensor products.
 Descriptors
 -----------
 
+:doc:`List of Descriptors <cuequivariance.descriptors>`
+
 .. toctree::
-   :maxdepth: 2
+   :hidden:
 
    cuequivariance.descriptors
-   

@@ -67,7 +67,6 @@ Tutorials
 | :doc:`tutorials/stp`
 
 .. toctree::
-   :maxdepth: 2
    :hidden:
 
    tutorials/index
