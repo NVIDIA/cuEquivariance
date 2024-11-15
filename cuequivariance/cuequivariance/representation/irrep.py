@@ -10,12 +10,14 @@ from typing import *
 import numpy as np
 
 from cuequivariance.representation import Rep
+import cuequivariance as cue  # noqa: F401
 
 
 # This class is inspired from https://github.com/lie-nn/lie-nn/blob/70adebce44e3197ee17f780585c6570d836fc2fe/lie_nn/_src/irrep.py
 @dataclasses.dataclass(frozen=True)
 class Irrep(Rep):
-    r"""Subclass of :class:`Rep` for an irreducible representation of a Lie group.
+    r"""
+    Subclass of :class:`Rep` for an irreducible representation of a Lie group.
 
     It extends the base class by adding:
 
@@ -27,12 +29,22 @@ class Irrep(Rep):
 
     @classmethod
     def regexp_pattern(cls) -> re.Pattern:
-        """Regular expression pattern for parsing the string representation."""
+        """
+        Regular expression pattern for parsing the string representation.
+
+        Raises:
+            NotImplementedError: This method must be implemented by the subclass.
+        """
         raise NotImplementedError
 
     @classmethod
     def from_string(cls, string: str) -> Irrep:
-        """Create an instance from the string representation."""
+        """
+        Create an instance from the string representation.
+
+        Raises:
+            NotImplementedError: This method must be implemented by the subclass.
+        """
         raise NotImplementedError
 
     @classmethod
@@ -57,9 +69,10 @@ class Irrep(Rep):
         raise NotImplementedError
 
     def __lt__(rep1: Irrep, rep2: Irrep) -> bool:
-        """This is required for sorting the irreps.
+        """
+        This is required for sorting the irreps.
 
-        * the dimension is the first criterion (ascending order)
+        - the dimension is the first criterion (ascending order)
         """
         if rep1 == rep2 or (rep1.dim != rep2.dim):
             return rep1.dim < rep2.dim
@@ -67,26 +80,42 @@ class Irrep(Rep):
 
     @classmethod
     def iterator(cls) -> Iterable[Irrep]:
-        r"""Iterator over all irreps of the Lie group.
+        r"""
+        Iterator over all irreps of the Lie group.
 
-        * the first element is the trivial irrep
-        * the elements respect the partial order defined by ``__lt__``
+        - the first element is the trivial irrep
+        - the elements respect the partial order defined by ``__lt__``
+
+        Raises:
+            NotImplementedError: This method must be implemented by the subclass.
+        """
+        raise NotImplementedError
+
+    @classmethod
+    def clebsch_gordan(cls, rep1: Irrep, rep2: Irrep, rep3: Irrep) -> np.ndarray:
+        """
+        Clebsch-Gordan coefficients tensor.
+
+        The shape is ``(number_of_paths, rep1.dim, rep2.dim, rep3.dim)`` and rep3 is the output irrep.
+
+        Raises:
+            NotImplementedError: This method must be implemented by the subclass.
+
+        See also:
+            :func:`clebsch_gordan`.
         """
         raise NotImplementedError
 
     @classmethod
     def trivial(cls) -> Irrep:
+        """
+        Return the trivial irrep.
+
+        Implemented by returning the first element of the iterator.
+        """
         rep: Irrep = cls.iterator().__next__()
         assert rep.is_trivial(), "problem with the iterator"
         return rep
-
-    @classmethod
-    def clebsch_gordan(cls, rep1: Irrep, rep2: Irrep, rep3: Irrep) -> np.ndarray:
-        """Clebsch-Gordan coefficients tensor.
-
-        The shape is ``(number_of_paths, rep1.dim, rep2.dim, rep3.dim)`` and rep3 is the output irrep.
-        """
-        raise NotImplementedError
 
 
 def clebsch_gordan(rep1: Irrep, rep2: Irrep, rep3: Irrep) -> np.ndarray:
@@ -95,9 +124,9 @@ def clebsch_gordan(rep1: Irrep, rep2: Irrep, rep3: Irrep) -> np.ndarray:
 
     The Clebsch-Gordan coefficients are used to decompose the tensor product of two irreducible representations
     into a direct sum of irreducible representations. This method computes the Clebsch-Gordan coefficients
-    for the given input representations and returns an array of shape (num_solutions, dim1, dim2, dim3),
-    where num_solutions is the number of solutions, dim1 is the dimension of rep1, dim2 is the dimension of rep2,
-    and dim3 is the dimension of rep3.
+    for the given input representations and returns an array of shape ``(num_solutions, dim1, dim2, dim3)``,
+    where num_solutions is the number of solutions, ``dim1`` is the dimension of ``rep1``, ``dim2`` is the
+    dimension of ``rep2``, and ``dim3`` is the dimension of ``rep3``.
 
     The Clebsch-Gordan coefficients satisfy the following equation:
 
@@ -111,7 +140,23 @@ def clebsch_gordan(rep1: Irrep, rep2: Irrep, rep3: Irrep) -> np.ndarray:
         rep3 (Irrep): The third irreducible representation (output).
 
     Returns:
-        np.ndarray: An array of shape (num_solutions, dim1, dim2, dim3) containing the Clebsch-Gordan coefficients.
+        np.ndarray: An array of shape ``(num_solutions, dim1, dim2, dim3)``.
+
+    Examples:
+        >>> rep1 = cue.SO3(1)
+        >>> rep2 = cue.SO3(1)
+        >>> rep3 = cue.SO3(2)
+        >>> C = clebsch_gordan(rep1, rep2, rep3)
+        >>> C.shape
+        (1, 3, 3, 5)
+        >>> C
+        array([[[[ 0.  ...]]]])
+
+        If there is no solution, the output is an empty array.
+        
+        >>> C = clebsch_gordan(cue.SO3(1), cue.SO3(1), cue.SO3(3))
+        >>> C.shape
+        (0, 3, 3, 7)
     """
     return rep1.clebsch_gordan(rep1, rep2, rep3)
 
