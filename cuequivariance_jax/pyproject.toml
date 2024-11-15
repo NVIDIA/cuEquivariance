@@ -6,7 +6,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "cuequivariance_jax"
+name = "cuequivariance-jax"
 dynamic = ["version"]
 description = "CUDA accelerated equivariant operations"
 readme = "../README.md"
