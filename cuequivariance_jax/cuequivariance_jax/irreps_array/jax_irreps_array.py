@@ -51,8 +51,7 @@ class IrrepsArray:
     """
     Wrapper around a jax array with a dict of Irreps for the non-trivial axes.
 
-    Creation
-    --------
+    .. rubric:: Creation
 
     >>> cuex.IrrepsArray(
     ...     {-1: cue.Irreps("SO3", "2x0")}, jnp.array([1.0, 2.0]), cue.ir_mul
@@ -72,8 +71,7 @@ class IrrepsArray:
     ...     cuex.IrrepsArray("2x0", jnp.array([1.0, 2.0]))
     {0: 2x0} [1. 2.]
 
-    Arithmetic
-    ----------
+    .. rubric:: Arithmetic
 
     Basic arithmetic operations are supported, as long as they are equivariant:
 
@@ -86,8 +84,7 @@ class IrrepsArray:
     >>> 3.0 * x
     {0: 2x0} [3. 6.]
 
-    Attributes
-    ----------
+    .. rubric:: Attributes
 
     Attributes:
         dirreps: Irreps for the non-trivial axes, see also :func:`irreps() <cuequivariance_jax.IrrepsArray.irreps>` below.
@@ -97,8 +94,7 @@ class IrrepsArray:
         ndim: Number of dimensions of the array
         dtype: Data type of the array
 
-    Methods
-    -------
+    .. rubric:: Methods
     """
 
     layout: cue.IrrepsLayout = field()
