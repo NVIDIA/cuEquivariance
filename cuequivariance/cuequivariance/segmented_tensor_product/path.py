@@ -12,17 +12,13 @@ class Path:
     """
     A tensor product path links segments from different operands and contains coefficients.
 
-    Attributes
-    ----------
-    indices : tuple[int, ...]
-        One index per operand, pointing to the segment.
-    coefficients : np.ndarray
-        Coefficients of the path.
+    Attributes:
+        indices (tuple of int): One index per operand, pointing to the segment.
+        coefficients (np.ndarray): Coefficients of the path.
 
-    Examples
-    --------
-    >>> Path((12, 44), 2.0)
-    op0[12]*op1[44]*2.
+    Examples:
+        >>> Path((12, 44), 2.0)
+        op0[12]*op1[44]*2.
     """
 
     indices: tuple[int, ...]  # One index per operand, pointing to the segment
@@ -71,15 +67,11 @@ class Path:
         """
         Apply a permutation to the operands.
 
-        Parameters
-        ----------
-        perm : tuple[int, ...]
-            The permutation of the operands.
+        Args:
+            perm (tuple of int): The permutation of the operands.
 
-        Returns
-        -------
-        Path
-            A new path with the operands permuted.
+        Returns:
+            Path: A new path with the operands permuted.
         """
         return Path(
             indices=tuple(self.indices[i] for i in perm),

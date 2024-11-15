@@ -17,17 +17,16 @@ def spherical_harmonics(
     subscripts: ``vector[],...,vector[],Yl[]``
 
     Args:
-        ir_vec (cue.Irrep): irrep of the input vector, for example ``cue.SO3(1)``.
-        ls (list[int]): list of spherical harmonic degrees, for example ``[0, 1, 2]``.
-        layout (cue.IrrepsLayout, optional): layout of the output. Defaults to ``cue.ir_mul``.
+        ir_vec (Irrep): irrep of the input vector, for example ``cue.SO3(1)``.
+        ls (list of int): list of spherical harmonic degrees, for example ``[0, 1, 2]``.
+        layout (IrrepsLayout, optional): layout of the output. Defaults to ``cue.ir_mul``.
 
     Returns:
         cue.EquivariantTensorProduct: The descriptor.
 
-    Example:
-
-    >>> spherical_harmonics(cue.SO3(1), [0, 1, 2])
-    EquivariantTensorProduct((1)^(0..2) -> 0+1+2)
+    Examples:
+        >>> spherical_harmonics(cue.SO3(1), [0, 1, 2])
+        EquivariantTensorProduct((1)^(0..2) -> 0+1+2)
     """
     if len(ls) != 1:
         return cue.EquivariantTensorProduct.stack(

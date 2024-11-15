@@ -242,7 +242,7 @@ class Irreps:
         Returns:
             bool: True if all representations are scalar, False otherwise.
 
-        Notes:
+        Note:
             This function does not check the multiplicity of the representation.
 
         Examples:
@@ -272,15 +272,11 @@ class Irreps:
         """
         Multiply the Irreps object by an integer.
 
-        Parameters
-        ----------
-        other : int
-            The integer to multiply by.
+        Args:
+            other (int): The integer to multiply by.
 
-        Returns
-        -------
-        Irreps
-            The product of the Irreps object and the integer.
+        Returns:
+            Irreps: The product of the Irreps object and the integer.
         """
         if isinstance(other, int):
             return Irreps(
@@ -295,15 +291,11 @@ class Irreps:
         """
         Floor divide the multiplicities of the Irreps object by an integer.
 
-        Parameters
-        ----------
-        other : int
-            The integer to divide by.
+        Args:
+            other (int): The integer to divide by.
 
-        Returns
-        -------
-        Irreps
-            The floor division of the Irreps object by the integer.
+        Returns:
+            Irreps: The floor division of the Irreps object by the integer.
         """
         if isinstance(other, int):
             return Irreps(
@@ -315,15 +307,11 @@ class Irreps:
         """
         Check if two Irreps objects are equal.
 
-        Parameters
-        ----------
-        other : Irreps
-            The other Irreps object to compare.
+        Args:
+            other (Irreps): The other Irreps object to compare.
 
-        Returns
-        -------
-        bool
-            True if the Irreps objects are equal, False otherwise.
+        Returns:
+            bool: True if the Irreps objects are equal, False otherwise.
         """
         try:
             other = Irreps(self.irrep_class, other)
@@ -338,15 +326,12 @@ class Irreps:
         """
         Merge consecutive `mul, rep` tuples with the same representation into a single tuple.
 
-        Returns
-        -------
-        Irreps
-            The Irreps object with merged tuples.
+        Returns:
+            Irreps: The Irreps object with merged tuples.
 
-        Examples
-        --------
-        >>> Irreps("SO3", "1 + 1 + 0 + 1").merge_consecutive()
-        2x1+0+1
+        Examples:
+            >>> Irreps("SO3", "1 + 1 + 0 + 1").merge_consecutive()
+            2x1+0+1
         """
         out = []
         for mul, rep in self:
@@ -360,15 +345,12 @@ class Irreps:
         """
         Remove zero multiplicities.
 
-        Returns
-        -------
-        Irreps
-            The Irreps object without zero multiplicities.
+        Returns:
+            Irreps: The Irreps object without zero multiplicities.
 
-        Examples
-        --------
-        >>> Irreps("SO3", "1 + 0x2 + 1").remove_zero_multiplicities()
-        1+1
+        Examples:
+            >>> Irreps("SO3", "1 + 0x2 + 1").remove_zero_multiplicities()
+            1+1
         """
         return Irreps(self.irrep_class, [(mul, rep) for mul, rep in self if mul != 0])
 
@@ -376,15 +358,12 @@ class Irreps:
         """
         Simplify the representation by removing zero multiplicities and merging consecutive tuples.
 
-        Returns
-        -------
-        Irreps
-            The simplified Irreps object.
+        Returns:
+            Irreps: The simplified Irreps object.
 
-        Examples
-        --------
-        >>> Irreps("SO3", "1 + 0x2 + 1").simplify()
-        2x1
+        Examples:
+            >>> Irreps("SO3", "1 + 0x2 + 1").simplify()
+            2x1
         """
         return self.remove_zero_multiplicities().merge_consecutive()
 
@@ -392,10 +371,8 @@ class Irreps:
         """
         Sort the representation.
 
-        Returns
-        -------
-        SortResult
-            The sorted representation and associated permutation.
+        Returns:
+            SortResult: The sorted representation and associated permutation.
         """
 
         def inverse(p):
@@ -411,15 +388,12 @@ class Irreps:
         """
         Regroup the representation by sorting and simplifying.
 
-        Returns
-        -------
-        Irreps
-            The regrouped Irreps object.
+        Returns:
+            Irreps: The regrouped Irreps object.
 
-        Examples
-        --------
-        >>> Irreps("SO3", "1 + 2 + 0 + 1").regroup()
-        0+2x1+2
+        Examples:
+            >>> Irreps("SO3", "1 + 2 + 0 + 1").regroup()
+            0+2x1+2
         """
         return self.sort().irreps.simplify()
 
@@ -427,15 +401,11 @@ class Irreps:
         """
         Set the multiplicity of all representations.
 
-        Parameters
-        ----------
-        mul : int
-            The multiplicity to set.
+        Args:
+            mul (int): The multiplicity to set.
 
-        Returns
-        -------
-        Irreps
-            The Irreps object with the set multiplicity.
+        Returns:
+            Irreps: The Irreps object with the set multiplicity.
         """
         return Irreps(self.irrep_class, [(mul, rep) for _, rep in self])
 
@@ -449,22 +419,15 @@ class Irreps:
         """
         Filter representations.
 
-        Parameters
-        ----------
-        keep : Union[str, Sequence[cue.Irrep], Callable[[MulIrrep], bool]], optional
-            Representations to keep.
-        drop : Union[str, Sequence[cue.Irrep], Callable[[MulIrrep], bool]], optional
-            Representations to drop.
+        Args:
+            keep (Union[str, Sequence[cue.Irrep], Callable[[MulIrrep], bool]], optional): Representations to keep.
+            drop (Union[str, Sequence[cue.Irrep], Callable[[MulIrrep], bool]], optional): Representations to drop.
 
-        Returns
-        -------
-        Irreps
-            The filtered Irreps object.
+        Returns:
+            Irreps: The filtered Irreps object.
 
-        Raises
-        ------
-        ValueError
-            If both `keep` and `drop` are defined or if neither is defined.
+        Raises:
+            ValueError: If both `keep` and `drop` are defined or if neither is defined.
         """
         if mask is None:
             mask = self.filter_mask(keep=keep, drop=drop)

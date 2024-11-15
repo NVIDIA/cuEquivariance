@@ -19,19 +19,13 @@ def compute_last_operand(
     r"""
     Compute the last operand of a segmented tensor product.
 
-    Parameters
-    ----------
-    descriptor : stp.SegmentedTensorProduct
-        The descriptor of the segmented tensor product.
-    inputs : np.ndarray
-        The operands of the segmented tensor product.
-    segment_axes : int | list[int], optional
-        The axes along which to segment the inputs, by default -1.
+    Args:
+        descriptor (SegmentedTensorProduct): The descriptor of the segmented tensor product.
+        inputs (np.ndarray): The operands of the segmented tensor product.
+        segment_axes (int or list of int, optional): The axes along which to segment the inputs, by default -1.
 
-    Returns
-    -------
-    np.ndarray
-        The last operand of the segmented tensor product.
+    Returns:
+        np.ndarray: The last operand of the segmented tensor product.
     """
     if len(inputs) != descriptor.num_operands - 1:
         raise ValueError(

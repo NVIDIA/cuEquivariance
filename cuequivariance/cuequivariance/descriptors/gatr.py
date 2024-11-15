@@ -7,15 +7,14 @@ def gatr_linear(mul_in: int, mul_out: int) -> cue.SegmentedTensorProduct:
     """
     subsrcipts: ``weights[uv],input[iu],output[iv]``
 
-    references:
-      * https://arxiv.org/pdf/2305.18415
-      * `Source code <https://github.com/Qualcomm-AI-research/geometric-algebra-transformer/blob/3f967c978445648ef83d87190d32176f7fd91565/gatr/primitives/linear.py#L33-L43>`_
+    References:
+      - https://arxiv.org/pdf/2305.18415
+      - `Source code <https://github.com/Qualcomm-AI-research/geometric-algebra-transformer/blob/3f967c978445648ef83d87190d32176f7fd91565/gatr/primitives/linear.py#L33-L43>`_
 
-    Example
-    -------
-    >>> d = gatr_linear(32, 32)
-    >>> d
-    uv,iu,iv sizes=9216,512,512 num_segments=9,8,8 num_paths=12 i={1, 3} u=32 v=32
+    Examples:
+        >>> d = gatr_linear(32, 32)
+        >>> d
+        uv,iu,iv sizes=9216,512,512 num_segments=9,8,8 num_paths=12 i={1, 3} u=32 v=32
     """
     d = cue.SegmentedTensorProduct.from_subscripts("uv,iu,iv")
 
@@ -46,23 +45,22 @@ def gatr_geometric_product() -> cue.SegmentedTensorProduct:
     """
     subsrcipts: ``input1[i],input2[j],output[k]+ijk``
 
-    references:
-      * https://arxiv.org/pdf/2305.18415
-      * `Source code <https://github.com/Qualcomm-AI-research/geometric-algebra-transformer/blob/3f967c978445648ef83d87190d32176f7fd91565/gatr/primitives/bilinear.py#L63>`_
+    References:
+      - https://arxiv.org/pdf/2305.18415
+      - `Source code <https://github.com/Qualcomm-AI-research/geometric-algebra-transformer/blob/3f967c978445648ef83d87190d32176f7fd91565/gatr/primitives/bilinear.py#L63>`_
 
-    Example
-    -------
-    >>> d = gatr_geometric_product(); d
-    i,j,k+ijk sizes=16,16,16 num_segments=8,8,8 num_paths=60 i={1, 3} j={1, 3} k={1, 3}
+    Examples:
+        >>> d = gatr_geometric_product(); d
+        i,j,k+ijk sizes=16,16,16 num_segments=8,8,8 num_paths=60 i={1, 3} j={1, 3} k={1, 3}
 
-    >>> d = d.append_modes_to_all_operands("u", dict(u=32)); d
-    iu,ju,ku+ijk sizes=512,512,512 num_segments=8,8,8 num_paths=60 i={1, 3} j={1, 3} k={1, 3} u=32
+        >>> d = d.append_modes_to_all_operands("u", dict(u=32)); d
+        iu,ju,ku+ijk sizes=512,512,512 num_segments=8,8,8 num_paths=60 i={1, 3} j={1, 3} k={1, 3} u=32
 
-    >>> d = d.normalize_paths_for_operand(2); d.paths[-1]
-    op0[7]*op1[6]*op2[1]*[[[-0.25]]]
+        >>> d = d.normalize_paths_for_operand(2); d.paths[-1]
+        op0[7]*op1[6]*op2[1]*[[[-0.25]]]
 
-    >>> d = d.flatten_coefficient_modes(); d
-    u,u,u sizes=512,512,512 num_segments=16,16,16 num_paths=192 u=32
+        >>> d = d.flatten_coefficient_modes(); d
+        u,u,u sizes=512,512,512 num_segments=16,16,16 num_paths=192 u=32
     """
     return cue.SegmentedTensorProduct.from_base64(
         """
@@ -84,14 +82,13 @@ def gatr_outer_product() -> cue.SegmentedTensorProduct:
     """
     subsrcipts: ``input1[i],input2[j],output[k]+ijk``
 
-    references:
-      * https://arxiv.org/pdf/2305.18415
-      * `Source code <https://github.com/Qualcomm-AI-research/geometric-algebra-transformer/blob/3f967c978445648ef83d87190d32176f7fd91565/gatr/primitives/bilinear.py#L88>`_
+    References:
+      - https://arxiv.org/pdf/2305.18415
+      - `Source code <https://github.com/Qualcomm-AI-research/geometric-algebra-transformer/blob/3f967c978445648ef83d87190d32176f7fd91565/gatr/primitives/bilinear.py#L88>`_
 
-    Example
-    -------
-    >>> d = gatr_outer_product(); d
-    i,j,k+ijk sizes=16,16,16 num_segments=8,8,8 num_paths=30 i={1, 3} j={1, 3} k={1, 3}
+    Examples:
+        >>> d = gatr_outer_product(); d
+        i,j,k+ijk sizes=16,16,16 num_segments=8,8,8 num_paths=30 i={1, 3} j={1, 3} k={1, 3}
     """
     return cue.SegmentedTensorProduct.from_base64(
         """
