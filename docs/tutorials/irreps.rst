@@ -40,7 +40,12 @@ The :class:`Irreps <cuequivariance.Irreps>` class is designed to describe which 
 
    cue.Irreps("SO3", "32x0 + 16x1")
 
-The object above represents a group representation of the group :math:`SO(3)` (rotations in 3D space) with 32 copies of the trivial representation (0) and 16 copies of the first nontrivial representation (1).
+The object above represents a group representation of the group :math:`SO(3)` (rotations in 3D space).
+This example has two "segments". The first segment ``32x0`` indicates 32 copies of the trivial representation (0) and the second segment ``16x1`` indicates 16 copies of the vector representation (1).
+
+The segments are separated by a ``+`` sign. Each segment consists of a number followed by ``x`` and then the irrep label. The number indicates how many copies of the irrep are present in the representation. The interpretation of the irrep label depends on the group.
+
+As a convenience, a multiplicity of 1 can be omitted: ``1x2`` can be written as ``2``.
 
 cuEquivariance provides irreps for the following groups: :math:`SO(3)`, :math:`O(3)` and :math:`SU(2)`.
 
