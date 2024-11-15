@@ -8,6 +8,11 @@ cuEquivariance is a Python library designed to facilitate the construction of hi
 
 Equivariance is the mathematical formalization of the concept of "respecting symmetries." Robust physical models exhibit equivariance with respect to rotations and translations in three-dimensional space. Artificial intelligence models that incorporate equivariance are often more data-efficient.
 
+Open Source
+-----------
+
+cuEquivariance frontend is open-source and available on `GitHub <https://github.com/NVIDIA/cuEquivariance>`_ under the Apache 2.0 license.
+
 Installation
 ------------
 

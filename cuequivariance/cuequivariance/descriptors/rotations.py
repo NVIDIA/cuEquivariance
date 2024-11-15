@@ -6,7 +6,6 @@ import numpy as np
 
 import cuequivariance as cue
 from cuequivariance import segmented_tensor_product as stp
-from cuequivariance import descriptors
 
 
 def fixed_axis_angle_rotation(
