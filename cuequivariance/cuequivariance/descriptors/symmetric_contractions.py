@@ -3,7 +3,6 @@
 from typing import *
 
 import cuequivariance as cue
-from cuequivariance import descriptors
 from cuequivariance import segmented_tensor_product as stp
 
 
@@ -25,7 +24,7 @@ def symmetric_contraction(
         degree (int): The degree of the symmetric contraction.
 
     Returns:
-        cue.EquivariantTensorProduct:
+        EquivariantTensorProduct:
             The descriptor of the symmetric contraction.
             The operands are the weights, the input degree times and the output.
     """

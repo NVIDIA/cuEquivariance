@@ -22,7 +22,7 @@ def spherical_harmonics(
         layout (IrrepsLayout, optional): layout of the output. Defaults to ``cue.ir_mul``.
 
     Returns:
-        cue.EquivariantTensorProduct: The descriptor.
+        EquivariantTensorProduct: The descriptor.
 
     Examples:
         >>> spherical_harmonics(cue.SO3(1), [0, 1, 2])

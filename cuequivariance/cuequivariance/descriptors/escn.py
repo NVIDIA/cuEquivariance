@@ -6,7 +6,6 @@ import numpy as np
 
 import cuequivariance as cue
 from cuequivariance import segmented_tensor_product as stp
-from cuequivariance import descriptors
 
 
 # The function escn_iu_ju_ku below is a 1:1 adaptation of https://github.com/e3nn/e3nn-jax/blob/a2a81ab451b9cd597d7be27b3e1faba79457475d/e3nn_jax/experimental/linear_shtp.py#L38-L165
@@ -107,7 +106,7 @@ def escn_tp_compact(
     m_max: Optional[int] = None,
 ) -> stp.SegmentedTensorProduct:
     """
-    subsrcipts: weights[uv],input[u],output[v]
+    subsrcipts: ``weights[uv],input[u],output[v]``
 
     Tensor Product part of the eSCN convolution introduced in https://arxiv.org/pdf/2302.03655.pdf
 

@@ -1,9 +1,13 @@
 .. SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES
    SPDX-License-Identifier: Apache-2.0
 
-{{ name | escape | underline}}
+Tutorials
+=========
 
-.. currentmodule:: {{ module }}
+.. toctree::
+   :maxdepth: 1
 
-.. autoclass:: {{ objname }}
-   :members:
+   irreps
+   layout
+   etp
+   stp

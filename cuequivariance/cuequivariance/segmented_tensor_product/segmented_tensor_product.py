@@ -18,6 +18,7 @@ from typing import *
 import numpy as np
 import opt_einsum
 
+import cuequivariance as cue  # noqa: F401
 from cuequivariance import segmented_tensor_product as stp
 from cuequivariance.misc.linalg import round_to_rational, round_to_sqrt_rational
 
@@ -32,22 +33,15 @@ class SegmentedTensorProduct:
     Irreps-agnostic and dataflow-agnostic descriptor of a segmented tensor product
 
     Args:
-        operands (list of :class:`stp.Operand`): The operands of the tensor product. Each operand is a collection of segments.
-            The operands also contain subscripts. See :class:`stp.Operand`.
-        paths (list of :class:`stp.Path`): The paths of the tensor product. Each path is a collection of indices and coefficients.
-            The indices are the indices of the segments of the operands. The coefficients are the coefficients of the path.
+        operands (list of operands): The operands of the tensor product. To each operand corresponds subscripts and a list of segments.
+        paths (list of paths): Each path contains coefficients and a list of indices.
+            The indices are the indices of the segments of the operands.
         coefficient_subscripts (str): The subscripts of the coefficients.
 
-    Examples:
-        >>> d = SegmentedTensorProduct.from_subscripts("uv_ui_vj+ij")
-        >>> i0 = d.add_segment(0, (2, 3))
-        >>> i1 = d.add_segment(1, (2, 5))
-        >>> i2 = d.add_segment(2, (3, 4))
-        >>> d.add_path(i0, i1, i2, c=np.ones((5, 4)))
-        0
 
-        >>> print(d)
-        uv,ui,vj+ij operands=[(2, 3)],[(2, 5)],[(3, 4)] paths=[op0[0]*op1[0]*op2[0]*c c.shape=(5, 4) c.nnz=20]
+    We typically use the :func:`from_subscripts <cuequivariance.SegmentedTensorProduct.from_subscripts>` method to create a descriptor and then add segments and paths one by one.
+
+    .. rubric:: Methods
     """
 
     operands: list[stp.Operand]
@@ -73,16 +67,6 @@ class SegmentedTensorProduct:
         self.coefficient_subscripts = coefficient_subscripts
 
     def assert_valid(self):
-        """
-        Raises:
-            ValueError:
-                - If the coefficient_subscripts is not lowercase.
-                - If the operands are not instances of `stp.Operand`.
-                - If the paths are not instances of `stp.Path`.
-                - If the subscripts of an operand has repeated modes.
-                - If the subscripts of an operand has a mode that is not contracted.
-                - If the number of indices of a path is different from the number of operands.
-        """
         assert stp.Subscripts.is_valid(self.subscripts)
 
         for m in self.subscripts.modes():
@@ -117,7 +101,19 @@ class SegmentedTensorProduct:
 
     @classmethod
     def from_subscripts(cls, subscripts: stp.Subscripts) -> SegmentedTensorProduct:
-        r"""Create a descriptor from a subscripts string."""
+        r"""
+        Create a descriptor from a subscripts string.
+
+        Examples:
+            >>> d = cue.SegmentedTensorProduct.from_subscripts("uv,ui,vj+ij")
+            >>> i0 = d.add_segment(0, (2, 3))
+            >>> i1 = d.add_segment(1, (2, 5))
+            >>> i2 = d.add_segment(2, (3, 4))
+            >>> d.add_path(i0, i1, i2, c=np.ones((5, 4)))
+            0
+            >>> print(d)
+            uv,ui,vj+ij operands=[(2, 3)],[(2, 5)],[(3, 4)] paths=[op0[0]*op1[0]*op2[0]*c c.shape=(5, 4) c.nnz=20]
+        """
         subscripts = stp.Subscripts(subscripts)
         operands = [stp.Operand(subscripts=operand) for operand in subscripts.operands]
 
@@ -127,7 +123,13 @@ class SegmentedTensorProduct:
 
     @classmethod
     def empty_segments(cls, num_segments: list[int]) -> SegmentedTensorProduct:
-        r"""Create a descriptor with a simple structure."""
+        r"""
+        Create a descriptor with a simple structure.
+
+        Examples:
+            >>> cue.SegmentedTensorProduct.empty_segments([2, 3, 4])
+            ,, sizes=2,3,4 num_segments=2,3,4 num_paths=0
+        """
         return cls(
             operands=[stp.Operand.empty_segments(num) for num in num_segments],
             paths=[],
@@ -222,7 +224,7 @@ class SegmentedTensorProduct:
 
     @property
     def stacked_coefficients(self) -> np.ndarray:
-        """Coefficients of the paths."""
+        """Stacked coefficients of the paths in a single array."""
         if not self.coefficients_are_stackable:
             raise ValueError("coefficients are not stackable.")  # pragma: no cover
 
@@ -241,10 +243,21 @@ class SegmentedTensorProduct:
         """Human-readable text representation of the descriptor.
 
         Args:
-            coefficient_formatter (Callable[[float], str], optional): A function to format the coefficients. If None, the coefficients are not shown.
+            coefficient_formatter (callable, optional): A function to format the coefficients.
 
-        Returns:
-            str: The text representation of the descriptor.
+        Examples:
+            >>> d = cue.descriptors.fully_connected_tensor_product(
+            ...     cue.Irreps("SO3", "4x0+4x1"),
+            ...     cue.Irreps("SO3", "4x0+4x1"),
+            ...     cue.Irreps("SO3", "4x0+4x1")
+            ... ).d
+            >>> d = d.flatten_coefficient_modes()
+            >>> print(d.to_text())
+            uvw,u,v,w sizes=320,16,16,16 num_segments=5,4,4,4 num_paths=16 u=4 v=4 w=4
+            Flop cost: 0->1344 1->2368 2->2368 3->2368
+            Memory cost from 368 to 1216
+            Path indices: 0 0 0 0, 1 0 1 1, 1 0 2 2, 1 0 3 3, 2 1 0 1, 2 2 0 2, ...
+            Path coefficients: [0.17...]
         """
         out = f"{self}"
         dims = self.get_dimensions_dict()
@@ -322,16 +335,27 @@ class SegmentedTensorProduct:
         }
         return extended_dict
 
-    def to_json(self, extended: bool) -> str:
+    def to_json(self, extended: bool = False) -> str:
         """JSON representation of the descriptor."""
         return json.dumps(self.to_dict(extended))
 
-    def to_bytes(self, extended: bool) -> bytes:
+    def to_bytes(self, extended: bool = False) -> bytes:
         """Compressed binary representation of the descriptor."""
         return zlib.compress(self.to_json(extended).encode("ascii"))
 
-    def to_base64(self, extended: bool) -> str:
-        """Base64 representation of the descriptor."""
+    def to_base64(self, extended: bool = False) -> str:
+        """
+        Base64 representation of the descriptor.
+
+        Examples:
+            >>> d = cue.descriptors.fully_connected_tensor_product(
+            ...     cue.Irreps("SO3", "4x0+4x1"),
+            ...     cue.Irreps("SO3", "4x0+4x1"),
+            ...     cue.Irreps("SO3", "4x0+4x1")
+            ... ).d
+            >>> print(d.to_base64())
+            eJytkstuwjAQRX/F8r...lTF2zlX91/fHyvj2Z4=
+        """
         return base64.b64encode(self.to_bytes(extended)).decode("ascii")
 
     def get_dimensions_dict(self) -> dict[str, set[int]]:
@@ -344,7 +368,22 @@ class SegmentedTensorProduct:
         return dims
 
     def get_dims(self, m: str) -> set[int]:
-        """Get the dimensions of a specific mode."""
+        """
+        Get the dimensions of a specific mode.
+
+        Examples:
+            >>> d = cue.descriptors.fully_connected_tensor_product(
+            ...     cue.Irreps("SO3", "4x0+8x1"),
+            ...     cue.Irreps("SO3", "3x0+3x1"),
+            ...     cue.Irreps("SO3", "5x0+7x1")
+            ... ).d
+            >>> d.get_dims("u")
+            {8, 4}
+            >>> d.get_dims("v")
+            {3}
+            >>> d.get_dims("w")
+            {5, 7}
+        """
         return self.get_dimensions_dict().get(m, set())
 
     def get_path_dimensions_dict(
@@ -402,7 +441,7 @@ class SegmentedTensorProduct:
         """
         Starting indices of paths for the segments of the specified operand.
 
-        This method requires that the paths are sorted by the specified operand.
+        Note: This method requires that the paths are sorted by the specified operand.
 
         Args:
             operand (int): The index of the operand for which to find path groups.
@@ -410,14 +449,15 @@ class SegmentedTensorProduct:
         Returns:
             np.ndarray: An array of starting path indices for each segment in the specified operand.
 
-        Raises:
-            ValueError: If the paths are not sorted by the specified operand.
-
         Examples:
-            [0, 0, 1, 1, 1], 2 -> [0, 2, 5]
-            [0, 0, 1, 1, 1], 3 -> [0, 2, 5, 5]
-            [0, 0, 2, 2, 2], 3 -> [0, 2, 2, 5]
-            [1, 1], 2 -> [0, 0, 2]
+
+            .. code-block:: python
+
+                indices[:, operand], operands[operand].num_segments -> compressed_path_segment(operand)
+                [0, 0, 1, 1, 1], 2 -> [0, 2, 5]
+                [0, 0, 1, 1, 1], 3 -> [0, 2, 5, 5]
+                [0, 0, 2, 2, 2], 3 -> [0, 2, 2, 5]
+                [1, 1], 2 -> [0, 0, 2]
         """
         if not np.all(np.diff(self.indices[:, operand]) >= 0):
             raise ValueError("Paths must be sorted by the specified operand.")
@@ -581,7 +621,8 @@ class SegmentedTensorProduct:
             )
         if len(dims) != len(self.subscripts.modes()):
             raise ValueError(
-                f"expected a dimension for each subscripts in the descriptor. {dims}"
+                f"expected a dimension for each subscripts in the descriptor. Got {dims}."
+                f" Missing dimensions for {self.subscripts.modes() - dims.keys()}."
             )
 
         dims = {m: next(iter(dd)) for m, dd in dims.items()}
@@ -609,7 +650,40 @@ class SegmentedTensorProduct:
         c: np.ndarray,
         dims: Optional[dict[str, int]] = None,
     ) -> int:
-        """Add a path to the descriptor."""
+        """
+        Add a path to the descriptor.
+
+        Args:
+            segments: Specifies the segments of the operands that are contracted in the path.
+            c (np.ndarray): The coefficients of the path.
+            dims (dict[str, int], optional): The extent of the modes.
+
+        Returns:
+            int: The index of the added path.
+
+        Examples:
+            >>> d = cue.SegmentedTensorProduct.from_subscripts("uv,ui,vj+ij")
+            >>> i1 = d.add_segment(1, (2, 3))
+            >>> i2 = d.add_segment(2, (2, 5))
+
+            We can use ``None`` to add a new segment on the fly:
+            >>> d.add_path(None, i1, i2, c=np.ones((3, 5)))
+            0
+
+            The descriptor has now a new segment ``(2, 2)`` in the first operand:
+            >>> d
+            uv,ui,vj+ij operands=[(2, 2)],[(2, 3)],[(2, 5)] paths=[op0[0]*op1[0]*op2[0]*c c.shape=(3, 5) c.nnz=15]
+            >>> d.add_path(0, None, None, c=np.ones((10, 10)))
+            1
+            >>> d
+            uv,ui,vj+ij sizes=4,26,30 num_segments=1,2,2 num_paths=2 i={10, 3} j={10, 5} u=2 v=2
+
+            When the dimensions of the modes cannot be inferred, we can provide them:
+            >>> d.add_path(None, None, None, c=np.ones((2, 2)), dims={"u": 2, "v": 2})
+            2
+            >>> d
+            uv,ui,vj+ij sizes=8,30,34 num_segments=2,3,3 num_paths=3 i={2, 10, 3} j={10, 2, 5} u=2 v=2
+        """
         return self.insert_path(len(self.paths), *segments, c=c, dims=dims)
 
     def insert_segment(
@@ -685,7 +759,16 @@ class SegmentedTensorProduct:
             self.add_segment(operand, segment)
 
     def canonicalize_subscripts(self) -> SegmentedTensorProduct:
-        """Return a new descriptor with a canonical representation of the subscripts."""
+        """
+        Return a new descriptor with a canonical representation of the subscripts.
+
+        Examples:
+            >>> d = cue.SegmentedTensorProduct.from_subscripts("ab,ax,by+xy")
+            >>> d.canonicalize_subscripts()
+            uv,ui,vj+ij sizes=0,0,0 num_segments=0,0,0 num_paths=0
+
+        This is useful to identify equivalent descriptors.
+        """
         subscripts = stp.Subscripts.canonicalize(self.subscripts)
         return self.add_or_rename_modes(subscripts)
 
@@ -698,7 +781,7 @@ class SegmentedTensorProduct:
         Args:
             subscripts (str): The new subscripts that contains the new names of the modes.
                 The new subscripts can also be a superset of the old subscripts.
-            mapping (dict[str, str], optional): A mapping from the old modes to the new modes.
+            mapping (dict of str to str, optional): The mapping between the old and new modes.
 
         Returns:
             SegmentedTensorProduct: The new descriptor with the renamed modes.
@@ -773,6 +856,7 @@ class SegmentedTensorProduct:
 
         Args:
             subscripts (str): A new subscripts that contains a permutation of the modes of the current subscripts.
+            dims (dict of str to int, optional): The dimensions of the new modes.
 
         Returns:
             SegmentedTensorProduct: The new descriptor with the transposed modes.
@@ -832,7 +916,7 @@ class SegmentedTensorProduct:
 
         Args:
             modes (str): The new segment modes to append to all operands.
-            dims (dict[str, int]): The dimensions of the new modes.
+            dims (dict of str to int): The dimensions of the new modes.
 
         Returns:
             SegmentedTensorProduct: The new descriptor with the appended modes.
@@ -905,7 +989,7 @@ class SegmentedTensorProduct:
         Sort the paths by their indices in lexicographical order.
 
         Args:
-            operands_ordering (int or Sequence of int, optional): The order in which to sort the paths.
+            operands_ordering (int or sequence of int, optional): The order in which to sort the paths.
                 If an integer, sort by that operand.
                 If a sequence, sort by the first operand in the sequence and then by the
                 second operand if equal, etc.
@@ -1071,8 +1155,10 @@ class SegmentedTensorProduct:
         Args:
             operand (int): The index of the operand to normalize.
 
-        Returns:
-            SegmentedTensorProduct: The new descriptor.
+        Assuming that the input operand have unit variance, this method computes the
+        variance of each segment in the selected operand and uniformly normalize the
+        coefficients of the paths by the square root of the variance of the segment.
+        This is useful to ensure that the output has unit variance.
         """
         operand = _canonicalize_index("operand", operand, self.num_operands)
         cum_variance = [0.0] * self.operands[operand].num_segments
@@ -1165,9 +1251,7 @@ class SegmentedTensorProduct:
         ).consolidate_paths()
 
     def symmetrize_operands(self, operands: Sequence[int]) -> SegmentedTensorProduct:
-        """
-        Symmetrize the specified operands permuting the indices.
-        """
+        """Symmetrize the specified operands permuting the indices."""
         operands = sorted(set(operands))
         if len(operands) < 2:
             return self
@@ -1240,12 +1324,6 @@ class SegmentedTensorProduct:
             modes (Sequence of str): The modes to remove, they must precede the modes to keep in each operand.
             skip_zeros (bool, optional): Whether to skip paths with zero coefficients. Default is True.
             force (bool, optional): Whether to force the flattening by flattening extra necessary modes. Default is False.
-
-        Returns:
-            SegmentedTensorProduct: The new descriptor.
-
-        Raises:
-            ValueError: If the modes are not at the beginning of the segment subscripts.
         """
         if not all(len(ch) == 1 and ch.islower() for ch in modes):
             raise ValueError("expected lowercase single letter modes.")
@@ -1394,9 +1472,6 @@ class SegmentedTensorProduct:
         Args:
             skip_zeros (bool, optional): Whether to skip paths with zero coefficients. Default is True.
             force (bool, optional): Whether to force the flattening by flattening extra necessary modes. Default is False.
-
-        Returns:
-            SegmentedTensorProduct: The new descriptor with flattened coefficients.
         """
         return self.flatten_modes(
             self.coefficient_subscripts, skip_zeros=skip_zeros, force=force
@@ -1408,9 +1483,6 @@ class SegmentedTensorProduct:
 
         Args:
             modes (str, optional): The modes to consolidate. If None, consolidate all modes that are repeated.
-
-        Returns:
-            SegmentedTensorProduct: The consolidated descriptor.
         """
         if modes is None:
             # look for opportunities to consolidate
@@ -1515,9 +1587,6 @@ class SegmentedTensorProduct:
 
         Args:
             max_denominator (int): The maximum denominator, ``q < max_denominator``.
-
-        Returns:
-            SegmentedTensorProduct: The new descriptor with the rounded coefficients.
         """
         d = copy.deepcopy(self)
         d.paths = [
@@ -1537,9 +1606,6 @@ class SegmentedTensorProduct:
 
         Args:
             max_denominator (int): The maximum denominator, ``q < max_denominator``.
-
-        Returns:
-            SegmentedTensorProduct: The new descriptor with the rounded coefficients.
         """
         d = copy.deepcopy(self)
         d.paths = [
@@ -1558,10 +1624,7 @@ class SegmentedTensorProduct:
         Modify the coefficients of the descriptor.
 
         Args:
-            f (Callable[[np.ndarray], np.ndarray]): The function to apply to the coefficients.
-
-        Returns:
-            SegmentedTensorProduct: The new descriptor with the modified coefficients.
+            f (callable): The function to apply to the coefficients.
         """
         d = copy.deepcopy(self)
         d.paths = [

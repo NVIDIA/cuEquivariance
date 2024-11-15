@@ -30,8 +30,24 @@ class Irreps:
     Direct sum of irreducible representations with multiplicities.
 
     Args:
-        irrep_class (Type[cue.Irrep]): Class of the irreducible representations (e.g., SO3, SU2, O3).
-        input (Union[str, Sequence[Union[MulIrrep, cue.Irrep]]]): List of tuples (multiplicity, representation) or string representation.
+        irrep_class: Class of the irreducible representations (e.g., SU2, SO3, O3).
+        input: A description of multiplicities of each irreducible representation.
+
+    Examples:
+        >>> Irreps("SO3", "16x0 + 4x1")
+        16x0+4x1
+
+        >>> Irreps(cue.SO3, "16x0 + 4x1")
+        16x0+4x1
+
+        >>> Irreps(cue.SO3, [(16, 0), (4, 1)])
+        16x0+4x1
+
+        >>> with cue.assume("SO3"):
+        ...     Irreps("16x0 + 4x1")
+        16x0+4x1
+
+    .. rubric:: Methods
     """
 
     irrep_class: Type[cue.Irrep]
@@ -125,27 +141,12 @@ class Irreps:
         object.__setattr__(self, "_mulirreps", tuple(mulreps))
 
     def __len__(self):
-        """
-        Return the number of `mul, rep` tuples in the Irreps.
-
-        Returns:
-            int: Number of `mul, rep` tuples in the Irreps.
-        """
         return len(self._mulirreps)
 
     def __iter__(self):
         return iter(self._mulirreps)
 
     def __getitem__(self, index: Union[int, slice]) -> Union[MulIrrep, Irreps]:
-        """
-        Return the `mul, rep` tuple at the given index or a slice of indices.
-
-        Args:
-            index (Union[int, slice]): Index or slice of indices.
-
-        Returns:
-            Union[MulIrrep, Irreps]: The `mul, rep` tuple at the given index or an Irreps object if a slice is given.
-        """
         x = self._mulirreps[index]
 
         if isinstance(index, slice):
@@ -153,22 +154,6 @@ class Irreps:
         return x
 
     def __contains__(self, rep: Union[str, cue.Irrep]) -> bool:
-        """
-        Check if the irreducible representation is in the Irreps.
-
-        Args:
-            rep (Union[str, cue.Irrep]): The irreducible representation to check.
-
-        Returns:
-            bool: True if the irreducible representation is in the Irreps, False otherwise.
-
-        Notes:
-            This function does not check the multiplicity of the representation.
-
-        Examples:
-            >>> "1" in Irreps("SO3", "100x0 + 0x1")
-            True
-        """
         # This function does not check the multiplicity of the representation!
         rep = self.irrep_class._from(rep)
         return any(mulrep.ir == rep for mulrep in self)
@@ -179,6 +164,10 @@ class Irreps:
     def new_scalars(self, mul: int) -> Irreps:
         """
         Return a representation with all scalar representations.
+
+        Examples:
+            >>> Irreps("SO3", "32x1").new_scalars(2)
+            2x0
         """
         return Irreps(self.irrep_class, [(mul, self.irrep_class.trivial())])
 
@@ -186,11 +175,9 @@ class Irreps:
         """
         Count the total multiplicity of a representation.
 
-        Args:
-            rep (Union[str, cue.Irrep]): The representation to count.
-
-        Returns:
-            int: Multiplicity of the representation.
+        Examples:
+            >>> Irreps("SO3", "100x0 + 20x1 + 10x0").count("0")
+            110
         """
         rep = self.irrep_class._from(rep)
         return sum(mul for mul, r in self if r == rep)
@@ -198,10 +185,11 @@ class Irreps:
     @property
     def dim(self) -> int:
         """
-        Return the total dimension of the representation.
+        Total dimension of the representation.
 
-        Returns:
-            int: Total dimension of the representation.
+        Examples:
+            >>> Irreps("SO3", "100x0 + 10x1").dim
+            130
         """
         return sum(mul * rep.dim for mul, rep in self)
 
@@ -210,22 +198,30 @@ class Irreps:
         """
         Return the number of irreducible representations.
 
-        Returns:
-            int: Number of irreducible representations.
+        Examples:
+            >>> Irreps("SO3", "100x0 + 10x1").num_irreps
+            110
         """
         return sum(mul for mul, _ in self)
 
     @property
     def muls(self) -> list[int]:
-        """List of multiplicities."""
+        """
+        List of multiplicities.
+
+        Examples:
+            >>> Irreps("SO3", "100x0 + 10x1").muls
+            [100, 10]
+        """
         return [mul for mul, _ in self]
 
     def slices(self) -> list[slice]:
         """
-        Get a list of slices corresponding to the offsets for each `mul, rep` tuple.
+        List of slices for each segment of the representation.
 
-        Returns:
-            list[slice]: List of slices for each `mul, rep` tuple.
+        Examples:
+            >>> Irreps("SO3", "100x0 + 10x1").slices()
+            [slice(0, 100, None), slice(100, 130, None)]
         """
         s = []
         i = 0
@@ -237,10 +233,7 @@ class Irreps:
 
     def is_scalar(self) -> bool:
         """
-        Check if all representations are scalar.
-
-        Returns:
-            bool: True if all representations are scalar, False otherwise.
+        All representations are scalar.
 
         Note:
             This function does not check the multiplicity of the representation.
@@ -248,20 +241,14 @@ class Irreps:
         Examples:
             >>> Irreps("SO3", "100x0 + 0x1").is_scalar()
             False
+
+            >>> Irreps("SO3", "100x0").is_scalar()
+            True
         """
         # Does not check the multiplicity of the representation!
         return all(rep.is_scalar() for mul, rep in self)
 
     def __add__(self, other):
-        """
-        Concatenate two Irreps objects.
-
-        Args:
-            other (Irreps): The other Irreps object to concatenate.
-
-        Returns:
-            :class:`Irreps`: The concatenation of the two Irreps objects.
-        """
         other = Irreps(self.irrep_class, other)
         return Irreps(self.irrep_class, self._mulirreps + other._mulirreps)
 
@@ -269,15 +256,6 @@ class Irreps:
         return Irreps(self.irrep_class, other) + self
 
     def __mul__(self, other):
-        """
-        Multiply the Irreps object by an integer.
-
-        Args:
-            other (int): The integer to multiply by.
-
-        Returns:
-            Irreps: The product of the Irreps object and the integer.
-        """
         if isinstance(other, int):
             return Irreps(
                 self.irrep_class, [MulIrrep(mul * other, rep) for mul, rep in self]
@@ -288,15 +266,6 @@ class Irreps:
         return self * other
 
     def __floordiv__(self, other):
-        """
-        Floor divide the multiplicities of the Irreps object by an integer.
-
-        Args:
-            other (int): The integer to divide by.
-
-        Returns:
-            Irreps: The floor division of the Irreps object by the integer.
-        """
         if isinstance(other, int):
             return Irreps(
                 self.irrep_class, [MulIrrep(mul // other, rep) for mul, rep in self]
@@ -304,15 +273,6 @@ class Irreps:
         return NotImplemented  # pragma: no cover
 
     def __eq__(self, other):
-        """
-        Check if two Irreps objects are equal.
-
-        Args:
-            other (Irreps): The other Irreps object to compare.
-
-        Returns:
-            bool: True if the Irreps objects are equal, False otherwise.
-        """
         try:
             other = Irreps(self.irrep_class, other)
         except ValueError:
@@ -324,10 +284,7 @@ class Irreps:
 
     def merge_consecutive(self) -> Irreps:
         """
-        Merge consecutive `mul, rep` tuples with the same representation into a single tuple.
-
-        Returns:
-            Irreps: The Irreps object with merged tuples.
+        Merge consecutive segments with the same representation.
 
         Examples:
             >>> Irreps("SO3", "1 + 1 + 0 + 1").merge_consecutive()
@@ -345,9 +302,6 @@ class Irreps:
         """
         Remove zero multiplicities.
 
-        Returns:
-            Irreps: The Irreps object without zero multiplicities.
-
         Examples:
             >>> Irreps("SO3", "1 + 0x2 + 1").remove_zero_multiplicities()
             1+1
@@ -357,9 +311,6 @@ class Irreps:
     def simplify(self) -> Irreps:
         """
         Simplify the representation by removing zero multiplicities and merging consecutive tuples.
-
-        Returns:
-            Irreps: The simplified Irreps object.
 
         Examples:
             >>> Irreps("SO3", "1 + 0x2 + 1").simplify()
@@ -372,7 +323,11 @@ class Irreps:
         Sort the representation.
 
         Returns:
-            SortResult: The sorted representation and associated permutation.
+            SortResult: The sorted representation and associated permutations.
+
+        Examples:
+            >>> Irreps("SO3", "1 + 2 + 0 + 1").sort()
+            SortResult(irreps=0+1+1+2, perm=(1, 3, 0, 2), inv=(2, 0, 3, 1))
         """
 
         def inverse(p):
@@ -388,9 +343,6 @@ class Irreps:
         """
         Regroup the representation by sorting and simplifying.
 
-        Returns:
-            Irreps: The regrouped Irreps object.
-
         Examples:
             >>> Irreps("SO3", "1 + 2 + 0 + 1").regroup()
             0+2x1+2
@@ -399,13 +351,11 @@ class Irreps:
 
     def set_mul(self, mul: int) -> Irreps:
         """
-        Set the multiplicity of all representations.
+        Set the multiplicity of all segments.
 
-        Args:
-            mul (int): The multiplicity to set.
-
-        Returns:
-            Irreps: The Irreps object with the set multiplicity.
+        Examples:
+            >>> Irreps("SO3", "3x0 + 2x0 + 4x1").set_mul(2)
+            2x0+2x0+2x1
         """
         return Irreps(self.irrep_class, [(mul, rep) for _, rep in self])
 
@@ -417,17 +367,18 @@ class Irreps:
         mask: Optional[Sequence[bool]] = None,
     ) -> Irreps:
         """
-        Filter representations.
+        Filter the representation.
 
         Args:
-            keep (Union[str, Sequence[cue.Irrep], Callable[[MulIrrep], bool]], optional): Representations to keep.
-            drop (Union[str, Sequence[cue.Irrep], Callable[[MulIrrep], bool]], optional): Representations to drop.
+            keep (str, list of Irrep, callable, optional): Keep only the specified representations.
+            drop (str, list of Irrep, callable, optional): Drop the specified representations.
 
-        Returns:
-            Irreps: The filtered Irreps object.
+        Examples:
+            >>> Irreps("SO3", "4x0 + 4x1 + 2x2").filter(keep="0 + 1")
+            4x0+4x1
 
-        Raises:
-            ValueError: If both `keep` and `drop` are defined or if neither is defined.
+            >>> Irreps("SO3", "4x0 + 4x1 + 2x2").filter(drop="0 + 1")
+            2x2
         """
         if mask is None:
             mask = self.filter_mask(keep=keep, drop=drop)
@@ -488,7 +439,14 @@ class Irreps:
 
     def layout_insensitive(self) -> bool:
         """
-        Check if the representation is layout insensitive.
+        True if the representation is layout insensitive.
+
+        Examples:
+            >>> Irreps("SO3", "100x0 + 1x1 + 1x2").layout_insensitive()
+            True
+
+            >>> Irreps("SO3", "100x0 + 2x1").layout_insensitive()
+            False
         """
         for mul, ir in self:
             if mul > 1 and ir.dim > 1:
@@ -497,19 +455,6 @@ class Irreps:
 
 
 class SortResult(NamedTuple):
-    """
-    Result of sorting irreducible representations.
-
-    Attributes
-    ----------
-    irreps : Irreps
-        The sorted Irreps object.
-    perm : tuple[int, ...]
-        The permutation applied to sort the irreps.
-    inv : tuple[int, ...]
-        The inverse of the permutation.
-    """
-
     irreps: Irreps
     perm: tuple[int, ...]
     inv: tuple[int, ...]

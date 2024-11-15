@@ -20,25 +20,31 @@ class Operand:
 class EquivariantTensorProduct:
     """
     Descriptor of an equivariant tensor product.
+    This class is a wrapper around a list of :class:`STP <cuequivariance.SegmentedTensorProduct>`.
+    While an STP is a single homogeneous polynomial without specification of the role of each operand,
+    an ETP determines the role of each operand (input or output), the representation of each operand (irreps),
+    and the layout of each operand (multiplicity first or irreducible representation first).
 
-    Contract:
+    Requirements:
+        - An ETP must contain at least one :class:`STP <cuequivariance.SegmentedTensorProduct>`.
+        - Each STP must have at least one operand (the output).
 
-    * An ETP must contain at least one STP.
-    * Each STP must have at least one operand (the output).
+    Examples:
+        +------+--------+--------+--------+--------+---------------------------------------------------+
+        |      | Input0 | Input1 | Input2 | Output |                    Comment                        |
+        +======+========+========+========+========+===================================================+
+        | STP0 |   x    |   x    |   x    |   x    |  common case, the number of operands is the same  |
+        +------+--------+--------+--------+--------+---------------------------------------------------+
+        | STP1 |   x    |   x    |        |   x    |  some inputs are not used by all STPs             |
+        +------+--------+--------+--------+--------+---------------------------------------------------+
+        | STP2 |   x    |        |        |   x    |  -- " --                                          |
+        +------+--------+--------+--------+--------+---------------------------------------------------+
+        | STP3 |        |        |        |   x    |  -- " --                                          |
+        +------+--------+--------+--------+--------+---------------------------------------------------+
+        | STP4 |   x    |   x    |  x x x |   x    |  the last input is fed multiple times             |
+        +------+--------+--------+--------+--------+---------------------------------------------------+
 
-    +------+--------+--------+--------+--------+---------------------------------------------------+
-    |      | Input0 | Input1 | Input2 | Output |                    Comment                        |
-    +======+========+========+========+========+===================================================+
-    | STP0 |   x    |   x    |   x    |   x    |  common case, the number of operands is the same  |
-    +------+--------+--------+--------+--------+---------------------------------------------------+
-    | STP1 |   x    |   x    |        |   x    |  some inputs are not used by all STPs             |
-    +------+--------+--------+--------+--------+---------------------------------------------------+
-    | STP2 |   x    |        |        |   x    |  -- " --                                          |
-    +------+--------+--------+--------+--------+---------------------------------------------------+
-    | STP3 |        |        |        |   x    |  -- " --                                          |
-    +------+--------+--------+--------+--------+---------------------------------------------------+
-    | STP4 |   x    |   x    |  xxx   |   x    |  the last input is repeated multiple times        |
-    +------+--------+--------+--------+--------+---------------------------------------------------+
+    .. rubric:: Methods
     """
 
     operands: tuple[Operand, ...]
@@ -159,9 +165,7 @@ class EquivariantTensorProduct:
     def permute_operands(
         self, permutation: tuple[int, ...]
     ) -> EquivariantTensorProduct:
-        """
-        Permute the operands of the tensor product.
-        """
+        """Permute the operands of the tensor product."""
         assert sorted(permutation) == list(range(self.num_operands))
         assert all(d.num_operands == self.num_operands for d in self.ds)
         return EquivariantTensorProduct(
@@ -170,9 +174,7 @@ class EquivariantTensorProduct:
         )
 
     def move_operand(self, src: int, dst: int) -> EquivariantTensorProduct:
-        """
-        Move an operand to a new position.
-        """
+        """Move an operand to a new position."""
         if src < 0:
             src += self.num_operands
         if dst < 0:
@@ -184,28 +186,27 @@ class EquivariantTensorProduct:
         )
 
     def move_operand_first(self, src: int) -> EquivariantTensorProduct:
-        """
-        Move an operand to the front.
-        """
+        """Move an operand to the front."""
         return self.move_operand(src, 0)
 
     def move_operand_last(self, src: int) -> EquivariantTensorProduct:
-        """
-        Move an operand to the back.
-        """
+        """Move an operand to the back."""
         return self.move_operand(src, -1)
 
     def squeeze_modes(self, modes: Optional[str] = None) -> EquivariantTensorProduct:
+        """Squeeze the modes."""
         return EquivariantTensorProduct(
             [d.squeeze_modes(modes) for d in self.ds], self.operands
         )
 
     def consolidate_paths(self) -> EquivariantTensorProduct:
+        """Consolidate the paths."""
         return EquivariantTensorProduct(
             [d.consolidate_paths() for d in self.ds], self.operands
         )
 
     def canonicalize_subscripts(self) -> EquivariantTensorProduct:
+        """Canonicalize the subscripts."""
         return EquivariantTensorProduct(
             [d.canonicalize_subscripts() for d in self.ds], self.operands
         )
@@ -213,6 +214,7 @@ class EquivariantTensorProduct:
     def flatten_modes(
         self, modes: str, *, skip_zeros: bool = True, force: bool = False
     ) -> EquivariantTensorProduct:
+        """Flatten modes."""
         return EquivariantTensorProduct(
             [
                 d.flatten_modes(modes, skip_zeros=skip_zeros, force=force)
@@ -222,9 +224,11 @@ class EquivariantTensorProduct:
         )
 
     def all_same_segment_shape(self) -> bool:
+        """Whether all the segments have the same shape."""
         return all(d.all_same_segment_shape() for d in self.ds)
 
     def flatten_coefficient_modes(self) -> EquivariantTensorProduct:
+        """Flatten the coefficient modes."""
         return EquivariantTensorProduct(
             [d.flatten_coefficient_modes() for d in self.ds], self.operands
         )
@@ -297,17 +301,13 @@ class EquivariantTensorProduct:
         )
 
     def flop_cost(self, batch_size: int) -> int:
-        """
-        Compute the number of flops of the tensor product.
-        """
+        """Compute the number of flops of the tensor product."""
         return sum(d.flop_cost(-1) for d in self.ds) * batch_size
 
     def memory_cost(
         self, batch_sizes: tuple[int, ...], itemsize: Union[int, tuple[int, ...]]
     ) -> int:
-        """
-        Compute the number of memory accesses of the tensor product.
-        """
+        """Compute the number of memory accesses of the tensor product."""
         assert len(batch_sizes) == self.num_operands
         if isinstance(itemsize, int):
             itemsize = (itemsize,) * self.num_operands
@@ -318,7 +318,36 @@ class EquivariantTensorProduct:
 
     def backward(self, input: int) -> tuple[EquivariantTensorProduct, tuple[int, ...]]:
         """
-        The backward tensor product.
+        The backward pass of the equivariant tensor product.
+
+        Args:
+            input: The input with respect to which the backward pass is computed.
+
+        Returns:
+            A tuple containing the ETP representing the backward pass and the permutation of the operands between the original and the backward ETP.
+
+        Examples:
+            >>> e = cue.descriptors.fully_connected_tensor_product(
+            ...     cue.Irreps("SO3", "4x0+1x1"),
+            ...     cue.Irreps("SO3", "4x0+2x1"),
+            ...     cue.Irreps("SO3", "4x0+3x1")
+            ... )
+            >>> e
+            EquivariantTensorProduct(114x0 x 4x0+1 x 4x0+2x1 -> 4x0+3x1)
+            >>> e_bwd, i = e.backward(0)
+            >>> e_bwd
+            EquivariantTensorProduct(4x0+3x1 x 4x0+1 x 4x0+2x1 -> 114x0)
+            >>> i
+            (3, 1, 2, 0)
+
+            >>> e = cue.descriptors.spherical_harmonics(cue.SO3(1), [0, 1, 2, 3])
+            >>> e
+            EquivariantTensorProduct((1)^(0..3) -> 0+1+2+3)
+            >>> e_bwd, i = e.backward(0)
+            >>> e_bwd
+            EquivariantTensorProduct(0+1+2+3 x (1)^(0..2) -> 1)
+            >>> i
+            (1, 0, 0)
         """
         assert input < self.num_inputs
 
@@ -416,6 +445,7 @@ class EquivariantTensorProduct:
         return cls(new_ds.values(), new_operands)
 
     def symmetrize_operands(self) -> EquivariantTensorProduct:
+        """Symmetrize the operands of the ETP."""
         new_ds = []
         for d in self.ds:
             new_ds.append(
@@ -424,6 +454,7 @@ class EquivariantTensorProduct:
         return EquivariantTensorProduct(new_ds, self.operands)
 
     def sort_indices_for_identical_operands(self) -> EquivariantTensorProduct:
+        """Sort the indices for identical operands."""
         new_ds = []
         for d in self.ds:
             new_ds.append(

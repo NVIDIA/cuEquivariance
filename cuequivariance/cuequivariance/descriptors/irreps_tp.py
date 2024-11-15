@@ -4,7 +4,6 @@ import itertools
 from typing import *
 
 import cuequivariance as cue
-from cuequivariance import descriptors
 from cuequivariance import segmented_tensor_product as stp
 from cuequivariance.irreps_array.irrep_utils import into_list_of_irrep
 

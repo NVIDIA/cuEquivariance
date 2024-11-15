@@ -32,7 +32,7 @@ As a consequence, any representation can be expressed as a direct sum of irreduc
 :code:`Irreps` in cuEquivariance
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The :code:`Irreps` class in cuEquivariance is designed to describe which irreducible representations and in which quantities are present in a given group representation.
+The :class:`Irreps <cuequivariance.Irreps>` class in cuEquivariance is designed to describe which irreducible representations and in which quantities are present in a given group representation.
 
 .. jupyter-execute::
 
