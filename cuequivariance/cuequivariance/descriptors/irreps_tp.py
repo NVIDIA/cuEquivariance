@@ -75,7 +75,7 @@ def channelwise_tensor_product(
     Args:
         irreps1 (Irreps): Irreps of the first operand.
         irreps2 (Irreps): Irreps of the second operand.
-        irreps3_filter (sequence of :clasreps, optional): Irreps of the output to consider.
+        irreps3_filter (sequence of Irrep, optional): Irreps of the output to consider.
 
     Returns:
         EquivariantTensorProduct: Descriptor of the channelwise tensor product.
