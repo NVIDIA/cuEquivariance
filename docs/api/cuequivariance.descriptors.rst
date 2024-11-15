@@ -21,6 +21,7 @@ These functions create specific instances of tensor products.
    symmetric_contraction
    x_rotation
    y_rotation
+   yxy_rotation
    escn_tp
    gatr_linear
    gatr_geometric_product
