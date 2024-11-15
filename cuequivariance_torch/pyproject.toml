@@ -6,7 +6,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "cuequivariance_torch"
+name = "cuequivariance-torch"
 dynamic = ["version"]
 description = "CUDA accelerated equivariant operations"
 readme = "../README.md"
