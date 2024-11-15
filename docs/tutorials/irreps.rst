@@ -103,6 +103,15 @@ The higher-dimensional irreps are less common but are still important in physics
 For instance the :math:`l = 2` irrep is a five-dimensional representation that corresponds to rank-2 symmetric traceless tensors. The remaining degrees of freedom in a rank-2 tensor are captured by the :math:`l = 0` (the trace) and :math:`l = 1` (the antisymmetric part) irreps.
 
 
+Irreps of :math:`O(3)`
+----------------------
+
+The group :math:`O(3)` is the group of rotations and reflections in 3D space. It can equivalently be described as the direct product of :math:`SO(3)` and :math:`Z_2`.
+:math:`Z_2` is the group of two elements, the identity and the inversion. It's the smallest non-trivial group. It has two irreducible representations, both of dimension 1, called the even and odd representations.
+The even representation corresponds to the trivial representation, and the odd representation corresponds to the sign: the identity is mapped to 1, and the inversion is mapped to -1.
+The irreps of :math:`O(3)` are labeled by a pair of integers :math:`(l, p)`, where :math:`l` is a non-negative integer and :math:`p` is either 1 or -1. The dimension of the :math:`(l, p)`-th irrep is :math:`2l + 1`.
+
+
 Set a default group
 -------------------
 

@@ -95,7 +95,10 @@ class Rotation(torch.nn.Module):
 def encode_rotation_angle(angle: torch.Tensor, l: int) -> torch.Tensor:
     """Encode a angle into a tensor of cosines and sines.
 
-    The encoding is [cos(l * angle), cos((l - 1) * angle), ..., cos(angle), 1, sin(angle), sin(2 * angle), ..., sin(l * angle)].
+    The encoding is::
+
+        [cos(l * angle), cos((l - 1) * angle), ..., cos(angle), 1, sin(angle), sin(2 * angle), ..., sin(l * angle)].
+
     This encoding is used to feed the segmented tensor products that perform rotations.
     """
     angle = torch.as_tensor(angle)
@@ -108,7 +111,19 @@ def encode_rotation_angle(angle: torch.Tensor, l: int) -> torch.Tensor:
     return torch.cat([c.flip(-1), one, s], dim=-1)
 
 
-def vector_to_euler_angles(vector: torch.Tensor) -> torch.Tensor:
+def vector_to_euler_angles(vector: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    r"""Convert a 3D vector to Euler angles.
+
+    .. math::
+
+        R_y(\alpha) R_x(\beta) \vec{e}_y = \vec{v}
+
+    Args:
+        vector (torch.Tensor): The 3D vector.
+
+    Returns:
+        tuple[torch.Tensor, torch.Tensor]: The beta and alpha angles.
+    """
     assert vector.shape[-1] == 3
     shape = vector.shape[:-1]
     vector = vector.reshape(-1, 3)

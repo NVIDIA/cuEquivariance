@@ -22,12 +22,12 @@ def fully_connected_tensor_product(
     .. currentmodule:: cuequivariance
 
     Args:
-        irreps1 (:class:`Irreps`): Irreps of the first operand.
-        irreps2 (:class:`Irreps`): Irreps of the second operand.
-        irreps3 (:class:`Irreps`): Irreps of the output.
+        irreps1 (Irreps): Irreps of the first operand.
+        irreps2 (Irreps): Irreps of the second operand.
+        irreps3 (Irreps): Irreps of the output.
 
     Returns:
-        cue.EquivariantTensorProduct: Descriptor of the fully connected tensor product.
+        EquivariantTensorProduct: Descriptor of the fully connected tensor product.
     """
     G = irreps1.irrep_class
 
@@ -73,12 +73,12 @@ def channelwise_tensor_product(
     .. currentmodule:: cuequivariance
 
     Args:
-        irreps1 (:class:`Irreps`): Irreps of the first operand.
-        irreps2 (:class:`Irreps`): Irreps of the second operand.
-        irreps3_filter (sequence of :class:`Irreps`, optional): Irreps of the output to consider.
+        irreps1 (Irreps): Irreps of the first operand.
+        irreps2 (Irreps): Irreps of the second operand.
+        irreps3_filter (sequence of :clasreps, optional): Irreps of the output to consider.
 
     Returns:
-        cue.EquivariantTensorProduct: Descriptor of the channelwise tensor product.
+        EquivariantTensorProduct: Descriptor of the channelwise tensor product.
     """
     G = irreps1.irrep_class
 
@@ -156,6 +156,16 @@ def elementwise_tensor_product(
 ) -> cue.EquivariantTensorProduct:
     """
     subscripts: ``lhs[iu],rhs[ju],output[ku]``
+
+    Construct an elementwise tensor product descriptor.
+
+    Args:
+        irreps1 (Irreps): Irreps of the first operand.
+        irreps2 (Irreps): Irreps of the second operand.
+        irreps3_filter (sequence of Irrep, optional): Irreps of the output to consider.
+
+    Returns:
+        EquivariantTensorProduct: Descriptor of the elementwise tensor product.
     """
     G = irreps1.irrep_class
 
@@ -202,7 +212,7 @@ def linear(
         irreps_out (Irreps): Irreps of the output.
 
     Returns:
-        cue.EquivariantTensorProduct: Descriptor of the linear transformation.
+        EquivariantTensorProduct: Descriptor of the linear transformation.
     """
     d = stp.SegmentedTensorProduct.from_subscripts("uv_iu_iv")
     for mul, ir in irreps_in:
