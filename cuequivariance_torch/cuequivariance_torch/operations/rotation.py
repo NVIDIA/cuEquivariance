@@ -144,6 +144,14 @@ def vector_to_euler_angles(vector: torch.Tensor) -> tuple[torch.Tensor, torch.Te
 
 
 class Inversion(torch.nn.Module):
+    """
+    Inversion layer for :math:`O(3)` representations.
+
+    Args:
+        irreps (Irreps): The irreducible representations of the tensor to invert.
+        layout (IrrepsLayout, optional): The memory layout of the tensor, ``cue.ir_mul`` is preferred.
+    """
+
     def __init__(
         self,
         irreps: cue.Irreps,
@@ -173,4 +181,5 @@ class Inversion(torch.nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply the inversion layer."""
         return self.f(x)

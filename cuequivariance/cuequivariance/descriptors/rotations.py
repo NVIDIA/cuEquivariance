@@ -215,4 +215,5 @@ def inversion(irreps: cue.Irreps) -> cue.EquivariantTensorProduct:
         H = ir.H[0]
         assert np.allclose(H @ H, np.eye(ir.dim), atol=1e-6)
         d.add_path(None, None, c=H, dims={"u": mul})
+    d = d.flatten_coefficient_modes()
     return cue.EquivariantTensorProduct(d, [irreps, irreps], layout=cue.ir_mul)
