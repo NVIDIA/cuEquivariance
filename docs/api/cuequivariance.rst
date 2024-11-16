@@ -2,11 +2,10 @@
    SPDX-License-Identifier: Apache-2.0
 
 .. module:: cuequivariance
+.. currentmodule:: cuequivariance
 
 cuequivariance
 ==============
-
-.. currentmodule:: cuequivariance
 
 Group Representations
 ---------------------
@@ -44,20 +43,9 @@ These classes represent tensor products.
 Descriptors
 -----------
 
-These functions create specific instances of tensor products.
+:doc:`List of Descriptors <cuequivariance.descriptors>`
 
-.. autosummary::
-   :toctree: generated/
-   :template: function_template.rst
+.. toctree::
+   :hidden:
 
-   descriptors.spherical_harmonics
-   descriptors.fully_connected_tensor_product
-   descriptors.channelwise_tensor_product
-   descriptors.linear
-   descriptors.symmetric_contraction
-   descriptors.x_rotation
-   descriptors.y_rotation
-   descriptors.escn_tp
-   descriptors.gatr_linear
-   descriptors.gatr_geometric_product
-   descriptors.gatr_outer_product
+   cuequivariance.descriptors

@@ -9,7 +9,7 @@ Data Layouts
 When representing a collection of irreps with multiplicities there are two ways to organize the data in memory:
 
    * **(ir, mul)** - Irreps are the outermost dimension.
-   * **(mul, ir)** - Multiplicities are the outermost dimension. This is the layout used by ``e3nn``.
+   * **(mul, ir)** - Multiplicities are the outermost dimension. This is the layout used by `e3nn <https://github.com/e3nn/e3nn>`_.
 
 .. image:: /_static/layout.png
    :alt: Illustration of data layouts

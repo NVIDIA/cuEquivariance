@@ -2,11 +2,10 @@
    SPDX-License-Identifier: Apache-2.0
 
 .. module:: cuequivariance_jax
+.. currentmodule:: cuequivariance_jax
 
 cuequivariance-jax
 ==================
-
-.. currentmodule:: cuequivariance_jax
 
 IrrepsArray
 -----------

@@ -39,11 +39,16 @@ def yxy_rotation(
     """
     subsrcipts: ``gamma[],beta[],alpha[],input[u],output[u]``
 
-    Rotation around the y-axis by angle gamma
-    followed by rotation around the x-axis by angle beta
-    followed by rotation around the y-axis by angle alpha
+    The composition of three rotations:
 
-    encoding(x) = [cos(x * l), cos(x * (l - 1)), ..., cos(x), 1, sin(x), sin(2 * x), ..., sin(l * x)]
+    - Rotation around the y-axis by angle gamma
+    - followed by rotation around the x-axis by angle beta
+    - followed by rotation around the y-axis by angle alpha
+
+    The angles are encoded in the following way::
+
+        encoding(x) = [cos(x * l), cos(x * (l - 1)), ..., cos(x), 1, sin(x), sin(2 * x), ..., sin(l * x)]
+
     where l is the maximum L in the input and output irreps.
     """
     cbio = xy_rotation(irreps, lmax).d  # gamma, beta, input, A
@@ -119,7 +124,10 @@ def y_rotation(
 
     Rotation around the y-axis by angle gamma
 
-    encoding(x) = [cos(x * l), cos(x * (l - 1)), ..., cos(x), 1, sin(x), sin(2 * x), ..., sin(l * x)]
+    The angle is encoded in the following way::
+
+        encoding(x) = [cos(x * l), cos(x * (l - 1)), ..., cos(x), 1, sin(x), sin(2 * x), ..., sin(l * x)]
+
     where l is the maximum L in the input and output irreps.
     """
     assert irreps.irrep_class in [cue.SO3, cue.O3]
@@ -180,7 +188,10 @@ def x_rotation(
 
     Rotation around the x-axis by angle beta
 
-    encoding(x) = [cos(x * l), cos(x * (l - 1)), ..., cos(x), 1, sin(x), sin(2 * x), ..., sin(l * x)]
+    The angle is encoded in the following way::
+
+        encoding(x) = [cos(x * l), cos(x * (l - 1)), ..., cos(x), 1, sin(x), sin(2 * x), ..., sin(l * x)]
+
     where l is the maximum L in the input and output irreps.
     """
     assert irreps.irrep_class in [cue.SO3, cue.O3]
@@ -204,4 +215,5 @@ def inversion(irreps: cue.Irreps) -> cue.EquivariantTensorProduct:
         H = ir.H[0]
         assert np.allclose(H @ H, np.eye(ir.dim), atol=1e-6)
         d.add_path(None, None, c=H, dims={"u": mul})
+    d = d.flatten_coefficient_modes()
     return cue.EquivariantTensorProduct(d, [irreps, irreps], layout=cue.ir_mul)

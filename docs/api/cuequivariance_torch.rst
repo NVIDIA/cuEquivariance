@@ -2,11 +2,10 @@
    SPDX-License-Identifier: Apache-2.0
 
 .. module:: cuequivariance_torch
+.. currentmodule:: cuequivariance_torch
 
 cuequivariance-torch
 ====================
-
-.. currentmodule:: cuequivariance_torch
 
 Tensor Products
 ---------------

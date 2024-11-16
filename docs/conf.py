@@ -62,3 +62,7 @@ intersphinx_mapping = {
 
 napoleon_google_docstring = True
 napoleon_numpy_docstring = False
+
+# -- Options for autodoc -----------------------------------------------------
+
+autodoc_member_order = "bysource"

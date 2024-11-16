@@ -18,12 +18,9 @@ class NumpyIrrepsArray:
     Data Array transforming according to the irreducible representations of a Lie group.
 
     Args:
-        irreps: :class:`cuequivariance.Irreps` or str
-            Irreps of the data array.
-        array: :class:`numpy.ndarray`
-            Data array.
-        layout: :class:`cuequivariance.IrrepsLayout`, optional
-            Layout of the data array.
+        irreps (Irreps or str): Irreps of the data array.
+        array (np.ndarray): Data array.
+        layout (IrrepsLayout, optional): Memory layout of the data array.
     """
 
     irreps: cue.Irreps

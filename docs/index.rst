@@ -61,8 +61,13 @@ This descriptor is then used to create a :class:`cuet.EquivariantTensorProduct <
 Tutorials
 ---------
 
+| :doc:`tutorials/irreps`
+| :doc:`tutorials/layout`
+| :doc:`tutorials/etp`
+| :doc:`tutorials/stp`
+
 .. toctree::
-   :maxdepth: 2
+   :hidden:
 
    tutorials/index
 
