@@ -3,7 +3,7 @@
 ## Issue Tracking
 
 * All requests for enhancements, bug fixes, or features must begin with the creation of an [issue](https://github.com/NVIDIA/cuEquivariance/issues).
-  * The issue request must be reviewed by NVIDIA engineers and approved prior to code review.
+  * The issue request will be reviewed by the NVIDIA team and approved prior to pull request integration and code review.
 
 
 ## Coding Guidelines
