@@ -15,8 +15,8 @@
 
 .. _tuto_irreps:
 
-Group representations
-=====================
+Groups and Representations
+==========================
 
 What Is a Group?
 ----------------
@@ -34,7 +34,7 @@ A **group** is a collection of elements (which could be numbers, functions, tran
 What Is a Group Representation?
 -------------------------------
 
-
+*The action of a group on a vector space.*
 
 A **group representation** is a way to map or "represent" each element of this abstract group to a concrete object, typically matrices or linear transformations acting on vector spaces. Essentially, it expresses abstract group operations in terms of matrix multiplication.
 
@@ -43,7 +43,8 @@ Why do this? Matrices and linear algebra are powerful tools with well-establishe
 Irreducible Representations
 ---------------------------
 
-A group representation can be decomposed into simpler, irreducible parts. An **irreducible representation** (irrep) is a representation that cannot be further decomposed into smaller representations. In other words, an irrep is a representation that has no nontrivial invariant subspaces.
+A group representation can be decomposed into simpler, irreducible parts. An **irreducible representation** (irrep) is a representation that cannot be further decomposed into smaller representations.
+In mathematical terms, an irrep is a representation that has no nontrivial invariant subspaces.
 
 As a consequence, any representation can be expressed as a direct sum of irreducible representations. This decomposition is known as the **irreducible decomposition** of the representation.
 
@@ -55,8 +56,8 @@ Irreps of :math:`SO(3)`
 The group :math:`SO(3)` is the group of rotations in 3D space. It has a countable number of irreducible representations, each labeled by a non-negative integer. The irreps of :math:`SO(3)` are indexed by the non-negative integers :math:`l = 0, 1, 2, \ldots`. The dimension of the :math:`l`-th irrep is :math:`2l + 1`.
 Some of the irreps of :math:`SO(3)` are well-known and have special names:
 
-- The trivial representation (0) is one-dimensional and corresponds to scalar quantities that do not transform under rotations (e.g., mass, charge, etc.).
-- The vector representation (1) is three-dimensional and corresponds to vectors in 3D space (e.g., position, velocity, force, etc.).
+- The trivial representation (:math:`l = 0`) is one-dimensional and corresponds to scalar quantities that do not transform under rotations (e.g., mass, charge, etc.).
+- The vector representation (:math:`l = 1`) is three-dimensional and corresponds to vectors in 3D space (e.g., position, velocity, force, etc.).
 
 The higher-dimensional irreps are less common but are still important in physics and mathematics. They appear when we consider tensor products of vector representations.
 For instance the :math:`l = 2` irrep is a five-dimensional representation that corresponds to rank-2 symmetric traceless tensors. The remaining degrees of freedom in a rank-2 tensor are captured by the :math:`l = 0` (the trace) and :math:`l = 1` (the antisymmetric part) irreps.
@@ -71,8 +72,29 @@ The even representation corresponds to the trivial representation, and the odd r
 The irreps of :math:`O(3)` are labeled by a pair of integers :math:`(l, p)`, where :math:`l` is a non-negative integer and :math:`p` is either 1 or -1. The dimension of the :math:`(l, p)`-th irrep is :math:`2l + 1`.
 
 
-:code:`Irreps`
---------------
+Example: Decomposing the Stress Tensor into Irreducible Representations
+-----------------------------------------------------------------------
+
+Let's explore the example of the stress tensor in the context of group representations. The stress tensor :math:`\sigma` is a :math:`3 \times 3` matrix that represents the internal forces acting within a material. Each element of this matrix describes how forces are transmitted in different directions at a point inside the material.
+Why a Matrix? Materials can experience various types of mechanical stresses: tension, compression, shear, etc. The stress tensor captures all these forces in a single object.
+
+Under a rotation of the coordinate system, the stress tensor transforms as:
+
+.. math::
+
+   \sigma \longrightarrow R \sigma R^T
+
+where :math:`\sigma` is the stress tensor and :math:`R` is a rotation matrix.
+It can be decomposed into irreducible components corresponding to different irreducible representations (irreps) of :math:`SO(3)`.
+
+- Trace part: :math:`l = 0` irrep (scalar)
+- Antisymmetric part: :math:`l = 1` irrep (vector)
+- Symmetric traceless part: :math:`l = 2` irrep
+
+Let see how representations are encoded in cuEquivariance.
+
+The class :code:`Irreps`
+------------------------
 
 The :class:`Irreps <cuequivariance.Irreps>` class is designed to describe which irreducible representations and in which quantities are present in a given group representation.
 
