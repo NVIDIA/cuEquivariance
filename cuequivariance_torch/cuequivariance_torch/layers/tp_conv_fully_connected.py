@@ -1,5 +1,17 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024 NVIDIA CORPORATION & AFFILIATES
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 from typing import *
 
 import torch
@@ -178,7 +190,7 @@ class FullyConnectedTensorProductConv(nn.Module):
                 Shape: (num_edges, sh_irreps.dim)
             edge_emb (torch.Tensor): Edge embeddings that are fed into MLPs to generate tensor product weights.
                 Shape: (num_edges, dim), where `dim` should be:
-                
+
                 - `tp.weight_numel` when the layer does not contain MLPs.
                 - num_edge_scalars, when scalar features from edges, sources and destinations are passed in separately.
             graph (tuple): A tuple that stores the graph information, with the first element being the adjacency matrix in COO, and the second element being its shape:
