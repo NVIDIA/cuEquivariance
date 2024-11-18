@@ -30,6 +30,16 @@ class O3(Irrep):
     r"""Subclass of :class:`Irrep`, real irreducible representations of the 3D rotation group :math:`O(3)`.
 
     Each representation is labeled by a non-negative integer :math:`l` and a parity :math:`p = \pm 1`.
+
+    Examples:
+        >>> O3(0, 1)
+        0e
+        >>> O3(1, -1)
+        1o
+        >>> O3(1, -1).dim
+        3
+        >>> O3.from_string("2o")
+        2o
     """
 
     l: int  # non-negative integer

@@ -43,9 +43,6 @@ class Irrep(Rep):
     def regexp_pattern(cls) -> re.Pattern:
         """
         Regular expression pattern for parsing the string representation.
-
-        Raises:
-            NotImplementedError: This method must be implemented by the subclass.
         """
         raise NotImplementedError
 
@@ -53,9 +50,6 @@ class Irrep(Rep):
     def from_string(cls, string: str) -> Irrep:
         """
         Create an instance from the string representation.
-
-        Raises:
-            NotImplementedError: This method must be implemented by the subclass.
         """
         raise NotImplementedError
 
@@ -97,9 +91,6 @@ class Irrep(Rep):
 
         - the first element is the trivial irrep
         - the elements respect the partial order defined by ``__lt__``
-
-        Raises:
-            NotImplementedError: This method must be implemented by the subclass.
         """
         raise NotImplementedError
 
@@ -109,9 +100,6 @@ class Irrep(Rep):
         Clebsch-Gordan coefficients tensor.
 
         The shape is ``(number_of_paths, rep1.dim, rep2.dim, rep3.dim)`` and rep3 is the output irrep.
-
-        Raises:
-            NotImplementedError: This method must be implemented by the subclass.
 
         See also:
             :func:`clebsch_gordan`.
