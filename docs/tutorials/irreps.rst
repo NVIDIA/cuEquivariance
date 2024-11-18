@@ -114,27 +114,12 @@ The segments are separated by a ``+`` sign. Each segment consists of a number fo
 As a convenience, a multiplicity of 1 can be omitted: ``1x2`` can be written as ``2``.
 
 cuEquivariance provides irreps for the following groups: :math:`SO(3)`, :math:`O(3)` and :math:`SU(2)`.
+The first argument to the :class:`Irreps <cuequivariance.Irreps>` constructor is the group name, which is a shorthand for :class:`cue.SO3 <cuequivariance.SO3>`, :class:`cue.O3 <cuequivariance.O3>` and :class:`cue.SU2 <cuequivariance.SU2>` respectively. Here is an example for the group :math:`SU(2)`:
 
 .. jupyter-execute::
 
    cue.Irreps("SU2", "6x1/2")
 
-The first argument to the :class:`Irreps <cuequivariance.Irreps>` constructor is the group name, it is a shorthand for :class:`cue.SO3 <cuequivariance.SO3>`, :class:`cue.O3 <cuequivariance.O3>` and :class:`cue.SU2 <cuequivariance.SU2>` respectively.
-If needed, you can also create custom irreps, see :ref:`custom-irreps` below.
-
-Here are some useful properties of the :class:`Irreps <cuequivariance.Irreps>` object, let's see them in action:
-
-.. jupyter-execute::
-
-   irreps = cue.Irreps("O3", "10x0e + 2x1o")
-
-.. jupyter-execute::
-
-   irreps.dim
-
-.. jupyter-execute::
-
-   irreps.filter(drop="0e")  # returns a new Irreps object with the 0e segment removed
 
 
 The order is important
@@ -151,7 +136,7 @@ Downstream tasks (e.g., equivariant layers in neural networks) rely on the speci
 Set a default group
 -------------------
 
-You can use the :func:`cue.assume <cuequivariance.assume>` context manager to fix the group.
+You can use the :func:`cue.assume <cuequivariance.assume>` to set a default group for all the irreps you create. This is useful when you are working with a single group and you don't want to specify it every time.
 
 .. jupyter-execute::
 
