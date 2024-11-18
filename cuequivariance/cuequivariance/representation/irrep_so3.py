@@ -47,6 +47,16 @@ class SO3(Irrep):
     r"""Subclass of :class:`Irrep`, real irreducible representations of the 3D rotation group :math:`SO(3)`.
 
     Each representation is labeled by a non-negative integer :math:`l`.
+
+    Examples:
+        >>> SO3(0)
+        0
+        >>> SO3(1)
+        1
+        >>> SO3(1).dim
+        3
+        >>> SO3.from_string("2")
+        2
     """
 
     l: int

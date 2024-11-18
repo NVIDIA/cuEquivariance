@@ -40,6 +40,16 @@ def fully_connected_tensor_product(
 
     Returns:
         EquivariantTensorProduct: Descriptor of the fully connected tensor product.
+
+    Examples:
+        >>> cue.descriptors.fully_connected_tensor_product(
+        ...    16 * cue.Irreps("SO3", "0 + 1 + 2"),
+        ...    16 * cue.Irreps("SO3", "0 + 1 + 2"),
+        ...    16 * cue.Irreps("SO3", "0 + 1 + 2"),
+        ... )
+        EquivariantTensorProduct(61440x0 x 16x0+16x1+16x2 x 16x0+16x1+16x2 -> 16x0+16x1+16x2)
+
+        Where ``61440x0`` are the 61440 weights needed to mix all the inputs with all the outputs.
     """
     G = irreps1.irrep_class
 

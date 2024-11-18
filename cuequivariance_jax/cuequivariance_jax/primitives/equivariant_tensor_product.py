@@ -34,8 +34,8 @@ def equivariant_tensor_product(
     """Compute the equivariant tensor product of the input arrays.
 
     Args:
-        e (cue.EquivariantTensorProduct): The equivariant tensor product descriptor.
-        *inputs (cuex.IrrepsArray | jax.Array): The input arrays.
+        e (EquivariantTensorProduct): The equivariant tensor product descriptor.
+        *inputs (IrrepsArray or jax.Array): The input arrays.
         dtype_output (jnp.dtype, optional): The data type for the output array. Defaults to None.
         dtype_math (jnp.dtype, optional): The data type for computational operations. Defaults to None.
         precision (jax.lax.Precision, optional): The precision for the computation. Defaults to jax.lax.Precision.HIGHEST.
@@ -44,7 +44,14 @@ def equivariant_tensor_product(
         use_custom_kernels (bool, optional): Whether to use custom kernels. Defaults to True.
 
     Returns:
-        cuex.IrrepsArray: The result of the equivariant tensor product.
+        IrrepsArray: The result of the equivariant tensor product.
+
+    Examples:
+        >>> e = cue.descriptors.spherical_harmonics(cue.SO3(1), [0, 1, 2])
+        >>> x = cuex.IrrepsArray(cue.Irreps("SO3", "1"), jnp.array([0.0, 1.0, 0.0]), cue.ir_mul)
+        >>> cuex.equivariant_tensor_product(e, x)
+        {0: 0+1+2}
+        [1. ... ]
     """
     if len(inputs) == 0:
         return lambda *inputs: equivariant_tensor_product(

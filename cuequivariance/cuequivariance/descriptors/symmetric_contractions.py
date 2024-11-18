@@ -39,6 +39,16 @@ def symmetric_contraction(
         EquivariantTensorProduct:
             The descriptor of the symmetric contraction.
             The operands are the weights, the input degree times and the output.
+
+    Examples:
+        >>> cue.descriptors.symmetric_contraction(
+        ...    16 * cue.Irreps("SO3", "0 + 1 + 2"),
+        ...    16 * cue.Irreps("SO3", "0 + 1"),
+        ...    [1, 2, 3]
+        ... )
+        EquivariantTensorProduct(32x0+80x0+176x0 x (16x0+16x1+16x2)^(1..3) -> 16x0+16x1)
+
+        Where ``32x0+80x0+176x0`` are the weights needed for each degree (32 for degree 1, 80 for degree 2, 176 for degree 3).
     """
     degrees = list(degrees)
     if len(degrees) != 1:

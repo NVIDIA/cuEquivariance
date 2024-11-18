@@ -20,6 +20,8 @@ cuEquivariance is a Python library designed to facilitate the construction of hi
 
 Equivariance is the mathematical formalization of the concept of "respecting symmetries." Robust physical models exhibit equivariance with respect to rotations and translations in three-dimensional space. Artificial intelligence models that incorporate equivariance are often more data-efficient.
 
+An introduction to group representations can be found in the page :doc:`tutorials/irreps`.
+
 Open Source
 -----------
 

@@ -30,6 +30,16 @@ class SU2(Irrep):
     r"""Subclass of :class:`Irrep`, irreducible representations of the Lie group :math:`SU(2)`.
 
     Each representation is labeled by a non-negative half-integer :math:`j`.
+
+    Examples:
+        >>> SU2(0)
+        0
+        >>> SU2(1/2)
+        1/2
+        >>> SU2(1/2).dim
+        2
+        >>> SU2.from_string("1")
+        1
     """
 
     j: float

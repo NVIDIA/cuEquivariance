@@ -90,9 +90,6 @@ class Rep:
 
         Returns:
             np.ndarray: An array of shape ``(lie_dim, lie_dim, lie_dim)``.
-
-        Raises:
-            NotImplementedError: This method is not implemented and should be overridden by subclasses.
         """
         raise NotImplementedError  # pragma: no cover
 
@@ -111,9 +108,6 @@ class Rep:
 
         Returns:
             np.ndarray: An array of shape ``(lie_dim, dim, dim)``.
-
-        Raises:
-            NotImplementedError: This method is not implemented and should be overridden by subclasses.
         """
         raise NotImplementedError  # pragma: no cover
 
@@ -126,18 +120,12 @@ class Rep:
 
         Returns:
             np.ndarray: An array of shape ``(len(H), dim, dim)``.
-
-        Raises:
-            NotImplementedError: This method is not implemented and should be overridden by subclasses.
         """
         raise NotImplementedError  # pragma: no cover
 
     def trivial(self) -> Rep:
         """
         Create a trivial representation from the same group as self
-
-        Raises:
-            NotImplementedError: This method is not implemented and should be overridden by subclasses.
         """
         raise NotImplementedError  # pragma: no cover
 
