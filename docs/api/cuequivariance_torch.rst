@@ -27,7 +27,6 @@ Tensor Products
    :template: pytorch_module_template.rst
 
    EquivariantTensorProduct
-   SymmetricTensorProduct
    TensorProduct
 
 Special Cases of Tensor Products

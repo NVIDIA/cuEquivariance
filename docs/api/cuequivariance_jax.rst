@@ -45,7 +45,6 @@ Tensor Products
    :template: function_template.rst
 
    equivariant_tensor_product
-   symmetric_tensor_product
    tensor_product
 
 Extra Modules
