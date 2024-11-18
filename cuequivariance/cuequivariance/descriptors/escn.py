@@ -39,7 +39,7 @@ def escn_tp(
         l_max (int, optional): Maximum angular resolution along the principal axis.
 
     Returns:
-        cue.EquivariantTensorProduct:
+        EquivariantTensorProduct:
             Descriptor of the tensor product part of the eSCN convolution.
 
             - Operand 0: weights
@@ -131,7 +131,7 @@ def escn_tp_compact(
         m_max (int, optional): Maximum angular resolution around the principal axis.
 
     Returns:
-        stp.SegmentedTensorProduct:
+        SegmentedTensorProduct:
             Descriptor of the tensor product part of the eSCN convolution.
 
             - Operand 0: weights
