@@ -41,6 +41,8 @@ class Irreps:
     """
     Direct sum of irreducible representations with multiplicities.
 
+    For more information, see :ref:`tuto_irreps`.
+
     Args:
         irrep_class: Class of the irreducible representations
             (e.g., :class:`SU2 <cuequivariance.SU2>`, :class:`SO3 <cuequivariance.SO3>`, :class:`O3 <cuequivariance.O3>`).

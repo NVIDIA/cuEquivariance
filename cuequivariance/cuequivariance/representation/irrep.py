@@ -37,6 +37,82 @@ class Irrep(Rep):
     - The selection rule for the tensor product of two irreps.
     - An ordering relation for sorting the irreps.
     - A Clebsch-Gordan method for computing the Clebsch-Gordan coefficients.
+
+    .. _custom-irreps:
+
+    Simple example of defining custom irreps
+    ----------------------------------------
+
+    In some cases, you may want to define a custom set of irreducible representations of a group.
+    Here is a simple example of how to define the irreps of the group :math:`Z_2`. For this we need to define a class that inherits from :class:`cue.Irrep <cuequivariance.Irrep>` and implement the required methods.
+
+    .. jupyter-execute::
+
+        from __future__ import annotations
+        import re
+        from typing import Iterator
+        import numpy as np
+        import cuequivariance as cue
+
+
+        class Z2(cue.Irrep):
+            odd: bool
+
+            def __init__(rep: Z2, odd: bool):
+                rep.odd = odd
+
+            @classmethod
+            def regexp_pattern(cls) -> re.Pattern:
+                return re.compile(r"(odd|even)")
+
+            @classmethod
+            def from_string(cls, string: str) -> Z2:
+                return cls(odd=string == "odd")
+
+            def __repr__(rep: Z2) -> str:
+                return "odd" if rep.odd else "even"
+
+            def __mul__(rep1: Z2, rep2: Z2) -> Iterator[Z2]:
+                return [Z2(odd=rep1.odd ^ rep2.odd)]
+
+            @classmethod
+            def clebsch_gordan(cls, rep1: Z2, rep2: Z2, rep3: Z2) -> np.ndarray:
+                if rep3 in rep1 * rep2:
+                    return np.array(
+                        [[[[1]]]]
+                    )  # (number_of_paths, rep1.dim, rep2.dim, rep3.dim)
+                else:
+                    return np.zeros((0, 1, 1, 1))
+
+            @property
+            def dim(rep: Z2) -> int:
+                return 1
+
+            def __lt__(rep1: Z2, rep2: Z2) -> bool:
+                # False < True
+                return rep1.odd < rep2.odd
+
+            @classmethod
+            def iterator(cls) -> Iterator[Z2]:
+                for odd in [False, True]:
+                    yield Z2(odd=odd)
+
+            def discrete_generators(rep: Z2) -> np.ndarray:
+                if rep.odd:
+                    return -np.ones((1, 1, 1))  # (number_of_generators, rep.dim, rep.dim)
+                else:
+                    return np.ones((1, 1, 1))
+
+            def continuous_generators(rep: Z2) -> np.ndarray:
+                return np.zeros((0, rep.dim, rep.dim))  # (lie_dim, rep.dim, rep.dim)
+
+            def algebra(self) -> np.ndarray:
+                return np.zeros((0, 0, 0))  # (lie_dim, lie_dim, lie_dim)
+
+
+        cue.Irreps(Z2, "13x odd + 6x even")
+
+    .. rubric:: Methods to implement
     """
 
     @classmethod
