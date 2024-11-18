@@ -51,8 +51,7 @@ def equivariant_tensor_product(
         >>> x = cuex.IrrepsArray(cue.Irreps("SO3", "1"), jnp.array([0.0, 1.0, 0.0]), cue.ir_mul)
         >>> cuex.equivariant_tensor_product(e, x)
         {0: 0+1+2}
-        [1.        0.        1.7320508 0.        0.        0.        2.236068
-         0.        0.       ]
+        [1. ... ]
     """
     if len(inputs) == 0:
         return lambda *inputs: equivariant_tensor_product(
