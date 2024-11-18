@@ -39,6 +39,15 @@ except ImportError:
 
 
 class Linear(nn.Module):
+    """
+    Equivariant linear layer.
+
+    Args:
+        irreps_out (Irreps): The output irreps. (The input irreps are inferred from the input.)
+        layout (IrrepsLayout): The layout of the output irreps.
+        force (bool): If False, the output irreps are filtered to contain only the reachable irreps from the input.
+    """
+
     irreps_out: cue.Irreps | str
     layout: cue.IrrepsLayout | None = None
     force: bool = False

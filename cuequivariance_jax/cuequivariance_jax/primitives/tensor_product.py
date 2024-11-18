@@ -50,7 +50,7 @@ def tensor_product(
     Compute the last operand of a segmented tensor product.
 
     Args:
-        d (stp.SegmentedTensorProduct): The segmented tensor product descriptor.
+        d (SegmentedTensorProduct): The segmented tensor product descriptor.
         *inputs (jax.Array): The input arrays for the tensor product.
         dtype_output (jnp.dtype, optional): The data type for the output. Defaults to None.
         dtype_math (jnp.dtype, optional): The data type for mathematical operations.
@@ -65,21 +65,21 @@ def tensor_product(
     See Also:
         :class:`cuequivariance.SegmentedTensorProduct`
 
-    +-----------------+-----------------------------------+-----------------+----------------------------+
-    | Algorithms      | Requires Identical Segment Shapes | Compilation     | Execution                  |
-    +=================+===================================+=================+============================+
-    |sliced           | No                                | Several minutes | It depends                 |
-    +-----------------+-----------------------------------+-----------------+----------------------------+
-    |stacked          | Yes                               | Several minutes | It depends                 |
-    +-----------------+-----------------------------------+-----------------+----------------------------+
-    |compact_stacked  | Yes                               | Few seconds     | It depends                 |
-    +-----------------+-----------------------------------+-----------------+----------------------------+
-    |indexed_compact  | Yes                               | Few seconds     | It depends                 |
-    +-----------------+-----------------------------------+-----------------+----------------------------+
-    |indexed_vmap     | Yes                               | Few seconds     | Probably the second slowest|
-    +-----------------+-----------------------------------+-----------------+----------------------------+
-    |indexed_for_loop | Yes                               | Few seconds     | Probably the slowest       |
-    +-----------------+-----------------------------------+-----------------+----------------------------+
+    +---------------------+--------------------------+-----------------+----------------------------+
+    | Algorithms          | Needs Identical Segments | Compilation     | Execution                  |
+    +=====================+==========================+=================+============================+
+    |``sliced``           | No                       | Several minutes | It depends                 |
+    +---------------------+--------------------------+-----------------+----------------------------+
+    |``stacked``          | Yes                      | Several minutes | It depends                 |
+    +---------------------+--------------------------+-----------------+----------------------------+
+    |``compact_stacked``  | Yes                      | Few seconds     | It depends                 |
+    +---------------------+--------------------------+-----------------+----------------------------+
+    |``indexed_compact``  | Yes                      | Few seconds     | It depends                 |
+    +---------------------+--------------------------+-----------------+----------------------------+
+    |``indexed_vmap``     | Yes                      | Few seconds     | Probably the second slowest|
+    +---------------------+--------------------------+-----------------+----------------------------+
+    |``indexed_for_loop`` | Yes                      | Few seconds     | Probably the slowest       |
+    +---------------------+--------------------------+-----------------+----------------------------+
     """
     if isinstance(precision, str):
         precision = jax.lax.Precision[precision]
