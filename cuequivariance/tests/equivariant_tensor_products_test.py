@@ -31,6 +31,12 @@ def test_commutativity_squeeze_flatten():
         == d.flatten_coefficient_modes().squeeze_modes()
     )
 
+    d = descriptors.full_tensor_product(irreps1, irreps2, irreps3).d
+    assert (
+        d.squeeze_modes().flatten_coefficient_modes()
+        == d.flatten_coefficient_modes().squeeze_modes()
+    )
+
     d = descriptors.channelwise_tensor_product(irreps1, irreps2, irreps3).d
     assert (
         d.squeeze_modes().flatten_coefficient_modes()

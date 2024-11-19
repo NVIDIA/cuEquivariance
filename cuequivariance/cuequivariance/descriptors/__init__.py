@@ -14,6 +14,7 @@
 # limitations under the License.
 from .transposition import transpose
 from .irreps_tp import (
+    full_tensor_product,
     fully_connected_tensor_product,
     channelwise_tensor_product,
     elementwise_tensor_product,
@@ -35,6 +36,7 @@ from .gatr import gatr_linear, gatr_geometric_product, gatr_outer_product
 
 __all__ = [
     "transpose",
+    "full_tensor_product",
     "fully_connected_tensor_product",
     "channelwise_tensor_product",
     "elementwise_tensor_product",

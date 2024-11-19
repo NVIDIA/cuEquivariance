@@ -20,6 +20,29 @@ from cuequivariance import segmented_tensor_product as stp
 from cuequivariance.irreps_array.irrep_utils import into_list_of_irrep
 
 
+def get_cuequivariance_descriptor(irreps_in1, irreps_in2):
+    d = stp.SegmentedTensorProduct.from_subscripts("ui,vj,kuv+ijk")
+    irreps_in1 = cue.Irreps("O3", irreps_in1.__str__())
+    irreps_in2 = cue.Irreps("O3", irreps_in2.__str__())
+    G = irreps_in1.irrep_class
+
+    for mul, ir in irreps_in1:
+        d.add_segment(0, (mul, ir.dim))
+    for mul, ir in irreps_in2:
+        d.add_segment(1, (mul, ir.dim))
+
+    for (i1, (mul1, ir1)), (i2, (mul2, ir2)) in itertools.product(
+        enumerate(irreps_in1), enumerate(irreps_in2)
+    ):
+        for ir3 in ir1 * ir2:
+            # for loop over the different solutions of the Clebsch-Gordan decomposition
+            for cg in cue.clebsch_gordan(ir1, ir2, ir3):
+                d.add_path(i1, i2, None, c=cg)
+
+    d = d.normalize_paths_for_operand(-1)
+    return d
+
+
 def fully_connected_tensor_product(
     irreps1: cue.Irreps, irreps2: cue.Irreps, irreps3: cue.Irreps
 ) -> cue.EquivariantTensorProduct:
@@ -76,6 +99,62 @@ def fully_connected_tensor_product(
     return cue.EquivariantTensorProduct(
         d,
         [irreps1.new_scalars(d.operands[0].size), irreps1, irreps2, irreps3],
+        layout=cue.ir_mul,
+    )
+
+
+def full_tensor_product(
+    irreps1: cue.Irreps,
+    irreps2: cue.Irreps,
+    irreps3_filter: Optional[Sequence[cue.Irrep]] = None,
+) -> cue.EquivariantTensorProduct:
+    """
+    subscripts: ``lhs[ui],rhs[vj],output[uvk]``
+
+    Construct a weightless channelwise tensor product descriptor.
+
+    .. currentmodule:: cuequivariance
+
+    Args:
+        irreps1 (Irreps): Irreps of the first operand.
+        irreps2 (Irreps): Irreps of the second operand.
+        irreps3_filter (sequence of Irrep, optional): Irreps of the output to consider.
+
+    Returns:
+        EquivariantTensorProduct: Descriptor of the full tensor product.
+    """
+    G = irreps1.irrep_class
+
+    if irreps3_filter is not None:
+        irreps3_filter = into_list_of_irrep(G, irreps3_filter)
+
+    d = stp.SegmentedTensorProduct.from_subscripts("iu,jv,kuv+ijk")
+
+    for mul, ir in irreps1:
+        d.add_segment(0, (ir.dim, mul))
+    for mul, ir in irreps2:
+        d.add_segment(1, (ir.dim, mul))
+
+    irreps3 = []
+
+    for (i1, (mul1, ir1)), (i2, (mul2, ir2)) in itertools.product(
+        enumerate(irreps1), enumerate(irreps2)
+    ):
+        for ir3 in ir1 * ir2:
+            # for loop over the different solutions of the Clebsch-Gordan decomposition
+            for cg in cue.clebsch_gordan(ir1, ir2, ir3):
+                d.add_path(i1, i2, None, c=cg)
+
+                irreps3.append((mul1 * mul2, ir3))
+
+    irreps3 = cue.Irreps(G, irreps3)
+    irreps3, perm, inv = irreps3.sort()
+    d = d.permute_segments(2, inv)
+
+    d = d.normalize_paths_for_operand(-1)
+    return cue.EquivariantTensorProduct(
+        d,
+        [irreps1, irreps2, irreps3],
         layout=cue.ir_mul,
     )
 
