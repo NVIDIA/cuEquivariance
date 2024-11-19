@@ -86,7 +86,7 @@ def full_tensor_product(
     irreps3_filter: Optional[Sequence[cue.Irrep]] = None,
 ) -> cue.EquivariantTensorProduct:
     """
-    subscripts: ``lhs[ui],rhs[vj],output[uvk]``
+    subscripts: ``lhs[iu],rhs[jv],output[kuv]``
 
     Construct a weightless channelwise tensor product descriptor.
 
