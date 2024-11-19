@@ -20,29 +20,6 @@ from cuequivariance import segmented_tensor_product as stp
 from cuequivariance.irreps_array.irrep_utils import into_list_of_irrep
 
 
-def get_cuequivariance_descriptor(irreps_in1, irreps_in2):
-    d = stp.SegmentedTensorProduct.from_subscripts("ui,vj,kuv+ijk")
-    irreps_in1 = cue.Irreps("O3", irreps_in1.__str__())
-    irreps_in2 = cue.Irreps("O3", irreps_in2.__str__())
-    G = irreps_in1.irrep_class
-
-    for mul, ir in irreps_in1:
-        d.add_segment(0, (mul, ir.dim))
-    for mul, ir in irreps_in2:
-        d.add_segment(1, (mul, ir.dim))
-
-    for (i1, (mul1, ir1)), (i2, (mul2, ir2)) in itertools.product(
-        enumerate(irreps_in1), enumerate(irreps_in2)
-    ):
-        for ir3 in ir1 * ir2:
-            # for loop over the different solutions of the Clebsch-Gordan decomposition
-            for cg in cue.clebsch_gordan(ir1, ir2, ir3):
-                d.add_path(i1, i2, None, c=cg)
-
-    d = d.normalize_paths_for_operand(-1)
-    return d
-
-
 def fully_connected_tensor_product(
     irreps1: cue.Irreps, irreps2: cue.Irreps, irreps3: cue.Irreps
 ) -> cue.EquivariantTensorProduct:
