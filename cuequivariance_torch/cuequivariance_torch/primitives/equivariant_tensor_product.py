@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Optional, Union
+from typing import List, Optional, Union
 
 import torch
 
@@ -41,7 +41,7 @@ class EquivariantTensorProduct(torch.nn.Module):
         >>> x1 = torch.ones(17, e.inputs[1].irreps.dim)
         >>> x2 = torch.ones(17, e.inputs[2].irreps.dim)
         >>> tp = cuet.EquivariantTensorProduct(e, layout=cue.ir_mul)
-        >>> tp(w, x1, x2)
+        >>> tp([w, x1, x2])
         tensor([[0., 0., 0., 0., 0., 0.],
         ...
                 [0., 0., 0., 0., 0., 0.]])
@@ -50,7 +50,7 @@ class EquivariantTensorProduct(torch.nn.Module):
 
         >>> w = torch.ones(3, e.inputs[0].irreps.dim)
         >>> indices = torch.randint(3, (17,))
-        >>> tp(w, x1, x2, indices=indices)
+        >>> tp([w, x1, x2], indices=indices)
         tensor([[0., 0., 0., 0., 0., 0.],
         ...
                 [0., 0., 0., 0., 0., 0.]])
@@ -136,14 +136,14 @@ class EquivariantTensorProduct(torch.nn.Module):
 
     def forward(
         self,
-        *inputs: torch.Tensor,
+        inputs: List[torch.Tensor],
         indices: Optional[torch.Tensor] = None,
         use_fallback: Optional[bool] = None,
     ) -> torch.Tensor:
         """
         If ``indices`` is not None, the first input is indexed by ``indices``.
         """
-        inputs: list[torch.Tensor] = list(inputs)
+        inputs: List[torch.Tensor] = list(inputs)
 
         assert len(inputs) == len(self.etp.inputs)
         for a, b in zip(inputs, self.etp.inputs):
@@ -162,7 +162,7 @@ class EquivariantTensorProduct(torch.nn.Module):
                 # TODO: at some point we will have kernel for this
                 assert len(inputs) >= 1
                 inputs[0] = inputs[0][indices]
-            output = self.tp(*inputs, use_fallback=use_fallback)
+            output = self.tp(inputs, use_fallback=use_fallback)
 
         if self.symm_tp is not None:
             if len(inputs) == 1:

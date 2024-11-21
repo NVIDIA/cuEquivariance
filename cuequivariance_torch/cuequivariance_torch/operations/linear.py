@@ -126,4 +126,4 @@ class Linear(torch.nn.Module):
         if not self.shared_weights and weight.ndim != 2:
             raise ValueError("Weights should be 2D tensor")
 
-        return self.f(weight, x, use_fallback=use_fallback)
+        return self.f([weight, x], use_fallback=use_fallback)

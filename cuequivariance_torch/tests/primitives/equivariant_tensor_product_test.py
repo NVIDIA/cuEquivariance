@@ -84,11 +84,11 @@ def test_performance_cuda_vs_fx(
     ]
 
     for _ in range(10):
-        m(*inputs, use_fallback=False)
-        m(*inputs, use_fallback=True)
+        m(inputs, use_fallback=False)
+        m(inputs, use_fallback=True)
 
     def f(ufb: bool):
-        m(*inputs, use_fallback=ufb)
+        m(inputs, use_fallback=ufb)
         torch.cuda.synchronize()
 
     t0 = timeit.Timer(lambda: f(False)).timeit(number=10)
@@ -130,7 +130,7 @@ def test_precision_cuda_vs_fx(
         device=device,
         math_dtype=math_dtype,
     )
-    y0 = m(*inputs, use_fallback=False)
+    y0 = m(inputs, use_fallback=False)
 
     m = cuet.EquivariantTensorProduct(
         e,
@@ -140,6 +140,6 @@ def test_precision_cuda_vs_fx(
         optimize_fallback=True,
     )
     inputs = map(lambda x: x.to(torch.float64), inputs)
-    y1 = m(*inputs, use_fallback=True).to(dtype)
+    y1 = m(inputs, use_fallback=True).to(dtype)
 
     torch.testing.assert_close(y0, y1, atol=atol, rtol=rtol)

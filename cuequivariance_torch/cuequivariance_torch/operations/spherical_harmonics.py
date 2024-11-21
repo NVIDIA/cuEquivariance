@@ -55,6 +55,6 @@ def spherical_harmonics(
         math_dtype=x.dtype,
         optimize_fallback=optimize_fallback,
     )
-    y = m(x)
+    y = m([x])
     y = y.reshape(vectors.shape[:-1] + (y.shape[-1],))
     return y
