@@ -298,9 +298,6 @@ class _Wrapper(torch.nn.Module):
             for arg in args
         ]
 
-        logger.debug(
-            f"Calling torch.fx tensor product: {self.descriptor}, input shapes: {', '.join(str(arg.shape) for arg in args)}"
-        )
         out = self.module(*args)
 
         return out.reshape(shape + (out.shape[-1],))

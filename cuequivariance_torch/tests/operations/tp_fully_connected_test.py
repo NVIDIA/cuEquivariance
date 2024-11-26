@@ -66,3 +66,18 @@ def test_fully_connected(
     ).to(out1.dtype)
 
     torch.testing.assert_close(out1, out2, atol=1e-5, rtol=1e-5)
+
+
+def test_compile():
+    m = cuet.FullyConnectedTensorProduct(
+        irreps_in1=cue.Irreps("O3", "32x0e + 32x1o"),
+        irreps_in2=cue.Irreps("O3", "32x0e + 32x1o"),
+        irreps_out=cue.Irreps("O3", "32x0e + 32x1o"),
+        layout=cue.mul_ir,
+        optimize_fallback=False,
+    )
+
+    m_compile = torch.compile(m, fullgraph=True)
+    input1 = torch.randn(100, m.irreps_in1.dim)
+    input2 = torch.randn(100, m.irreps_in2.dim)
+    m_compile(input1, input2)

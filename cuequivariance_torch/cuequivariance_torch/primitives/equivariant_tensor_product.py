@@ -131,6 +131,8 @@ class EquivariantTensorProduct(torch.nn.Module):
             )
             self.symm_tp = None
 
+        self.operands_dims = [op.irreps.dim for op in e.operands]
+
     def extra_repr(self) -> str:
         return str(self.etp)
 
@@ -146,8 +148,8 @@ class EquivariantTensorProduct(torch.nn.Module):
         inputs: list[torch.Tensor] = list(inputs)
 
         assert len(inputs) == len(self.etp.inputs)
-        for a, b in zip(inputs, self.etp.inputs):
-            assert a.shape[-1] == b.irreps.dim
+        for a, dim in zip(inputs, self.operands_dims):
+            assert a.shape[-1] == dim
 
         # Transpose inputs
         inputs = [

@@ -143,3 +143,14 @@ def test_precision_cuda_vs_fx(
     y1 = m(*inputs, use_fallback=True).to(dtype)
 
     torch.testing.assert_close(y0, y1, atol=atol, rtol=rtol)
+
+
+def test_compile():
+    e = cue.descriptors.symmetric_contraction(
+        cue.Irreps("O3", "32x0e + 32x1o"), cue.Irreps("O3", "32x0e + 32x1o"), [1, 2, 3]
+    )
+    m = cuet.EquivariantTensorProduct(e, layout=cue.mul_ir, optimize_fallback=False)
+    m_compile = torch.compile(m, fullgraph=True)
+    input1 = torch.randn(100, e.inputs[0].irreps.dim)
+    input2 = torch.randn(100, e.inputs[1].irreps.dim)
+    m_compile(input1, input2)
