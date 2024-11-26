@@ -74,7 +74,7 @@ def test_compile():
         irreps_in2=cue.Irreps("O3", "32x0e + 32x1o"),
         irreps_out=cue.Irreps("O3", "32x0e + 32x1o"),
         layout=cue.mul_ir,
-        optimize_fallback=True,
+        optimize_fallback=False,
     )
 
     m_compile = torch.compile(m, fullgraph=True)
