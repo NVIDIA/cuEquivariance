@@ -43,10 +43,10 @@ The easiest way to install cuEquivariance is from `PyPi <https://pypi.org/>`_ us
    pip install cuequivariance-ops-torch-cu11
    pip install cuequivariance-ops-torch-cu12
 
-Supported platforms
--------------------
+Requirements
+------------
 
-``cuequivariance-ops-torch-*`` packages are only available for Linux x86_64.
+``cuequivariance-ops-torch-*`` packages are only available for Linux x86_64 and require PyTorch 2.4.0 or later.
 
 Organization
 ------------
