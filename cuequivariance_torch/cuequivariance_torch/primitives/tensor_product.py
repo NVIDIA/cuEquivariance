@@ -15,7 +15,7 @@
 import logging
 import math
 import warnings
-from typing import Optional, OrderedDict, Tuple
+from typing import List, Optional, OrderedDict, Tuple
 
 import torch
 import torch.fx
@@ -76,12 +76,12 @@ class TensorProduct(torch.nn.Module):
         )
         return f"TensorProduct({self.descriptor} {has_cuda_kernel})"
 
-    def forward(self, *args, use_fallback: Optional[bool] = None):
+    def forward(self, inputs: List[torch.Tensor], use_fallback: Optional[bool] = None):
         r"""
         Perform the tensor product based on the specified descriptor.
 
         Args:
-            args (list of torch.Tensor): The input tensors. The number of input tensors should match the number of operands in the descriptor minus one.
+            inputs (list of torch.Tensor): The input tensors. The number of input tensors should match the number of operands in the descriptor minus one.
                 Each input tensor should have a shape of ((batch,) operand_size), where `operand_size` corresponds to the size
                 of each operand as defined in the tensor product descriptor.
             use_fallback (bool, optional):  Determines the computation method. If `None` (default), a CUDA kernel will be used if available and the input
@@ -97,16 +97,16 @@ class TensorProduct(torch.nn.Module):
         Raises:
             RuntimeError: If `use_fallback` is `False` and either no CUDA kernel is available or the input tensor is not on CUDA.
         """
-        if any(x.numel() == 0 for x in args):
+        if any(x.numel() == 0 for x in inputs):
             use_fallback = True  # Empty tensors are not supported by the CUDA kernel
 
         if (
-            args
-            and args[0].device.type == "cuda"
+            inputs
+            and inputs[0].device.type == "cuda"
             and self.f_cuda is not None
             and (use_fallback is not True)
         ):
-            return self.f_cuda(*args)
+            return self.f_cuda(*inputs)
 
         if use_fallback is False:
             if self.f_cuda is not None:
@@ -119,7 +119,7 @@ class TensorProduct(torch.nn.Module):
                 "The fallback method is used but it has not been optimized. "
                 "Consider setting optimize_fallback=True when creating the TensorProduct module."
             )
-        return self.f_fx(*args)
+        return self.f_fx(inputs)
 
 
 def _tensor_product_fx(
@@ -278,7 +278,7 @@ class _Wrapper(torch.nn.Module):
         self.module = module
         self.descriptor = descriptor
 
-    def forward(self, *args):
+    def forward(self, args):
         for oid, arg in enumerate(args):
             torch._assert(
                 arg.shape[-1] == self.descriptor.operands[oid].size,

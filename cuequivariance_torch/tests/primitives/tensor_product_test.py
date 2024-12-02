@@ -111,12 +111,12 @@ def test_primitive_tensor_product_cuda_vs_fx(
         m = cuet.TensorProduct(
             d, device=device, math_dtype=math_dtype, optimize_fallback=False
         )
-        out1 = m(*inputs, use_fallback=False)
+        out1 = m(inputs, use_fallback=False)
         m = cuet.TensorProduct(
             d, device=device, math_dtype=torch.float64, optimize_fallback=False
         )
         inputs_ = [inp.clone().to(torch.float64) for inp in inputs]
-        out2 = m(*inputs_, use_fallback=True)
+        out2 = m(inputs_, use_fallback=True)
 
         assert out1.shape[:-1] == torch.broadcast_shapes(*batches)
         assert out1.dtype == dtype

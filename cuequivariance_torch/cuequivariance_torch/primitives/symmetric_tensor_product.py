@@ -109,7 +109,7 @@ class SymmetricTensorProduct(torch.nn.Module):
             use_fallback=use_fallback,
         )
         if self.f0 is not None:
-            out += self.f0()
+            out += self.f0([])
         return out
 
 
@@ -368,6 +368,6 @@ class FallbackImpl(torch.nn.Module):
         self, x0: torch.Tensor, i0: torch.Tensor, x1: torch.Tensor
     ) -> torch.Tensor:
         return sum(
-            f(x0[i0], *[x1] * (f.descriptor.num_operands - 2), use_fallback=True)
+            f([x0[i0]] + [x1] * (f.descriptor.num_operands - 2), use_fallback=True)
             for f in self.fs
         )
