@@ -94,6 +94,6 @@ We can execute an :class:`cuequivariance.EquivariantTensorProduct` with PyTorch.
     w = torch.randn(e.inputs[0].irreps.dim)
     x = torch.randn(e.inputs[1].irreps.dim)
 
-    module(w, x)
+    module([w, x])
 
 Note that you have to specify the layout. If the layout specified is different from the one in the descriptor, the module will transpose the inputs/output to match the layout.

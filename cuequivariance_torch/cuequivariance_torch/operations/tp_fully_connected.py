@@ -148,4 +148,4 @@ class FullyConnectedTensorProduct(torch.nn.Module):
         if not self.shared_weights and weight.ndim != 2:
             raise ValueError("Weights should be 2D tensor")
 
-        return self.f(weight, x1, x2, use_fallback=use_fallback)
+        return self.f([weight, x1, x2], use_fallback=use_fallback)

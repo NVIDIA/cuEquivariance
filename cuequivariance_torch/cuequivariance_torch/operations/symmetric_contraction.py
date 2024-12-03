@@ -188,4 +188,4 @@ class SymmetricContraction(torch.nn.Module):
             weight = self.weight
         weight = weight.flatten(1)
 
-        return self.f(weight, x, indices=indices, use_fallback=use_fallback)
+        return self.f([weight, x], indices=indices, use_fallback=use_fallback)

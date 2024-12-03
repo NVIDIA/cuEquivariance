@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import *
+from typing import Optional
 
 import torch
 import torch.fx
@@ -59,7 +59,7 @@ class TransposeIrrepsLayout(torch.nn.Module):
         return f"TransposeIrrepsLayout({self.source} -> {self.target})"
 
     def forward(
-        self, x: torch.Tensor, *, use_fallback: Optional[bool] = None
+        self, x: torch.Tensor, use_fallback: Optional[bool] = None
     ) -> torch.Tensor:
         r"""
         Perform the transposition.
@@ -92,7 +92,7 @@ class TransposeSegments(torch.nn.Module):
 
         if info is not None:
             try:
-                import cuequivariance_ops_torch
+                import cuequivariance_ops_torch  # noqa: F401
             except ImportError:
                 self.f_cuda = None
             else:
@@ -104,10 +104,10 @@ class TransposeSegments(torch.nn.Module):
             self.f = torch.nn.Identity()
 
     def __repr__(self):
-        return f"TransposeSegments()"
+        return "TransposeSegments()"
 
     def forward(
-        self, x: torch.Tensor, *, use_fallback: Optional[bool] = None
+        self, x: torch.Tensor, use_fallback: Optional[bool] = None
     ) -> torch.Tensor:
         """
         Perform the transposition of the input tensor using either a CUDA kernel or a PyTorch fallback.
@@ -184,12 +184,16 @@ def _transpose_info(
     return torch.IntTensor(info).to(device=device)
 
 
+try:
+    from cuequivariance_ops_torch import segmented_transpose
+except ImportError:
+    pass
+
+
 class _transpose(torch.nn.Module):
     def __init__(self, info: torch.IntTensor):
         super().__init__()
         self.register_buffer("_info", info, persistent=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        from cuequivariance_ops_torch import segmented_transpose
-
         return segmented_transpose(x, self._info, True)

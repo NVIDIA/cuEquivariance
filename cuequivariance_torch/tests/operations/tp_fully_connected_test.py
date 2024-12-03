@@ -59,9 +59,7 @@ def test_fully_connected(
         d = d.add_or_transpose_modes("uvw,ui,vj,wk+ijk")
     mfx = cuet.TensorProduct(d, math_dtype=torch.float64).cuda()
     out2 = mfx(
-        m.weight.to(torch.float64),
-        x1.to(torch.float64),
-        x2.to(torch.float64),
+        [m.weight.to(torch.float64), x1.to(torch.float64), x2.to(torch.float64)],
         use_fallback=True,
     ).to(out1.dtype)
 
