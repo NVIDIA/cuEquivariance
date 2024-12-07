@@ -40,6 +40,7 @@ class Rotation(torch.nn.Module):
         layout_out: Optional[cue.IrrepsLayout] = None,
         device: Optional[torch.device] = None,
         math_dtype: Optional[torch.dtype] = None,
+        use_fallback: Optional[bool] = None,
         optimize_fallback: Optional[bool] = None,
     ):
         super().__init__()
@@ -60,6 +61,7 @@ class Rotation(torch.nn.Module):
             layout_out=layout_out,
             device=device,
             math_dtype=math_dtype,
+            use_fallback=use_fallback,
             optimize_fallback=optimize_fallback,
         )
 
@@ -69,8 +71,6 @@ class Rotation(torch.nn.Module):
         beta: torch.Tensor,
         alpha: torch.Tensor,
         x: torch.Tensor,
-        *,
-        use_fallback: Optional[bool] = None,
     ) -> torch.Tensor:
         """
         Forward pass of the rotation layer.
@@ -80,9 +80,6 @@ class Rotation(torch.nn.Module):
             beta (torch.Tensor): The beta angles. Second rotation around the x-axis.
             alpha (torch.Tensor): The alpha angles. Third rotation around the y-axis.
             x (torch.Tensor): The input tensor.
-            use_fallback (bool, optional): If `None` (default), a CUDA kernel will be used if available.
-                If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
-                If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
 
         Returns:
             torch.Tensor: The rotated tensor.
@@ -97,7 +94,6 @@ class Rotation(torch.nn.Module):
 
         return self.f(
             [encodings_gamma, encodings_beta, encodings_alpha, x],
-            use_fallback=use_fallback,
         )
 
 
@@ -159,6 +155,11 @@ class Inversion(torch.nn.Module):
     Args:
         irreps (Irreps): The irreducible representations of the tensor to invert.
         layout (IrrepsLayout, optional): The memory layout of the tensor, ``cue.ir_mul`` is preferred.
+        use_fallback (bool, optional): If `None` (default), a CUDA kernel will be used if available.
+                If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
+                If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
+
+        optimize_fallback (bool, optional): Whether to optimize fallback. Defaults to None.
     """
 
     def __init__(
@@ -170,6 +171,8 @@ class Inversion(torch.nn.Module):
         layout_out: Optional[cue.IrrepsLayout] = None,
         device: Optional[torch.device] = None,
         math_dtype: Optional[torch.dtype] = None,
+        use_fallback: Optional[bool] = None,
+        optimize_fallback: Optional[bool] = None,
     ):
         super().__init__()
         (irreps,) = default_irreps(irreps)
@@ -187,6 +190,8 @@ class Inversion(torch.nn.Module):
             layout_out=layout_out,
             device=device,
             math_dtype=math_dtype,
+            use_fallback=use_fallback,
+            optimize_fallback=optimize_fallback,
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

@@ -1,0 +1,267 @@
+# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: LicenseRef-NvidiaProprietary
+#
+# NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+# property and proprietary rights in and to this material, related
+# documentation and any modifications thereto. Any use, reproduction,
+# disclosure or distribution of this material and related documentation
+# without an express license agreement from NVIDIA CORPORATION or
+# its affiliates is strictly prohibited.
+
+import os
+import pytest
+import torch
+from typing import Sequence
+
+try:
+    import onnx  # noqa: F401
+    import onnxscript  # noqa: F401
+    import onnxruntime  # noqa: F401
+    import cuequivariance_ops_torch.onnx  # noqa: F401
+    from cuequivariance_ops_torch.tensorrt import register_plugins
+
+    ONNX_AVAILABLE = True
+except Exception:
+    ONNX_AVAILABLE = False
+
+
+try:
+    import torch_tensorrt
+
+    TORCH_TRT_AVAILABLE = True
+except Exception:
+    TORCH_TRT_AVAILABLE = False
+
+
+def verify_onnx(module, onnx_module, inputs, dtype):
+    if dtype != torch.float32:
+        pytest.skip("onnxrt only checked for float32")
+    from onnxruntime import SessionOptions
+    from onnxruntime_extensions import get_library_path
+    from torch.onnx.verification import (
+        _compare_onnx_pytorch_model,
+        VerificationOptions,
+    )
+
+    original_init = SessionOptions.__init__
+
+    def new_init(self):
+        original_init(self)
+        try:
+            self.register_custom_ops_library(get_library_path())
+        except Exception:
+            pass
+
+    SessionOptions.__init__ = new_init
+    _compare_onnx_pytorch_model(
+        module, onnx_module, tuple(inputs), None, None, VerificationOptions()
+    )
+    SessionOptions.__init__ = original_init
+    torch.cuda.synchronize()
+    torch.cuda.empty_cache()
+
+
+def verify_trt(module, onnx_module, inputs, dtype):
+    import tensorrt
+    from pkg_resources import parse_version
+
+    if parse_version(tensorrt.__version__) < parse_version("10.3.0"):
+        pytest.skip("TRT < 10.3.0 is not supported!")
+    if dtype == torch.float64:
+        pytest.skip("TRT does not support float64")
+
+    from polygraphy.backend.trt import (
+        engine_from_network,
+        network_from_onnx_path,
+        TrtRunner,
+        CreateConfig,
+    )
+    from polygraphy.backend.onnxrt import OnnxrtRunner
+    from polygraphy.comparator import Comparator, DataLoader
+    from onnxruntime import InferenceSession, SessionOptions
+    from onnxruntime_extensions import get_library_path
+
+    register_plugins()
+
+    network = network_from_onnx_path(onnx_module)
+    trt_engine = engine_from_network(network, config=CreateConfig())
+
+    if dtype != torch.float32:
+        pytest.skip("Comparator only supports float32")
+
+    # Create runners for ONNX and TRT models
+    trt_runner = TrtRunner(trt_engine)
+
+    options = SessionOptions()
+    options.register_custom_ops_library(get_library_path())
+    onnx_runner = OnnxrtRunner(InferenceSession(onnx_module, sess_options=options))
+
+    results = Comparator.run([trt_runner, onnx_runner], data_loader=DataLoader())
+    Comparator.compare_accuracy(results)
+    torch.cuda.synchronize()
+    torch.cuda.empty_cache()
+
+
+def module_with_mode(
+    mode,
+    module,
+    inputs,
+    math_dtype,
+    tmp_path,
+    grad_modes=["eager", "compile", "jit", "export"],
+):
+    if isinstance(inputs[0], list):
+        dtype = inputs[0][0].dtype
+    else:
+        dtype = inputs[0].dtype
+    if mode in ["trt", "torch_trt", "onnx", "onnx_dynamo", "export"]:
+        if not ONNX_AVAILABLE:
+            pytest.skip("ONNX not available!")
+        if dtype == torch.float64 or math_dtype == torch.float64:
+            pytest.skip("TRT/ORT do not support float64")
+
+    with torch.set_grad_enabled(mode in grad_modes):
+        if mode == "compile":
+            import sys
+
+            if sys.version_info.major == 3 and sys.version_info.minor >= 12:
+                pytest.skip("torch dynamo needs cpy <= 3.11")
+                module = torch.compile(module)
+        elif mode == "fx":
+            module = torch.fx.symbolic_trace(module)
+        elif mode == "jit":
+            module = torch.jit.trace(module, inputs)
+            fname = os.path.join(tmp_path, "test.ts")
+            torch.jit.save(module, fname)
+            module = torch.jit.load(fname)
+        elif mode == "export":
+            exp_program = torch.export.export(module, tuple(inputs))
+            fname = os.path.join(tmp_path, "test.pt2")
+            torch.export.save(exp_program, fname)
+            del exp_program
+            module = torch.export.load(fname).module()
+        elif mode == "torch_trt":
+            if not TORCH_TRT_AVAILABLE:
+                pytest.skip("torch_tensorrt is not installed!")
+            register_plugins()
+            exp_program = torch_tensorrt.dynamo.trace(module, inputs)
+            module = torch_tensorrt.dynamo.compile(
+                exp_program,
+                inputs=inputs,
+                require_full_compilation=True,
+                min_block_size=1,
+                enabled_precisions={torch.float32, dtype},
+                # dryrun=True
+            )
+        elif mode == "onnx" or mode == "trt":
+            try:
+                onnx_path = os.path.join(tmp_path, "test.onnx")
+                torch.onnx.export(
+                    module, tuple(inputs), onnx_path, opset_version=17, verbose=False
+                )
+                if mode == "trt":
+                    verify_trt(module, onnx_path, inputs, dtype)
+                else:
+                    verify_onnx(module, onnx_path, inputs, dtype)
+            except ImportError:
+                pytest.skip("ONNX/TRT is not available")
+
+        elif mode == "onnx_dynamo":
+            try:
+                from cuequivariance_ops_torch.onnx import (
+                    cuequivariance_ops_torch_onnx_registry,
+                )
+
+                export_options = torch.onnx.ExportOptions(
+                    onnx_registry=cuequivariance_ops_torch_onnx_registry
+                )
+                onnx_program = torch.onnx.dynamo_export(
+                    module, *inputs, export_options=export_options
+                )
+                onnx_path = os.path.join(tmp_path, "test.onnx")
+                onnx_program.save(onnx_path)
+                verify_onnx(module, onnx_path, inputs, dtype)
+            except ImportError:
+                pytest.skip("ONNX is not available")
+        elif mode == "eager":
+            pass
+        else:
+            raise ValueError(f"No such mode: {mode}")
+
+    torch.cuda.synchronize()
+    torch.cuda.empty_cache()
+
+    return module
+
+
+def create_random_tensor_2d(batch_size, stride, requires_grad, dtype, is_shared):
+    data = torch.randn(
+        (stride,) if is_shared else (batch_size, stride),
+        dtype=dtype,
+        device="cuda",
+    ).requires_grad_(requires_grad)
+
+    return data
+
+
+def maybe_detach_and_to(tensor, *args, **kwargs):
+    if tensor is not None:
+        return tensor.clone().detach().to(*args, **kwargs)
+    return None
+
+
+def run_fwd_test(module, x: Sequence):
+    with torch.no_grad():
+        out = module(*x)
+        test_output = [maybe_detach_and_to(out, dtype=torch.float32)]
+        return test_output
+
+
+def run_fwd_bwd_test(module, x: Sequence):
+    out = module(*x)
+
+    loss = out.sum()
+    loss.backward()
+
+    test_output = [maybe_detach_and_to(out, dtype=torch.float32)]
+    test_output.extend([maybe_detach_and_to(t.grad, dtype=torch.float32) for t in x])
+
+    return test_output
+
+
+def run_bwd_bwd_test(module, x: Sequence):
+    test_outputs = []
+    out = module(*x)
+    grads = torch.autograd.grad(out.pow(2).sum(), x, create_graph=True)
+    test_outputs.extend([maybe_detach_and_to(g, dtype=torch.float32) for g in grads])
+    loss = sum([g.sum() for g in grads])
+    loss.backward()
+    test_outputs.extend([maybe_detach_and_to(t.grad, dtype=torch.float32) for t in x])
+    return test_outputs
+
+
+def assert_close_modules(m_test, m_ref, inputs_test, procedure, tol_dict):
+    outs_test = procedure(m_test, inputs_test)
+
+    inputs_ref = [
+        x.clone()
+        .detach()
+        .to(device="cuda", dtype=torch.float32)
+        .requires_grad_(x.requires_grad)
+        for x in inputs_test
+    ]
+    outs_ref = procedure(m_ref, inputs_ref)
+    for out_test, out_ref in zip(outs_test, outs_ref):
+        torch.testing.assert_close(out_test, out_ref, **tol_dict)
+
+
+tol_dict = {
+    # we compare against double for precision reasons
+    # hence FP64 and FP32 threshold are the same
+    (torch.float64, torch.float64): {"atol": 1e-9, "rtol": 1e-5},
+    (torch.float32, torch.float64): {"atol": 1e-4, "rtol": 1e-5},
+    (torch.float64, torch.float32): {"atol": 1e-4, "rtol": 1e-5},
+    (torch.float32, torch.float32): {"atol": 1e-4, "rtol": 1e-5},
+    (torch.bfloat16, torch.float32): {"atol": 4.0, "rtol": 1e-2},
+    (torch.float16, torch.float32): {"atol": 0.25, "rtol": 1e-2},
+}

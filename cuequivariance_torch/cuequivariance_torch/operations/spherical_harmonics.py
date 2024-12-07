@@ -25,6 +25,7 @@ def spherical_harmonics(
     ls: list[int],
     vectors: torch.Tensor,
     normalize: bool = True,
+    use_fallback: Optional[bool] = None,
     optimize_fallback: Optional[bool] = None,
 ) -> torch.Tensor:
     r"""Compute the spherical harmonics of the input vectors.
@@ -33,6 +34,10 @@ def spherical_harmonics(
         ls (list of int): List of spherical harmonic degrees.
         vectors (torch.Tensor): Input vectors of shape (..., 3).
         normalize (bool, optional): Whether to normalize the input vectors. Defaults to True.
+        use_fallback (bool, optional): If `None` (default), a CUDA kernel will be used if available.
+                If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
+                If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
+
         optimize_fallback (bool, optional): Whether to optimize fallback. Defaults to None.
 
     Returns:
@@ -53,6 +58,7 @@ def spherical_harmonics(
         layout=cue.ir_mul,
         device=x.device,
         math_dtype=x.dtype,
+        use_fallback=use_fallback,
         optimize_fallback=optimize_fallback,
     )
     y = m([x])

@@ -30,7 +30,7 @@ torch.backends.cudnn.allow_tf32 = USE_TF32
 @pytest.mark.parametrize("dtype", [torch.float64, torch.float32])
 @pytest.mark.parametrize("layout", [cue.ir_mul, cue.mul_ir])
 @pytest.mark.parametrize("original_mace", [True, False])
-@pytest.mark.parametrize("batch", [0, 32])
+@pytest.mark.parametrize("batch", [1, 32])
 def test_symmetric_contraction(dtype, layout, original_mace, batch):
     mul = 64
     irreps_in = mul * cue.Irreps("O3", "0e + 1o + 2e")

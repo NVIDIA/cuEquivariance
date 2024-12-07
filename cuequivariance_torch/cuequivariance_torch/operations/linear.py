@@ -32,6 +32,10 @@ class Linear(torch.nn.Module):
         layout (IrrepsLayout, optional): The layout of the irreducible representations, by default ``cue.mul_ir``. This is the layout used in the e3nn library.
         shared_weights (bool, optional): Whether to use shared weights, by default True.
         internal_weights (bool, optional): Whether to use internal weights, by default True if shared_weights is True, otherwise False.
+        use_fallback (bool, optional): If `None` (default), a CUDA kernel will be used if available.
+                If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
+                If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
+        optimize_fallback (bool, optional): Whether to optimize fallback. Defaults to None.
     """
 
     def __init__(
@@ -47,6 +51,7 @@ class Linear(torch.nn.Module):
         device: Optional[torch.device] = None,
         dtype: Optional[torch.dtype] = None,
         math_dtype: Optional[torch.dtype] = None,
+        use_fallback: Optional[bool] = None,
         optimize_fallback: Optional[bool] = None,
     ):
         super().__init__()
@@ -84,6 +89,7 @@ class Linear(torch.nn.Module):
             layout_out=layout_out,
             device=device,
             math_dtype=math_dtype,
+            use_fallback=use_fallback,
             optimize_fallback=optimize_fallback,
         )
 
@@ -94,8 +100,6 @@ class Linear(torch.nn.Module):
         self,
         x: torch.Tensor,
         weight: Optional[torch.Tensor] = None,
-        *,
-        use_fallback: Optional[bool] = None,
     ) -> torch.Tensor:
         """
         Forward pass of the linear layer.
@@ -103,9 +107,6 @@ class Linear(torch.nn.Module):
         Args:
             x (torch.Tensor): The input tensor.
             weight (torch.Tensor, optional): The weight tensor. If None, the internal weight tensor is used.
-            use_fallback (bool, optional): If `None` (default), a CUDA kernel will be used if available.
-                If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
-                If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
 
         Returns:
             torch.Tensor: The output tensor after applying the linear transformation.
@@ -126,4 +127,4 @@ class Linear(torch.nn.Module):
         if not self.shared_weights and weight.ndim != 2:
             raise ValueError("Weights should be 2D tensor")
 
-        return self.f([weight, x], use_fallback=use_fallback)
+        return self.f([weight, x])

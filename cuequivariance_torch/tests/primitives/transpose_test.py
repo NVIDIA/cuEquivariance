@@ -42,5 +42,5 @@ def test_transpose(use_fallback: bool, dtype: torch.dtype):
         [[1.0, 4.0, 2.0, 5.0, 3.0, 6.0, 10, 12, 11, 13]], dtype=dtype
     ).cuda()
 
-    m = cuet.TransposeSegments(segments).cuda()
-    torch.testing.assert_close(m(x, use_fallback=use_fallback), xt)
+    m = cuet.TransposeSegments(segments, use_fallback=use_fallback).cuda()
+    torch.testing.assert_close(m(x), xt)

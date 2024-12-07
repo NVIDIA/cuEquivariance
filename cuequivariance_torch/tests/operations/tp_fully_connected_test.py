@@ -47,35 +47,37 @@ def test_fully_connected(
         layout=layout,
         device="cuda",
         dtype=torch.float64,
+        use_fallback=use_fallback,
     )
 
     x1 = torch.randn(32, irreps1.dim, dtype=torch.float64).cuda()
     x2 = torch.randn(32, irreps2.dim, dtype=torch.float64).cuda()
 
-    out1 = m(x1, x2, use_fallback=use_fallback)
+    out1 = m(x1, x2)
 
     d = descriptors.fully_connected_tensor_product(irreps1, irreps2, irreps3).d
     if layout == cue.mul_ir:
         d = d.add_or_transpose_modes("uvw,ui,vj,wk+ijk")
-    mfx = cuet.TensorProduct(d, math_dtype=torch.float64).cuda()
+    mfx = cuet.TensorProduct(d, math_dtype=torch.float64, use_fallback=True).cuda()
     out2 = mfx(
         [m.weight.to(torch.float64), x1.to(torch.float64), x2.to(torch.float64)],
-        use_fallback=True,
     ).to(out1.dtype)
 
     torch.testing.assert_close(out1, out2, atol=1e-5, rtol=1e-5)
 
 
 def test_compile():
+    device = "cuda"
     m = cuet.FullyConnectedTensorProduct(
         irreps_in1=cue.Irreps("O3", "32x0e + 32x1o"),
         irreps_in2=cue.Irreps("O3", "32x0e + 32x1o"),
         irreps_out=cue.Irreps("O3", "32x0e + 32x1o"),
         layout=cue.mul_ir,
-        optimize_fallback=False,
+        device=device,
+        use_fallback=False,
     )
 
     m_compile = torch.compile(m, fullgraph=True)
-    input1 = torch.randn(100, m.irreps_in1.dim)
-    input2 = torch.randn(100, m.irreps_in2.dim)
+    input1 = torch.randn(100, m.irreps_in1.dim, device=device)
+    input2 = torch.randn(100, m.irreps_in2.dim, device=device)
     m_compile(input1, input2)
