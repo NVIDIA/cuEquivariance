@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import *
+from typing import Optional
 
 import numpy as np
 
@@ -70,33 +70,33 @@ def escn_tp(
 
     for i1, (mul1, ir1) in enumerate(irreps_in):
         for i2, (mul2, ir2) in enumerate(irreps_out):
-            l = min(ir1.l, ir2.l)
+            ell = min(ir1.l, ir2.l)
 
             if l_max is not None:
                 if abs(ir1.l - ir2.l) > l_max:
                     continue
             if m_max is not None:
-                l = min(l, m_max)
+                ell = min(ell, m_max)
 
             # Scaled rotation (2 degrees of freedom per |m|)
-            c = np.zeros((2 * l + 1, ir1.dim, ir2.dim))
-            for m in range(-l, l + 1):
+            c = np.zeros((2 * ell + 1, ir1.dim, ir2.dim))
+            for m in range(-ell, ell + 1):
                 # "cosine" part
-                c[l - abs(m), ir1.l + m, ir2.l + m] = 1.0
+                c[ell - abs(m), ir1.l + m, ir2.l + m] = 1.0
 
                 # "sine" part
                 if m != 0:
-                    c[l + abs(m), ir1.l - m, ir2.l + m] = 1.0 if m > 0 else -1.0
+                    c[ell + abs(m), ir1.l - m, ir2.l + m] = 1.0 if m > 0 else -1.0
 
             if G == cue.SO3:
                 pass  # keep all the degrees of freedom
             elif G == cue.O3:
                 if (-1) ** (ir1.l + ir2.l) == ir1.p * ir2.p:
                     # Symmetric case: keep only the "cosine" part
-                    c = c[: l + 1]
-                elif l > 0:
+                    c = c[: ell + 1]
+                elif ell > 0:
                     # Antisymmetric case: keep only the "sine" part
-                    c = c[l + 1 :]
+                    c = c[ell + 1 :]
                 else:
                     c = None
 

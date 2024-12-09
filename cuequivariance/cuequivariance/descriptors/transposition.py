@@ -12,10 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import *
-
 import cuequivariance as cue
-from cuequivariance import segmented_tensor_product as stp
 from cuequivariance.equivariant_tensor_product import Operand
 
 
@@ -23,10 +20,10 @@ def transpose(
     irreps: cue.Irreps, source: cue.IrrepsLayout, target: cue.IrrepsLayout
 ) -> cue.EquivariantTensorProduct:
     """Transpose the irreps layout of a tensor."""
-    d = stp.SegmentedTensorProduct(
+    d = cue.SegmentedTensorProduct(
         operands=[
-            stp.Operand(subscripts="ui" if source == cue.mul_ir else "iu"),
-            stp.Operand(subscripts="ui" if target == cue.mul_ir else "iu"),
+            cue.Operand(subscripts="ui" if source == cue.mul_ir else "iu"),
+            cue.Operand(subscripts="ui" if target == cue.mul_ir else "iu"),
         ]
     )
     for mul, ir in irreps:

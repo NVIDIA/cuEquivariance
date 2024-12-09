@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import itertools
-from typing import *
+from typing import Optional, Sequence
 
 import cuequivariance as cue
 from cuequivariance import segmented_tensor_product as stp

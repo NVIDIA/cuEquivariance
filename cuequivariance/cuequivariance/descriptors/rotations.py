@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import *
+from typing import Optional
 
 import numpy as np
 
@@ -162,28 +162,28 @@ def y_rotation(
         smi = d.add_segment(2, (1, mul))
         slo = d.add_segment(2, (ir.l, mul))
 
-        l = ir.l
+        ell = ir.l
 
         d.add_path(ph1, smi, smi, c=np.ones((1, 1, 1)))
 
-        c = np.zeros((lmax, l, l))
-        for i in range(l):
-            c[lmax - l + i, i, i] = 1
+        c = np.zeros((lmax, ell, ell))
+        for i in range(ell):
+            c[lmax - ell + i, i, i] = 1
         d.add_path(phc, sup, sup, c=c)
 
-        c = np.zeros((lmax, l, l))
-        for i in range(l):
-            c[l - 1 - i, l - 1 - i, i] = 1
+        c = np.zeros((lmax, ell, ell))
+        for i in range(ell):
+            c[ell - 1 - i, ell - 1 - i, i] = 1
         d.add_path(phs, slo, sup, c=c)
 
-        c = np.zeros((lmax, l, l))
-        for i in range(l):
-            c[l - 1 - i, i, l - 1 - i] = -1
+        c = np.zeros((lmax, ell, ell))
+        for i in range(ell):
+            c[ell - 1 - i, i, ell - 1 - i] = -1
         d.add_path(phs, sup, slo, c=c)
 
-        c = np.zeros((lmax, l, l))
-        for i in range(l):
-            c[lmax - l + i, l - 1 - i, l - 1 - i] = 1
+        c = np.zeros((lmax, ell, ell))
+        for i in range(ell):
+            c[lmax - ell + i, ell - 1 - i, ell - 1 - i] = 1
         d.add_path(phc, slo, slo, c=c)
 
     d = d.flatten_coefficient_modes()

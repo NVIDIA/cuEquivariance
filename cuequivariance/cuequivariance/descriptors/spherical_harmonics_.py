@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from functools import cache
-from typing import *
 
 import sympy as sp
 
@@ -42,14 +41,14 @@ def spherical_harmonics(
     """
     if len(ls) != 1:
         return cue.EquivariantTensorProduct.stack(
-            [spherical_harmonics(ir_vec, [l], layout) for l in ls], [False, True]
+            [spherical_harmonics(ir_vec, [ell], layout) for ell in ls], [False, True]
         )
 
-    [l] = ls
-    ir, formula = sympy_spherical_harmonics(ir_vec, l)
+    [ell] = ls
+    ir, formula = sympy_spherical_harmonics(ir_vec, ell)
 
     assert ir_vec.dim == 3
-    d = stp.SegmentedTensorProduct.empty_segments([3] * l + [ir.dim])
+    d = stp.SegmentedTensorProduct.empty_segments([3] * ell + [ir.dim])
     for i in range(ir.dim):
         for degrees, coeff in sp.Poly(formula[i], sp.symbols("x:3")).as_dict().items():
             indices = poly_degrees_to_path_indices(degrees)
@@ -66,23 +65,25 @@ def poly_degrees_to_path_indices(degrees: tuple[int, ...]) -> tuple[int, ...]:
 
 # The function sympy_spherical_harmonics below is a 1:1 adaptation of https://github.com/e3nn/e3nn-jax/blob/c1a1adda485b8de756df56c656ce1d0cece73b64/e3nn_jax/_src/spherical_harmonics/recursive.py
 @cache
-def sympy_spherical_harmonics(ir_vec: cue.Irrep, l: int) -> tuple[cue.Irrep, sp.Array]:
-    if l == 0:
+def sympy_spherical_harmonics(
+    ir_vec: cue.Irrep, ell: int
+) -> tuple[cue.Irrep, sp.Array]:
+    if ell == 0:
         return ir_vec.trivial(), sp.Array([1])
 
-    if l == 1:
+    if ell == 1:
         assert ir_vec.dim == 3
         x = sp.symbols("x:3")
         return ir_vec, sp.sqrt(3) * sp.Array([x[0], x[1], x[2]])
 
-    l2 = l // 2
-    l1 = l - l2
+    l2 = ell // 2
+    l1 = ell - l2
     ir1, yl1 = sympy_spherical_harmonics(ir_vec, l1)
     ir2, yl2 = sympy_spherical_harmonics(ir_vec, l2)
     ir = sorted(cue.selection_rule_product(ir1, ir2))[-1]
 
-    def sh_var(ir: cue.Irrep, l: int) -> list[sp.Symbol]:
-        return [sp.symbols(f"sh{l}_{m}") for m in range(ir.dim)]
+    def sh_var(ir: cue.Irrep, ell: int) -> list[sp.Symbol]:
+        return [sp.symbols(f"sh{ell}_{m}") for m in range(ir.dim)]
 
     cg = sqrtQarray_to_sympy(ir_vec.clebsch_gordan(ir1, ir2, ir).squeeze(0))
     yl = sp.Array(
