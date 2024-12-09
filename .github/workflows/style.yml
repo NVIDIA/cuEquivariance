@@ -26,6 +26,6 @@ jobs:
         python -m pip install ruff==0.8.2
     - name: Style check with black
       run: |
-        ruff cuequivariance
-        ruff cuequivariance_jax
-        ruff cuequivariance_torch
+        ruff check cuequivariance
+        ruff check cuequivariance_jax
+        ruff check cuequivariance_torch

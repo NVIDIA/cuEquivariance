@@ -15,7 +15,6 @@
 import numpy as np
 import pytest
 
-import cuequivariance as cue
 import cuequivariance.segmented_tensor_product as stp
 
 
@@ -48,7 +47,7 @@ def test_user_friendly():
         == "ia,jb,kab+ijk sizes=80,160,6144 num_segments=1,1,2 num_paths=1 a={16, 32} b=32 i=5 j=5 k=4"
     )
 
-    assert d.all_segments_are_used() == False
+    assert not d.all_segments_are_used()
     assert d.subscripts == "ia,jb,kab+ijk"
     assert d.subscripts.is_equivalent("ia,jb,kab+ijk")
 
