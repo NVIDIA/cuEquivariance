@@ -16,12 +16,13 @@ import functools
 import itertools
 import logging
 from math import prod
-from typing import *
+from typing import FrozenSet, List, Optional, Sequence, Tuple, Iterator, Union
 
 import numpy as np
 
 import cuequivariance as cue
 from cuequivariance import irreps_array
+from cuequivariance.irreps_array.irrep_utils import into_list_of_irrep
 from cuequivariance.misc.linalg import (
     basis_intersection,
     perm_compose,
@@ -30,7 +31,6 @@ from cuequivariance.misc.linalg import (
     round_to_sqrt_rational,
     sparsify_matrix,
 )
-from cuequivariance.irreps_array.irrep_utils import into_list_of_irrep
 
 logger = logging.getLogger(__name__)
 
@@ -845,7 +845,7 @@ def reduce_permutation_base(
         xs = {(s, tuple(x[i] for i in p)) for s, p in perm_repr}
         # s * T[x] are all equal for all (s, x) in xs
         # if T[x] = -T[x] it is then equal to 0 and we lose this degree of freedom
-        if not (-1, x) in xs:
+        if (-1, x) not in xs:
             # the sign is arbitrary, put both possibilities
             base.add(frozenset({frozenset(xs), frozenset({(-s, x) for s, x in xs})}))
 

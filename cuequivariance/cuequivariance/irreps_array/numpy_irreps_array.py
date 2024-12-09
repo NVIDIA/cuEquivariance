@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import *
+from typing import Callable, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 

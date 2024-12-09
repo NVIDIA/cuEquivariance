@@ -132,9 +132,9 @@ def test_slices():
 
 
 def test_is_scalar():
-    assert cue.Irreps("O3", "0e + 1o").is_scalar() == False
-    assert cue.Irreps("O3", "0e + 0x1o").is_scalar() == False
-    assert cue.Irreps("O3", "0e + 0e").is_scalar() == True
+    assert cue.Irreps("O3", "0e + 1o").is_scalar() is False
+    assert cue.Irreps("O3", "0e + 0x1o").is_scalar() is False
+    assert cue.Irreps("O3", "0e + 0e").is_scalar() is True
 
 
 def test_add():

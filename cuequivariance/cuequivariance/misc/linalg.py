@@ -15,7 +15,7 @@
 import itertools
 from dataclasses import dataclass
 from functools import wraps
-from typing import *
+from typing import Set, Callable
 
 import networkx
 import numpy as np
@@ -413,7 +413,7 @@ def sparsify_matrix(
                         if i != i0:
                             next_graph.add_edge(i, i0)
 
-                case AlreadySparse(nc, nx, n0, n1):
+                case AlreadySparse(_nc, _nx, _n0, _n1):
                     next_graph.add_edge(i0, i1)
         iterations += 1
         graph = next_graph

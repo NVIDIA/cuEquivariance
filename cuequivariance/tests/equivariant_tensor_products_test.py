@@ -50,37 +50,37 @@ def test_commutativity_squeeze_flatten():
     )
 
 
-@pytest.mark.parametrize("l", [1, 2, 3, 4])
-def test_spherical_harmonics(l: int):
-    d = descriptors.spherical_harmonics(cue.SO3(1), [l]).d
+@pytest.mark.parametrize("ell", [1, 2, 3, 4])
+def test_spherical_harmonics(ell: int):
+    d = descriptors.spherical_harmonics(cue.SO3(1), [ell]).d
 
     vec = np.random.randn(3)
     axis = np.random.randn(3)
     angle = np.random.rand()
 
-    yl = stp.compute_last_operand(d, *(vec,) * l)
+    yl = stp.compute_last_operand(d, *(vec,) * ell)
 
     R = cue.SO3(1).rotation(axis, angle)
-    Rl = cue.SO3(l).rotation(axis, angle)
+    Rl = cue.SO3(ell).rotation(axis, angle)
 
-    yl1 = stp.compute_last_operand(d, *(R @ vec,) * l)
+    yl1 = stp.compute_last_operand(d, *(R @ vec,) * ell)
     yl2 = Rl @ yl
 
     np.testing.assert_allclose(yl1, yl2)
-    np.testing.assert_allclose(np.sum(yl**2), (2 * l + 1) * np.sum(vec**2) ** l)
+    np.testing.assert_allclose(np.sum(yl**2), (2 * ell + 1) * np.sum(vec**2) ** ell)
 
 
-@pytest.mark.parametrize("l", [0, 1, 2, 3, 4])
-def test_y_rotation(l: int):
+@pytest.mark.parametrize("ell", [0, 1, 2, 3, 4])
+def test_y_rotation(ell: int):
     alpha = 0.3
     beta = 0.4
     gamma = -0.5
 
-    irrep = cue.SO3(l)
+    irrep = cue.SO3(ell)
     d = descriptors.yxy_rotation(cue.Irreps("SO3", [irrep])).d
 
     def enc(th: float):
-        m = np.arange(1, l + 1)
+        m = np.arange(1, ell + 1)
         c = np.cos(m * th)
         s = np.sin(m * th)
         return np.concatenate([c[::-1], [1.0], s])

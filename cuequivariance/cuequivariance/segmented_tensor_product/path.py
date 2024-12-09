@@ -58,7 +58,7 @@ class Path:
         txt = np.array2string(
             self.coefficients, separator=" ", precision=2, suppress_small=True
         )
-        if not "\n" in txt:
+        if "\n" not in txt:
             return f"{indices_txt}*{txt}"
         return f"{indices_txt}*c c.shape={self.coefficients.shape} c.nnz={np.count_nonzero(self.coefficients)}"
 

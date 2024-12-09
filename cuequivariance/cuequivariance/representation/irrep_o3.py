@@ -17,7 +17,7 @@ from __future__ import annotations
 import itertools
 import re
 from dataclasses import dataclass
-from typing import *
+from typing import Iterator
 
 import numpy as np
 
@@ -42,7 +42,7 @@ class O3(Irrep):
         2o
     """
 
-    l: int  # non-negative integer
+    l: int  # non-negative integer # noqa: E741
     p: int  # 1 or -1
 
     @classmethod
@@ -52,9 +52,9 @@ class O3(Irrep):
     @classmethod
     def from_string(cls, s: str) -> O3:
         s = s.strip()
-        l = int(s[:-1])
+        ell = int(s[:-1])
         p = {"e": 1, "o": -1}[s[-1]]
-        return cls(l=l, p=p)
+        return cls(l=ell, p=p)
 
     def __repr__(rep: O3) -> str:
         return f"{rep.l}{['e', 'o'][rep.p < 0]}"
@@ -63,7 +63,8 @@ class O3(Irrep):
         rep2 = rep1._from(rep2)
         p = rep1.p * rep2.p
         return [
-            O3(l=l, p=p) for l in range(abs(rep1.l - rep2.l), rep1.l + rep2.l + 1, 1)
+            O3(l=ell, p=p)
+            for ell in range(abs(rep1.l - rep2.l), rep1.l + rep2.l + 1, 1)
         ]
 
     @classmethod
@@ -88,9 +89,9 @@ class O3(Irrep):
 
     @classmethod
     def iterator(cls) -> Iterator[O3]:
-        for l in itertools.count(0):
-            yield O3(l=l, p=1 * (-1) ** l)
-            yield O3(l=l, p=-1 * (-1) ** l)
+        for ell in itertools.count(0):
+            yield O3(l=ell, p=1 * (-1) ** ell)
+            yield O3(l=ell, p=-1 * (-1) ** ell)
 
     def continuous_generators(rep: O3) -> np.ndarray:
         return SO3(l=rep.l).continuous_generators()

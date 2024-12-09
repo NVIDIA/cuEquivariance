@@ -13,10 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from functools import wraps
-from typing import *
+from typing import Optional, Union, Type
 
 import cuequivariance as cue
-from cuequivariance import irreps_array
+import cuequivariance.irreps_array as irreps_array
 from cuequivariance.irreps_array.context_irrep_class import (
     pop_irrep_scope,
     push_irrep_scope,

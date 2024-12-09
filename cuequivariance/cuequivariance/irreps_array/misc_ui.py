@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import *
+from typing import Generator, Optional, Union, Any
 
 import cuequivariance as cue
 

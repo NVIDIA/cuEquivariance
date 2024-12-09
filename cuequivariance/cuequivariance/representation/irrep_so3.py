@@ -17,7 +17,7 @@ from __future__ import annotations
 import itertools
 import re
 from dataclasses import dataclass
-from typing import *
+from typing import Iterator
 
 import numpy as np
 
@@ -26,19 +26,19 @@ from cuequivariance.representation import Irrep, SU2
 
 
 # This function is copied from https://github.com/lie-nn/lie-nn/blob/70adebce44e3197ee17f780585c6570d836fc2fe/lie_nn/_src/irreps/so3_real.py
-def change_basis_real_to_complex(l: int) -> np.ndarray:
+def change_basis_real_to_complex(ell: int) -> np.ndarray:
     # https://en.wikipedia.org/wiki/Spherical_harmonics#Real_form
-    q = np.zeros((2 * l + 1, 2 * l + 1), dtype=np.complex128)
-    for m in range(-l, 0):
-        q[l + m, l + abs(m)] = 1 / np.sqrt(2)
-        q[l + m, l - abs(m)] = -1j / np.sqrt(2)
-    q[l, l] = 1
-    for m in range(1, l + 1):
-        q[l + m, l + abs(m)] = (-1) ** m / np.sqrt(2)
-        q[l + m, l - abs(m)] = 1j * (-1) ** m / np.sqrt(2)
+    q = np.zeros((2 * ell + 1, 2 * ell + 1), dtype=np.complex128)
+    for m in range(-ell, 0):
+        q[ell + m, ell + abs(m)] = 1 / np.sqrt(2)
+        q[ell + m, ell - abs(m)] = -1j / np.sqrt(2)
+    q[ell, ell] = 1
+    for m in range(1, ell + 1):
+        q[ell + m, ell + abs(m)] = (-1) ** m / np.sqrt(2)
+        q[ell + m, ell - abs(m)] = 1j * (-1) ** m / np.sqrt(2)
 
     # Added factor of 1j**l to make the Clebsch-Gordan coefficients real
-    return q * (-1j) ** l
+    return q * (-1j) ** ell
 
 
 # This class is adapted from https://github.com/lie-nn/lie-nn/blob/70adebce44e3197ee17f780585c6570d836fc2fe/lie_nn/_src/irreps/so3_real.py
@@ -59,7 +59,7 @@ class SO3(Irrep):
         2
     """
 
-    l: int
+    l: int  # noqa: E741
 
     @classmethod
     def regexp_pattern(cls) -> re.Pattern:
@@ -74,7 +74,9 @@ class SO3(Irrep):
 
     def __mul__(rep1: SO3, rep2: SO3) -> Iterator[SO3]:
         rep2 = rep1._from(rep2)
-        return [SO3(l=l) for l in range(abs(rep1.l - rep2.l), rep1.l + rep2.l + 1, 1)]
+        return [
+            SO3(l=ell) for ell in range(abs(rep1.l - rep2.l), rep1.l + rep2.l + 1, 1)
+        ]
 
     @classmethod
     def clebsch_gordan(cls, rep1: SO3, rep2: SO3, rep3: SO3) -> np.ndarray:
@@ -103,8 +105,8 @@ class SO3(Irrep):
 
     @classmethod
     def iterator(cls) -> Iterator[SO3]:
-        for l in itertools.count(0):
-            yield cls(l=l)
+        for ell in itertools.count(0):
+            yield cls(l=ell)
 
     def continuous_generators(rep: SO3) -> np.ndarray:
         X = SU2(j=rep.l).X
@@ -122,8 +124,8 @@ class SO3(Irrep):
 
     def rotation(self, axis: np.ndarray, angle: float) -> np.ndarray:
         """Rotation matrix for the representation."""
-        l = self.l
-        m = np.arange(-l, l + 1)
+        ell = self.l
+        m = np.arange(-ell, ell + 1)
 
         axis = axis / np.linalg.norm(axis)
         iX = 1j * np.sum(self.X * axis[:, None, None], axis=0)

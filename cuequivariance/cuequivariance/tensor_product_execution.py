@@ -14,7 +14,7 @@
 # limitations under the License.
 import itertools
 from collections import defaultdict
-from typing import *
+from typing import Callable, Generator, Sequence, TypeVar, Any
 
 import numpy as np
 
@@ -171,9 +171,9 @@ class TensorProductExecution:
         f_out: Callable[[int], int] | None = None,
     ) -> "TensorProductExecution":
         if f_in is None:
-            f_in = lambda b: b
+            f_in = lambda b: b  # noqa
         if f_out is None:
-            f_out = lambda b: b
+            f_out = lambda b: b  # noqa
         return TensorProductExecution(
             tuple(
                 Computation(

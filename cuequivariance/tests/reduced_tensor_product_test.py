@@ -29,7 +29,7 @@ def test_elasticity_tensor():
 
 def test_symmetric_basis():
     C = cue.reduced_symmetric_tensor_product_basis(cue.Irreps("SU2", "1/2 + 1"), 4)
-    irreps, C = C.irreps, C.array
+    _irreps, C = C.irreps, C.array
     assert C.shape == (5, 5, 5, 5, 70)
 
     # The symmetry is respected

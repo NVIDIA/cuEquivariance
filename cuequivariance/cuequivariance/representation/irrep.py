@@ -17,12 +17,12 @@ from __future__ import annotations
 import dataclasses
 import itertools
 import re
-from typing import *
+from typing import FrozenSet, Iterable, Optional, Sequence, Type, Union
 
 import numpy as np
 
-from cuequivariance.representation import Rep
 import cuequivariance as cue  # noqa: F401
+from cuequivariance.representation import Rep
 
 
 # This class is inspired from https://github.com/lie-nn/lie-nn/blob/70adebce44e3197ee17f780585c6570d836fc2fe/lie_nn/_src/irrep.py

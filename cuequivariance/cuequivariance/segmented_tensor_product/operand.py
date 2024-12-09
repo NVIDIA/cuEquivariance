@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import dataclasses
 import math
-from typing import *
+from typing import Optional, Union, Sequence
 
 from cuequivariance import segmented_tensor_product as stp
 

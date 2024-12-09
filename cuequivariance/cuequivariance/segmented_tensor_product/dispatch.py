@@ -14,7 +14,7 @@
 # limitations under the License.
 import itertools
 import math
-from typing import *
+from typing import Generator, Tuple
 
 import cuequivariance.segmented_tensor_product as stp
 

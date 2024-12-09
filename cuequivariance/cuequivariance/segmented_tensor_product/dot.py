@@ -16,11 +16,11 @@ from __future__ import annotations
 
 import copy
 import itertools
+from typing import Any, Sequence
 
 import numpy as np
 
 from cuequivariance import segmented_tensor_product as stp
-from typing import *
 
 
 def stable_unique(xs: Sequence[Any]) -> Sequence[Any]:
@@ -132,7 +132,7 @@ def trace(
         for i, j in contraction
         for chi, chj in zip(d.operands[i].subscripts, d.operands[j].subscripts)
     }
-    f = lambda subscripts: "".join(mapping.get(ch, ch) for ch in subscripts)
+    f = lambda subscripts: "".join(mapping.get(ch, ch) for ch in subscripts)  # noqa
 
     coefficients_subscripts_renamed = f(d.coefficient_subscripts)
     coefficients_subscripts_compressed = stable_unique(coefficients_subscripts_renamed)
