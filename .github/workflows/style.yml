@@ -8,7 +8,7 @@ on:
 
 
 jobs:
-  cuequivariance:
+  style:
 
     runs-on: ubuntu-latest
     strategy:
