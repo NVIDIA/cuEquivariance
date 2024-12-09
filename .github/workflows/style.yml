@@ -23,47 +23,9 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        python -m pip install black
+        python -m pip install ruff==0.8.2
     - name: Style check with black
       run: |
-        black --check cuequivariance
-
-  cuequivariance-jax:
-
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-
-    steps:
-    - uses: actions/checkout@v4
-    - name: Set up Python
-      uses: actions/setup-python@v3
-      with:
-        python-version: "3.12"
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        python -m pip install black
-    - name: Style check with black
-      run: |
-        black --check cuequivariance_jax
-
-  cuequivariance-torch:
-
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-
-    steps:
-    - uses: actions/checkout@v4
-    - name: Set up Python
-      uses: actions/setup-python@v3
-      with:
-        python-version: "3.12"
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        python -m pip install black
-    - name: Style check with black
-      run: |
-        black --check cuequivariance_torch
+        ruff cuequivariance
+        ruff cuequivariance_jax
+        ruff cuequivariance_torch

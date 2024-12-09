@@ -17,7 +17,7 @@ import itertools
 import re
 from dataclasses import dataclass
 from math import factorial
-from typing import *
+from typing import Iterator
 
 import numpy as np
 
@@ -208,9 +208,9 @@ def clebsch_gordanSU2mat(j1, j2, j3):
         for m1 in (x / 2 for x in range(-int(2 * j1), int(2 * j1) + 1, 2)):
             for m2 in (x / 2 for x in range(-int(2 * j2), int(2 * j2) + 1, 2)):
                 if abs(m1 + m2) <= j3:
-                    mat[
-                        int(j1 + m1), int(j2 + m2), int(j3 + m1 + m2)
-                    ] = clebsch_gordanSU2coeffs((j1, m1), (j2, m2), (j3, m1 + m2))
+                    mat[int(j1 + m1), int(j2 + m2), int(j3 + m1 + m2)] = (
+                        clebsch_gordanSU2coeffs((j1, m1), (j2, m2), (j3, m1 + m2))
+                    )
     # in e3nn it was divided by np.sqrt(2 * j3 + 1) to make the CG symmetric wrt j1,j2,j3
     # but if we say that j3 is always the output, it makes sense to not divide
     return mat  # / np.sqrt(2 * j3 + 1)
