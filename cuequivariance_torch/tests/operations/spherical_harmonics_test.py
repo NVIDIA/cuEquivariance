@@ -24,7 +24,7 @@ import cuequivariance_torch as cuet
     "dtype, tol",
     [(torch.float64, 1e-6), (torch.float32, 1e-4)],
 )
-@pytest.mark.parametrize("l", [1, 2, 3])
+@pytest.mark.parametrize("ell", [1, 2, 3])
 def test_spherical_harmonics(ell: int, dtype, tol):
     vec = torch.randn(3, dtype=dtype)
     axis = np.random.randn(3)
