@@ -67,7 +67,7 @@ def test_mace_compatibility():
     base64-encoded weights and input/output tensors from the original MACE implementation.
     """
     try:
-        import e3nn
+        import e3nn  # noqa
     except ImportError:
         pytest.skip("e3nn is not installed")
 

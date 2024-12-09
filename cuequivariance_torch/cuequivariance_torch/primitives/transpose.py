@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import *
+from typing import Optional
 
 import torch
 import torch.fx
@@ -92,7 +92,7 @@ class TransposeSegments(torch.nn.Module):
 
         if info is not None:
             try:
-                import cuequivariance_ops_torch
+                import cuequivariance_ops_torch  # noqa
             except ImportError:
                 self.f_cuda = None
             else:
@@ -104,7 +104,7 @@ class TransposeSegments(torch.nn.Module):
             self.f = torch.nn.Identity()
 
     def __repr__(self):
-        return f"TransposeSegments()"
+        return "TransposeSegments()"
 
     def forward(
         self, x: torch.Tensor, *, use_fallback: Optional[bool] = None

@@ -76,7 +76,7 @@ class EquivariantTensorProduct(torch.nn.Module):
             raise ValueError(
                 f"Expected {e.num_inputs} input layouts, got {len(layout_in)}"
             )
-        layout_in = tuple(l or layout for l in layout_in)
+        layout_in = tuple(ell or layout for ell in layout_in)
         layout_out = layout_out or layout
         del layout
 
