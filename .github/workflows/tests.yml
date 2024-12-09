@@ -59,8 +59,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.9", "3.12"]
-        runner: ["ubuntu-latest", "self-hosted"]
+        include:
+          - runner: "ubuntu-latest"
+            python-version: "3.9"
+          - runner: "ubuntu-latest"
+            python-version: "3.12"
+          - runner: "self-hosted"
+            python-version: "3.12"
 
     runs-on: ${{ matrix.runner }}
 
