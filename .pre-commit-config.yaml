@@ -2,8 +2,8 @@ repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.8.2  # Use the latest stable version of Black
     hooks:
-      # Run the linter.
       - id: ruff
-        args: [--fix]
-      # Run the formatter.
+        args: ["--fix"]
+      - id: ruff
+        args: ["check", "--select", "I", "--fix"]
       - id: ruff-format
