@@ -83,3 +83,7 @@ class IrrepsLayout(Enum):
             return cue.IrrepsLayout[layout]
         except KeyError:
             raise ValueError(f"Invalid layout {layout}")
+
+
+mul_ir = IrrepsLayout.mul_ir
+ir_mul = IrrepsLayout.ir_mul

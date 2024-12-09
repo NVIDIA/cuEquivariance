@@ -6,4 +6,5 @@ repos:
         args: ["--fix"]
       - id: ruff
         args: ["check", "--select", "I", "--fix"]
+        exclude: __init__.py
       - id: ruff-format
