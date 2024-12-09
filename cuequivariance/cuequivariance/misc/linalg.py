@@ -401,7 +401,7 @@ def sparsify_matrix(
             if isinstance(result, DisjointRows):
                 pass
             elif isinstance(result, ReplaceRow):
-                a0, a1, row, which = result
+                a0, a1, row, which = result.a0, result.a1, result.row, result.which
                 hope = True
                 which = i0 if which == 0 else i1
                 x[which] = row
