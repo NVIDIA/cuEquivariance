@@ -16,7 +16,6 @@ import logging
 import math
 import os
 import warnings
-from typing import *
 
 import jax
 import jax.lax

@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import *
+from typing import Any, Callable, Generator, Sequence
 
 import jax
 import jax.numpy as jnp
@@ -20,9 +20,9 @@ import numpy as np
 import pytest
 
 import cuequivariance as cue
-from cuequivariance import descriptors
 import cuequivariance.segmented_tensor_product as stp
 import cuequivariance_jax as cuex
+from cuequivariance import descriptors
 
 jax.config.update("jax_enable_x64", True)
 
@@ -94,7 +94,7 @@ def test_tensor_product_forward(
 ):
     inputs = make_inputs(d, dtype_io)
     fA = jax.jit(cuex.tensor_product(d, dtype_math=dtype_math, algorithm=algorithm))
-    fB = lambda *x: stp.compute_last_operand(d, *x)
+    fB = lambda *x: stp.compute_last_operand(d, *x)  # noqa
     compare(fA, fB, inputs, tol)
 
 
@@ -118,7 +118,7 @@ def test_tensor_product_backward(d: stp.SegmentedTensorProduct, algorithm: str):
         dict(algorithm="sliced", use_custom_primitive=False),
         dict(algorithm=algorithm, use_custom_primitive=True),
     ]:
-        f = lambda *x: cuex.tensor_product(d, *x, **options).sum() ** 2
+        f = lambda *x: cuex.tensor_product(d, *x, **options).sum() ** 2  # noqa
         A = jax.grad(f)(*x)
         out.append(A)
 
@@ -145,9 +145,9 @@ def test_tensor_product_double_backward(d: stp.SegmentedTensorProduct, algorithm
         dict(algorithm="sliced", use_custom_primitive=False),
         dict(algorithm=algorithm, use_custom_primitive=True),
     ]:
-        f0 = lambda *x: cuex.tensor_product(d, *x, **options).sum()
-        f1 = lambda *x: jax.grad(f0)(*x).sum()
-        f2 = lambda *x: jax.grad(f1)(*x).sum()
+        f0 = lambda *x: cuex.tensor_product(d, *x, **options).sum()  # noqa
+        f1 = lambda *x: jax.grad(f0)(*x).sum()  # noqa
+        f2 = lambda *x: jax.grad(f1)(*x).sum()  # noqa
         A = f2(*x)
         out.append(A)
 

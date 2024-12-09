@@ -14,7 +14,6 @@
 # limitations under the License.
 import logging
 from functools import partial
-from typing import *
 
 import jax
 import jax.lax

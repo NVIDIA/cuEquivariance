@@ -24,7 +24,7 @@ import cuequivariance_jax as cuex
 @pytest.mark.parametrize("layout_out", [cue.ir_mul, cue.mul_ir])
 def test_explicit_linear(layout_in, layout_out):
     try:
-        import flax
+        import flax  # noqa
     except ImportError:
         pytest.skip("flax not installed")
 
@@ -40,7 +40,7 @@ def test_explicit_linear(layout_in, layout_out):
 @cue.assume("SO3", cue.ir_mul)
 def test_implicit_linear():
     try:
-        import flax
+        import flax  # noqa
     except ImportError:
         pytest.skip("flax not installed")
 
