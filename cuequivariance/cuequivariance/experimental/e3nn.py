@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import itertools
-from typing import *
+from typing import Iterator
 
 import numpy as np
 
@@ -45,6 +45,6 @@ class O3_e3nn(cue.O3):
 
     @classmethod
     def iterator(cls) -> Iterator["O3_e3nn"]:
-        for l in itertools.count(0):
-            yield O3_e3nn(l=l, p=1 * (-1) ** l)
-            yield O3_e3nn(l=l, p=-1 * (-1) ** l)
+        for ell in itertools.count(0):
+            yield O3_e3nn(l=ell, p=1 * (-1) ** ell)
+            yield O3_e3nn(l=ell, p=-1 * (-1) ** ell)
