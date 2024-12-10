@@ -19,11 +19,9 @@ __version__ = (
 )
 
 
-from .irreps_array.jax_irreps_array import (
-    IrrepsArray,
-    from_segments,
-    vmap,
-)
+from .irreps_array.jax_irreps_array import IrrepsArray, from_segments
+from .irreps_array.jax_rep_array import RepArray
+from .irreps_array.vmap import vmap
 from .irreps_array.utils import concatenate, randn, as_irreps_array
 
 from .primitives.tensor_product import tensor_product
@@ -44,6 +42,7 @@ __all__ = [
     "IrrepsArray",
     "from_segments",
     "as_irreps_array",
+    "RepArray",
     "vmap",
     "concatenate",
     "randn",
