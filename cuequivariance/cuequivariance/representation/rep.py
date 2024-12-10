@@ -43,6 +43,9 @@ class Rep:
         Returns:
             int: The dimension of the representation.
         """
+        return self._dim()
+
+    def _dim(self) -> int:
         X = self.continuous_generators()
         d = X.shape[1]
         return d
@@ -155,6 +158,14 @@ class Rep:
     def is_trivial(self) -> bool:
         """Check if the representation is trivial (scalar of dimension 1)"""
         return self.dim == 1 and self.is_scalar()
+
+    def __eq__(self, other: Rep) -> bool:
+        return (
+            self.dim == other.dim
+            and np.allclose(self.A, other.A)
+            and np.allclose(self.H, other.H)
+            and np.allclose(self.X, other.X)
+        )
 
     def __repr__(self) -> str:
         return f"Rep(dim={self.dim}, lie_dim={self.lie_dim}, len(H)={len(self.H)})"

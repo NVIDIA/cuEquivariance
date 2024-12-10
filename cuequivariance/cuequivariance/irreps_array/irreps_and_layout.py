@@ -26,6 +26,9 @@ class IrrepsAndLayout(cue.Rep):
     irreps: cue.Irreps = field()
     layout: cue.IrrepsLayout = field()
 
+    def _dim(self) -> int:
+        return self.irreps.dim
+
     def algebra(self) -> np.ndarray:
         return self.trivial().algebra()
 
@@ -58,6 +61,13 @@ class IrrepsAndLayout(cue.Rep):
 
     def is_scalar(self) -> bool:
         return self.irreps.is_scalar()
+
+    def __eq__(self, other: cue.Rep) -> bool:
+        if isinstance(other, IrrepsAndLayout):
+            return self.irreps == other.irreps and (
+                self.irreps.layout_insensitive() or self.layout == other.layout
+            )
+        return cue.Rep.__eq__(self, other)
 
 
 def block_diag(entries: list[np.ndarray], leading_shape: tuple[int, ...]) -> np.ndarray:
