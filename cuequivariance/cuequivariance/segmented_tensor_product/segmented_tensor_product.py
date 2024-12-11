@@ -25,7 +25,7 @@ import logging
 import math
 import re
 import zlib
-from typing import Any, Optional, Union, Callable, Sequence
+from typing import Any, Callable, Optional, Sequence, Union
 
 import numpy as np
 import opt_einsum

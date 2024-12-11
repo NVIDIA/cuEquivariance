@@ -18,8 +18,8 @@ from typing import Optional
 import numpy as np
 
 import cuequivariance as cue
-from cuequivariance import descriptors
 import cuequivariance.segmented_tensor_product as stp
+from cuequivariance import descriptors
 from cuequivariance.misc.linalg import round_to_sqrt_rational, triu_array
 
 

@@ -15,52 +15,61 @@
 from typing import Optional
 
 import torch
+import torch.nn as nn
 
 import cuequivariance as cue
 import cuequivariance_torch as cuet
 from cuequivariance import descriptors
 
 
-def spherical_harmonics(
-    ls: list[int],
-    vectors: torch.Tensor,
-    normalize: bool = True,
-    use_fallback: Optional[bool] = None,
-    optimize_fallback: Optional[bool] = None,
-) -> torch.Tensor:
-    r"""Compute the spherical harmonics of the input vectors.
+class SphericalHarmonics(nn.Module):
+    r"""Compute the spherical harmonics of the input vectors as a torch module."""
 
-    Args:
-        ls (list of int): List of spherical harmonic degrees.
-        vectors (torch.Tensor): Input vectors of shape (..., 3).
-        normalize (bool, optional): Whether to normalize the input vectors. Defaults to True.
-        use_fallback (bool, optional): If `None` (default), a CUDA kernel will be used if available.
-                If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
-                If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
+    def __init__(
+        self,
+        ls: list[int],
+        normalize: bool = True,
+        use_fallback: Optional[bool] = None,
+        optimize_fallback: Optional[bool] = None,
+    ):
+        """
+        Args:
+            ls (list of int): List of spherical harmonic degrees.
+            normalize (bool, optional): Whether to normalize the input vectors. Defaults to True.
+            use_fallback (bool, optional): If `None` (default), a CUDA kernel will be used if available.
+                    If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
+                    If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
+            optimize_fallback (bool, optional): Whether to optimize fallback. Defaults to None.
+        """
+        super(SphericalHarmonics, self).__init__()
+        self.ls = ls if isinstance(ls, list) else [ls]
+        assert self.ls == sorted(set(self.ls))
+        self.normalize = normalize
+        self.use_fallback = use_fallback
+        self.optimize_fallback = optimize_fallback
 
-        optimize_fallback (bool, optional): Whether to optimize fallback. Defaults to None.
+        self.m = cuet.EquivariantTensorProduct(
+            descriptors.spherical_harmonics(cue.SO3(1), self.ls),
+            layout=cue.ir_mul,
+            use_fallback=self.use_fallback,
+            optimize_fallback=self.optimize_fallback,
+        )
 
-    Returns:
-        torch.Tensor: The spherical harmonics of the input vectors of shape (..., dim)
-        where dim is the sum of 2*l+1 for l in ls.
-    """
-    if isinstance(ls, int):
-        ls = [ls]
-    assert ls == sorted(set(ls))
-    assert vectors.shape[-1] == 3
+    def forward(self, vectors: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            vectors (torch.Tensor): Input vectors of shape (..., 3).
 
-    if normalize:
-        vectors = torch.nn.functional.normalize(vectors, dim=-1)
+        Returns:
+            torch.Tensor: The spherical harmonics of the input vectors of shape (..., dim)
+            where dim is the sum of 2*l+1 for l in ls.
+        """
+        assert vectors.shape[-1] == 3
 
-    x = vectors.reshape(-1, 3)
-    m = cuet.EquivariantTensorProduct(
-        descriptors.spherical_harmonics(cue.SO3(1), ls),
-        layout=cue.ir_mul,
-        device=x.device,
-        math_dtype=x.dtype,
-        use_fallback=use_fallback,
-        optimize_fallback=optimize_fallback,
-    )
-    y = m([x])
-    y = y.reshape(vectors.shape[:-1] + (y.shape[-1],))
-    return y
+        if self.normalize:
+            vectors = torch.nn.functional.normalize(vectors, dim=-1)
+
+        x = vectors.reshape(-1, 3)
+        y = self.m([x])
+        y = y.reshape(vectors.shape[:-1] + (y.shape[-1],))
+        return y

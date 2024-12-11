@@ -33,12 +33,13 @@ def test_spherical_harmonics(ell: int, dtype, tol):
     angle = np.random.rand()
     scale = 1.3
 
-    yl = cuet.spherical_harmonics([ell], vec, False)
+    m = cuet.SphericalHarmonics([ell], False)
+    yl = m(vec)
 
     R = torch.from_numpy(cue.SO3(1).rotation(axis, angle)).to(dtype).to(device)
     Rl = torch.from_numpy(cue.SO3(ell).rotation(axis, angle)).to(dtype).to(device)
 
-    yl1 = cuet.spherical_harmonics([ell], scale * R @ vec, False)
+    yl1 = m(scale * R @ vec)
     yl2 = scale**ell * Rl @ yl
 
     torch.testing.assert_close(yl1, yl2, rtol=tol, atol=tol)
@@ -47,6 +48,7 @@ def test_spherical_harmonics(ell: int, dtype, tol):
 def test_spherical_harmonics_full():
     vec = torch.randn(3, device=device)
     ls = [0, 1, 2, 3]
-    yl = cuet.spherical_harmonics(ls, vec, False)
+    m = cuet.SphericalHarmonics(ls)
+    yl = m(vec)
 
     assert abs(yl[0] - 1.0) < 1e-6
