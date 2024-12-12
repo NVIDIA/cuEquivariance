@@ -42,7 +42,13 @@ def fixed_axis_angle_rotation(
         )
 
     d = d.flatten_coefficient_modes()
-    return cue.EquivariantTensorProduct(d, [irreps, irreps], layout=cue.ir_mul)
+    return cue.EquivariantTensorProduct(
+        d,
+        [
+            cue.IrrepsAndLayout(irreps, cue.ir_mul),
+            cue.IrrepsAndLayout(irreps, cue.ir_mul),
+        ],
+    )
 
 
 def yxy_rotation(
@@ -70,13 +76,12 @@ def yxy_rotation(
     return cue.EquivariantTensorProduct(
         cbaio,
         [
-            irreps.new_scalars(cbaio.operands[0].size),
-            irreps.new_scalars(cbaio.operands[1].size),
-            irreps.new_scalars(cbaio.operands[2].size),
-            irreps,
-            irreps,
+            cue.IrrepsAndLayout(irreps.new_scalars(cbaio.operands[0].size), cue.ir_mul),
+            cue.IrrepsAndLayout(irreps.new_scalars(cbaio.operands[1].size), cue.ir_mul),
+            cue.IrrepsAndLayout(irreps.new_scalars(cbaio.operands[2].size), cue.ir_mul),
+            cue.IrrepsAndLayout(irreps, cue.ir_mul),
+            cue.IrrepsAndLayout(irreps, cue.ir_mul),
         ],
-        layout=cue.ir_mul,
     )
 
 
@@ -95,12 +100,11 @@ def xy_rotation(
     return cue.EquivariantTensorProduct(
         cbio,
         [
-            irreps.new_scalars(cbio.operands[0].size),
-            irreps.new_scalars(cbio.operands[1].size),
-            irreps,
-            irreps,
+            cue.IrrepsAndLayout(irreps.new_scalars(cbio.operands[0].size), cue.ir_mul),
+            cue.IrrepsAndLayout(irreps.new_scalars(cbio.operands[1].size), cue.ir_mul),
+            cue.IrrepsAndLayout(irreps, cue.ir_mul),
+            cue.IrrepsAndLayout(irreps, cue.ir_mul),
         ],
-        layout=cue.ir_mul,
     )
 
 
@@ -119,12 +123,11 @@ def yx_rotation(
     return cue.EquivariantTensorProduct(
         cbio,
         [
-            irreps.new_scalars(cbio.operands[0].size),
-            irreps.new_scalars(cbio.operands[1].size),
-            irreps,
-            irreps,
+            cue.IrrepsAndLayout(irreps.new_scalars(cbio.operands[0].size), cue.ir_mul),
+            cue.IrrepsAndLayout(irreps.new_scalars(cbio.operands[1].size), cue.ir_mul),
+            cue.IrrepsAndLayout(irreps, cue.ir_mul),
+            cue.IrrepsAndLayout(irreps, cue.ir_mul),
         ],
-        layout=cue.ir_mul,
     )
 
 
@@ -188,7 +191,12 @@ def y_rotation(
 
     d = d.flatten_coefficient_modes()
     return cue.EquivariantTensorProduct(
-        d, [irreps.new_scalars(d.operands[0].size), irreps, irreps], layout=cue.ir_mul
+        d,
+        [
+            cue.IrrepsAndLayout(irreps.new_scalars(d.operands[0].size), cue.ir_mul),
+            cue.IrrepsAndLayout(irreps, cue.ir_mul),
+            cue.IrrepsAndLayout(irreps, cue.ir_mul),
+        ],
     )
 
 
@@ -213,7 +221,12 @@ def x_rotation(
     d = stp.dot(stp.dot(dy, dz90, (1, 1)), dz90, (1, 1))
 
     return cue.EquivariantTensorProduct(
-        d, [irreps.new_scalars(d.operands[0].size), irreps, irreps], layout=cue.ir_mul
+        d,
+        [
+            cue.IrrepsAndLayout(irreps.new_scalars(d.operands[0].size), cue.ir_mul),
+            cue.IrrepsAndLayout(irreps, cue.ir_mul),
+            cue.IrrepsAndLayout(irreps, cue.ir_mul),
+        ],
     )
 
 
@@ -228,4 +241,10 @@ def inversion(irreps: cue.Irreps) -> cue.EquivariantTensorProduct:
         assert np.allclose(H @ H, np.eye(ir.dim), atol=1e-6)
         d.add_path(None, None, c=H, dims={"u": mul})
     d = d.flatten_coefficient_modes()
-    return cue.EquivariantTensorProduct(d, [irreps, irreps], layout=cue.ir_mul)
+    return cue.EquivariantTensorProduct(
+        d,
+        [
+            cue.IrrepsAndLayout(irreps, cue.ir_mul),
+            cue.IrrepsAndLayout(irreps, cue.ir_mul),
+        ],
+    )

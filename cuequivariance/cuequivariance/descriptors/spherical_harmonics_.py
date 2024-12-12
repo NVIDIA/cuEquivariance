@@ -54,7 +54,13 @@ def spherical_harmonics(
             indices = poly_degrees_to_path_indices(degrees)
             d.add_path(*indices, i, c=coeff)
 
-    return cue.EquivariantTensorProduct([d], [ir_vec, ir], layout=layout)
+    return cue.EquivariantTensorProduct(
+        [d],
+        [
+            cue.IrrepsAndLayout(cue.Irreps(ir_vec), cue.ir_mul),
+            cue.IrrepsAndLayout(cue.Irreps(ir), cue.ir_mul),
+        ],
+    )
 
 
 def poly_degrees_to_path_indices(degrees: tuple[int, ...]) -> tuple[int, ...]:

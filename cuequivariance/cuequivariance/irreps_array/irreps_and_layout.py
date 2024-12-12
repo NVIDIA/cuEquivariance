@@ -21,10 +21,18 @@ import numpy as np
 import cuequivariance as cue
 
 
-@dataclass(init=True, frozen=True)
+@dataclass(init=False, frozen=True)
 class IrrepsAndLayout(cue.Rep):
     irreps: cue.Irreps = field()
     layout: cue.IrrepsLayout = field()
+
+    def __init__(self, irreps: cue.Irreps, layout: cue.IrrepsLayout):
+        irreps = cue.Irreps(irreps)
+        if layout is None:
+            layout = cue.get_layout_scope()
+
+        object.__setattr__(self, "irreps", irreps)
+        object.__setattr__(self, "layout", layout)
 
     def _dim(self) -> int:
         return self.irreps.dim

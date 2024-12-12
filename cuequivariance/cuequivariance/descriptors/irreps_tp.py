@@ -75,8 +75,12 @@ def fully_connected_tensor_product(
     d = d.normalize_paths_for_operand(-1)
     return cue.EquivariantTensorProduct(
         d,
-        [irreps1.new_scalars(d.operands[0].size), irreps1, irreps2, irreps3],
-        layout=cue.ir_mul,
+        [
+            cue.IrrepsAndLayout(irreps1.new_scalars(d.operands[0].size), cue.ir_mul),
+            cue.IrrepsAndLayout(irreps1, cue.ir_mul),
+            cue.IrrepsAndLayout(irreps2, cue.ir_mul),
+            cue.IrrepsAndLayout(irreps3, cue.ir_mul),
+        ],
     )
 
 
@@ -131,8 +135,11 @@ def full_tensor_product(
     d = d.normalize_paths_for_operand(-1)
     return cue.EquivariantTensorProduct(
         d,
-        [irreps1, irreps2, irreps3],
-        layout=cue.ir_mul,
+        [
+            cue.IrrepsAndLayout(irreps1, cue.ir_mul),
+            cue.IrrepsAndLayout(irreps2, cue.ir_mul),
+            cue.IrrepsAndLayout(irreps3, cue.ir_mul),
+        ],
     )
 
 
@@ -193,8 +200,12 @@ def channelwise_tensor_product(
     d = d.normalize_paths_for_operand(-1)
     return cue.EquivariantTensorProduct(
         d,
-        [irreps1.new_scalars(d.operands[0].size), irreps1, irreps2, irreps3],
-        layout=cue.ir_mul,
+        [
+            cue.IrrepsAndLayout(irreps1.new_scalars(d.operands[0].size), cue.ir_mul),
+            cue.IrrepsAndLayout(irreps1, cue.ir_mul),
+            cue.IrrepsAndLayout(irreps2, cue.ir_mul),
+            cue.IrrepsAndLayout(irreps3, cue.ir_mul),
+        ],
     )
 
 
@@ -273,7 +284,12 @@ def elementwise_tensor_product(
     irreps3 = cue.Irreps(G, irreps3)
     d = d.normalize_paths_for_operand(-1)
     return cue.EquivariantTensorProduct(
-        d, [irreps1, irreps2, irreps3], layout=cue.ir_mul
+        d,
+        [
+            cue.IrrepsAndLayout(irreps1, cue.ir_mul),
+            cue.IrrepsAndLayout(irreps2, cue.ir_mul),
+            cue.IrrepsAndLayout(irreps3, cue.ir_mul),
+        ],
     )
 
 
@@ -308,6 +324,9 @@ def linear(
 
     return cue.EquivariantTensorProduct(
         d,
-        [irreps_in.new_scalars(d.operands[0].size), irreps_in, irreps_out],
-        layout=cue.ir_mul,
+        [
+            cue.IrrepsAndLayout(irreps_in.new_scalars(d.operands[0].size), cue.ir_mul),
+            cue.IrrepsAndLayout(irreps_in, cue.ir_mul),
+            cue.IrrepsAndLayout(irreps_out, cue.ir_mul),
+        ],
     )

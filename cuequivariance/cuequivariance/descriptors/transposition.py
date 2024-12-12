@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import cuequivariance as cue
-from cuequivariance.equivariant_tensor_product import Operand
 
 
 def transpose(
@@ -22,12 +21,16 @@ def transpose(
     """Transpose the irreps layout of a tensor."""
     d = cue.SegmentedTensorProduct(
         operands=[
-            cue.Operand(subscripts="ui" if source == cue.mul_ir else "iu"),
-            cue.Operand(subscripts="ui" if target == cue.mul_ir else "iu"),
+            cue.segmented_tensor_product.Operand(
+                subscripts="ui" if source == cue.mul_ir else "iu"
+            ),
+            cue.segmented_tensor_product.Operand(
+                subscripts="ui" if target == cue.mul_ir else "iu"
+            ),
         ]
     )
     for mul, ir in irreps:
         d.add_path(None, None, c=1, dims={"u": mul, "i": ir.dim})
     return cue.EquivariantTensorProduct(
-        d, [Operand(irreps, source), Operand(irreps, target)]
+        d, [cue.IrrepsAndLayout(irreps, source), cue.IrrepsAndLayout(irreps, target)]
     )
