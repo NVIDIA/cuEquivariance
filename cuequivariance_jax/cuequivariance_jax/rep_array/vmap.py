@@ -46,10 +46,10 @@ def vmap(
     out_axes: int = 0,
 ) -> Callable[..., Any]:
     """
-    Like jax.vmap, but for IrrepsArray.
+    Like jax.vmap, but for RepArray.
 
     Args:
-        fun: Callable[..., Any]: Function to vectorize. Can take `IrrepsArray` or `RepArray` as input and output.
+        fun: Callable[..., Any]: Function to vectorize. Can take `RepArray` as input and output.
         in_axes: int | tuple[int, ...]: Axes to vectorize over.
         out_axes: int: Axes to vectorize over.
 
@@ -104,48 +104,31 @@ def vmap(
 
 
 def _is_array(x):
-    return isinstance(x, cuex.IrrepsArray) or isinstance(x, cuex.RepArray)
+    return isinstance(x, cuex.RepArray)
 
 
 @dataclass(frozen=True)
 class _wrapper:
-    layout: cue.IrrepsLayout | None = field()
-    dirreps: dict[int, cue.Irreps] = field()
+    reps: dict[int, cue.Rep] = field()
     array: jax.Array = field()
 
     def to_array(self):
-        if self.layout is None:
-            return cuex.RepArray(self.dirreps, self.array)
-        else:
-            return cuex.IrrepsArray(self.dirreps, self.array, self.layout)
+        return cuex.RepArray(self.reps, self.array)
 
     @classmethod
-    def from_array_add_axis(
-        cls, x: cuex.IrrepsArray | cuex.RepArray, axis: int
-    ) -> _wrapper:
-        if isinstance(x, cuex.IrrepsArray):
-            d, layout = x.dirreps, x.layout
-        if isinstance(x, cuex.RepArray):
-            d, layout = x.reps, None
-        return _wrapper(layout, add_axis(d, axis), x.array)
+    def from_array_add_axis(cls, x: cuex.RepArray, axis: int) -> _wrapper:
+        return _wrapper(add_axis(x.reps, axis), x.array)
 
     @classmethod
-    def from_array_remove_axis(
-        cls, x: cuex.IrrepsArray | cuex.RepArray, axis: int
-    ) -> _wrapper:
-        if isinstance(x, cuex.IrrepsArray):
-            d, layout = x.dirreps, x.layout
-        if isinstance(x, cuex.RepArray):
-            d, layout = x.reps, None
+    def from_array_remove_axis(cls, x: cuex.RepArray, axis: int) -> _wrapper:
         return _wrapper(
-            layout,
-            remove_axis(d, axis if axis >= 0 else axis + x.ndim),
+            remove_axis(x.reps, axis if axis >= 0 else axis + x.ndim),
             x.array,
         )
 
 
 jax.tree_util.register_pytree_node(
     _wrapper,
-    lambda x: ((x.array,), (x.layout, x.dirreps)),
-    lambda static, data: _wrapper(static[0], static[1], data[0]),
+    lambda x: ((x.array,), (x.reps,)),
+    lambda static, data: _wrapper(static[0], data[0]),
 )

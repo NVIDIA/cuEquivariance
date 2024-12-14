@@ -28,9 +28,8 @@ def spherical_harmonics(
     algorithm: str = "stacked",
 ) -> cuex.IrrepsArray:
     ls = list(ls)
-    assert isinstance(vector, cuex.IrrepsArray)
-    assert vector.is_simple()
-    irreps = vector.irreps()
+    assert vector.is_irreps_array()
+    irreps = vector.irreps
     assert len(irreps) == 1
     mul, ir = irreps[0]
     assert mul == 1
@@ -64,8 +63,8 @@ def normalize(array: cuex.IrrepsArray) -> cuex.IrrepsArray:
         return x / rsn_safe
 
     return cuex.from_segments(
-        array.irreps(),
-        [f(x) for x in array.segments()],
+        array.irreps,
+        [f(x) for x in array.segments],
         array.shape,
         array.layout,
         array.dtype,
@@ -97,8 +96,8 @@ def norm(array: cuex.IrrepsArray, *, squared: bool = False) -> cuex.IrrepsArray:
                 return rsn
 
     return cuex.from_segments(
-        cue.Irreps(array.irreps(), [(mul, ir.trivial()) for mul, ir in array.irreps()]),
-        [f(x) for x in array.segments()],
+        cue.Irreps(array.irreps, [(mul, ir.trivial()) for mul, ir in array.irreps]),
+        [f(x) for x in array.segments],
         array.shape,
         array.layout,
         array.dtype,

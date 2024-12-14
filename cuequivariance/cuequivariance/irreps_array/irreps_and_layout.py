@@ -26,7 +26,9 @@ class IrrepsAndLayout(cue.Rep):
     irreps: cue.Irreps = field()
     layout: cue.IrrepsLayout = field()
 
-    def __init__(self, irreps: cue.Irreps, layout: cue.IrrepsLayout):
+    def __init__(
+        self, irreps: cue.Irreps | str, layout: cue.IrrepsLayout | None = None
+    ):
         irreps = cue.Irreps(irreps)
         if layout is None:
             layout = cue.get_layout_scope()
@@ -34,11 +36,14 @@ class IrrepsAndLayout(cue.Rep):
         object.__setattr__(self, "irreps", irreps)
         object.__setattr__(self, "layout", layout)
 
+    def __repr__(self):
+        return f"{self.irreps}"
+
     def _dim(self) -> int:
         return self.irreps.dim
 
     def algebra(self) -> np.ndarray:
-        return self.trivial().algebra()
+        return self.irreps.irrep_class.algebra()
 
     def continuous_generators(self) -> np.ndarray:
         if self.layout == cue.mul_ir:

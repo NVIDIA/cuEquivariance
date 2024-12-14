@@ -12,22 +12,21 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Any, Sequence
+from typing import Any
 
 import jax
 import jax.numpy as jnp
 
 import cuequivariance as cue
 import cuequivariance_jax as cuex
-from cuequivariance.equivariant_tensor_product import Operand
 from cuequivariance.irreps_array.misc_ui import assert_same_group
 
 
-def concatenate(arrays: list[cuex.IrrepsArray], axis: int = -1) -> cuex.IrrepsArray:
-    """Concatenate a list of :class:`cuex.IrrepsArray <cuequivariance_jax.IrrepsArray>`
+def concatenate(arrays: list[cuex.RepArray]) -> cuex.RepArray:
+    """Concatenate a list of :class:`cuex.RepArray <cuequivariance_jax.RepArray>`
 
     Args:
-        arrays (list of IrrepsArray): List of arrays to concatenate.
+        arrays (list of RepArray): List of arrays to concatenate.
         axis (int, optional): Axis along which to concatenate. Defaults to -1.
 
     Example:
@@ -48,71 +47,52 @@ def concatenate(arrays: list[cuex.IrrepsArray], axis: int = -1) -> cuex.IrrepsAr
         raise ValueError(
             "All arrays must have the same number of dimensions"
         )  # pragma: no cover
-    assert_same_group(*[a.irreps(axis) for a in arrays])
-
-    if axis < 0:
-        axis += arrays[0].ndim
+    assert_same_group(*[a.irreps for a in arrays])
 
     irreps = sum(
-        (a.irreps(axis) for a in arrays), cue.Irreps(arrays[0].irreps(axis), [])
+        (a.irreps for a in arrays), cue.Irreps(arrays[0].irreps.irrep_class, [])
     )
-    list_dirreps = [a.dirreps | {axis: irreps} for a in arrays]
-    if not all(d == list_dirreps[0] for d in list_dirreps):
-        raise ValueError("All arrays must have the same dirreps")  # pragma: no cover
-
     return cuex.IrrepsArray(
-        list_dirreps[0],
-        jnp.concatenate([a.array for a in arrays], axis=axis),
+        irreps,
+        jnp.concatenate([a.array for a in arrays], axis=-1),
         arrays[0].layout,
     )
 
 
 def randn(
     key: jax.Array,
-    irreps: cue.Irreps | Operand,
+    rep: cue.Rep,
     leading_shape: tuple[int, ...] = (),
-    layout: cue.IrrepsLayout | None = None,
     dtype: jnp.dtype | None = None,
-) -> cuex.IrrepsArray:
-    r"""Generate a random :class:`cuex.IrrepsArrays <cuequivariance_jax.IrrepsArrays>`.
+) -> cuex.RepArray:
+    r"""Generate a random :class:`cuex.RepArray <cuequivariance_jax.RepArray>`.
 
     Args:
         key (jax.Array): Random key.
-        irreps (Irreps): Irreps of the array.
+        rep (Rep): representation.
         leading_shape (tuple[int, ...], optional): Leading shape of the array. Defaults to ().
-        layout (IrrepsLayout): Layout of the array.
         dtype (jnp.dtype): Data type of the array.
 
     Returns:
-        IrrepsArray: Random IrrepsArray.
+        RepArray: Random RepArray.
 
     Example:
 
         >>> key = jax.random.key(0)
-        >>> irreps = cue.Irreps("O3", "2x1o")
-        >>> cuex.randn(key, irreps, (), cue.ir_mul)
+        >>> rep = cue.IrrepsAndLayout(cue.Irreps("O3", "2x1o"), cue.ir_mul)
+        >>> cuex.randn(key, rep, ())
         {0: 2x1o} [...]
     """
-    if isinstance(irreps, Operand):
-        assert layout is None
-        irreps, layout = irreps.irreps, irreps.layout
-
-    irreps = cue.Irreps(irreps)
-    leading_shape = tuple(leading_shape)
-
-    return cuex.IrrepsArray(
-        irreps,
-        jax.random.normal(key, leading_shape + (irreps.dim,), dtype=dtype),
-        layout,
+    return cuex.RepArray(
+        rep, jax.random.normal(key, leading_shape + (rep.dim,), dtype=dtype)
     )
 
 
 def as_irreps_array(
     input: Any,
     layout: cue.IrrepsLayout | None = None,
-    axis: int | Sequence[int] = -1,
-    like: cuex.IrrepsArray | None = None,
-) -> cuex.IrrepsArray:
+    like: cuex.RepArray | None = None,
+) -> cuex.RepArray:
     """Converts input to an IrrepsArray. Arrays are assumed to be scalars.
 
     Examples:
@@ -121,53 +101,31 @@ def as_irreps_array(
         ...     cuex.as_irreps_array([1.0], layout=cue.ir_mul)
         {0: 0e} [1.]
     """
-    # We need first to define axes and layout
+    ir = None
+
     if like is not None:
         assert layout is None
-        assert axis == -1
-        layout = like.layout
-        axes = {
-            axis - like.ndim: irreps.irrep_class.trivial()
-            for axis, irreps in like.dirreps.items()
-        }
-    else:
-        if isinstance(input, cuex.IrrepsArray):
-            axes = {
-                axis: input.irreps(axis).irrep_class.trivial()
-                for axis in (axis if isinstance(axis, Sequence) else [axis])
-            }
-        else:
-            ir = cue.get_irrep_scope().trivial()
-            axes = {
-                axis: ir for axis in (axis if isinstance(axis, Sequence) else [axis])
-            }
-        if layout is None:
-            if isinstance(input, cuex.IrrepsArray):
-                layout = input.layout
-            else:
-                layout = cue.get_layout_scope()
-    del like, axis
+        assert like.is_irreps_array()
 
-    if isinstance(input, cuex.IrrepsArray):
+        layout = like.layout
+        ir = like.irreps.irrep_class.trivial()
+    del like
+
+    if layout is None:
+        layout = cue.get_layout_scope()
+    if ir is None:
+        ir = cue.get_irrep_scope().trivial()
+
+    if isinstance(input, cuex.RepArray):
+        assert input.is_irreps_array()
+
         if input.layout != layout:
             raise ValueError(
                 f"as_irreps_array: layout mismatch {input.layout} != {layout}"
             )
-        for axis, ir in axes.items():
-            if input.irreps(axis).irrep_class is not type(ir):
-                raise ValueError(
-                    f"as_irreps_array: irrep mismatch {input.irreps(axis).irrep_class} != {type(ir)}"
-                )
+
         return input
 
     input: jax.Array = jnp.asarray(input)
-    # if max(axes.keys()) >= input.ndim:
-    #     raise ValueError(
-    #         f"as_irreps_array: input has {input.ndim} dimensions, but axes are {axes.keys()}"
-    #     )
-
-    dirreps = {
-        axis: cue.Irreps(type(ir), [(input.shape[axis], ir)])
-        for axis, ir in axes.items()
-    }
-    return cuex.IrrepsArray(dirreps, input, layout)
+    irreps = cue.Irreps(type(ir), [(input.shape[-1], ir)])
+    return cuex.IrrepsArray(irreps, input, layout)

@@ -100,16 +100,16 @@ def scalar_activation(
     assert input.is_simple()
 
     if isinstance(acts, dict):
-        acts = [acts.get(ir, None) for mul, ir in input.irreps()]
+        acts = [acts.get(ir, None) for mul, ir in input.irreps]
     if callable(acts):
-        acts = [acts] * len(input.irreps())
+        acts = [acts] * len(input.irreps)
 
-    assert len(input.irreps()) == len(acts), (input.irreps(), acts)
+    assert len(input.irreps) == len(acts), (input.irreps, acts)
 
     segments = []
 
     irreps_out = []
-    for (mul, ir), x, act in zip(input.irreps(), input.segments(), acts):
+    for (mul, ir), x, act in zip(input.irreps, input.segments, acts):
         mul: int
         ir: cue.Irrep
         x: jax.Array
@@ -144,7 +144,7 @@ def scalar_activation(
             irreps_out.append((mul, ir))
             segments.append(x)
 
-    irreps_out = cue.Irreps(input.irreps(), irreps_out)
+    irreps_out = cue.Irreps(input.irreps, irreps_out)
     return cuex.from_segments(
         irreps_out, segments, input.shape, input.layout, input.dtype
     )

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable, Sequence
 
 import jax
 import jax.numpy as jnp
@@ -73,11 +73,36 @@ class RepArray:
         axis = next(iter(self.reps.keys()))
         return axis == self.ndim - 1
 
+    def is_irreps_array(self) -> bool:
+        if not self.is_simple():
+            return False
+        rep = self.rep()
+        return isinstance(rep, cue.IrrepsAndLayout)
+
     def rep(self, axis: int = -1) -> cue.Rep:
         axis = axis if axis >= 0 else axis + self.ndim
         if axis not in self.reps:
             raise ValueError(f"No Rep for axis {axis}")
         return self.reps[axis]
+
+    @property
+    def irreps(self) -> cue.Irreps:
+        """Return the Irreps of the RepArray if it is an IrrepsArray.
+
+        Examples:
+
+            >>> cuex.IrrepsArray(
+            ...     cue.Irreps("SO3", "2x0"), jnp.array([1.0, 2.0]), cue.ir_mul
+            ... ).irreps
+            2x0
+        """
+        assert self.is_irreps_array()
+        return self.rep().irreps
+
+    @property
+    def layout(self) -> cue.IrrepsLayout:
+        assert self.is_irreps_array()
+        return self.rep().layout
 
     def __repr__(self):
         r = str(self.array)
@@ -100,6 +125,22 @@ class RepArray:
             {k + key.ndim - 1: irreps for k, irreps in self.reps.items()},
             self.array[key],
         )
+
+    @property
+    def slice_by_mul(self) -> _MulIndexSliceHelper:
+        r"""Return the slice with respect to the multiplicities.
+
+        Examples:
+
+            >>> x = cuex.IrrepsArray(
+            ...     cue.Irreps("SO3", "2x0 + 1"),
+            ...     jnp.array([1.0, 2.0, 0.0, 0.0, 0.0]), cue.ir_mul
+            ... )
+            >>> x.slice_by_mul[1:4]
+            {0: 0+1} [2. 0. 0. 0.]
+        """
+        assert self.is_irreps_array()
+        return _MulIndexSliceHelper(self)
 
     def __neg__(self) -> RepArray:
         return RepArray(self.reps, -self.array)
@@ -150,19 +191,229 @@ class RepArray:
     def transform(self, v: jax.Array) -> RepArray:
         assert self.is_simple()
 
-        X = self.rep().X
-        assert np.allclose(X, -X.conj().T)
+        def matrix(rep: cue.Rep) -> jax.Array:
+            X = rep.X
+            assert np.allclose(X, -X.conj().T)  # TODO: support other types of X
 
-        X = jnp.asarray(X, dtype=v.dtype)
-        iX = 1j * jnp.einsum("a,aij->ij", v, X)
-        m, V = jnp.linalg.eigh(iX)
-        # np.testing.assert_allclose(V @ np.diag(m) @ V.T.conj(), iX, atol=1e-10)
+            X = jnp.asarray(X, dtype=v.dtype)
+            iX = 1j * jnp.einsum("a,aij->ij", v, X)
+            m, V = jnp.linalg.eigh(iX)
+            # np.testing.assert_allclose(V @ np.diag(m) @ V.T.conj(), iX, atol=1e-10)
 
-        phase = jnp.exp(-1j * m)
-        R = V @ jnp.diag(phase) @ V.T.conj()
-        R = jnp.real(R)
+            phase = jnp.exp(-1j * m)
+            R = V @ jnp.diag(phase) @ V.T.conj()
+            R = jnp.real(R)
+            return R
 
+        if self.is_irreps_array():
+
+            def f(segment: jax.Array, ir: cue.Irrep) -> jax.Array:
+                R = matrix(ir)
+                match self.layout:
+                    case cue.mul_ir:
+                        return jnp.einsum("ij,...uj->...ui", R, segment)
+                    case cue.ir_mul:
+                        return jnp.einsum("ij,...ju->...iu", R, segment)
+
+            return from_segments(
+                self.irreps,
+                [f(x, ir) for x, (_, ir) in zip(self.segments, self.irreps)],
+                self.shape,
+                self.layout,
+                self.dtype,
+            )
+
+        R = matrix(self.rep())
         return RepArray(self.reps, jnp.einsum("ij,...j->...i", R, self.array))
+
+    @property
+    def segments(self) -> list[jax.Array]:
+        """Split the array into segments.
+
+        Examples:
+
+            >>> x = cuex.IrrepsArray(
+            ...     cue.Irreps("SO3", "2x0 + 1"), jnp.array([1.0, 2.0, 0.0, 0.0, 0.0]),
+            ...     cue.ir_mul
+            ... )
+            >>> x.segments
+            [Array(...), Array(...)]
+
+        Note:
+
+            See also :func:`cuex.from_segments <cuequivariance_jax.from_segments>`.
+        """
+        assert self.is_irreps_array()
+        return [
+            jnp.reshape(self.array[..., s], self.shape[:-1] + self.layout.shape(mulir))
+            for s, mulir in zip(self.irreps.slices(), self.irreps)
+        ]
+
+    def filter(
+        self,
+        *,
+        keep: str | Sequence[cue.Irrep] | Callable[[cue.MulIrrep], bool] | None = None,
+        drop: str | Sequence[cue.Irrep] | Callable[[cue.MulIrrep], bool] | None = None,
+        mask: Sequence[bool] | None = None,
+    ) -> RepArray:
+        """Filter the irreps.
+
+        Args:
+            keep: Irreps to keep.
+            drop: Irreps to drop.
+            mask: Boolean mask for segments to keep.
+            axis: Axis to filter.
+
+        Examples:
+
+            >>> x = cuex.IrrepsArray(
+            ...     cue.Irreps("SO3", "2x0 + 1"),
+            ...     jnp.array([1.0, 2.0, 0.0, 0.0, 0.0]), cue.ir_mul
+            ... )
+            >>> x.filter(keep="0")
+            {0: 2x0} [1. 2.]
+            >>> x.filter(drop="0")
+            {0: 1} [0. 0. 0.]
+            >>> x.filter(mask=[True, False])
+            {0: 2x0} [1. 2.]
+        """
+        assert self.is_irreps_array()
+
+        if mask is None:
+            mask = self.irreps.filter_mask(keep=keep, drop=drop)
+
+        if all(mask):
+            return self
+
+        if not any(mask):
+            shape = list(self.shape)
+            shape[-1] = 0
+            return IrrepsArray(
+                cue.Irreps(self.irreps.irrep_class, ""),
+                jnp.zeros(shape, dtype=self.dtype),
+                self.layout,
+            )
+
+        return IrrepsArray(
+            self.irreps.filter(mask=mask),
+            jnp.concatenate(
+                [self.array[..., s] for s, m in zip(self.irreps.slices(), mask) if m],
+                axis=-1,
+            ),
+            self.layout,
+        )
+
+    def sort(self) -> RepArray:
+        """Sort the irreps.
+
+        Examples:
+
+            >>> x = cuex.IrrepsArray(
+            ...     cue.Irreps("SO3", "1 + 2x0"),
+            ...     jnp.array([1.0, 1.0, 1.0, 2.0, 3.0]), cue.ir_mul
+            ... )
+            >>> x.sort()
+            {0: 2x0+1} [2. 3. 1. 1. 1.]
+        """
+        assert self.is_irreps_array()
+
+        irreps = self.irreps
+        r = irreps.sort()
+
+        segments = self.segments
+        return from_segments(
+            r.irreps,
+            [segments[i] for i in r.inv],
+            self.shape,
+            self.layout,
+            self.dtype,
+        )
+
+    def simplify(self) -> RepArray:
+        assert self.is_irreps_array()
+
+        simplified_irreps = self.irreps.simplify()
+
+        if self.layout == cue.mul_ir:
+            return IrrepsArray(simplified_irreps, self.array, self.layout)
+
+        segments = []
+        last_ir = None
+        for x, (_mul, ir) in zip(self.segments, self.irreps):
+            if last_ir is None or last_ir != ir:
+                segments.append(x)
+                last_ir = ir
+            else:
+                segments[-1] = jnp.concatenate([segments[-1], x], axis=-1)
+
+        return from_segments(
+            simplified_irreps,
+            segments,
+            self.shape,
+            cue.ir_mul,
+            self.dtype,
+        )
+
+    def regroup(self) -> RepArray:
+        """Clean up the irreps.
+
+        Examples:
+
+            >>> x = cuex.IrrepsArray(
+            ...     cue.Irreps("SO3", "0 + 1 + 0"), jnp.array([0., 1., 2., 3., -1.]),
+            ...     cue.ir_mul
+            ... )
+            >>> x.regroup()
+            {0: 2x0+1} [ 0. -1.  1.  2.  3.]
+        """
+        return self.sort().simplify()
+
+    def change_layout(self, layout: cue.IrrepsLayout) -> RepArray:
+        assert self.is_irreps_array()
+        if self.layout == layout:
+            return self
+
+        return from_segments(
+            self.irreps,
+            [jnp.moveaxis(x, -2, -1) for x in self.segments],
+            self.shape,
+            layout,
+            self.dtype,
+        )
+
+    def move_axis_to_mul(self, axis: int) -> RepArray:
+        assert self.is_irreps_array()
+
+        if axis < 0:
+            axis += self.ndim
+        assert axis < self.ndim - 1
+
+        mul = self.shape[axis]
+
+        match self.layout:
+            case cue.ir_mul:
+                array = jnp.moveaxis(self.array, axis, -1)
+                array = jnp.reshape(array, array.shape[:-2] + (self.irreps.dim * mul,))
+                return IrrepsArray(mul * self.irreps, array, cue.ir_mul)
+            case cue.mul_ir:
+
+                def f(x):
+                    x = jnp.moveaxis(x, axis, -3)
+                    return jnp.reshape(
+                        x, x.shape[:-3] + (mul * x.shape[-2], x.shape[-1])
+                    )
+
+                shape = list(self.shape)
+                del shape[axis]
+                shape[-1] = mul * shape[-1]
+
+                return from_segments(
+                    mul * self.irreps,
+                    [f(x) for x in self.segments],
+                    shape,
+                    self.layout,
+                    self.dtype,
+                )
 
 
 def encode_rep_array(x: RepArray) -> tuple:
@@ -178,3 +429,181 @@ def decode_rep_array(static, data) -> RepArray:
 
 
 jax.tree_util.register_pytree_node(RepArray, encode_rep_array, decode_rep_array)
+
+
+@dataclass(frozen=True, init=False, repr=False)
+class IrrepsArray(RepArray):
+    """
+    Wrapper around a jax array with a dict of Irreps for the non-trivial axes.
+
+    .. rubric:: Creation
+
+    >>> cuex.IrrepsArray(
+    ...     cue.Irreps("SO3", "2x0"), jnp.array([1.0, 2.0]), cue.ir_mul
+    ... )
+    {0: 2x0} [1. 2.]
+
+    If you don't specify the axis it will default to the last axis:
+
+    >>> cuex.IrrepsArray(
+    ...     cue.Irreps("SO3", "2x0"), jnp.array([1.0, 2.0]), cue.ir_mul
+    ... )
+    {0: 2x0} [1. 2.]
+
+    You can use a default group and layout:
+
+    >>> with cue.assume(cue.SO3, cue.ir_mul):
+    ...     cuex.IrrepsArray("2x0", jnp.array([1.0, 2.0]))
+    {0: 2x0} [1. 2.]
+
+    .. rubric:: Arithmetic
+
+    Basic arithmetic operations are supported, as long as they are equivariant:
+
+    >>> with cue.assume(cue.SO3, cue.ir_mul):
+    ...     x = cuex.IrrepsArray("2x0", jnp.array([1.0, 2.0]))
+    ...     y = cuex.IrrepsArray("2x0", jnp.array([3.0, 4.0]))
+    ...     x + y
+    {0: 2x0} [4. 6.]
+
+    >>> 3.0 * x
+    {0: 2x0} [3. 6.]
+    """
+
+    def __init__(
+        self,
+        irreps: cue.Irreps | str,
+        array: jax.Array,
+        layout: cue.IrrepsLayout | None = None,
+    ) -> RepArray:
+        super().__init__(
+            {array.ndim - 1: cue.IrrepsAndLayout(irreps, layout)},
+            array,
+        )
+
+
+def encode_irreps_array(x: IrrepsArray) -> tuple:
+    data = (x.array,)
+    static = (x.irreps, x.layout)
+    return data, static
+
+
+def decode_irreps_array(static, data) -> IrrepsArray:
+    (irreps, layout) = static
+    (array,) = data
+    return IrrepsArray(irreps, array, layout)
+
+
+jax.tree_util.register_pytree_node(
+    IrrepsArray, encode_irreps_array, decode_irreps_array
+)
+
+
+def from_segments(
+    irreps: cue.Irreps | str,
+    segments: Sequence[jax.Array],
+    shape: tuple[int, ...],
+    layout: cue.IrrepsLayout | None = None,
+    dtype: jnp.dtype | None = None,
+) -> RepArray:
+    """Construct an :class:`cuex.IrrepsArrays <cuequivariance_jax.IrrepsArrays>` from a list of segments.
+
+    Args:
+        dirreps: final Irreps.
+        segments: list of segments.
+        shape: shape of the final array.
+        layout: layout of the final array.
+        dtype: data type
+        axis: axis to concatenate the segments.
+
+    Returns:
+        IrrepsArray: IrrepsArray.
+
+    Examples:
+
+        >>> cuex.from_segments(
+        ...     cue.Irreps("SO3", "2x0 + 1"),
+        ...     [jnp.array([[1.0], [2.0]]), jnp.array([[0.0], [0.0], [0.0]])],
+        ...     (-1,), cue.ir_mul)
+        {0: 2x0+1} [1. 2. 0. 0. 0.]
+
+    Note:
+
+        See also :func:`cuex.IrrepsArray.segments <cuequivariance_jax.IrrepsArray.segments>`.
+    """
+    irreps = cue.Irreps(irreps)
+    shape = list(shape)
+    shape[-1] = irreps.dim
+
+    if not all(x.ndim == len(shape) + 1 for x in segments):
+        raise ValueError(
+            "from_segments: segments must have ndim equal to len(shape) + 1"
+        )
+
+    if len(segments) != len(irreps):
+        raise ValueError(
+            f"from_segments: the number of segments {len(segments)} must match the number of irreps {len(irreps)}"
+        )
+
+    if dtype is not None:
+        segments = [segment.astype(dtype) for segment in segments]
+
+    segments = [
+        segment.reshape(segment.shape[:-2] + (mul * ir.dim,))
+        for (mul, ir), segment in zip(irreps, segments)
+    ]
+
+    if len(segments) > 0:
+        array = jnp.concatenate(segments, axis=-1)
+    else:
+        array = jnp.zeros(shape, dtype=dtype)
+
+    return IrrepsArray(irreps, array, layout)
+
+
+class _MulIndexSliceHelper:
+    irreps_array: RepArray
+
+    def __init__(self, irreps_array: RepArray):
+        assert irreps_array.is_irreps_array()
+        self.irreps_array = irreps_array
+
+    def __getitem__(self, index: slice) -> RepArray:
+        if not isinstance(index, slice):
+            raise IndexError(
+                "RepArray.slice_by_mul only supports one slices (like RepArray.slice_by_mul[2:4])."
+            )
+
+        input_irreps = self.irreps_array.irreps
+        start, stop, stride = index.indices(input_irreps.num_irreps)
+        if stride != 1:
+            raise NotImplementedError("RepArray.slice_by_mul does not support strides.")
+
+        output_irreps = []
+        segments = []
+        i = 0
+        for (mul, ir), x in zip(input_irreps, self.irreps_array.segments):
+            if start <= i and i + mul <= stop:
+                output_irreps.append((mul, ir))
+                segments.append(x)
+            elif start < i + mul and i < stop:
+                output_irreps.append((min(stop, i + mul) - max(start, i), ir))
+                match self.irreps_array.layout:
+                    case cue.mul_ir:
+                        segments.append(
+                            x[..., slice(max(start, i) - i, min(stop, i + mul) - i), :]
+                        )
+                    case cue.ir_mul:
+                        segments.append(
+                            x[..., slice(max(start, i) - i, min(stop, i + mul) - i)]
+                        )
+
+            i += mul
+
+        return from_segments(
+            cue.Irreps(input_irreps.irrep_class, output_irreps),
+            segments,
+            self.irreps_array.shape,
+            self.irreps_array.layout,
+            self.irreps_array.dtype,
+        )

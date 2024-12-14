@@ -19,10 +19,9 @@ __version__ = (
 )
 
 
-from .irreps_array.jax_irreps_array import IrrepsArray, from_segments
-from .irreps_array.jax_rep_array import RepArray
-from .irreps_array.vmap import vmap
-from .irreps_array.utils import concatenate, randn, as_irreps_array
+from .rep_array.jax_rep_array import RepArray, from_segments, IrrepsArray
+from .rep_array.vmap import vmap
+from .rep_array.utils import concatenate, randn, as_irreps_array
 
 from .primitives.tensor_product import tensor_product
 from .primitives.symmetric_tensor_product import symmetric_tensor_product
@@ -39,13 +38,13 @@ from .operations.spherical_harmonics import spherical_harmonics, normalize, norm
 from cuequivariance_jax import flax_linen
 
 __all__ = [
-    "IrrepsArray",
-    "from_segments",
-    "as_irreps_array",
     "RepArray",
+    "from_segments",
+    "IrrepsArray",
     "vmap",
     "concatenate",
     "randn",
+    "as_irreps_array",
     "tensor_product",
     "symmetric_tensor_product",
     "equivariant_tensor_product",

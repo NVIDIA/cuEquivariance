@@ -33,7 +33,7 @@ def test_explicit_linear(layout_in, layout_out):
     w = linear.init(jax.random.key(0), x)
     y: cuex.IrrepsArray = linear.apply(w, x)
     assert y.shape == (16, 5)
-    assert y.irreps() == cue.Irreps("SO3", "2x0 + 1")
+    assert y.irreps == cue.Irreps("SO3", "2x0 + 1")
     assert y.layout == layout_out
 
 
@@ -49,4 +49,4 @@ def test_implicit_linear():
     w = linear.init(jax.random.key(0), x)
     y = linear.apply(w, x)
     assert y.shape == (16, 5)
-    assert y.irreps() == "2x0 + 1"
+    assert y.irreps == "2x0 + 1"

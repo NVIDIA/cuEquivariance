@@ -132,8 +132,9 @@ def smooth_bump(x: jax.Array) -> jax.Array:
 
 
 def gather(
-    i: jax.Array, x: cuex.IrrepsArray, n: int, indices_are_sorted: bool = False
-) -> cuex.IrrepsArray:
+    i: jax.Array, x: cuex.RepArray, n: int, indices_are_sorted: bool = False
+) -> cuex.RepArray:
+    assert 0 not in x.reps
     y = jnp.zeros((n,) + x.shape[1:], dtype=x.dtype)
     y = y.at[i].add(x.array, indices_are_sorted=indices_are_sorted)
-    return cuex.IrrepsArray(x.irreps(), y, x.layout)
+    return cuex.RepArray(x.reps, y)
