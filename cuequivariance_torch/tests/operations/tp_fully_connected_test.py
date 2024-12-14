@@ -19,6 +19,8 @@ import cuequivariance as cue
 import cuequivariance_torch as cuet
 from cuequivariance import descriptors
 
+device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
+
 list_of_irreps = [
     cue.Irreps("O3", "4x0e + 4x1o"),
     cue.Irreps("O3", "2x1o + 5x0e + 2e + 1e + 1o"),
@@ -38,44 +40,52 @@ def test_fully_connected(
     layout: cue.IrrepsLayout,
     use_fallback: bool,
 ):
-    m = cuet.FullyConnectedTensorProduct(
+    if use_fallback is False and not torch.cuda.is_available():
+        pytest.skip("CUDA is not available")
+
+    m1 = cuet.FullyConnectedTensorProduct(
         irreps1,
         irreps2,
         irreps3,
         shared_weights=True,
         internal_weights=True,
         layout=layout,
-        device="cuda",
+        device=device,
         dtype=torch.float64,
+        use_fallback=use_fallback,
     )
 
-    x1 = torch.randn(32, irreps1.dim, dtype=torch.float64).cuda()
-    x2 = torch.randn(32, irreps2.dim, dtype=torch.float64).cuda()
+    x1 = torch.randn(32, irreps1.dim, dtype=torch.float64).to(device)
+    x2 = torch.randn(32, irreps2.dim, dtype=torch.float64).to(device)
 
-    out1 = m(x1, x2, use_fallback=use_fallback)
+    out1 = m1(x1, x2)
 
     d = descriptors.fully_connected_tensor_product(irreps1, irreps2, irreps3).d
     if layout == cue.mul_ir:
         d = d.add_or_transpose_modes("uvw,ui,vj,wk+ijk")
-    mfx = cuet.TensorProduct(d, math_dtype=torch.float64).cuda()
-    out2 = mfx(
-        [m.weight.to(torch.float64), x1.to(torch.float64), x2.to(torch.float64)],
-        use_fallback=True,
+    m2 = cuet.TensorProduct(d, math_dtype=torch.float64, use_fallback=True).to(device)
+    out2 = m2(
+        [m1.weight.to(torch.float64), x1.to(torch.float64), x2.to(torch.float64)],
     ).to(out1.dtype)
 
     torch.testing.assert_close(out1, out2, atol=1e-5, rtol=1e-5)
 
 
-def test_compile():
+@pytest.mark.parametrize("use_fallback", [False, True])
+def test_compile(use_fallback: bool):
+    if use_fallback is False and not torch.cuda.is_available():
+        pytest.skip("CUDA is not available")
+
     m = cuet.FullyConnectedTensorProduct(
         irreps_in1=cue.Irreps("O3", "32x0e + 32x1o"),
         irreps_in2=cue.Irreps("O3", "32x0e + 32x1o"),
         irreps_out=cue.Irreps("O3", "32x0e + 32x1o"),
         layout=cue.mul_ir,
-        optimize_fallback=False,
+        device=device,
+        use_fallback=use_fallback,
     )
 
     m_compile = torch.compile(m, fullgraph=True)
-    input1 = torch.randn(100, m.irreps_in1.dim)
-    input2 = torch.randn(100, m.irreps_in2.dim)
+    input1 = torch.randn(100, m.irreps_in1.dim, device=device)
+    input2 = torch.randn(100, m.irreps_in2.dim, device=device)
     m_compile(input1, input2)

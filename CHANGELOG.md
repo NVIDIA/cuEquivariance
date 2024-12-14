@@ -1,5 +1,9 @@
 ## Latest Changes
 
+### Added
+
+- Partial support of `torch.jit.script` and `torch.compile`
+
 ### Changed
 
 - `cuequivariance_torch.TensorProduct` and `cuequivariance_torch.EquivariantTensorProduct` now require lists of `torch.Tensor` as input.

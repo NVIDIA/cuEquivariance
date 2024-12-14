@@ -33,6 +33,10 @@ class ChannelWiseTensorProduct(torch.nn.Module):
         layout (IrrepsLayout, optional): The layout of the input and output irreps. Default is ``cue.mul_ir`` which is the layout corresponding to e3nn.
         shared_weights (bool, optional): Whether to share weights across the batch dimension. Default is True.
         internal_weights (bool, optional): Whether to create module parameters for weights. Default is None.
+        use_fallback (bool, optional): If `None` (default), a CUDA kernel will be used if available.
+                If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
+                If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
+        optimize_fallback (bool, optional): Whether to optimize fallback. Defaults to None.
 
     Note:
         In e3nn there was a irrep_normalization and path_normalization parameters.
@@ -54,6 +58,7 @@ class ChannelWiseTensorProduct(torch.nn.Module):
         device: Optional[torch.device] = None,
         dtype: Optional[torch.dtype] = None,
         math_dtype: Optional[torch.dtype] = None,
+        use_fallback: Optional[bool] = None,
         optimize_fallback: Optional[bool] = None,
     ):
         super().__init__()
@@ -95,6 +100,7 @@ class ChannelWiseTensorProduct(torch.nn.Module):
             layout_out=layout_out,
             device=device,
             math_dtype=math_dtype,
+            use_fallback=use_fallback,
             optimize_fallback=optimize_fallback,
         )
 
@@ -110,8 +116,6 @@ class ChannelWiseTensorProduct(torch.nn.Module):
         x1: torch.Tensor,
         x2: torch.Tensor,
         weight: Optional[torch.Tensor] = None,
-        *,
-        use_fallback: Optional[bool] = None,
     ) -> torch.Tensor:
         """
         Perform the forward pass of the fully connected tensor product operation.
@@ -122,9 +126,6 @@ class ChannelWiseTensorProduct(torch.nn.Module):
             weight (torch.Tensor, optional): Weights for the tensor product. It should have the shape (batch_size, weight_numel)
                 if shared_weights is False, or (weight_numel,) if shared_weights is True.
                 If None, the internal weights are used.
-            use_fallback (bool, optional): If `None` (default), a CUDA kernel will be used if available.
-                If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
-                If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
 
         Returns:
             torch.Tensor:
@@ -147,4 +148,4 @@ class ChannelWiseTensorProduct(torch.nn.Module):
         if not self.shared_weights and weight.ndim != 2:
             raise ValueError("Weights should be 2D tensor")
 
-        return self.f([weight, x1, x2], use_fallback=use_fallback)
+        return self.f([weight, x1, x2])

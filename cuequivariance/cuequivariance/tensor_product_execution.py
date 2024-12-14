@@ -14,7 +14,7 @@
 # limitations under the License.
 import itertools
 from collections import defaultdict
-from typing import Callable, Generator, Sequence, TypeVar, Any
+from typing import Any, Callable, Generator, Optional, Sequence, TypeVar
 
 import numpy as np
 
@@ -64,8 +64,8 @@ class Computation(tuple):
     def map_operands(
         self,
         in_buffers: Sequence[T],
-        out_buffers: Sequence[T] | None = None,
-    ) -> list[T | None]:
+        out_buffers: Optional[Sequence[T]] = None,
+    ) -> list[Optional[T]]:
         in_buffers = list(in_buffers)
         if out_buffers is None:
             return [in_buffers[b] if isinstance(b, InBuffer) else None for b in self]
@@ -167,8 +167,8 @@ class TensorProductExecution:
 
     def map_buffers(
         self,
-        f_in: Callable[[int], int] | None,
-        f_out: Callable[[int], int] | None = None,
+        f_in: Optional[Callable[[int], int]],
+        f_out: Optional[Callable[[int], int]] = None,
     ) -> "TensorProductExecution":
         if f_in is None:
             f_in = lambda b: b  # noqa

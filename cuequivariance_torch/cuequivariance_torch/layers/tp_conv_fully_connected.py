@@ -56,6 +56,10 @@ class FullyConnectedTensorProductConv(nn.Module):
         mlp_channels (Sequence of int, optional): A sequence of integers defining the number of neurons in each layer in MLP before the output layer. If None, no MLP will be added. The input layer contains edge embeddings and node scalar features. Defaults to None.
         mlp_activation (``nn.Module`` or Sequence of ``nn.Module``, optional): A sequence of functions to be applied in between linear layers in MLP, e.g., ``nn.Sequential(nn.ReLU(), nn.Dropout(0.4))``. Defaults to ``nn.GELU()``.
         layout (IrrepsLayout, optional): The layout of the input and output irreps. Default is ``cue.mul_ir`` which is the layout corresponding to e3nn.
+        use_fallback (bool, optional): If `None` (default), a CUDA kernel will be used if available.
+                If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
+                If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
+        optimize_fallback (bool, optional): Whether to optimize fallback. Defaults to None.
 
     Examples:
         >>> in_irreps = cue.Irreps("O3", "4x0e + 4x1o")
@@ -66,29 +70,9 @@ class FullyConnectedTensorProductConv(nn.Module):
         having 16 channels. edge_emb.size(1) must match the size of the input layer: 6
 
         >>> conv1 = FullyConnectedTensorProductConv(in_irreps, sh_irreps, out_irreps,
-        ...     mlp_channels=[6, 16, 16], mlp_activation=nn.ReLU(), layout=cue.ir_mul).cuda()
+        ...     mlp_channels=[6, 16, 16], mlp_activation=nn.ReLU(), layout=cue.ir_mul)
         >>> conv1
-        FullyConnectedTensorProductConv(
-          (tp): FullyConnectedTensorProduct(
-            shared_weights=False, internal_weights=False, weight_numel=64
-            (f): EquivariantTensorProduct(
-              EquivariantTensorProduct(64x0e x 4x0e+4x1o x 0e+1o -> 4x0e+4x1o)
-              (transpose_in): ModuleList(
-                (0-2): 3 x TransposeIrrepsLayout((irrep,mul) -> (irrep,mul))
-              )
-              (transpose_out): TransposeIrrepsLayout((irrep,mul) -> (irrep,mul))
-              (tp): TensorProduct(uvw,iu,jv,kw+ijk sizes=64,16,4,16 num_segments=4,2,2,2 num_paths=4 i={1, 3} j={1, 3} k={1, 3} u=4 v=1 w=4 (with CUDA kernel))
-            )
-          )
-          (batch_norm): BatchNorm(4x0e+4x1o, layout=(irrep,mul), eps=1e-05, momentum=0.1)
-          (mlp): Sequential(
-            (0): Linear(in_features=6, out_features=16, bias=True)
-            (1): ReLU()
-            (2): Linear(in_features=16, out_features=16, bias=True)
-            (3): ReLU()
-            (4): Linear(in_features=16, out_features=64, bias=True)
-          )
-        )
+        FullyConnectedTensorProductConv(...)
         >>> # out = conv1(src_features, edge_sh, edge_emb, graph)
 
         **Case 2**: If edge_emb is constructed by concatenating scalar features from
@@ -108,7 +92,7 @@ class FullyConnectedTensorProductConv(nn.Module):
         **Case 3**: No MLP, edge_emb will be directly used as the tensor product weights:
 
         >>> conv3 = FullyConnectedTensorProductConv(in_irreps, sh_irreps, out_irreps,
-        ...     mlp_channels=None, layout=cue.ir_mul).cuda()
+        ...     mlp_channels=None, layout=cue.ir_mul)
         >>> # out = conv3(src_features, edge_sh, edge_emb, graph)
     """
 
@@ -121,6 +105,7 @@ class FullyConnectedTensorProductConv(nn.Module):
         mlp_channels: Optional[Sequence[int]] = None,
         mlp_activation: Union[nn.Module, Sequence[nn.Module], None] = nn.GELU(),
         layout: cue.IrrepsLayout = None,  # e3nn_compat_mode
+        use_fallback: Optional[bool] = None,
         optimize_fallback: Optional[bool] = None,
     ):
         super().__init__()
@@ -141,6 +126,7 @@ class FullyConnectedTensorProductConv(nn.Module):
             out_irreps,
             layout=self.layout,
             shared_weights=False,
+            use_fallback=use_fallback,
             optimize_fallback=optimize_fallback,
         )
 

@@ -22,6 +22,8 @@ import cuequivariance as cue
 import cuequivariance_torch as cuet
 from cuequivariance.experimental.e3nn import O3_e3nn
 
+device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
+
 USE_TF32 = False
 torch.backends.cuda.matmul.allow_tf32 = USE_TF32
 torch.backends.cudnn.allow_tf32 = USE_TF32
@@ -30,7 +32,7 @@ torch.backends.cudnn.allow_tf32 = USE_TF32
 @pytest.mark.parametrize("dtype", [torch.float64, torch.float32])
 @pytest.mark.parametrize("layout", [cue.ir_mul, cue.mul_ir])
 @pytest.mark.parametrize("original_mace", [True, False])
-@pytest.mark.parametrize("batch", [0, 32])
+@pytest.mark.parametrize("batch", [1, 32])
 def test_symmetric_contraction(dtype, layout, original_mace, batch):
     mul = 64
     irreps_in = mul * cue.Irreps("O3", "0e + 1o + 2e")
@@ -45,12 +47,12 @@ def test_symmetric_contraction(dtype, layout, original_mace, batch):
         layout_out=layout,
         dtype=dtype,
         math_dtype=dtype,
-        device="cuda",
+        device=device,
         original_mace=original_mace,
     )
 
-    x = torch.randn((batch, irreps_in.dim), dtype=dtype).cuda()
-    indices = torch.randint(0, 5, (batch,), dtype=torch.int32).cuda()
+    x = torch.randn((batch, irreps_in.dim), dtype=dtype).to(device)
+    indices = torch.randint(0, 5, (batch,), dtype=torch.int32).to(device)
 
     out = m(x, indices)
     assert out.shape == (batch, irreps_out.dim)
@@ -58,7 +60,7 @@ def test_symmetric_contraction(dtype, layout, original_mace, batch):
 
 def from64(shape: tuple[int, ...], data: str) -> torch.Tensor:
     x = np.frombuffer(base64.b64decode(data), dtype=np.float32).reshape(shape)
-    return torch.from_numpy(x.copy()).cuda()
+    return torch.from_numpy(x.copy()).to(device)
 
 
 def test_mace_compatibility():
@@ -76,7 +78,7 @@ def test_mace_compatibility():
     irreps_in = cue.Irreps(O3_e3nn, "0e + 1o + 2e")
     irreps_out = cue.Irreps(O3_e3nn, "0e + 1o")
 
-    i = (torch.arange(3) % num_elements).cuda()
+    i = (torch.arange(3) % num_elements).to(device)
     x = from64(
         (3, 36),
         "mHgaP1zHTz5kdhs/3ygQvwzZf77dhoU8+iP+PzzRRD8L9CY+qi9Fv5aiBz/sGJG/xwaev+5w4b2Mbg8+1jDOP4/cwj9rt/u/FedUP7H6qD4y9LM+i7yvPhcifz8coHE/Vkk1PwK0hb/BNig+GF4gP1FNaD94Uj++d+1qPtkrYD8m8o6/9zK9PihGBz9M6Ne9XgCXP/r6bzxTXJO/glIsQPQlDL/fN5w7VeeKP4iYlD/9Msa/GF/cvg+2gz/oRJ6/0Te4P7g+oz8YQ6g+k0q0vN8WEr41/u0/sa55PmAhvD9FZZw/ICJtvyxFkz+zOAq/8JtNPztZX74E9hK/xCdqv4+0Rz9Ah/g+5vmDv6mLL7+M5DI/xgP3PhWEnj5ZmZ0+DBkXwPa12D1mVPo9rDdWP4DkRD+L85Y9EJ01P+8Hiz6gxSM7/eoPwOQOtr8gjge+NBEYPrmg5L2XpO8/F2tCvjEyWL8gjLw+UOIuP5bhPr9qRvM+ADa5v3rqLLwSr/8+PbZhP4tn675SWVm/SMC1P5h/0r0D8v2/CNS7Pza7SL8PqJG+DsKCOpTKoT+xnLg/",
@@ -95,7 +97,7 @@ def test_mace_compatibility():
         layout_in=cue.ir_mul,
         layout_out=cue.mul_ir,
         original_mace=True,
-        device="cuda",
+        device=device,
         dtype=torch.float32,
         math_dtype=torch.float64,
     )

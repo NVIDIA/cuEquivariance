@@ -15,7 +15,7 @@
 import itertools
 from dataclasses import dataclass
 from functools import wraps
-from typing import Set, Callable
+from typing import Callable, Set
 
 import networkx
 import numpy as np
@@ -396,25 +396,29 @@ def sparsify_matrix(
         next_graph.add_nodes_from(range(x.shape[0]))
 
         for i0, i1 in graph.edges:
-            match sparsify_rows(x[i0], x[i1], round_fn):
-                case DisjointRows():
-                    pass
-                case ReplaceRow(a0, a1, row, which):
-                    hope = True
-                    which = i0 if which == 0 else i1
-                    x[which] = row
-                    q[which] = a0 * q[i0] + a1 * q[i1]
+            result = sparsify_rows(x[i0], x[i1], round_fn)
 
-                    next_graph.add_edge(i0, i1)
-                    for i in graph.neighbors(i0):
-                        if i != i1:
-                            next_graph.add_edge(i, i1)
-                    for i in graph.neighbors(i1):
-                        if i != i0:
-                            next_graph.add_edge(i, i0)
+            if isinstance(result, DisjointRows):
+                pass
+            elif isinstance(result, ReplaceRow):
+                a0, a1, row, which = result.a0, result.a1, result.row, result.which
+                hope = True
+                which = i0 if which == 0 else i1
+                x[which] = row
+                q[which] = a0 * q[i0] + a1 * q[i1]
 
-                case AlreadySparse(_nc, _nx, _n0, _n1):
-                    next_graph.add_edge(i0, i1)
+                next_graph.add_edge(i0, i1)
+                for i in graph.neighbors(i0):
+                    if i != i1:
+                        next_graph.add_edge(i, i1)
+                for i in graph.neighbors(i1):
+                    if i != i0:
+                        next_graph.add_edge(i, i0)
+            elif isinstance(result, AlreadySparse):
+                next_graph.add_edge(i0, i1)
+            else:
+                raise ValueError(f"Unknown result type: {result}")
+
         iterations += 1
         graph = next_graph
 

@@ -38,6 +38,10 @@ class SymmetricContraction(torch.nn.Module):
         layout (IrrepsLayout, optional): The layout of the input and output irreps. If not provided, a default layout is used.
         math_dtype (torch.dtype, optional): The data type for mathematical operations. If not specified, the default data type
             from the torch environment is used.
+        use_fallback (bool, optional): If `None` (default), a CUDA kernel will be used if available.
+                If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
+                If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
+        optimize_fallback (bool, optional): Whether to optimize fallback. Defaults to None.
 
     Examples:
         >>> irreps_in = cue.Irreps("O3", "32x0e + 32x1o")
@@ -48,6 +52,7 @@ class SymmetricContraction(torch.nn.Module):
 
         The argument `original_mace` can be set to `True` to emulate the original MACE implementation.
 
+        >>> device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         >>> feats_irreps = cue.Irreps("O3", "32x0e + 32x1o + 32x2e")
         >>> target_irreps = cue.Irreps("O3", "32x0e + 32x1o")
         >>> # OLD FUNCTION DEFINITION:
@@ -67,14 +72,15 @@ class SymmetricContraction(torch.nn.Module):
         ...     layout_out=cue.mul_ir,
         ...     original_mace=True,
         ...     dtype=torch.float64,
+        ...     device=device,
         ... )
 
         Then the execution is as follows:
 
-        >>> node_feats = torch.randn(128, 32, feats_irreps.dim // 32, dtype=torch.float64)
+        >>> node_feats = torch.randn(128, 32, feats_irreps.dim // 32, dtype=torch.float64, device=device)
         >>> # with node_attrs_index being the index version of node_attrs, sth like:
         >>> # node_attrs_index = torch.nonzero(node_attrs)[:, 1].int()
-        >>> node_attrs_index = torch.randint(0, 10, (128,), dtype=torch.int32)
+        >>> node_attrs_index = torch.randint(0, 10, (128,), dtype=torch.int32, device=device)
         >>> # OLD CALL:
         >>> # symmetric_contractions_old(node_feats, node_attrs)
         >>> # NEW CALL:
@@ -102,6 +108,7 @@ class SymmetricContraction(torch.nn.Module):
         dtype: Optional[torch.dtype] = None,
         math_dtype: Optional[torch.dtype] = None,
         original_mace: bool = False,
+        use_fallback: Optional[bool] = None,
         optimize_fallback: Optional[bool] = None,
     ):
         super().__init__()
@@ -147,6 +154,7 @@ class SymmetricContraction(torch.nn.Module):
             layout_out=layout_out,
             device=device,
             math_dtype=math_dtype or dtype,
+            use_fallback=use_fallback,
             optimize_fallback=optimize_fallback,
         )
 
@@ -160,8 +168,6 @@ class SymmetricContraction(torch.nn.Module):
         self,
         x: torch.Tensor,
         indices: torch.Tensor,
-        *,
-        use_fallback: Optional[bool] = None,
     ) -> torch.Tensor:
         """
         Perform the forward pass of the symmetric contraction operation.
@@ -170,9 +176,6 @@ class SymmetricContraction(torch.nn.Module):
             x (torch.Tensor): The input tensor. It should have shape (..., irreps_in.dim).
             indices (torch.Tensor): The index of the weight to use for each batch element.
                 It should have shape (...).
-            use_fallback (bool, optional): If `None` (default), a CUDA kernel will be used if available.
-                If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
-                If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
 
         Returns:
             torch.Tensor: The output tensor. It has shape (batch, irreps_out.dim).
@@ -188,4 +191,4 @@ class SymmetricContraction(torch.nn.Module):
             weight = self.weight
         weight = weight.flatten(1)
 
-        return self.f([weight, x], indices=indices, use_fallback=use_fallback)
+        return self.f([weight, x], indices=indices)

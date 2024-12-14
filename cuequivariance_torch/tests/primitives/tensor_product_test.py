@@ -22,6 +22,8 @@ import cuequivariance.segmented_tensor_product as stp
 import cuequivariance_torch as cuet
 from cuequivariance import descriptors
 
+device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
+
 
 def make_descriptors():
     yield descriptors.fully_connected_tensor_product(
@@ -80,7 +82,7 @@ settings = [
     (torch.float64, torch.float64, 1e-12),
 ]
 
-if torch.cuda.get_device_capability()[0] >= 8:
+if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:
     settings += [
         (torch.float16, torch.float32, 1.0),
         (torch.bfloat16, torch.float32, 1.0),
@@ -89,13 +91,16 @@ if torch.cuda.get_device_capability()[0] >= 8:
 
 @pytest.mark.parametrize("d", make_descriptors())
 @pytest.mark.parametrize("dtype, math_dtype, tol", settings)
+@pytest.mark.parametrize("use_fallback", [False, True])
 def test_primitive_tensor_product_cuda_vs_fx(
     d: stp.SegmentedTensorProduct,
     dtype: torch.dtype,
     math_dtype: torch.dtype,
     tol: float,
+    use_fallback: bool,
 ):
-    device = torch.device("cuda:0")
+    if use_fallback is False and not torch.cuda.is_available():
+        pytest.skip("CUDA is not available")
 
     for batches in itertools.product([(16,), (), (4, 1)], repeat=d.num_operands - 1):
         inputs = [
@@ -109,14 +114,22 @@ def test_primitive_tensor_product_cuda_vs_fx(
         ]
 
         m = cuet.TensorProduct(
-            d, device=device, math_dtype=math_dtype, optimize_fallback=False
+            d, device=device, math_dtype=math_dtype, use_fallback=use_fallback
         )
-        out1 = m(inputs, use_fallback=False)
+        if not use_fallback:
+            m = torch.jit.script(m)
+
+        out1 = m(inputs)
+
         m = cuet.TensorProduct(
-            d, device=device, math_dtype=torch.float64, optimize_fallback=False
+            d,
+            device=device,
+            math_dtype=torch.float64,
+            use_fallback=True,
+            optimize_fallback=False,
         )
         inputs_ = [inp.clone().to(torch.float64) for inp in inputs]
-        out2 = m(inputs_, use_fallback=True)
+        out2 = m(inputs_)
 
         assert out1.shape[:-1] == torch.broadcast_shapes(*batches)
         assert out1.dtype == dtype

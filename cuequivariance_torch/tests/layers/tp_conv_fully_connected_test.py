@@ -21,7 +21,7 @@ import cuequivariance as cue
 import cuequivariance_torch as cuet
 from cuequivariance_torch.layers.tp_conv_fully_connected import scatter_reduce
 
-device = torch.device("cuda:0")
+device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
 
 
 @pytest.mark.parametrize("layout", [cue.mul_ir, cue.ir_mul])
@@ -133,7 +133,6 @@ def test_tensor_product_conv_equivariance(
 
 @pytest.mark.parametrize("reduce", ["sum", "mean", "prod", "amax", "amin"])
 def test_scatter_reduce(reduce: str):
-    device = torch.device("cuda")
     src = torch.Tensor([3, 1, 0, 1, 1, 2])
     index = torch.Tensor([0, 1, 2, 2, 3, 1])
 
@@ -153,7 +152,6 @@ def test_scatter_reduce(reduce: str):
 
 
 def test_scatter_reduce_empty():
-    device = torch.device("cuda")
     src, index = torch.empty((0, 41)), torch.empty((0,))
     src = src.to(device)
     index = index.to(device)

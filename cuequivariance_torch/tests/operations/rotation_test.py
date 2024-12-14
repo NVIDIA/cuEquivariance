@@ -17,16 +17,18 @@ import torch
 import cuequivariance as cue
 import cuequivariance_torch as cuet
 
+device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
+
 
 def test_rotation():
     irreps = cue.Irreps("SO3", "3x0 + 1 + 0 + 4x2 + 4")
-    alpha = torch.tensor(0.3).cuda()
-    beta = torch.tensor(0.4).cuda()
-    gamma = torch.tensor(-0.5).cuda()
+    alpha = torch.tensor(0.3).to(device)
+    beta = torch.tensor(0.4).to(device)
+    gamma = torch.tensor(-0.5).to(device)
 
-    rot = cuet.Rotation(irreps, layout=cue.ir_mul).cuda()
+    rot = cuet.Rotation(irreps, layout=cue.ir_mul).to(device)
 
-    x = torch.randn(10, irreps.dim).cuda()
+    x = torch.randn(10, irreps.dim).to(device)
 
     rx = rot(gamma, beta, alpha, x)
     x_ = rot(-alpha, -beta, -gamma, rx)

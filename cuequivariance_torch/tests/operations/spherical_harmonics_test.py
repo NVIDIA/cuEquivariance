@@ -19,22 +19,24 @@ import torch
 import cuequivariance as cue
 import cuequivariance_torch as cuet
 
+device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
+
 
 @pytest.mark.parametrize(
     "dtype, tol",
     [(torch.float64, 1e-6), (torch.float32, 1e-4)],
 )
-@pytest.mark.parametrize("l", [1, 2, 3])
+@pytest.mark.parametrize("ell", [1, 2, 3])
 def test_spherical_harmonics(ell: int, dtype, tol):
-    vec = torch.randn(3, dtype=dtype)
+    vec = torch.randn(3, dtype=dtype, device=device)
     axis = np.random.randn(3)
     angle = np.random.rand()
     scale = 1.3
 
     yl = cuet.spherical_harmonics([ell], vec, False)
 
-    R = torch.from_numpy(cue.SO3(1).rotation(axis, angle)).to(dtype)
-    Rl = torch.from_numpy(cue.SO3(ell).rotation(axis, angle)).to(dtype)
+    R = torch.from_numpy(cue.SO3(1).rotation(axis, angle)).to(dtype).to(device)
+    Rl = torch.from_numpy(cue.SO3(ell).rotation(axis, angle)).to(dtype).to(device)
 
     yl1 = cuet.spherical_harmonics([ell], scale * R @ vec, False)
     yl2 = scale**ell * Rl @ yl
@@ -43,7 +45,7 @@ def test_spherical_harmonics(ell: int, dtype, tol):
 
 
 def test_spherical_harmonics_full():
-    vec = torch.randn(3)
+    vec = torch.randn(3, device=device)
     ls = [0, 1, 2, 3]
     yl = cuet.spherical_harmonics(ls, vec, False)
 

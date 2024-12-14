@@ -20,6 +20,8 @@ import cuequivariance.segmented_tensor_product as stp
 import cuequivariance_torch as cuet
 from cuequivariance import descriptors
 
+device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
+
 
 def make_descriptors():
     yield descriptors.symmetric_contraction(
@@ -47,7 +49,7 @@ settings1 = [
     (torch.float32, torch.float64, 1e-5),
 ]
 
-if torch.cuda.get_device_capability()[0] >= 8:
+if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:
     settings1 += [
         (torch.float16, torch.float32, 1.0),
         (torch.float16, torch.float64, 0.1),
@@ -58,14 +60,22 @@ if torch.cuda.get_device_capability()[0] >= 8:
 
 @pytest.mark.parametrize("ds", make_descriptors())
 @pytest.mark.parametrize("dtype, math_dtype, tol", settings1)
+@pytest.mark.parametrize("use_fallback", [False, True])
 def test_primitive_indexed_symmetric_tensor_product_cuda_vs_fx(
-    ds: list[stp.SegmentedTensorProduct], dtype, math_dtype, tol: float
+    ds: list[stp.SegmentedTensorProduct],
+    dtype,
+    math_dtype,
+    tol: float,
+    use_fallback: bool,
 ):
-    device = torch.device("cuda:0")
+    if use_fallback is False and not torch.cuda.is_available():
+        pytest.skip("CUDA is not available")
 
     m = cuet.IWeightedSymmetricTensorProduct(
-        ds, math_dtype=math_dtype, device=device, optimize_fallback=False
+        ds, math_dtype=math_dtype, device=device, use_fallback=use_fallback
     )
+    if use_fallback is False:
+        m = torch.jit.script(m)
 
     x0 = torch.randn((2, m.x0_size), device=device, dtype=dtype, requires_grad=True)
     i0 = torch.tensor([0, 1, 0], dtype=torch.int32, device=device)
@@ -75,11 +85,15 @@ def test_primitive_indexed_symmetric_tensor_product_cuda_vs_fx(
     x0_ = x0.clone().to(torch.float64)
     x1_ = x1.clone().to(torch.float64)
 
-    out1 = m(x0, i0, x1, use_fallback=False)
+    out1 = m(x0, i0, x1)
     m = cuet.IWeightedSymmetricTensorProduct(
-        ds, math_dtype=torch.float64, device=device, optimize_fallback=True
+        ds,
+        math_dtype=torch.float64,
+        device=device,
+        use_fallback=True,
+        optimize_fallback=True,
     )
-    out2 = m(x0_, i0, x1_, use_fallback=True)
+    out2 = m(x0_, i0, x1_)
 
     assert out1.dtype == dtype
 
@@ -104,7 +118,7 @@ settings2 = [
     (torch.float32, torch.float64),
 ]
 
-if torch.cuda.get_device_capability()[0] >= 8:
+if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:
     settings2 += [
         (torch.float16, torch.float32),
         (torch.bfloat16, torch.float32),
@@ -112,28 +126,29 @@ if torch.cuda.get_device_capability()[0] >= 8:
 
 
 @pytest.mark.parametrize("dtype, math_dtype", settings2)
-def test_math_dtype(
-    dtype: torch.dtype,
-    math_dtype: torch.dtype,
-):
-    device = torch.device("cuda:0")
+@pytest.mark.parametrize("use_fallback", [False, True])
+def test_math_dtype(dtype: torch.dtype, math_dtype: torch.dtype, use_fallback: bool):
+    if use_fallback is False and not torch.cuda.is_available():
+        pytest.skip("CUDA is not available")
 
     ds = descriptors.symmetric_contraction(
         cue.Irreps("SO3", "0 + 1 + 2"), cue.Irreps("SO3", "0"), [1, 2, 3]
     ).ds
-    m = cuet.IWeightedSymmetricTensorProduct(ds, math_dtype=math_dtype, device=device)
+    m = cuet.IWeightedSymmetricTensorProduct(
+        ds, math_dtype=math_dtype, device=device, use_fallback=use_fallback
+    )
     x0 = torch.randn((20, m.x0_size), dtype=dtype, device=device)
     i0 = torch.randint(0, m.x0_size, (1000,), dtype=torch.int32, device=device)
     x1 = torch.randn((i0.size(0), m.x1_size), dtype=dtype, device=device)
 
-    out1 = m(x0, i0, x1, use_fallback=False)
+    out1 = m(x0, i0, x1)
 
     # .to should have no effect
     for param in m.parameters():
         assert False  # no parameters
     m = m.to(torch.float64)
 
-    out2 = m(x0, i0, x1, use_fallback=False)
+    out2 = m(x0, i0, x1)
 
     assert out1.dtype == dtype
     assert out2.dtype == dtype

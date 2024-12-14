@@ -12,13 +12,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import pytest
 import torch
+
 import cuequivariance_torch as cuet
 
-import pytest
+device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
 
 dtypes = [torch.float32, torch.float64]
-if torch.cuda.get_device_capability()[0] >= 8:
+if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:
     dtypes += [torch.float16, torch.bfloat16]
 
 
@@ -33,14 +35,16 @@ def test_transpose(use_fallback: bool, dtype: torch.dtype):
     10 11       10 12
     12 13       11 13
     """
+    if use_fallback is False and not torch.cuda.is_available():
+        pytest.skip("CUDA is not available")
 
     x = torch.tensor(
-        [[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 10, 11, 12, 13]], dtype=dtype
-    ).cuda()
+        [[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 10, 11, 12, 13]], dtype=dtype, device=device
+    )
     segments = [(2, 3), (2, 2)]
     xt = torch.tensor(
-        [[1.0, 4.0, 2.0, 5.0, 3.0, 6.0, 10, 12, 11, 13]], dtype=dtype
-    ).cuda()
+        [[1.0, 4.0, 2.0, 5.0, 3.0, 6.0, 10, 12, 11, 13]], dtype=dtype, device=device
+    )
 
-    m = cuet.TransposeSegments(segments).cuda()
-    torch.testing.assert_close(m(x, use_fallback=use_fallback), xt)
+    m = cuet.TransposeSegments(segments, device, use_fallback=use_fallback)
+    torch.testing.assert_close(m(x), xt)
