@@ -89,7 +89,7 @@ We can execute an :class:`cuequivariance.EquivariantTensorProduct` with PyTorch.
         cue.Irreps("O3", "32x0e + 32x1o"),
         cue.Irreps("O3", "8x0e + 4x1o")
     )
-    module = cuet.EquivariantTensorProduct(e, layout=cue.ir_mul)
+    module = cuet.EquivariantTensorProduct(e, layout=cue.ir_mul, use_fallback=True)
 
     w = torch.randn(e.inputs[0].irreps.dim)
     x = torch.randn(e.inputs[1].irreps.dim)

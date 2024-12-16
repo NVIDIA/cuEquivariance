@@ -23,3 +23,4 @@ Tutorials
    layout
    etp
    stp
+   kernels
