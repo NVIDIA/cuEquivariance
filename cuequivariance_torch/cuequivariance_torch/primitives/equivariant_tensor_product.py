@@ -164,36 +164,44 @@ class EquivariantTensorProduct(torch.nn.Module):
             raise ValueError(
                 f"Expected {e.num_inputs} input layouts, got {len(layout_in)}"
             )
-        layout_in = tuple(ell or layout for ell in layout_in)
+        layout_in = tuple(lay or layout for lay in layout_in)
         layout_out = layout_out or layout
         del layout
 
         self.etp = e
-        self.layout_in = layout_in = tuple(map(default_layout, layout_in))
-        self.layout_out = layout_out = default_layout(layout_out)
 
         transpose_in = torch.nn.ModuleList()
         for layout_used, input_expected in zip(layout_in, e.inputs):
-            transpose_in.append(
-                cuet.TransposeIrrepsLayout(
-                    input_expected.irreps,
-                    source=layout_used,
-                    target=input_expected.layout,
-                    device=device,
-                    use_fallback=use_fallback,
+            if isinstance(input_expected, cue.IrrepsAndLayout):
+                layout_used = default_layout(layout_used)
+                transpose_in.append(
+                    cuet.TransposeIrrepsLayout(
+                        input_expected.irreps,
+                        source=layout_used,
+                        target=input_expected.layout,
+                        device=device,
+                        use_fallback=use_fallback,
+                    )
                 )
-            )
+            else:
+                assert layout_used is None
+                transpose_in.append(torch.nn.Identity())
 
         # script() requires literal addressing and fails to eliminate dead branches
         self.transpose_in = TRANSPOSE_DISPATCHERS[len(transpose_in) - 1](transpose_in)
 
-        self.transpose_out = cuet.TransposeIrrepsLayout(
-            e.output.irreps,
-            source=e.output.layout,
-            target=layout_out,
-            device=device,
-            use_fallback=use_fallback,
-        )
+        if isinstance(e.output, cue.IrrepsAndLayout):
+            layout_out = default_layout(layout_out)
+            self.transpose_out = cuet.TransposeIrrepsLayout(
+                e.output.irreps,
+                source=e.output.layout,
+                target=layout_out,
+                device=device,
+                use_fallback=use_fallback,
+            )
+        else:
+            assert layout_out is None
+            self.transpose_out = torch.nn.Identity()
 
         if any(d.num_operands != e.num_inputs + 1 for d in e.ds):
             if e.num_inputs == 1:
@@ -229,7 +237,7 @@ class EquivariantTensorProduct(torch.nn.Module):
                 )
             )
 
-        self.operands_dims = [op.irreps.dim for op in e.operands]
+        self.operands_dims = [op.dim for op in e.operands]
 
     def extra_repr(self) -> str:
         return str(self.etp)
