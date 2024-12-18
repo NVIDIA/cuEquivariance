@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import logging
+import math
 from typing import Optional
 
 import torch
@@ -86,6 +87,9 @@ class SymmetricTensorProduct(torch.nn.Module):
                 The output tensor resulting from the indexed symmetric tensor product operation.
                 It will have the shape (batch, x1_size).
         """
+        torch._assert(
+            x0.ndim == 2, f"Expected 2 dims (batch, x0_size), got shape {x0.shape}"
+        )
         return self.f(
             torch.ones((1, 1), dtype=x0.dtype, device=x0.device),
             torch.zeros((x0.shape[0],), dtype=torch.int32, device=x0.device),
@@ -226,8 +230,7 @@ class CUDAKernel(torch.nn.Module):
     ):
         super().__init__()
 
-        d_max = max(ds, key=lambda d: d.num_operands)
-        max_degree = d_max.num_operands - 2
+        max_degree = max(d.num_operands - 2 for d in ds)
 
         if max_degree > 6:
             raise NotImplementedError("Correlation > 6 is not implemented.")
@@ -250,26 +253,55 @@ class CUDAKernel(torch.nn.Module):
                 ]
             )
             d = d.consolidate_modes()
+            if d.subscripts.modes() == []:
+                d = d.append_modes_to_all_operands("u", dict(u=1))
 
             # ops.SymmetricTensorContraction will "symmetrize" for the derivatives so we can sort for the forward pass
             d = d.sort_indices_for_identical_operands(range(0, d.num_operands - 2))
 
-            if len(set(ope.subscripts for ope in d.operands)) != 1:
+            if len(d.subscripts.modes()) != 1:
+                raise NotImplementedError("Different modes are not supported.")
+
+            m = d.subscripts.modes()[0]
+
+            if not all(ope.subscripts == m for ope in d.operands):
                 raise NotImplementedError("Different subscripts are not supported.")
+
+            d = d.split_mode(m, math.gcd(*d.get_dims(m)))
+
             return d
 
         ds_ = [f(d) for d in ds]
         import cuequivariance_ops_torch as ops
 
+        d_max = max(ds_, key=lambda d: d.num_operands)
+
+        path_segment_indices = sum((d.indices.tolist() for d in ds_), [])
+        path_coefficients = sum((d.stacked_coefficients.tolist() for d in ds_), [])
+        num_in_segments = (
+            d_max.operands[0].num_segments if d_max.num_operands >= 3 else 1
+        )
+        num_couplings = d_max.operands[-2].num_segments
+        num_out_segments = d_max.operands[-1].num_segments
+        correlation = max(1, max_degree)
+        math_dtype = math_dtype
+        logger.debug(f"""cuequivariance_ops_torch.SymmetricTensorContraction(
+    path_segment_indices={path_segment_indices},
+    path_coefficients={path_coefficients},
+    num_in_segments={num_in_segments},
+    num_couplings={num_couplings},
+    num_out_segments={num_out_segments},
+    correlation={correlation},
+    math_dtype={math_dtype},
+        )""")
+
         self.f = ops.SymmetricTensorContraction(
-            sum((d.indices.tolist() for d in ds_), []),
-            sum((d.stacked_coefficients.tolist() for d in ds_), []),
-            num_in_segments=d_max.operands[1].num_segments
-            if d_max.num_operands >= 3
-            else 1,
-            num_couplings=d_max.operands[0].num_segments,
-            num_out_segments=d_max.operands[-1].num_segments,
-            correlation=max(1, max_degree),
+            path_segment_indices=path_segment_indices,
+            path_coefficients=path_coefficients,
+            num_in_segments=num_in_segments,
+            num_couplings=num_couplings,
+            num_out_segments=num_out_segments,
+            correlation=correlation,
             math_dtype=math_dtype,
         ).to(device=device)
         self.u = d_max.operands[0].size // d_max.operands[0].num_segments
@@ -284,6 +316,10 @@ class CUDAKernel(torch.nn.Module):
             x_2[j_{n+1}] = val x_0[i_0][j_0] \prod_{k=1}^{n} x_1[j_k]
 
         """
+        torch._assert(x0.ndim == 2, f"Expected shape (num_x0, x0_size), got {x0.shape}")
+        torch._assert(x1.ndim == 2, f"Expected shape (batch, x1_size), got {x1.shape}")
+        torch._assert(i0.ndim == 1, f"Expected shape (batch,), got {i0.shape}")
+
         i0 = i0.to(torch.int32)
         x0 = x0.reshape(x0.shape[0], x0.shape[1] // self.u, self.u)
         x1 = x1.reshape(x1.shape[0], x1.shape[1] // self.u, self.u)
