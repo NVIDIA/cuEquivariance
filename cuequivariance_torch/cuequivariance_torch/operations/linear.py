@@ -66,7 +66,7 @@ class Linear(torch.nn.Module):
         self.irreps_in = irreps_in
         self.irreps_out = irreps_out
 
-        self.weight_numel = e.inputs[0].irreps.dim
+        self.weight_numel = e.inputs[0].dim
 
         self.shared_weights = shared_weights
         self.internal_weights = (

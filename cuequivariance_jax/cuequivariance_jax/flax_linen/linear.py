@@ -72,7 +72,7 @@ class Linear(nn.Module):
         if algorithm != "sliced":
             e = e.flatten_modes("i")
 
-        w = self.param("w", self.kernel_init, (e.operands[0].irreps.dim,), input.dtype)
+        w = self.param("w", self.kernel_init, (e.operands[0].dim,), input.dtype)
 
         return cuex.equivariant_tensor_product(
             e, w, input, precision=jax.lax.Precision.HIGH, algorithm=algorithm

@@ -310,7 +310,7 @@ class EquivariantTensorProduct:
         if isinstance(itemsize, int):
             itemsize = (itemsize,) * self.num_operands
         return sum(
-            bs * operand.irreps.dim * iz
+            bs * operand.dim * iz
             for iz, bs, operand in zip(itemsize, batch_sizes, self.operands)
         )
 

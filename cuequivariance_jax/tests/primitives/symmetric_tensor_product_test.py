@@ -30,8 +30,8 @@ def test_custom_jvp():
         3 * cue.Irreps(cue.O3, "0e"),
         [0, 1, 2, 3, 4],
     )
-    w = np.random.randn(2, e.inputs[0].irreps.dim)
-    x = np.random.randn(2, e.inputs[1].irreps.dim)
+    w = np.random.randn(2, e.inputs[0].dim)
+    x = np.random.randn(2, e.inputs[1].dim)
 
     A = jax.grad(
         lambda x: jnp.sum(
