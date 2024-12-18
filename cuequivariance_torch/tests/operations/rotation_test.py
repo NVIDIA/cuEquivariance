@@ -50,6 +50,9 @@ def test_vector_to_euler_angles():
 
 @pytest.mark.parametrize("use_fallback", [False, True])
 def test_inversion(use_fallback: bool):
+    if use_fallback is False and not torch.cuda.is_available():
+        pytest.skip("CUDA is not available")
+
     irreps = cue.Irreps("O3", "2x1e + 1o")
     torch.testing.assert_close(
         cuet.Inversion(
