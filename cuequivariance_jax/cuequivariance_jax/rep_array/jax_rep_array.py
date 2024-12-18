@@ -126,7 +126,7 @@ class RepArray:
         if len(self.reps) != 1:
             return False
         axis = next(iter(self.reps.keys()))
-        if axis != -1:
+        if axis != self.ndim - 1:
             return False
         rep = self.rep()
         return isinstance(rep, cue.IrrepsAndLayout)
