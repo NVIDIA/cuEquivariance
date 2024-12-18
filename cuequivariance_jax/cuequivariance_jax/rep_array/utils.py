@@ -16,6 +16,7 @@ from typing import Any
 
 import jax
 import jax.numpy as jnp
+import numpy as np  # noqa: F401
 
 import cuequivariance as cue
 import cuequivariance_jax as cuex
