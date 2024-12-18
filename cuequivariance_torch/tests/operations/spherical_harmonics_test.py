@@ -29,6 +29,9 @@ device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("
 @pytest.mark.parametrize("ell", [0, 1, 2, 3])
 @pytest.mark.parametrize("use_fallback", [False, True])
 def test_spherical_harmonics_equivariance(use_fallback: bool, ell: int, dtype, tol):
+    if use_fallback is False and not torch.cuda.is_available():
+        pytest.skip("CUDA is not available")
+
     vec = torch.randn(3, dtype=dtype, device=device)
     axis = np.random.randn(3)
     angle = np.random.rand()
@@ -55,6 +58,9 @@ if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:
 @pytest.mark.parametrize("ls", [[0], [1], [2], [0, 1], [0, 1, 2]])
 @pytest.mark.parametrize("use_fallback", [False, True])
 def test_spherical_harmonics_full(dtype, ls: list[int], use_fallback: bool):
+    if use_fallback is False and not torch.cuda.is_available():
+        pytest.skip("CUDA is not available")
+
     vec = torch.randn(3, device=device, dtype=dtype)
     yl = cuet.spherical_harmonics(ls, vec, False, use_fallback=use_fallback)
     assert yl.shape[-1] == sum(2 * ell + 1 for ell in ls)
