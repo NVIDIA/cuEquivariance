@@ -101,11 +101,14 @@ class TensorProduct(torch.nn.Module):
         self.descriptor = descriptor
         if math_dtype is None:
             math_dtype = torch.get_default_dtype()
-        self.f = None
+
         self.has_cuda = False
         self.num_operands = descriptor.num_operands
 
-        if use_fallback is None or use_fallback is False:
+        if use_fallback is False:
+            self.f = _tensor_product_cuda(descriptor, device, math_dtype)
+            self.has_cuda = True
+        elif use_fallback is None:
             try:
                 self.f = _tensor_product_cuda(descriptor, device, math_dtype)
                 self.has_cuda = True
@@ -120,12 +123,7 @@ class TensorProduct(torch.nn.Module):
                     "pip install cuequivariance-ops-torch-cu12"
                 )
 
-        if use_fallback is False and not self.has_cuda:
-            raise RuntimeError(
-                "`use_fallback` is `False` and no CUDA kernel is available!"
-            )
-
-        if self.f is None:
+        if not self.has_cuda:
             if optimize_fallback is None:
                 optimize_fallback = False
                 warnings.warn(
