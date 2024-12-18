@@ -29,7 +29,7 @@ def equivariant_tensor_product(
     algorithm: str = "sliced",
     use_custom_primitive: bool = True,
     use_custom_kernels: bool = False,
-):
+) -> cuex.RepArray:
     """Compute the equivariant tensor product of the input arrays.
 
     Args:
@@ -73,8 +73,7 @@ def equivariant_tensor_product(
 
     for x, rep in zip(inputs, e.inputs):
         if isinstance(x, cuex.RepArray):
-            assert x.is_simple()
-            assert x.rep() == rep
+            assert x.rep(-1) == rep
         else:
             assert x.ndim >= 1
             assert x.shape[-1] == rep.dim

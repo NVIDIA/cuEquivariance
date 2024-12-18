@@ -34,7 +34,6 @@ def spherical_harmonics(
     mul, ir = irreps[0]
     assert mul == 1
     assert ir.dim == 3
-    assert max(ls) > 0
     assert min(ls) >= 0
 
     if normalize:
@@ -47,8 +46,8 @@ def spherical_harmonics(
     )
 
 
-def normalize(array: cuex.IrrepsArray) -> cuex.IrrepsArray:
-    assert array.is_simple()
+def normalize(array: cuex.IrrepsArray, epsilon: float = 0.0) -> cuex.IrrepsArray:
+    assert array.is_irreps_array()
 
     match array.layout:
         case cue.ir_mul:
@@ -58,9 +57,10 @@ def normalize(array: cuex.IrrepsArray) -> cuex.IrrepsArray:
 
     def f(x: jax.Array) -> jax.Array:
         sn = jnp.sum(jnp.conj(x) * x, axis=axis_ir, keepdims=True)
-        sn_safe = jnp.where(sn == 0.0, 1.0, sn)
-        rsn_safe = jnp.sqrt(sn_safe)
-        return x / rsn_safe
+        sn += epsilon
+        if epsilon == 0.0:
+            sn = jnp.where(sn == 0.0, 1.0, sn)
+        return x / jnp.sqrt(sn)
 
     return cuex.from_segments(
         array.irreps,
@@ -76,7 +76,7 @@ _normalize = normalize
 
 def norm(array: cuex.IrrepsArray, *, squared: bool = False) -> cuex.IrrepsArray:
     """Norm of IrrepsArray."""
-    assert array.is_simple()
+    assert array.is_irreps_array()
 
     match array.layout:
         case cue.ir_mul:

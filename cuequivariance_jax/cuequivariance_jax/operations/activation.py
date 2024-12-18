@@ -96,8 +96,6 @@ def scalar_activation(
     The activation functions are by default normalized.
     """
     input = cuex.as_irreps_array(input)
-    assert isinstance(input, cuex.IrrepsArray)
-    assert input.is_simple()
 
     if isinstance(acts, dict):
         acts = [acts.get(ir, None) for mul, ir in input.irreps]

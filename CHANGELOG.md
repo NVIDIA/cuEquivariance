@@ -10,6 +10,10 @@
 - `cuequivariance_torch.TensorProduct` and `cuequivariance_torch.EquivariantTensorProduct` now require lists of `torch.Tensor` as input.
 - `cuex.IrrepsArray` is now an alias for `cuex.RepArray` and its `.irreps` attribute and `.segments` are not functions anymore but properties.
 
+## Removed
+
+- `cuex.IrrepsArray.is_simple` is replaced by `cuex.RepArray.is_irreps_array`.
+
 ### Fixed
 
 - Add support for empty batch dimension in `cuequivariance-torch`.

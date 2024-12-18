@@ -122,14 +122,11 @@ class RepArray:
     def dtype(self) -> jax.numpy.dtype:
         return self.array.dtype
 
-    def is_simple(self) -> bool:
+    def is_irreps_array(self) -> bool:
         if len(self.reps) != 1:
             return False
         axis = next(iter(self.reps.keys()))
-        return axis == self.ndim - 1
-
-    def is_irreps_array(self) -> bool:
-        if not self.is_simple():
+        if axis != -1:
             return False
         rep = self.rep()
         return isinstance(rep, cue.IrrepsAndLayout)
