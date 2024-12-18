@@ -21,7 +21,7 @@ __version__ = (
 
 from .rep_array.jax_rep_array import RepArray, from_segments, IrrepsArray
 from .rep_array.vmap import vmap
-from .rep_array.utils import concatenate, randn, as_irreps_array
+from .rep_array.utils import concatenate, randn, as_irreps_array, clebsch_gordan
 
 from .primitives.tensor_product import tensor_product
 from .primitives.symmetric_tensor_product import symmetric_tensor_product
@@ -45,6 +45,7 @@ __all__ = [
     "concatenate",
     "randn",
     "as_irreps_array",
+    "clebsch_gordan",
     "tensor_product",
     "symmetric_tensor_product",
     "equivariant_tensor_product",

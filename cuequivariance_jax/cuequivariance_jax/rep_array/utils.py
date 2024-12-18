@@ -91,8 +91,8 @@ def randn(
 def as_irreps_array(
     input: Any,
     layout: cue.IrrepsLayout | None = None,
-    like: cuex.RepArray | None = None,
-) -> cuex.RepArray:
+    like: cuex.IrrepsArray | None = None,
+) -> cuex.IrrepsArray:
     """Converts input to an IrrepsArray. Arrays are assumed to be scalars.
 
     Examples:
@@ -129,3 +129,44 @@ def as_irreps_array(
     input: jax.Array = jnp.asarray(input)
     irreps = cue.Irreps(type(ir), [(input.shape[-1], ir)])
     return cuex.IrrepsArray(irreps, input, layout)
+
+
+def clebsch_gordan(rep1: cue.Irrep, rep2: cue.Irrep, rep3: cue.Irrep) -> cuex.RepArray:
+    r"""
+    Compute the Clebsch-Gordan coefficients.
+
+    The Clebsch-Gordan coefficients are used to decompose the tensor product of two irreducible representations
+    into a direct sum of irreducible representations. This method computes the Clebsch-Gordan coefficients
+    for the given input representations and returns an array of shape ``(num_solutions, dim1, dim2, dim3)``,
+    where num_solutions is the number of solutions, ``dim1`` is the dimension of ``rep1``, ``dim2`` is the
+    dimension of ``rep2``, and ``dim3`` is the dimension of ``rep3``.
+
+    The Clebsch-Gordan coefficients satisfy the following equation:
+
+    .. math::
+
+        C_{ljk} X^1_{li} + C_{ilk} X^2_{lj} = X^3_{kl} C_{ijl}
+
+    Args:
+        rep1 (Irrep): The first irreducible representation (input).
+        rep2 (Irrep): The second irreducible representation (input).
+        rep3 (Irrep): The third irreducible representation (output).
+
+    Returns:
+        RepArray: An array of shape ``(num_solutions, dim1, dim2, dim3)``.
+
+    Examples:
+        >>> rep1 = cue.SO3(1)
+        >>> rep2 = cue.SO3(1)
+        >>> rep3 = cue.SO3(2)
+        >>> C1 = cuex.clebsch_gordan(rep1, rep2, rep3)
+        >>> C1.shape
+        (1, 3, 3, 5)
+
+        According to the definition of the Clebsch-Gordan coefficients, the following transformation should be identity:
+        >>> C2 = C1.transform(jnp.array([0.1, -0.3, 0.4]))
+        >>> np.testing.assert_allclose(C1.array, C2.array, atol=1e-3)
+    """
+    return cuex.RepArray(
+        {1: rep1, 2: rep2, 3: rep3}, cue.clebsch_gordan(rep1, rep2, rep3)
+    )

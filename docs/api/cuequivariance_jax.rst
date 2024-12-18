@@ -19,14 +19,14 @@
 cuequivariance-jax
 ==================
 
-IrrepsArray
------------
+RepArray
+--------
 
 .. autosummary::
    :toctree: generated/
    :template: class_template.rst
 
-   IrrepsArray
+   RepArray
 
 .. autosummary::
    :toctree: generated/

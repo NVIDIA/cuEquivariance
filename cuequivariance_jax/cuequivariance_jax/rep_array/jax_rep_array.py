@@ -15,6 +15,51 @@ import cuequivariance_jax as cuex  # noqa: F401
 class RepArray:
     """
     Wrapper around a jax array with a dict of Rep for the non-trivial axes.
+
+    .. rubric:: Creation
+
+    You can create a RepArray by specifying the Reps for each axis:
+
+    >>> cuex.RepArray({0: cue.SO3(1), 1: cue.SO3(1)}, jnp.eye(3))
+    {0: 1, 1: 1}
+    [[1. 0. 0.]
+     [0. 1. 0.]
+     [0. 0. 1.]]
+
+    .. rubric:: Special case for Irreps
+
+    If you are using Irreps, you can use the following syntax:
+
+    >>> cuex.IrrepsArray(
+    ...     cue.Irreps("SO3", "2x0"), jnp.array([1.0, 2.0]), cue.ir_mul
+    ... )
+    {0: 2x0} [1. 2.]
+
+    If you don't specify the axis it will default to the last axis:
+
+    >>> cuex.IrrepsArray(
+    ...     cue.Irreps("SO3", "2x0"), jnp.array([1.0, 2.0]), cue.ir_mul
+    ... )
+    {0: 2x0} [1. 2.]
+
+    You can use a default group and layout:
+
+    >>> with cue.assume(cue.SO3, cue.ir_mul):
+    ...     cuex.IrrepsArray("2x0", jnp.array([1.0, 2.0]))
+    {0: 2x0} [1. 2.]
+
+    .. rubric:: Arithmetic
+
+    Basic arithmetic operations are supported, as long as they are equivariant:
+
+    >>> with cue.assume(cue.SO3, cue.ir_mul):
+    ...     x = cuex.IrrepsArray("2x0", jnp.array([1.0, 2.0]))
+    ...     y = cuex.IrrepsArray("2x0", jnp.array([3.0, 4.0]))
+    ...     x + y
+    {0: 2x0} [4. 6.]
+
+    >>> 3.0 * x
+    {0: 2x0} [3. 6.]
     """
 
     reps: dict[int, cue.Rep] = field()
@@ -24,12 +69,22 @@ class RepArray:
         self,
         reps: cue.Rep | dict[int, cue.Rep],
         array: jax.Array,
+        layout: cue.IrrepsLayout | None = None,
     ):
+        # Support for RepArray(irreps, array, layout)
+        if isinstance(reps, str):
+            reps = cue.Irreps(reps)
+        if isinstance(reps, cue.Irreps):
+            reps = cue.IrrepsAndLayout(reps, layout)
+        else:
+            assert layout is None
+        # End of support for RepArray(irreps, array, layout)
+
         if isinstance(reps, cue.Rep):
             reps = {-1: reps}
 
         if not isinstance(reps, dict):
-            raise ValueError("Invalid input")
+            raise ValueError(f"Invalid input for reps: {reps}, {type(reps)}")
 
         ndim = getattr(array, "ndim", None)
         if ndim is not None:
@@ -189,11 +244,11 @@ class RepArray:
         return self * other
 
     def transform(self, v: jax.Array) -> RepArray:
-        assert self.is_simple()
-
         def matrix(rep: cue.Rep) -> jax.Array:
             X = rep.X
-            assert np.allclose(X, -X.conj().T)  # TODO: support other types of X
+            assert np.allclose(
+                X, -X.conj().transpose((0, 2, 1))
+            )  # TODO: support other types of X
 
             X = jnp.asarray(X, dtype=v.dtype)
             iX = 1j * jnp.einsum("a,aij->ij", v, X)
@@ -223,8 +278,14 @@ class RepArray:
                 self.dtype,
             )
 
-        R = matrix(self.rep())
-        return RepArray(self.reps, jnp.einsum("ij,...j->...i", R, self.array))
+        a = self.array
+        for axis, rep in self.reps.items():
+            a = jnp.moveaxis(a, axis, 0)
+            R = matrix(rep)
+            a = jnp.einsum("ij,j...->i...", R, a)
+            a = jnp.moveaxis(a, 0, axis)
+
+        return RepArray(self.reps, a)
 
     @property
     def segments(self) -> list[jax.Array]:
@@ -394,7 +455,7 @@ class RepArray:
             case cue.ir_mul:
                 array = jnp.moveaxis(self.array, axis, -1)
                 array = jnp.reshape(array, array.shape[:-2] + (self.irreps.dim * mul,))
-                return IrrepsArray(mul * self.irreps, array, cue.ir_mul)
+                return RepArray(mul * self.irreps, array, cue.ir_mul)
             case cue.mul_ir:
 
                 def f(x):
@@ -430,73 +491,7 @@ def decode_rep_array(static, data) -> RepArray:
 
 jax.tree_util.register_pytree_node(RepArray, encode_rep_array, decode_rep_array)
 
-
-@dataclass(frozen=True, init=False, repr=False)
-class IrrepsArray(RepArray):
-    """
-    Wrapper around a jax array with a dict of Irreps for the non-trivial axes.
-
-    .. rubric:: Creation
-
-    >>> cuex.IrrepsArray(
-    ...     cue.Irreps("SO3", "2x0"), jnp.array([1.0, 2.0]), cue.ir_mul
-    ... )
-    {0: 2x0} [1. 2.]
-
-    If you don't specify the axis it will default to the last axis:
-
-    >>> cuex.IrrepsArray(
-    ...     cue.Irreps("SO3", "2x0"), jnp.array([1.0, 2.0]), cue.ir_mul
-    ... )
-    {0: 2x0} [1. 2.]
-
-    You can use a default group and layout:
-
-    >>> with cue.assume(cue.SO3, cue.ir_mul):
-    ...     cuex.IrrepsArray("2x0", jnp.array([1.0, 2.0]))
-    {0: 2x0} [1. 2.]
-
-    .. rubric:: Arithmetic
-
-    Basic arithmetic operations are supported, as long as they are equivariant:
-
-    >>> with cue.assume(cue.SO3, cue.ir_mul):
-    ...     x = cuex.IrrepsArray("2x0", jnp.array([1.0, 2.0]))
-    ...     y = cuex.IrrepsArray("2x0", jnp.array([3.0, 4.0]))
-    ...     x + y
-    {0: 2x0} [4. 6.]
-
-    >>> 3.0 * x
-    {0: 2x0} [3. 6.]
-    """
-
-    def __init__(
-        self,
-        irreps: cue.Irreps | str,
-        array: jax.Array,
-        layout: cue.IrrepsLayout | None = None,
-    ) -> RepArray:
-        super().__init__(
-            {array.ndim - 1: cue.IrrepsAndLayout(irreps, layout)},
-            array,
-        )
-
-
-def encode_irreps_array(x: IrrepsArray) -> tuple:
-    data = (x.array,)
-    static = (x.irreps, x.layout)
-    return data, static
-
-
-def decode_irreps_array(static, data) -> IrrepsArray:
-    (irreps, layout) = static
-    (array,) = data
-    return IrrepsArray(irreps, array, layout)
-
-
-jax.tree_util.register_pytree_node(
-    IrrepsArray, encode_irreps_array, decode_irreps_array
-)
+IrrepsArray = RepArray
 
 
 def from_segments(
