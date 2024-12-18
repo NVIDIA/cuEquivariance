@@ -48,20 +48,6 @@ class SymmetricTensorProduct(torch.nn.Module):
 
         self.descriptors = descriptors
 
-        if any(d.num_operands < 2 for d in descriptors):
-            d0 = next(d for d in descriptors if d.num_operands == 1)
-            descriptors = [d for d in descriptors if d.num_operands >= 2]
-            assert len(descriptors) + 1 == len(self.descriptors)
-            self.f0 = cuet.TensorProduct(
-                d0,
-                device=device,
-                math_dtype=math_dtype,
-                use_fallback=use_fallback,
-                optimize_fallback=optimize_fallback,
-            )
-        else:
-            self.f0 = None
-
         descriptors = [
             stp.SegmentedTensorProduct(
                 operands=[stp.Operand.empty_segments(1)] + d.operands,
@@ -72,13 +58,10 @@ class SymmetricTensorProduct(torch.nn.Module):
             )
             for d in descriptors
         ]
-        try:
-            d = next(d for d in descriptors if d.num_operands >= 1)
-        except StopIteration:
-            raise ValueError("At least one STP must have at least 2 operands.")
+        d_max = max(descriptors, key=lambda d: d.num_operands)
 
-        self.x0_size = d.operands[0].size
-        self.x1_size = d.operands[1].size
+        self.x0_size = d_max.operands[0].size
+        self.x1_size = d_max.operands[1].size if d_max.num_operands >= 3 else 1
 
         self.f = cuet.IWeightedSymmetricTensorProduct(
             descriptors,
@@ -103,14 +86,11 @@ class SymmetricTensorProduct(torch.nn.Module):
                 The output tensor resulting from the indexed symmetric tensor product operation.
                 It will have the shape (batch, x1_size).
         """
-        out = self.f(
+        return self.f(
             torch.ones((1, 1), dtype=x0.dtype, device=x0.device),
             torch.zeros((x0.shape[0],), dtype=torch.int32, device=x0.device),
             x0,
         )
-        if self.f0 is not None:
-            out += self.f0([])
-        return out
 
 
 class IWeightedSymmetricTensorProduct(torch.nn.Module):
@@ -145,31 +125,26 @@ class IWeightedSymmetricTensorProduct(torch.nn.Module):
         _check_descriptors(descriptors)
         self.descriptors = descriptors
 
-        d = next(d for d in descriptors if d.num_operands >= 3)
+        d = max(descriptors, key=lambda d: d.num_operands)
         self.x0_size = d.operands[0].size
-        self.x1_size = d.operands[1].size
+        self.x1_size = d.operands[1].size if d.num_operands >= 3 else 1
         self.x2_size = d.operands[-1].size
 
         self.has_cuda = False
 
-        self.f = None
-
-        if use_fallback is None or use_fallback is False:
+        if use_fallback is False:
+            self.f = CUDAKernel(descriptors, device, math_dtype)
+            self.has_cuda = True
+        elif use_fallback is None:
             try:
                 self.f = CUDAKernel(descriptors, device, math_dtype)
                 self.has_cuda = True
-                return
             except NotImplementedError as e:
                 logger.info(f"Failed to initialize CUDA implementation: {e}")
             except ImportError as e:
                 logger.warning(f"Failed to initialize CUDA implementation: {e}")
 
-        if use_fallback is False and not self.has_cuda:
-            raise RuntimeError(
-                "`use_fallback` is `False` and no CUDA kernel is available!"
-            )
-
-        if self.f is None:
+        if not self.has_cuda:
             self.f = FallbackImpl(
                 descriptors,
                 device,
@@ -228,42 +203,41 @@ def _check_descriptors(descriptors: list[stp.SegmentedTensorProduct]):
     if len(descriptors) == 0:
         raise ValueError("stps must contain at least one STP.")
 
-    try:
-        d = next(d for d in descriptors if d.num_operands >= 3)
-    except StopIteration:
-        raise ValueError("At least one STP must have at least 3 operands.")
-
-    x0 = d.operands[0]
-    x1 = d.operands[1]
-    x2 = d.operands[-1]
+    d_max = max(descriptors, key=lambda d: d.num_operands)
+    assert d_max.num_operands >= 2  # at least x0 and x2
 
     for d in descriptors:
-        if d.operands[0].size != x0.size:
+        if d.operands[0].size != d_max.operands[0].size:
             raise ValueError("All STPs must have the same first operand (x0).")
 
-        if any(ope.size != x1.size for ope in d.operands[1:-1]):
+        if any(ope.size != d_max.operands[1].size for ope in d.operands[1:-1]):
             raise ValueError("All STPs must have the operands[1:-1] identical (x1).")
 
-        if d.operands[-1].size != x2.size:
+        if d.operands[-1].size != d_max.operands[-1].size:
             raise ValueError("All STPs must have the same last operand (x2, output).")
 
 
 class CUDAKernel(torch.nn.Module):
     def __init__(
         self,
-        stps: list[stp.SegmentedTensorProduct],
+        ds: list[stp.SegmentedTensorProduct],
         device: Optional[torch.device],
         math_dtype: torch.dtype,
     ):
         super().__init__()
 
-        max_degree = max(d.num_operands - 2 for d in stps)
+        d_max = max(ds, key=lambda d: d.num_operands)
+        max_degree = d_max.num_operands - 2
+
         if max_degree > 6:
             raise NotImplementedError("Correlation > 6 is not implemented.")
-        if min(d.num_operands for d in stps) == 2:
-            raise NotImplementedError(
-                "Only STPs with at least 3 operands are supported."
-            )
+
+        if len({d.operands[0].num_segments for d in ds}) != 1:
+            raise ValueError("All STPs must have the same number of segments in x0.")
+        if len({ope.num_segments for d in ds for ope in d.operands[1:-1]}) > 1:
+            raise ValueError("All STPs must have the same number of segments in x1.")
+        if len({d.operands[-1].num_segments for d in ds}) != 1:
+            raise ValueError("All STPs must have the same number of segments in x2.")
 
         def f(d: stp.SegmentedTensorProduct) -> stp.SegmentedTensorProduct:
             d = d.move_operand(0, -2)
@@ -284,36 +258,22 @@ class CUDAKernel(torch.nn.Module):
                 raise NotImplementedError("Different subscripts are not supported.")
             return d
 
-        ds = [f(d) for d in stps]
-
-        if (
-            len(
-                set(
-                    (
-                        d.operands[0].num_segments,
-                        d.operands[-2].num_segments,
-                        d.operands[-1].num_segments,
-                    )
-                    for d in ds
-                )
-            )
-            != 1
-        ):
-            raise ValueError("All STPs must have the same number of segments.")
-
+        ds_ = [f(d) for d in ds]
         import cuequivariance_ops_torch as ops
 
         self.f = ops.SymmetricTensorContraction(
-            sum((d.indices.tolist() for d in ds), []),
-            sum((d.stacked_coefficients.tolist() for d in ds), []),
-            ds[0].operands[0].num_segments,
-            ds[0].operands[-2].num_segments,
-            ds[0].operands[-1].num_segments,
-            max_degree,
-            math_dtype,
+            sum((d.indices.tolist() for d in ds_), []),
+            sum((d.stacked_coefficients.tolist() for d in ds_), []),
+            num_in_segments=d_max.operands[1].num_segments
+            if d_max.num_operands >= 3
+            else 1,
+            num_couplings=d_max.operands[0].num_segments,
+            num_out_segments=d_max.operands[-1].num_segments,
+            correlation=max(1, max_degree),
+            math_dtype=math_dtype,
         ).to(device=device)
-        self.u = ds[0].operands[0].size // ds[0].operands[0].num_segments
-        self.descriptors = ds
+        self.u = d_max.operands[0].size // d_max.operands[0].num_segments
+        self.descriptors = ds_
 
     def forward(
         self, x0: torch.Tensor, i0: torch.Tensor, x1: torch.Tensor
@@ -331,7 +291,7 @@ class CUDAKernel(torch.nn.Module):
             logger.debug(
                 f"Calling SymmetricTensorContraction: {self.descriptors}, input shapes: {x0.shape}, {i0.shape}, {x1.shape}"
             )
-        out = self.f(x1, x0, i0)
+        out: torch.Tensor = self.f(x1, x0, i0)
         out = out.reshape(out.shape[0], out.shape[1] * self.u)
         return out
 
