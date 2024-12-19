@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import dataclasses
 import re
-from typing import NamedTuple, Union, Type, Any, Sequence, Callable, Optional
+from typing import Any, Callable, NamedTuple, Optional, Sequence, Type, Union
 
 import cuequivariance as cue
 

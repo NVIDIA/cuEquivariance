@@ -59,7 +59,6 @@ class FullyConnectedTensorProductConv(nn.Module):
         use_fallback (bool, optional): If `None` (default), a CUDA kernel will be used if available.
                 If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
                 If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
-        optimize_fallback (bool, optional): Whether to optimize fallback. Defaults to None.
 
     Examples:
         >>> in_irreps = cue.Irreps("O3", "4x0e + 4x1o")
@@ -106,7 +105,6 @@ class FullyConnectedTensorProductConv(nn.Module):
         mlp_activation: Union[nn.Module, Sequence[nn.Module], None] = nn.GELU(),
         layout: cue.IrrepsLayout = None,  # e3nn_compat_mode
         use_fallback: Optional[bool] = None,
-        optimize_fallback: Optional[bool] = None,
     ):
         super().__init__()
 
@@ -127,7 +125,6 @@ class FullyConnectedTensorProductConv(nn.Module):
             layout=self.layout,
             shared_weights=False,
             use_fallback=use_fallback,
-            optimize_fallback=optimize_fallback,
         )
 
         self.batch_norm = (

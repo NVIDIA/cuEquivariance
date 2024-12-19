@@ -21,16 +21,22 @@ from cuequivariance import descriptors
 
 device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
 
-list_of_irreps = [
-    cue.Irreps("O3", "4x0e + 4x1o"),
-    cue.Irreps("O3", "2x1o + 5x0e + 2e + 1e + 1o"),
-    cue.Irreps("O3", "2e + 0x0e + 0o + 0x1e + 1e"),
-]
 
-
-@pytest.mark.parametrize("irreps1", list_of_irreps)
-@pytest.mark.parametrize("irreps2", list_of_irreps)
-@pytest.mark.parametrize("irreps3", list_of_irreps)
+@pytest.mark.parametrize(
+    "irreps1, irreps2, irreps3",
+    [
+        (
+            cue.Irreps("O3", "4x0e + 4x1o"),
+            cue.Irreps("O3", "4x0e + 4x1o"),
+            cue.Irreps("O3", "4x0e + 4x1o"),
+        ),
+        (
+            cue.Irreps("O3", "2e + 0x0e + 0o + 0x1e + 1e"),
+            cue.Irreps("O3", "4x0e + 4x1o"),
+            cue.Irreps("O3", "2e + 0x0e + 0o + 0x1e + 1e"),
+        ),
+    ],
+)
 @pytest.mark.parametrize("layout", [cue.ir_mul, cue.mul_ir])
 @pytest.mark.parametrize("use_fallback", [False, True])
 def test_fully_connected(

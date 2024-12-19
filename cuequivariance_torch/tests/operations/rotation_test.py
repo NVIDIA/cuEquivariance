@@ -23,9 +23,9 @@ device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("
 
 def test_rotation():
     irreps = cue.Irreps("SO3", "3x0 + 1 + 0 + 4x2 + 4")
-    alpha = torch.tensor(0.3).to(device)
-    beta = torch.tensor(0.4).to(device)
-    gamma = torch.tensor(-0.5).to(device)
+    alpha = torch.tensor([0.3]).to(device)
+    beta = torch.tensor([0.4]).to(device)
+    gamma = torch.tensor([-0.5]).to(device)
 
     rot = cuet.Rotation(irreps, layout=cue.ir_mul).to(device)
 
@@ -42,8 +42,10 @@ def test_vector_to_euler_angles():
     A = torch.nn.functional.normalize(A, dim=-1)
 
     beta, alpha = cuet.vector_to_euler_angles(A)
-    ey = torch.tensor([0.0, 1.0, 0.0])
-    B = cuet.Rotation(cue.Irreps("SO3", "1"), layout=cue.ir_mul)(0.0, beta, alpha, ey)
+    ey = torch.tensor([[0.0, 1.0, 0.0]])
+    B = cuet.Rotation(cue.Irreps("SO3", "1"), layout=cue.ir_mul)(
+        torch.tensor([0.0]), beta, alpha, ey
+    )
 
     assert torch.allclose(A, B)
 
