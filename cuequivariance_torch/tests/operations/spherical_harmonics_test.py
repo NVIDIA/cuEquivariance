@@ -26,14 +26,18 @@ device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("
     "dtype, tol",
     [(torch.float64, 1e-6), (torch.float32, 1e-4)],
 )
-@pytest.mark.parametrize("ell", [1, 2, 3])
-def test_spherical_harmonics(ell: int, dtype, tol):
+@pytest.mark.parametrize("ell", [0, 1, 2, 3])
+@pytest.mark.parametrize("use_fallback", [False, True])
+def test_spherical_harmonics_equivariance(use_fallback: bool, ell: int, dtype, tol):
+    if use_fallback is False and not torch.cuda.is_available():
+        pytest.skip("CUDA is not available")
+
     vec = torch.randn(3, dtype=dtype, device=device)
     axis = np.random.randn(3)
     angle = np.random.rand()
     scale = 1.3
 
-    yl = cuet.spherical_harmonics([ell], vec, False)
+    yl = cuet.spherical_harmonics([ell], vec, False, use_fallback=use_fallback)
 
     R = torch.from_numpy(cue.SO3(1).rotation(axis, angle)).to(dtype).to(device)
     Rl = torch.from_numpy(cue.SO3(ell).rotation(axis, angle)).to(dtype).to(device)
@@ -44,9 +48,19 @@ def test_spherical_harmonics(ell: int, dtype, tol):
     torch.testing.assert_close(yl1, yl2, rtol=tol, atol=tol)
 
 
-def test_spherical_harmonics_full():
-    vec = torch.randn(3, device=device)
-    ls = [0, 1, 2, 3]
-    yl = cuet.spherical_harmonics(ls, vec, False)
+data_types = [torch.float32, torch.float64]
 
-    assert abs(yl[0] - 1.0) < 1e-6
+if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:
+    data_types += [torch.float16, torch.bfloat16]
+
+
+@pytest.mark.parametrize("dtype", data_types)
+@pytest.mark.parametrize("ls", [[0], [1], [2], [0, 1], [0, 1, 2]])
+@pytest.mark.parametrize("use_fallback", [False, True])
+def test_spherical_harmonics_full(dtype, ls: list[int], use_fallback: bool):
+    if use_fallback is False and not torch.cuda.is_available():
+        pytest.skip("CUDA is not available")
+
+    vec = torch.randn(3, device=device, dtype=dtype)
+    yl = cuet.spherical_harmonics(ls, vec, False, use_fallback=use_fallback)
+    assert yl.shape[-1] == sum(2 * ell + 1 for ell in ls)

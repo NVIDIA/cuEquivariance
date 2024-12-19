@@ -12,6 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import pytest
 import torch
 
 import cuequivariance as cue
@@ -47,11 +48,15 @@ def test_vector_to_euler_angles():
     assert torch.allclose(A, B)
 
 
-def test_inversion():
+@pytest.mark.parametrize("use_fallback", [False, True])
+def test_inversion(use_fallback: bool):
+    if use_fallback is False and not torch.cuda.is_available():
+        pytest.skip("CUDA is not available")
+
     irreps = cue.Irreps("O3", "2x1e + 1o")
     torch.testing.assert_close(
-        cuet.Inversion(irreps, layout=cue.ir_mul)(
-            torch.tensor([1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
-        ),
-        torch.tensor([1.0, 1.0, 1.0, 1.0, 1.0, 1.0, -1.0, -1.0, -1.0]),
+        cuet.Inversion(
+            irreps, layout=cue.ir_mul, device=device, use_fallback=use_fallback
+        )(torch.tensor([[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]], device=device)),
+        torch.tensor([[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, -1.0, -1.0, -1.0]], device=device),
     )

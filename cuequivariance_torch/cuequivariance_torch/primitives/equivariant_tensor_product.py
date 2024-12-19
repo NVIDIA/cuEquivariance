@@ -203,7 +203,13 @@ class EquivariantTensorProduct(torch.nn.Module):
             assert layout_out is None
             self.transpose_out = torch.nn.Identity()
 
-        if any(d.num_operands != e.num_inputs + 1 for d in e.ds):
+        if (
+            len(e.ds) > 1
+            or any(d.num_operands != e.num_inputs + 1 for d in e.ds)
+            or any(
+                d.num_operands == 2 for d in e.ds
+            )  # special case for Spherical Harmonics ls = [1]
+        ):
             if e.num_inputs == 1:
                 self.tp = SymmetricTPDispatcher(
                     cuet.SymmetricTensorProduct(
