@@ -107,8 +107,11 @@ def escn_tp(
     d = d.flatten_coefficient_modes()
     return cue.EquivariantTensorProduct(
         d,
-        [irreps_in.new_scalars(d.operands[0].size), irreps_in, irreps_out],
-        layout=cue.ir_mul,
+        [
+            cue.IrrepsAndLayout(irreps_in.new_scalars(d.operands[0].size), cue.ir_mul),
+            cue.IrrepsAndLayout(irreps_in, cue.ir_mul),
+            cue.IrrepsAndLayout(irreps_out, cue.ir_mul),
+        ],
     )
 
 
@@ -175,4 +178,13 @@ def escn_tp_compact(
         d.add_path(i, l_max_in - m, l_max_out + m, c=-1.0)
 
     d = d.normalize_paths_for_operand(2)
-    return d
+    return d  # TODO: return an EquivariantTensorProduct using SphericalSignal
+
+
+class SphericalSignal(cue.Rep):
+    def __init__(self, mul: int, l_max: int, m_max: int):
+        self.mul = mul
+        self.l_max = l_max
+        self.m_max = m_max
+
+    # TODO

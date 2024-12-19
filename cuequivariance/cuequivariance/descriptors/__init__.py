@@ -30,9 +30,7 @@ from .rotations import (
     yxy_rotation,
     inversion,
 )
-from .escn import escn_tp, escn_tp_compact
 from .spherical_harmonics_ import sympy_spherical_harmonics, spherical_harmonics
-from .gatr import gatr_linear, gatr_geometric_product, gatr_outer_product
 
 __all__ = [
     "transpose",
@@ -49,11 +47,6 @@ __all__ = [
     "yx_rotation",
     "yxy_rotation",
     "inversion",
-    "escn_tp",
-    "escn_tp_compact",
     "sympy_spherical_harmonics",
     "spherical_harmonics",
-    "gatr_linear",
-    "gatr_geometric_product",
-    "gatr_outer_product",
 ]
