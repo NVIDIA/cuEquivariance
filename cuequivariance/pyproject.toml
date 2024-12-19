@@ -24,7 +24,7 @@ description = "CUDA accelerated equivariant operations"
 readme = "../README.md"
 license = { file = "../LICENSES/LICENSE" }
 authors = [{ name = "NVIDIA Corporation" }]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "numpy",
     "scipy",
@@ -35,11 +35,9 @@ dependencies = [
 classifiers = [
     "Intended Audience :: Developers",
     "Programming Language :: Python",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
 ]
 
 [tool.hatch.version]
