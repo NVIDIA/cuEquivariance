@@ -27,6 +27,17 @@ def spherical_harmonics(
     normalize: bool = True,
     algorithm: str = "stacked",
 ) -> cuex.RepArray:
+    """Compute the spherical harmonics of a vector.
+
+    Args:
+        ls (list of int): List of spherical harmonic degrees.
+        vector (RepArray): Input vector(s).
+        normalize (bool): Whether to normalize the vector before computing the spherical harmonics.
+        algorithm (str): Algorithm to use for the tensor product. See :class:`cuex.tensor_product <cuequivariance_jax.tensor_product>` for more information.
+
+    Returns:
+        RepArray: Spherical harmonics of the vector.
+    """
     ls = list(ls)
     assert vector.is_irreps_array()
     irreps = vector.irreps

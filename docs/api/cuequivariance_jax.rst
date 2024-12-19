@@ -56,3 +56,9 @@ Extra Modules
 
    flax_linen.Linear
    flax_linen.LayerNorm
+
+.. autosummary::
+   :toctree: generated/
+   :template: function_template.rst
+
+   spherical_harmonics
