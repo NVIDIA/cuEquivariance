@@ -37,7 +37,7 @@ class NumpyIrrepsArray:
 
     irreps: cue.Irreps
     array: np.ndarray
-    layout: cue.IrrepsLayout  # TODO: replace with IrrepsAndLayout
+    layout: cue.IrrepsLayout
 
     def __init__(
         self,
