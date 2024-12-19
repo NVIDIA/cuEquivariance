@@ -49,6 +49,7 @@ These classes represent tensor products.
 
    Irreps
    IrrepsLayout
+   IrrepsAndLayout
    SegmentedTensorProduct
    EquivariantTensorProduct
 
@@ -61,3 +62,13 @@ Descriptors
    :hidden:
 
    cuequivariance.descriptors
+
+Utilities
+---------
+
+.. autosummary::
+   :toctree: generated/
+   :template: class_template.rst
+
+   assume
+   

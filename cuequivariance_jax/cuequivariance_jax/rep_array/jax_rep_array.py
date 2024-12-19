@@ -14,11 +14,11 @@ import cuequivariance_jax as cuex  # noqa: F401
 @dataclass(frozen=True, init=False, repr=False)
 class RepArray:
     """
-    Wrapper around a jax array with a dict of Rep for the non-trivial axes.
+    A `jax.Array` decorated with a dict of `Rep` for the axes transforming under a group representation.
 
-    .. rubric:: Creation
+    Example:
 
-    You can create a RepArray by specifying the Reps for each axis:
+    You can create a `RepArray` by specifying the `Rep` for each axis:
 
     >>> cuex.RepArray({0: cue.SO3(1), 1: cue.SO3(1)}, jnp.eye(3))
     {0: 1, 1: 1}
@@ -26,26 +26,26 @@ class RepArray:
      [0. 1. 0.]
      [0. 0. 1.]]
 
-    .. rubric:: Special case for Irreps
+    .. rubric:: IrrepsArray
 
-    If you are using Irreps, you can use the following syntax:
+    An ``IrrepsArray`` is just a special case of a ``RepArray`` where the last axis is a `IrrepsAndLayout`:
 
-    >>> cuex.IrrepsArray(
-    ...     cue.Irreps("SO3", "2x0"), jnp.array([1.0, 2.0]), cue.ir_mul
+    >>> x = cuex.RepArray(
+    ...     cue.Irreps("SO3", "2x0"), jnp.zeros((3, 2)), cue.ir_mul
     ... )
-    {0: 2x0} [1. 2.]
+    >>> x
+    {1: 2x0}
+    [[0. 0.]
+     [0. 0.]
+     [0. 0.]]
 
-    If you don't specify the axis it will default to the last axis:
-
-    >>> cuex.IrrepsArray(
-    ...     cue.Irreps("SO3", "2x0"), jnp.array([1.0, 2.0]), cue.ir_mul
-    ... )
-    {0: 2x0} [1. 2.]
+    >>> x.is_irreps_array()
+    True
 
     You can use a default group and layout:
 
     >>> with cue.assume(cue.SO3, cue.ir_mul):
-    ...     cuex.IrrepsArray("2x0", jnp.array([1.0, 2.0]))
+    ...     cuex.RepArray("2x0", jnp.array([1.0, 2.0]))
     {0: 2x0} [1. 2.]
 
     .. rubric:: Arithmetic
@@ -53,8 +53,8 @@ class RepArray:
     Basic arithmetic operations are supported, as long as they are equivariant:
 
     >>> with cue.assume(cue.SO3, cue.ir_mul):
-    ...     x = cuex.IrrepsArray("2x0", jnp.array([1.0, 2.0]))
-    ...     y = cuex.IrrepsArray("2x0", jnp.array([3.0, 4.0]))
+    ...     x = cuex.RepArray("2x0", jnp.array([1.0, 2.0]))
+    ...     y = cuex.RepArray("2x0", jnp.array([3.0, 4.0]))
     ...     x + y
     {0: 2x0} [4. 6.]
 
@@ -112,26 +112,34 @@ class RepArray:
 
     @property
     def shape(self) -> tuple[int, ...]:
+        """Shape of the array."""
         return self.array.shape
 
     @property
     def ndim(self) -> int:
+        """Number of dimensions of the array."""
         return self.array.ndim
 
     @property
     def dtype(self) -> jax.numpy.dtype:
+        """Data type of the array."""
         return self.array.dtype
 
     def is_irreps_array(self) -> bool:
+        """Check if the RepArray is an ``IrrepsArray``.
+
+        An ``IrrepsArray`` is a `RepArray` where the last axis is an `IrrepsAndLayout`.
+        """
         if len(self.reps) != 1:
             return False
         axis = next(iter(self.reps.keys()))
         if axis != self.ndim - 1:
             return False
-        rep = self.rep()
+        rep = self.rep(-1)
         return isinstance(rep, cue.IrrepsAndLayout)
 
-    def rep(self, axis: int = -1) -> cue.Rep:
+    def rep(self, axis: int) -> cue.Rep:
+        """Return the Rep for a given axis."""
         axis = axis if axis >= 0 else axis + self.ndim
         if axis not in self.reps:
             raise ValueError(f"No Rep for axis {axis}")
@@ -139,22 +147,27 @@ class RepArray:
 
     @property
     def irreps(self) -> cue.Irreps:
-        """Return the Irreps of the RepArray if it is an IrrepsArray.
+        """Return the `Irreps` of the ``IrrepsArray``.
 
-        Examples:
+        Note:
 
-            >>> cuex.IrrepsArray(
-            ...     cue.Irreps("SO3", "2x0"), jnp.array([1.0, 2.0]), cue.ir_mul
-            ... ).irreps
-            2x0
+            This method is only available for ``IrrepsArray``.
+            See :func:`is_irreps_array <cuequivariance_jax.RepArray.is_irreps_array>`.
         """
         assert self.is_irreps_array()
-        return self.rep().irreps
+        return self.rep(-1).irreps
 
     @property
     def layout(self) -> cue.IrrepsLayout:
+        """Return the layout of the ``IrrepsArray``.
+
+        Note:
+
+            This method is only available for ``IrrepsArray``.
+            See :func:`is_irreps_array <cuequivariance_jax.RepArray.is_irreps_array>`.
+        """
         assert self.is_irreps_array()
-        return self.rep().layout
+        return self.rep(-1).layout
 
     def __repr__(self):
         r = str(self.array)
@@ -184,12 +197,18 @@ class RepArray:
 
         Examples:
 
-            >>> x = cuex.IrrepsArray(
+            >>> x = cuex.RepArray(
             ...     cue.Irreps("SO3", "2x0 + 1"),
-            ...     jnp.array([1.0, 2.0, 0.0, 0.0, 0.0]), cue.ir_mul
+            ...     jnp.array([1.0, 2.0, 0.0, 0.0, 0.0]),
+            ...     cue.ir_mul
             ... )
             >>> x.slice_by_mul[1:4]
             {0: 0+1} [2. 0. 0. 0.]
+
+        Note:
+
+            This method is only available for ``IrrepsArray``.
+            See :func:`is_irreps_array <cuequivariance_jax.RepArray.is_irreps_array>`.
         """
         assert self.is_irreps_array()
         return _MulIndexSliceHelper(self)
@@ -241,6 +260,27 @@ class RepArray:
         return self * other
 
     def transform(self, v: jax.Array) -> RepArray:
+        """Transform the array according to the representation.
+
+        Args:
+            v: Vector of angles.
+
+        Examples:
+
+            >>> x = cuex.RepArray(
+            ...     {0: cue.SO3(1), 1: cue.SO3(1)}, jnp.ones((3, 3))
+            ... )
+            >>> x
+            {0: 1, 1: 1}
+            [[1. 1. 1.]
+             [1. 1. 1.]
+             [1. 1. 1.]]
+            >>> x.transform(jnp.array([np.pi, 0.0, 0.0])).array.round(1)
+            Array([[ 1., -1., -1.],
+                   [-1.,  1.,  1.],
+                   [-1.,  1.,  1.]]...)
+        """
+
         def matrix(rep: cue.Rep) -> jax.Array:
             X = rep.X
             assert np.allclose(
@@ -290,7 +330,7 @@ class RepArray:
 
         Examples:
 
-            >>> x = cuex.IrrepsArray(
+            >>> x = cuex.RepArray(
             ...     cue.Irreps("SO3", "2x0 + 1"), jnp.array([1.0, 2.0, 0.0, 0.0, 0.0]),
             ...     cue.ir_mul
             ... )
@@ -299,7 +339,8 @@ class RepArray:
 
         Note:
 
-            See also :func:`cuex.from_segments <cuequivariance_jax.from_segments>`.
+            This method is only available for ``IrrepsArray``.
+            See :func:`is_irreps_array <cuequivariance_jax.RepArray.is_irreps_array>`.
         """
         assert self.is_irreps_array()
         return [
@@ -324,7 +365,7 @@ class RepArray:
 
         Examples:
 
-            >>> x = cuex.IrrepsArray(
+            >>> x = cuex.RepArray(
             ...     cue.Irreps("SO3", "2x0 + 1"),
             ...     jnp.array([1.0, 2.0, 0.0, 0.0, 0.0]), cue.ir_mul
             ... )
@@ -334,6 +375,11 @@ class RepArray:
             {0: 1} [0. 0. 0.]
             >>> x.filter(mask=[True, False])
             {0: 2x0} [1. 2.]
+
+        Note:
+
+            This method is only available for ``IrrepsArray``.
+            See :func:`is_irreps_array <cuequivariance_jax.RepArray.is_irreps_array>`.
         """
         assert self.is_irreps_array()
 
@@ -346,13 +392,13 @@ class RepArray:
         if not any(mask):
             shape = list(self.shape)
             shape[-1] = 0
-            return IrrepsArray(
+            return RepArray(
                 cue.Irreps(self.irreps.irrep_class, ""),
                 jnp.zeros(shape, dtype=self.dtype),
                 self.layout,
             )
 
-        return IrrepsArray(
+        return RepArray(
             self.irreps.filter(mask=mask),
             jnp.concatenate(
                 [self.array[..., s] for s, m in zip(self.irreps.slices(), mask) if m],
@@ -366,12 +412,17 @@ class RepArray:
 
         Examples:
 
-            >>> x = cuex.IrrepsArray(
+            >>> x = cuex.RepArray(
             ...     cue.Irreps("SO3", "1 + 2x0"),
             ...     jnp.array([1.0, 1.0, 1.0, 2.0, 3.0]), cue.ir_mul
             ... )
             >>> x.sort()
             {0: 2x0+1} [2. 3. 1. 1. 1.]
+
+        Note:
+
+            This method is only available for ``IrrepsArray``.
+            See :func:`is_irreps_array <cuequivariance_jax.RepArray.is_irreps_array>`.
         """
         assert self.is_irreps_array()
 
@@ -393,7 +444,7 @@ class RepArray:
         simplified_irreps = self.irreps.simplify()
 
         if self.layout == cue.mul_ir:
-            return IrrepsArray(simplified_irreps, self.array, self.layout)
+            return RepArray(simplified_irreps, self.array, self.layout)
 
         segments = []
         last_ir = None
@@ -417,16 +468,28 @@ class RepArray:
 
         Examples:
 
-            >>> x = cuex.IrrepsArray(
+            >>> x = cuex.RepArray(
             ...     cue.Irreps("SO3", "0 + 1 + 0"), jnp.array([0., 1., 2., 3., -1.]),
             ...     cue.ir_mul
             ... )
             >>> x.regroup()
             {0: 2x0+1} [ 0. -1.  1.  2.  3.]
+
+        Note:
+
+            This method is only available for ``IrrepsArray``.
+            See :func:`is_irreps_array <cuequivariance_jax.RepArray.is_irreps_array>`.
         """
         return self.sort().simplify()
 
     def change_layout(self, layout: cue.IrrepsLayout) -> RepArray:
+        """Change the layout of the ``IrrepsArray``.
+
+        Note:
+
+            This method is only available for ``IrrepsArray``.
+            See :func:`is_irreps_array <cuequivariance_jax.RepArray.is_irreps_array>`.
+        """
         assert self.is_irreps_array()
         if self.layout == layout:
             return self
@@ -440,6 +503,13 @@ class RepArray:
         )
 
     def move_axis_to_mul(self, axis: int) -> RepArray:
+        """Move an axis to the multiplicities.
+
+        Note:
+
+            This method is only available for ``IrrepsArray``.
+            See :func:`is_irreps_array <cuequivariance_jax.RepArray.is_irreps_array>`.
+        """
         assert self.is_irreps_array()
 
         if axis < 0:
@@ -488,7 +558,7 @@ def decode_rep_array(static, data) -> RepArray:
 
 jax.tree_util.register_pytree_node(RepArray, encode_rep_array, decode_rep_array)
 
-IrrepsArray = RepArray
+IrrepsArray = RepArray  # TODO: do we deprecate IrrepsArray?
 
 
 def from_segments(
@@ -498,18 +568,17 @@ def from_segments(
     layout: cue.IrrepsLayout | None = None,
     dtype: jnp.dtype | None = None,
 ) -> RepArray:
-    """Construct an :class:`cuex.IrrepsArrays <cuequivariance_jax.IrrepsArrays>` from a list of segments.
+    """Construct a `RepArray` from segments.
 
     Args:
-        dirreps: final Irreps.
-        segments: list of segments.
-        shape: shape of the final array.
-        layout: layout of the final array.
+        irreps (Irreps): irreps.
+        segments (list of jax.Array): segments.
+        shape (tuple of int): shape of the final array.
+        layout (IrrepsLayout): data layout.
         dtype: data type
-        axis: axis to concatenate the segments.
 
     Returns:
-        IrrepsArray: IrrepsArray.
+        RepArray: the RepArray.
 
     Examples:
 
@@ -518,10 +587,6 @@ def from_segments(
         ...     [jnp.array([[1.0], [2.0]]), jnp.array([[0.0], [0.0], [0.0]])],
         ...     (-1,), cue.ir_mul)
         {0: 2x0+1} [1. 2. 0. 0. 0.]
-
-    Note:
-
-        See also :func:`cuex.IrrepsArray.segments <cuequivariance_jax.IrrepsArray.segments>`.
     """
     irreps = cue.Irreps(irreps)
     shape = list(shape)
@@ -550,7 +615,7 @@ def from_segments(
     else:
         array = jnp.zeros(shape, dtype=dtype)
 
-    return IrrepsArray(irreps, array, layout)
+    return RepArray(irreps, array, layout)
 
 
 class _MulIndexSliceHelper:

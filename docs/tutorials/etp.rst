@@ -70,9 +70,9 @@ Execution on JAX
 
     cuex.equivariant_tensor_product(e, w, x)
 
-The function :func:`cuex.randn <cuequivariance_jax.randn>` generates random :class:`cuex.IrrepsArray <cuequivariance_jax.IrrepsArray>` objects.
+The function :func:`cuex.randn <cuequivariance_jax.randn>` generates random :class:`cuex.RepArray <cuequivariance_jax.RepArray>` objects.
 The function :func:`cuex.equivariant_tensor_product <cuequivariance_jax.equivariant_tensor_product>` executes the tensor product.
-The output is a :class:`cuex.IrrepsArray <cuequivariance_jax.IrrepsArray>` object.
+The output is a :class:`cuex.RepArray <cuequivariance_jax.RepArray>` object.
 
 
 Execution on PyTorch

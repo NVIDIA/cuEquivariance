@@ -23,6 +23,62 @@ import cuequivariance as cue
 
 @dataclass(init=False, frozen=True)
 class IrrepsAndLayout(cue.Rep):
+    r"""
+    A group representation (:class:`Rep`) made from the combination of :class:`Irreps` and :class:`IrrepsLayout` into a single object.
+
+    This class inherits from :class:`Rep`::
+
+        Rep                  <--- Base class for all representations
+        ├── Irrep            <--- Base class for all irreducible representations
+            ├── SU2
+            ├── SO3
+            ├── O3
+        ├── IrrepsAndLayout  <--- This class
+
+        IrrepsLayout         <--- Enum class with two values: mul_ir and ir_mul
+
+        Irreps               <--- Collection of Irrep with multiplicities
+
+    Args:
+        irreps (Irreps or str): Irreducible representations and their multiplicities.
+        layout (optional, IrrepsLayout): The data layout (``mul_ir`` or ``ir_mul``).
+
+    Examples:
+        Let's create rotations matrices for a 2x1 representation of SO(3) using two different layouts:
+
+        >>> angles = np.array([np.pi, 0, 0])
+
+        Here we use the ``ir_mul`` layout:
+
+        >>> with cue.assume("SO3", cue.ir_mul):
+        ...     rep = cue.IrrepsAndLayout("2x1")
+        >>> R_ir_mul = rep.exp_map(angles, np.array([]))
+
+        Here we use the ``mul_ir`` layout:
+
+        >>> with cue.assume("SO3", cue.mul_ir):
+        ...     rep = cue.IrrepsAndLayout("2x1")
+        >>> R_mul_ir = rep.exp_map(angles, np.array([]))
+
+        Let's see the difference between the two layouts:
+
+        >>> R_ir_mul.round(1) + 0.0
+        array([[ 1.,  0.,  0.,  0.,  0.,  0.],
+               [ 0.,  1.,  0.,  0.,  0.,  0.],
+               [ 0.,  0., -1.,  0.,  0.,  0.],
+               [ 0.,  0.,  0., -1.,  0.,  0.],
+               [ 0.,  0.,  0.,  0., -1.,  0.],
+               [ 0.,  0.,  0.,  0.,  0., -1.]])
+
+        >>> R_mul_ir.round(1) + 0.0
+        array([[ 1.,  0.,  0.,  0.,  0.,  0.],
+               [ 0., -1.,  0.,  0.,  0.,  0.],
+               [ 0.,  0., -1.,  0.,  0.,  0.],
+               [ 0.,  0.,  0.,  1.,  0.,  0.],
+               [ 0.,  0.,  0.,  0., -1.,  0.],
+               [ 0.,  0.,  0.,  0.,  0., -1.]])
+    """
+
     irreps: cue.Irreps = field()
     layout: cue.IrrepsLayout = field()
 
@@ -56,13 +112,15 @@ class IrrepsAndLayout(cue.Rep):
             )
 
     def discrete_generators(self) -> np.ndarray:
+        num_H = self.irreps.irrep_class.trivial().H.shape[0]
+
         if self.layout == cue.mul_ir:
             return block_diag(
-                [np.kron(np.eye(mul), ir.H) for mul, ir in self.irreps], (self.lie_dim,)
+                [np.kron(np.eye(mul), ir.H) for mul, ir in self.irreps], (num_H,)
             )
         if self.layout == cue.ir_mul:
             return block_diag(
-                [np.kron(ir.H, np.eye(mul)) for mul, ir in self.irreps], (self.lie_dim,)
+                [np.kron(ir.H, np.eye(mul)) for mul, ir in self.irreps], (num_H,)
             )
 
     def trivial(self) -> cue.Rep:
@@ -88,7 +146,7 @@ def block_diag(entries: list[np.ndarray], leading_shape: tuple[int, ...]) -> np.
         return np.zeros(leading_shape + (0, 0))
 
     A = entries[0]
-    assert A.shape[:-2] == leading_shape
+    assert A.shape[:-2] == leading_shape, (A.shape, leading_shape)
 
     if len(entries) == 1:
         return A

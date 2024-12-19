@@ -54,8 +54,8 @@ class Linear(nn.Module):
 
     @nn.compact
     def __call__(
-        self, input: cuex.IrrepsArray, algorithm: str = "sliced"
-    ) -> cuex.IrrepsArray:
+        self, input: cuex.RepArray, algorithm: str = "sliced"
+    ) -> cuex.RepArray:
         assert input.is_irreps_array()
 
         irreps_out = cue.Irreps(self.irreps_out)

@@ -36,7 +36,7 @@ class LayerNorm(nn.Module):
     epsilon: float = 0.01
 
     @nn.compact
-    def __call__(self, input: cuex.IrrepsArray) -> cuex.IrrepsArray:
+    def __call__(self, input: cuex.RepArray) -> cuex.RepArray:
         assert input.is_irreps_array()
 
         def rms(v: jax.Array) -> jax.Array:

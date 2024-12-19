@@ -33,8 +33,8 @@ def concatenate(arrays: list[cuex.RepArray]) -> cuex.RepArray:
     Example:
 
         >>> with cue.assume(cue.SO3, cue.ir_mul):
-        ...     x = cuex.IrrepsArray("3x0", jnp.array([1.0, 2.0, 3.0]))
-        ...     y = cuex.IrrepsArray("1x1", jnp.array([0.0, 0.0, 0.0]))
+        ...     x = cuex.RepArray("3x0", jnp.array([1.0, 2.0, 3.0]))
+        ...     y = cuex.RepArray("1x1", jnp.array([0.0, 0.0, 0.0]))
         >>> cuex.concatenate([x, y])
         {0: 3x0+1} [1. 2. 3. 0. 0. 0.]
     """
@@ -53,7 +53,7 @@ def concatenate(arrays: list[cuex.RepArray]) -> cuex.RepArray:
     irreps = sum(
         (a.irreps for a in arrays), cue.Irreps(arrays[0].irreps.irrep_class, [])
     )
-    return cuex.IrrepsArray(
+    return cuex.RepArray(
         irreps,
         jnp.concatenate([a.array for a in arrays], axis=-1),
         arrays[0].layout,
@@ -92,9 +92,9 @@ def randn(
 def as_irreps_array(
     input: Any,
     layout: cue.IrrepsLayout | None = None,
-    like: cuex.IrrepsArray | None = None,
-) -> cuex.IrrepsArray:
-    """Converts input to an IrrepsArray. Arrays are assumed to be scalars.
+    like: cuex.RepArray | None = None,
+) -> cuex.RepArray:
+    """Converts input to a `RepArray`. Arrays are assumed to be scalars.
 
     Examples:
 
@@ -129,7 +129,7 @@ def as_irreps_array(
 
     input: jax.Array = jnp.asarray(input)
     irreps = cue.Irreps(type(ir), [(input.shape[-1], ir)])
-    return cuex.IrrepsArray(irreps, input, layout)
+    return cuex.RepArray(irreps, input, layout)
 
 
 def clebsch_gordan(rep1: cue.Irrep, rep2: cue.Irrep, rep3: cue.Irrep) -> cuex.RepArray:

@@ -20,7 +20,7 @@ import cuequivariance_jax as cuex
 
 @cue.assume("SO3", cue.ir_mul)
 def test_segments():
-    x = cuex.IrrepsArray("2x0 + 1", jnp.array([1.0, 1.0, 0.0, 0.0, 0.0]))
+    x = cuex.RepArray("2x0 + 1", jnp.array([1.0, 1.0, 0.0, 0.0, 0.0]))
     x0, x1 = x.segments
     assert x0.shape == (1, 2)
     assert x1.shape == (3, 1)
@@ -32,7 +32,7 @@ def test_segments():
 
 @cue.assume("SO3", cue.ir_mul)
 def test_slice_by_mul():
-    x = cuex.IrrepsArray("2x0 + 1", jnp.array([1.0, 1.0, 0.0, 0.0, 0.0]))
+    x = cuex.RepArray("2x0 + 1", jnp.array([1.0, 1.0, 0.0, 0.0, 0.0]))
     x = x.slice_by_mul[1:]
     assert x.irreps == cue.Irreps("0 + 1")
     assert x.layout == cue.ir_mul

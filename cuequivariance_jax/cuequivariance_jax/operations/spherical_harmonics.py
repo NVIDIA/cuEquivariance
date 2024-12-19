@@ -23,10 +23,10 @@ from cuequivariance import descriptors
 
 def spherical_harmonics(
     ls: list[int],
-    vector: cuex.IrrepsArray,
+    vector: cuex.RepArray,
     normalize: bool = True,
     algorithm: str = "stacked",
-) -> cuex.IrrepsArray:
+) -> cuex.RepArray:
     ls = list(ls)
     assert vector.is_irreps_array()
     irreps = vector.irreps
@@ -46,7 +46,7 @@ def spherical_harmonics(
     )
 
 
-def normalize(array: cuex.IrrepsArray, epsilon: float = 0.0) -> cuex.IrrepsArray:
+def normalize(array: cuex.RepArray, epsilon: float = 0.0) -> cuex.RepArray:
     assert array.is_irreps_array()
 
     match array.layout:
@@ -74,8 +74,8 @@ def normalize(array: cuex.IrrepsArray, epsilon: float = 0.0) -> cuex.IrrepsArray
 _normalize = normalize
 
 
-def norm(array: cuex.IrrepsArray, *, squared: bool = False) -> cuex.IrrepsArray:
-    """Norm of IrrepsArray."""
+def norm(array: cuex.RepArray, *, squared: bool = False) -> cuex.RepArray:
+    """Norm of `RepArray`."""
     assert array.is_irreps_array()
 
     match array.layout:

@@ -87,12 +87,12 @@ def function_parity(phi: ActFn) -> int:
 
 
 def scalar_activation(
-    input: cuex.IrrepsArray,
+    input: cuex.RepArray,
     acts: ActFn | list[ActFn | None] | dict[cue.Irrep, ActFn],
     *,
     normalize_act: bool = True,
-) -> cuex.IrrepsArray:
-    r"""Apply activation functions to the scalars of an `IrrepsArray`.
+) -> cuex.RepArray:
+    r"""Apply activation functions to the scalars of an `RepArray`.
     The activation functions are by default normalized.
     """
     input = cuex.as_irreps_array(input)
