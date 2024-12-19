@@ -283,8 +283,7 @@ def test_performance_cuda_vs_fx(
     )
 
     inputs = [
-        torch.randn((1024, inp.irreps.dim), device=device, dtype=dtype)
-        for inp in e.inputs
+        torch.randn((1024, inp.dim), device=device, dtype=dtype) for inp in e.inputs
     ]
 
     for _ in range(10):
@@ -333,8 +332,7 @@ def test_precision_cuda_vs_fx(
         pytest.skip("CUDA is not available")
 
     inputs = [
-        torch.randn((1024, inp.irreps.dim), device=device, dtype=dtype)
-        for inp in e.inputs
+        torch.randn((1024, inp.dim), device=device, dtype=dtype) for inp in e.inputs
     ]
     m = cuet.EquivariantTensorProduct(
         e, layout=cue.ir_mul, device=device, math_dtype=math_dtype, use_fallback=False
@@ -371,8 +369,7 @@ def test_compile(
         e, layout=cue.mul_ir, use_fallback=False, device=device, math_dtype=math_dtype
     )
     inputs = [
-        torch.randn((1024, inp.irreps.dim), device=device, dtype=dtype)
-        for inp in e.inputs
+        torch.randn((1024, inp.dim), device=device, dtype=dtype) for inp in e.inputs
     ]
     res = m(inputs)
     m_compile = torch.compile(m, fullgraph=True)
@@ -396,8 +393,7 @@ def test_script(
         e, layout=cue.mul_ir, use_fallback=False, device=device, math_dtype=math_dtype
     )
     inputs = [
-        torch.randn((1024, inp.irreps.dim), device=device, dtype=dtype)
-        for inp in e.inputs
+        torch.randn((1024, inp.dim), device=device, dtype=dtype) for inp in e.inputs
     ]
     res = m(inputs)
     m_script = torch.jit.script(m)
@@ -428,8 +424,7 @@ def test_export(
         e, layout=cue.mul_ir, math_dtype=math_dtype, use_fallback=False, device=device
     )
     inputs = [
-        torch.randn((1024, inp.irreps.dim), device=device, dtype=dtype)
-        for inp in e.inputs
+        torch.randn((1024, inp.dim), device=device, dtype=dtype) for inp in e.inputs
     ]
     res = m(inputs)
     m_script = module_with_mode(mode, m, [inputs], math_dtype, tmp_path)

@@ -22,12 +22,6 @@ import cuequivariance as cue
 from cuequivariance import segmented_tensor_product as stp
 
 
-@dataclasses.dataclass(init=True, frozen=True)
-class Operand:
-    irreps: cue.Irreps
-    layout: cue.IrrepsLayout
-
-
 @dataclasses.dataclass(init=False, frozen=True)
 class EquivariantTensorProduct:
     """
@@ -59,29 +53,19 @@ class EquivariantTensorProduct:
     .. rubric:: Methods
     """
 
-    operands: tuple[Operand, ...]
+    operands: tuple[cue.Rep, ...]
     ds: list[stp.SegmentedTensorProduct]
 
     def __init__(
         self,
         d: Union[stp.SegmentedTensorProduct, Sequence[stp.SegmentedTensorProduct]],
-        operands: list[Union[cue.Irreps, Operand]],
-        layout: Optional[cue.IrrepsLayout] = None,
+        operands: list[cue.Rep],
     ):
-        operands = tuple(
-            (
-                ope
-                if isinstance(ope, Operand)
-                else Operand(
-                    irreps=cue.Irreps(ope), layout=layout or cue.get_layout_scope()
-                )
-            )
-            for ope in operands
-        )
+        operands = tuple(operands)
         if isinstance(d, stp.SegmentedTensorProduct):
             assert len(operands) == d.num_operands
             for oid in range(d.num_operands):
-                assert operands[oid].irreps.dim == d.operands[oid].size
+                assert operands[oid].dim == d.operands[oid].size
             ds = [d]
         else:
             ds = list(d)
@@ -94,20 +78,20 @@ class EquivariantTensorProduct:
                     if not (i < d.num_operands - 1):
                         continue
 
-                    if operands[i].irreps.dim != d.operands[i].size:
+                    if operands[i].dim != d.operands[i].size:
                         raise ValueError(
-                            f"Input {i} size mismatch: {operands[i].irreps} vs {d.operands[i]}"
+                            f"Input {i} size mismatch: {operands[i]} vs {d.operands[i]}"
                         )
                 # the repeated input operand is the same
                 assert len(operands) >= 2
                 for d_ope in d.operands[nin - 1 : -1]:
-                    if operands[-2].irreps.dim != d_ope.size:
+                    if operands[-2].dim != d_ope.size:
                         raise ValueError(
-                            f"Last input size mismatch: {operands[-2].irreps} vs {d_ope}"
+                            f"Last input size mismatch: {operands[-2]} vs {d_ope}"
                         )
-                if operands[-1].irreps.dim != d.operands[-1].size:
+                if operands[-1].dim != d.operands[-1].size:
                     raise ValueError(
-                        f"Output size mismatch: {operands[-1].irreps} vs {d.operands[-1]}"
+                        f"Output size mismatch: {operands[-1]} vs {d.operands[-1]}"
                     )
 
             # all non-repeated inputs have the same operands
@@ -140,11 +124,11 @@ class EquivariantTensorProduct:
         return self.num_operands - 1
 
     @property
-    def inputs(self) -> tuple[Operand, ...]:
+    def inputs(self) -> tuple[cue.Rep, ...]:
         return self.operands[:-1]
 
     @property
-    def output(self) -> Operand:
+    def output(self) -> cue.Rep:
         return self.operands[-1]
 
     def _degrees(self, i: int) -> set[int]:
@@ -278,6 +262,8 @@ class EquivariantTensorProduct:
 
             new_subscripts = []
             for oid, (operand, layout) in enumerate(zip(operands, layouts_)):
+                assert isinstance(operand, cue.IrrepsAndLayout)
+
                 subscripts = d.subscripts.operands[oid]
                 if operand.layout == layout:
                     new_subscripts.append(subscripts)
@@ -307,7 +293,7 @@ class EquivariantTensorProduct:
         return EquivariantTensorProduct(
             [f(d) for d in self.ds],
             [
-                Operand(ope.irreps, layout)
+                cue.IrrepsAndLayout(ope.irreps, layout)
                 for ope, layout in zip(self.operands, layouts)
             ],
         )
@@ -324,7 +310,7 @@ class EquivariantTensorProduct:
         if isinstance(itemsize, int):
             itemsize = (itemsize,) * self.num_operands
         return sum(
-            bs * operand.irreps.dim * iz
+            bs * operand.dim * iz
             for iz, bs, operand in zip(itemsize, batch_sizes, self.operands)
         )
 
@@ -413,27 +399,23 @@ class EquivariantTensorProduct:
         """Stack multiple equivariant tensor products."""
         assert len(es) > 0
         num_operands = es[0].num_operands
-        layouts = [ope.layout for ope in es[0].operands]
+
         assert all(e.num_operands == num_operands for e in es)
-        assert all(
-            e.operands[oid].layout == layouts[oid]
-            for e in es
-            for oid in range(num_operands)
-        )
         assert len(stacked) == num_operands
 
         new_operands = []
         for oid in range(num_operands):
             if stacked[oid]:
-                new_operands.append(
-                    Operand(
-                        irreps=cue.concatenate([e.operands[oid].irreps for e in es]),
-                        layout=layouts[oid],
+                if not all(
+                    isinstance(e.operands[oid], cue.IrrepsAndLayout) for e in es
+                ):
+                    raise NotImplementedError(
+                        f"Stacking of {type(es[0].operands[oid])} is not implemented"
                     )
-                )
+                new_operands.append(cue.concatenate([e.operands[oid] for e in es]))
             else:
                 ope = es[0].operands[oid]
-                assert all(e.operands[oid].irreps == ope.irreps for e in es)
+                assert all(e.operands[oid] == ope for e in es)
                 new_operands.append(ope)
 
         new_ds: dict[int, stp.SegmentedTensorProduct] = {}

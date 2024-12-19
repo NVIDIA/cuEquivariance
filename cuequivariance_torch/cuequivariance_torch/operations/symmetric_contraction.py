@@ -138,7 +138,7 @@ class SymmetricContraction(torch.nn.Module):
             self.weight_shape = (p.shape[0], mul)
         else:
             self.projection = None
-            self.weight_shape = (self.etp.inputs[0].irreps.dim // mul, mul)
+            self.weight_shape = (self.etp.inputs[0].dim // mul, mul)
 
         self.num_elements = num_elements
         self.weight = torch.nn.Parameter(

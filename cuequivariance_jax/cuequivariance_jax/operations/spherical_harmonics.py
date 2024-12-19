@@ -23,19 +23,28 @@ from cuequivariance import descriptors
 
 def spherical_harmonics(
     ls: list[int],
-    vector: cuex.IrrepsArray,
+    vector: cuex.RepArray,
     normalize: bool = True,
     algorithm: str = "stacked",
-) -> cuex.IrrepsArray:
+) -> cuex.RepArray:
+    """Compute the spherical harmonics of a vector.
+
+    Args:
+        ls (list of int): List of spherical harmonic degrees.
+        vector (RepArray): Input vector(s).
+        normalize (bool): Whether to normalize the vector before computing the spherical harmonics.
+        algorithm (str): Algorithm to use for the tensor product. See :class:`cuex.tensor_product <cuequivariance_jax.tensor_product>` for more information.
+
+    Returns:
+        RepArray: Spherical harmonics of the vector.
+    """
     ls = list(ls)
-    assert isinstance(vector, cuex.IrrepsArray)
-    assert vector.is_simple()
-    irreps = vector.irreps()
+    assert vector.is_irreps_array()
+    irreps = vector.irreps
     assert len(irreps) == 1
     mul, ir = irreps[0]
     assert mul == 1
     assert ir.dim == 3
-    assert max(ls) > 0
     assert min(ls) >= 0
 
     if normalize:
@@ -48,8 +57,8 @@ def spherical_harmonics(
     )
 
 
-def normalize(array: cuex.IrrepsArray) -> cuex.IrrepsArray:
-    assert array.is_simple()
+def normalize(array: cuex.RepArray, epsilon: float = 0.0) -> cuex.RepArray:
+    assert array.is_irreps_array()
 
     match array.layout:
         case cue.ir_mul:
@@ -59,13 +68,14 @@ def normalize(array: cuex.IrrepsArray) -> cuex.IrrepsArray:
 
     def f(x: jax.Array) -> jax.Array:
         sn = jnp.sum(jnp.conj(x) * x, axis=axis_ir, keepdims=True)
-        sn_safe = jnp.where(sn == 0.0, 1.0, sn)
-        rsn_safe = jnp.sqrt(sn_safe)
-        return x / rsn_safe
+        sn += epsilon
+        if epsilon == 0.0:
+            sn = jnp.where(sn == 0.0, 1.0, sn)
+        return x / jnp.sqrt(sn)
 
     return cuex.from_segments(
-        array.irreps(),
-        [f(x) for x in array.segments()],
+        array.irreps,
+        [f(x) for x in array.segments],
         array.shape,
         array.layout,
         array.dtype,
@@ -75,9 +85,9 @@ def normalize(array: cuex.IrrepsArray) -> cuex.IrrepsArray:
 _normalize = normalize
 
 
-def norm(array: cuex.IrrepsArray, *, squared: bool = False) -> cuex.IrrepsArray:
-    """Norm of IrrepsArray."""
-    assert array.is_simple()
+def norm(array: cuex.RepArray, *, squared: bool = False) -> cuex.RepArray:
+    """Norm of `RepArray`."""
+    assert array.is_irreps_array()
 
     match array.layout:
         case cue.ir_mul:
@@ -97,8 +107,8 @@ def norm(array: cuex.IrrepsArray, *, squared: bool = False) -> cuex.IrrepsArray:
                 return rsn
 
     return cuex.from_segments(
-        cue.Irreps(array.irreps(), [(mul, ir.trivial()) for mul, ir in array.irreps()]),
-        [f(x) for x in array.segments()],
+        cue.Irreps(array.irreps, [(mul, ir.trivial()) for mul, ir in array.irreps]),
+        [f(x) for x in array.segments],
         array.shape,
         array.layout,
         array.dtype,

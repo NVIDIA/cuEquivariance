@@ -19,14 +19,14 @@
 cuequivariance-jax
 ==================
 
-IrrepsArray
------------
+RepArray
+--------
 
 .. autosummary::
    :toctree: generated/
    :template: class_template.rst
 
-   IrrepsArray
+   RepArray
 
 .. autosummary::
    :toctree: generated/
@@ -56,3 +56,9 @@ Extra Modules
 
    flax_linen.Linear
    flax_linen.LayerNorm
+
+.. autosummary::
+   :toctree: generated/
+   :template: function_template.rst
+
+   spherical_harmonics

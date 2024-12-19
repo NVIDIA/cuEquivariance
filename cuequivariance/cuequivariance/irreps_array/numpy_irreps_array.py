@@ -37,7 +37,7 @@ class NumpyIrrepsArray:
 
     irreps: cue.Irreps
     array: np.ndarray
-    layout: cue.IrrepsLayout
+    layout: cue.IrrepsLayout  # TODO: replace with IrrepsAndLayout
 
     def __init__(
         self,
@@ -252,10 +252,20 @@ def from_segments(
 
 
 def concatenate(
-    arrays: Union[list[cue.Irreps], list[NumpyIrrepsArray]],
-) -> NumpyIrrepsArray:
+    arrays: Union[
+        list[cue.Irreps],
+        list[Union[cue.IrrepsAndLayout]],
+        list[NumpyIrrepsArray],
+    ],
+) -> Union[cue.Irreps, cue.IrrepsAndLayout, NumpyIrrepsArray]:
     if len(arrays) == 0:
         raise ValueError("Expected at least one input")
+
+    if all(isinstance(array, cue.IrrepsAndLayout) for array in arrays):
+        assert len({x.layout for x in arrays}) == 1
+        return cue.IrrepsAndLayout(
+            concatenate([x.irreps for x in arrays]), arrays[0].layout
+        )
 
     if all(isinstance(array, cue.Irreps) for array in arrays):
         return sum(arrays, cue.Irreps(arrays[0].irrep_class, []))

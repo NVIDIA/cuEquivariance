@@ -15,6 +15,7 @@
 from .context_irrep_class import get_irrep_scope
 from .irreps import MulIrrep, Irreps
 from .irreps_layout import IrrepsLayout, mul_ir, ir_mul
+from .irreps_and_layout import IrrepsAndLayout
 
 from .context_layout import get_layout_scope
 from .context_decorator import assume
@@ -33,6 +34,7 @@ __all__ = [
     "IrrepsLayout",
     "mul_ir",
     "ir_mul",
+    "IrrepsAndLayout",
     "get_layout_scope",
     "assume",
     "NumpyIrrepsArray",

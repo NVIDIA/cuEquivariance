@@ -30,7 +30,7 @@ def test_special_double_backward():
     h1 = lambda w, x: jax.grad(h0, 1)(w, x).array.sum() ** 2  # noqa
 
     w = jax.random.normal(jax.random.key(0), (1, irreps_w.dim))
-    x = cuex.IrrepsArray(
+    x = cuex.RepArray(
         irreps_x, jax.random.normal(jax.random.key(1), (3, irreps_x.dim)), cue.ir_mul
     )
     jax.grad(h1, 0)(w, x)

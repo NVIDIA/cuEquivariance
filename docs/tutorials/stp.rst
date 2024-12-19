@@ -94,7 +94,7 @@ Now we can create a tensor product from the descriptor and execute it. In PyTorc
 
 .. jupyter-execute::
 
-   linear_torch = cuet.TensorProduct(d)
+   linear_torch = cuet.TensorProduct(d, use_fallback=True)
    linear_torch
 
 

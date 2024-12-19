@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from functools import wraps
-from typing import Optional, Union, Type
+from typing import Optional, Type, Union
 
 import cuequivariance as cue
 import cuequivariance.irreps_array as irreps_array
@@ -28,19 +28,25 @@ from cuequivariance.irreps_array.context_layout import (
 
 
 class assume:
-    """Context manager / decorator to assume the irrep class and layout for a block of code.
+    """
+    ``assume`` is a context manager or decorator to assume the irrep class and layout for a block of code or a function.
 
     Examples:
-    ```
-    with cue.assume(irrep_class="SU2", layout=cue.mul_ir):
-        ...
-    ```
+        As a context manager:
 
-    ```
-    @cue.assume(irrep_class="SU2", layout=cue.mul_ir)
-    def my_function():
-        ...
-    ```
+        >>> with cue.assume(cue.SO3, cue.mul_ir):
+        ...     rep = cue.IrrepsAndLayout("2x1")
+        >>> rep.irreps
+        2x1
+        >>> rep.layout
+        (mul,irrep)
+
+        As a decorator:
+
+        >>> @cue.assume(cue.SO3, cue.mul_ir)
+        ... def foo():
+        ...     return cue.IrrepsAndLayout("2x1")
+        >>> assert foo() == rep
     """
 
     def __init__(

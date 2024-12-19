@@ -70,9 +70,9 @@ Execution on JAX
 
     cuex.equivariant_tensor_product(e, w, x)
 
-The function :func:`cuex.randn <cuequivariance_jax.randn>` generates random :class:`cuex.IrrepsArray <cuequivariance_jax.IrrepsArray>` objects.
+The function :func:`cuex.randn <cuequivariance_jax.randn>` generates random :class:`cuex.RepArray <cuequivariance_jax.RepArray>` objects.
 The function :func:`cuex.equivariant_tensor_product <cuequivariance_jax.equivariant_tensor_product>` executes the tensor product.
-The output is a :class:`cuex.IrrepsArray <cuequivariance_jax.IrrepsArray>` object.
+The output is a :class:`cuex.RepArray <cuequivariance_jax.RepArray>` object.
 
 
 Execution on PyTorch
@@ -89,10 +89,10 @@ We can execute an :class:`cuequivariance.EquivariantTensorProduct` with PyTorch.
         cue.Irreps("O3", "32x0e + 32x1o"),
         cue.Irreps("O3", "8x0e + 4x1o")
     )
-    module = cuet.EquivariantTensorProduct(e, layout=cue.ir_mul)
+    module = cuet.EquivariantTensorProduct(e, layout=cue.ir_mul, use_fallback=True)
 
-    w = torch.randn(e.inputs[0].irreps.dim)
-    x = torch.randn(e.inputs[1].irreps.dim)
+    w = torch.randn(e.inputs[0].dim)
+    x = torch.randn(e.inputs[1].dim)
 
     module([w, x])
 

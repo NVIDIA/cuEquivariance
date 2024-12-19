@@ -398,26 +398,26 @@ def sparsify_matrix(
         for i0, i1 in graph.edges:
             result = sparsify_rows(x[i0], x[i1], round_fn)
 
-            if isinstance(result, DisjointRows):
-                pass
-            elif isinstance(result, ReplaceRow):
-                a0, a1, row, which = result.a0, result.a1, result.row, result.which
-                hope = True
-                which = i0 if which == 0 else i1
-                x[which] = row
-                q[which] = a0 * q[i0] + a1 * q[i1]
+            match result:
+                case DisjointRows():
+                    pass
+                case ReplaceRow(a0=a0, a1=a1, row=row, which=which):
+                    hope = True
+                    which = i0 if which == 0 else i1
+                    x[which] = row
+                    q[which] = a0 * q[i0] + a1 * q[i1]
 
-                next_graph.add_edge(i0, i1)
-                for i in graph.neighbors(i0):
-                    if i != i1:
-                        next_graph.add_edge(i, i1)
-                for i in graph.neighbors(i1):
-                    if i != i0:
-                        next_graph.add_edge(i, i0)
-            elif isinstance(result, AlreadySparse):
-                next_graph.add_edge(i0, i1)
-            else:
-                raise ValueError(f"Unknown result type: {result}")
+                    next_graph.add_edge(i0, i1)
+                    for i in graph.neighbors(i0):
+                        if i != i1:
+                            next_graph.add_edge(i, i1)
+                    for i in graph.neighbors(i1):
+                        if i != i0:
+                            next_graph.add_edge(i, i0)
+                case AlreadySparse():
+                    next_graph.add_edge(i0, i1)
+                case _:
+                    raise ValueError(f"Unknown result type: {result}")
 
         iterations += 1
         graph = next_graph
