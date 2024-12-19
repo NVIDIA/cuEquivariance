@@ -37,8 +37,8 @@ def equivariant_tensor_product(
         *inputs (RepArray or jax.Array): The input arrays.
         dtype_output (jnp.dtype, optional): The data type for the output array. Defaults to None.
         dtype_math (jnp.dtype, optional): The data type for computational operations. Defaults to None.
-        precision (jax.lax.Precision, optional): The precision for the computation. Defaults to jax.lax.Precision.HIGHEST.
-        algorithm (str, optional): One of "sliced", "stacked", "compact_stacked", "indexed_compact", "indexed_vmap", "indexed_for_loop". Defaults to "sliced".
+        precision (jax.lax.Precision, optional): The precision for the computation. Defaults to ``jax.lax.Precision.HIGHEST``.
+        algorithm (str, optional): One of "sliced", "stacked", "compact_stacked", "indexed_compact", "indexed_vmap", "indexed_for_loop". Defaults to "sliced". See :class:`cuex.tensor_product <cuequivariance_jax.tensor_product>` for more information.
         use_custom_primitive (bool, optional): Whether to use custom JVP rules. Defaults to True.
         use_custom_kernels (bool, optional): Whether to use custom kernels. Defaults to True.
 
@@ -46,8 +46,22 @@ def equivariant_tensor_product(
         RepArray: The result of the equivariant tensor product.
 
     Examples:
+
+        Let's create a descriptor for the spherical harmonics of degree 0, 1, and 2.
+
         >>> e = cue.descriptors.spherical_harmonics(cue.SO3(1), [0, 1, 2])
-        >>> x = cuex.RepArray(cue.IrrepsAndLayout(cue.Irreps("SO3", "1"), cue.ir_mul), jnp.array([0.0, 1.0, 0.0]))
+        >>> e
+        EquivariantTensorProduct((1)^(0..2) -> 0+1+2)
+
+        We need some input data.
+
+        >>> with cue.assume(cue.SO3, cue.ir_mul):
+        ...    x = cuex.RepArray("1", jnp.array([0.0, 1.0, 0.0]))
+        >>> x
+        {0: 1} [0. 1. 0.]
+
+        Now we can execute the equivariant tensor product.
+
         >>> cuex.equivariant_tensor_product(e, x)
         {0: 0+1+2}
         [1. ... ]

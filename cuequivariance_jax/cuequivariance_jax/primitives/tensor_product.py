@@ -46,39 +46,40 @@ def tensor_product(
     use_custom_kernels: bool = False,
 ) -> jax.Array:
     """
-    Compute the last operand of a segmented tensor product.
+    Compute the last operand of a `SegmentedTensorProduct`.
 
     Args:
-        d (SegmentedTensorProduct): The segmented tensor product descriptor.
-        *inputs (jax.Array): The input arrays for the tensor product.
-        dtype_output (jnp.dtype, optional): The data type for the output. Defaults to None.
+        d (SegmentedTensorProduct): The descriptor of the operation.
+        *inputs (jax.Array): The input arrays for each operand except the last one.
+        dtype_output (jnp.dtype, optional): The data type for the output.
         dtype_math (jnp.dtype, optional): The data type for mathematical operations.
-        precision (jax.lax.Precision, optional): The precision for the computation. Defaults to jax.lax.Precision.HIGHEST.
+        precision (jax.lax.Precision, optional): The precision for the computation. Defaults to ``jax.lax.Precision.HIGHEST``.
         algorithm (str, optional): The algorithm to use for the computation. Defaults to "sliced". See table below for available algorithms.
-        use_custom_primitive (bool, optional): Whether to use custom JVP/transpose rules. Defaults to True.
-        use_custom_kernels (bool, optional): Whether to use custom kernels. Defaults to True.
+        use_custom_primitive (bool, optional): Whether to use custom JVP/transpose rules.
+        use_custom_kernels (bool, optional): Whether to use custom kernels.
 
     Returns:
-        jax.Array: The result of the tensor product computation.
+        jax.Array: The result of the tensor product. The last operand of the `SegmentedTensorProduct`.
 
-    See Also:
-        :class:`cuequivariance.SegmentedTensorProduct`
+    .. table:: Available algorithms for the tensor product
+        :align: center
+        :class: longtable
 
-    +---------------------+--------------------------+-----------------+----------------------------+
-    | Algorithms          | Needs Identical Segments | Compilation     | Execution                  |
-    +=====================+==========================+=================+============================+
-    |``sliced``           | No                       | Several minutes | It depends                 |
-    +---------------------+--------------------------+-----------------+----------------------------+
-    |``stacked``          | Yes                      | Several minutes | It depends                 |
-    +---------------------+--------------------------+-----------------+----------------------------+
-    |``compact_stacked``  | Yes                      | Few seconds     | It depends                 |
-    +---------------------+--------------------------+-----------------+----------------------------+
-    |``indexed_compact``  | Yes                      | Few seconds     | It depends                 |
-    +---------------------+--------------------------+-----------------+----------------------------+
-    |``indexed_vmap``     | Yes                      | Few seconds     | Probably the second slowest|
-    +---------------------+--------------------------+-----------------+----------------------------+
-    |``indexed_for_loop`` | Yes                      | Few seconds     | Probably the slowest       |
-    +---------------------+--------------------------+-----------------+----------------------------+
+        +---------------------+--------------------------+------------------+----------------------------+
+        | Algorithms          | Needs Identical Segments | Compilation Time | Execution Time             |
+        +=====================+==========================+==================+============================+
+        |``sliced``           | No                       | Several minutes  | It depends                 |
+        +---------------------+--------------------------+------------------+----------------------------+
+        |``stacked``          | Yes                      | Several minutes  | It depends                 |
+        +---------------------+--------------------------+------------------+----------------------------+
+        |``compact_stacked``  | Yes                      | Few seconds      | It depends                 |
+        +---------------------+--------------------------+------------------+----------------------------+
+        |``indexed_compact``  | Yes                      | Few seconds      | It depends                 |
+        +---------------------+--------------------------+------------------+----------------------------+
+        |``indexed_vmap``     | Yes                      | Few seconds      | Probably the second slowest|
+        +---------------------+--------------------------+------------------+----------------------------+
+        |``indexed_for_loop`` | Yes                      | Few seconds      | Probably the slowest       |
+        +---------------------+--------------------------+------------------+----------------------------+
     """
     if isinstance(precision, str):
         precision = jax.lax.Precision[precision]
