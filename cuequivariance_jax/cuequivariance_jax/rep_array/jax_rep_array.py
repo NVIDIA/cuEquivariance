@@ -26,6 +26,18 @@ class RepArray:
      [0. 1. 0.]
      [0. 0. 1.]]
 
+    By default, arguments that are not `Rep` will be automatically converted into `IrrepsAndLayout`:
+
+    >>> with cue.assume(cue.SO3, cue.ir_mul):
+    ...     x = cuex.RepArray({0: "1", 1: "2"}, jnp.ones((3, 5)))
+    >>> x
+    {0: 1, 1: 2}
+    [[1. 1. 1. 1. 1.]
+     [1. 1. 1. 1. 1.]
+     [1. 1. 1. 1. 1.]]
+    >>> x.rep(0).irreps, x.rep(0).layout
+    (1, (irrep,mul))
+
     .. rubric:: IrrepsArray
 
     An ``IrrepsArray`` is just a special case of a ``RepArray`` where the last axis is a `IrrepsAndLayout`:
@@ -67,24 +79,38 @@ class RepArray:
 
     def __init__(
         self,
-        reps: cue.Rep | dict[int, cue.Rep],
+        reps: dict[int, cue.Rep]
+        | cue.Rep
+        | cue.Irreps
+        | str
+        | dict[int, cue.Irreps]
+        | dict[int, str],
         array: jax.Array,
         layout: cue.IrrepsLayout | None = None,
     ):
-        # Support for RepArray(irreps, array, layout)
-        if isinstance(reps, str):
-            reps = cue.Irreps(reps)
-        if isinstance(reps, cue.Irreps):
-            reps = cue.IrrepsAndLayout(reps, layout)
-        else:
-            assert layout is None
-        # End of support for RepArray(irreps, array, layout)
-
-        if isinstance(reps, cue.Rep):
+        if not isinstance(reps, dict):
             reps = {-1: reps}
 
-        if not isinstance(reps, dict):
-            raise ValueError(f"Invalid input for reps: {reps}, {type(reps)}")
+        # Remaining cases: dict[int, cue.Rep] | dict[int, cue.Irreps] | dict[int, str]
+
+        reps = {
+            axis: cue.Irreps(rep) if isinstance(rep, str) else rep
+            for axis, rep in reps.items()
+        }
+
+        # Remaining cases: dict[int, cue.Rep] | dict[int, cue.Irreps]
+
+        reps = {
+            axis: cue.IrrepsAndLayout(rep, layout)
+            if isinstance(rep, cue.Irreps)
+            else rep
+            for axis, rep in reps.items()
+        }
+
+        del layout
+        assert isinstance(reps, dict)
+        assert all(isinstance(k, int) for k in reps)
+        assert all(isinstance(v, cue.Rep) for v in reps.values())
 
         ndim = getattr(array, "ndim", None)
         if ndim is not None:
