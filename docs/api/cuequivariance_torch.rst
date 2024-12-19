@@ -41,12 +41,7 @@ Special Cases of Tensor Products
    Linear
    SymmetricContraction
    TransposeIrrepsLayout
-
-.. autosummary::
-   :toctree: generated/
-   :template: function_template.rst
-
-   spherical_harmonics
+   SphericalHarmonics
 
 Euclidean Operations
 --------------------

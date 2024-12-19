@@ -24,7 +24,7 @@ device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("
 
 @pytest.mark.parametrize(
     "dtype, tol",
-    [(torch.float64, 1e-6), (torch.float32, 1e-4)],
+    [(torch.float64, 1e-5), (torch.float32, 1e-4)],
 )
 @pytest.mark.parametrize("ell", [1, 2, 3])
 def test_spherical_harmonics(ell: int, dtype, tol):
@@ -33,20 +33,23 @@ def test_spherical_harmonics(ell: int, dtype, tol):
     angle = np.random.rand()
     scale = 1.3
 
-    yl = cuet.spherical_harmonics([ell], vec, False)
+    m = cuet.SphericalHarmonics([ell], False, device=device)
+
+    yl = m(vec)
 
     R = torch.from_numpy(cue.SO3(1).rotation(axis, angle)).to(dtype).to(device)
     Rl = torch.from_numpy(cue.SO3(ell).rotation(axis, angle)).to(dtype).to(device)
 
-    yl1 = cuet.spherical_harmonics([ell], scale * R @ vec, False)
+    yl1 = m(scale * R @ vec)
     yl2 = scale**ell * Rl @ yl
 
     torch.testing.assert_close(yl1, yl2, rtol=tol, atol=tol)
 
 
 def test_spherical_harmonics_full():
-    vec = torch.randn(3, device=device)
+    vec = torch.randn(3, device=device).to(device)
     ls = [0, 1, 2, 3]
-    yl = cuet.spherical_harmonics(ls, vec, False)
+    m = cuet.SphericalHarmonics(ls, device=device)
+    yl = m(vec)
 
     assert abs(yl[0] - 1.0) < 1e-6

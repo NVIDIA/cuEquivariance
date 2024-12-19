@@ -36,7 +36,7 @@ from .operations.rotation import (
     vector_to_euler_angles,
     Inversion,
 )
-from .operations.spherical_harmonics import spherical_harmonics
+from .operations.spherical_harmonics import SphericalHarmonics
 
 from cuequivariance_torch import layers
 
@@ -55,6 +55,6 @@ __all__ = [
     "Inversion",
     "encode_rotation_angle",
     "vector_to_euler_angles",
-    "spherical_harmonics",
+    "SphericalHarmonics",
     "layers",
 ]

@@ -22,7 +22,7 @@ from typing import Iterator
 import numpy as np
 
 from cuequivariance.misc.linalg import round_to_sqrt_rational
-from cuequivariance.representation import Irrep, SU2
+from cuequivariance.representation import SU2, Irrep
 
 
 # This function is copied from https://github.com/lie-nn/lie-nn/blob/70adebce44e3197ee17f780585c6570d836fc2fe/lie_nn/_src/irreps/so3_real.py

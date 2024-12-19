@@ -16,8 +16,8 @@ import numpy as np
 import pytest
 
 import cuequivariance as cue
-from cuequivariance import descriptors
 import cuequivariance.segmented_tensor_product as stp
+from cuequivariance import descriptors
 
 
 def test_commutativity_squeeze_flatten():

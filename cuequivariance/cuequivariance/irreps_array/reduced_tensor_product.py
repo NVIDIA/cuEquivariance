@@ -16,7 +16,7 @@ import functools
 import itertools
 import logging
 from math import prod
-from typing import FrozenSet, List, Optional, Sequence, Tuple, Iterator, Union
+from typing import FrozenSet, Iterator, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 

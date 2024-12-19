@@ -35,7 +35,6 @@ class Linear(torch.nn.Module):
         use_fallback (bool, optional): If `None` (default), a CUDA kernel will be used if available.
                 If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
                 If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
-        optimize_fallback (bool, optional): Whether to optimize fallback. Defaults to None.
     """
 
     def __init__(
@@ -52,7 +51,6 @@ class Linear(torch.nn.Module):
         dtype: Optional[torch.dtype] = None,
         math_dtype: Optional[torch.dtype] = None,
         use_fallback: Optional[bool] = None,
-        optimize_fallback: Optional[bool] = None,
     ):
         super().__init__()
         irreps_in, irreps_out = default_irreps(irreps_in, irreps_out)
@@ -77,7 +75,7 @@ class Linear(torch.nn.Module):
             if not self.shared_weights:
                 raise ValueError("Internal weights should be shared")
             self.weight = torch.nn.Parameter(
-                torch.randn(self.weight_numel, device=device, dtype=dtype)
+                torch.randn(1, self.weight_numel, device=device, dtype=dtype)
             )
         else:
             self.weight = None
@@ -90,7 +88,6 @@ class Linear(torch.nn.Module):
             device=device,
             math_dtype=math_dtype,
             use_fallback=use_fallback,
-            optimize_fallback=optimize_fallback,
         )
 
     def extra_repr(self) -> str:
@@ -122,9 +119,7 @@ class Linear(torch.nn.Module):
 
             weight = self.weight
 
-        if self.shared_weights and weight.ndim != 1:
-            raise ValueError("Shared weights should be 1D tensor")
-        if not self.shared_weights and weight.ndim != 2:
-            raise ValueError("Weights should be 2D tensor")
+        if weight is None:
+            raise ValueError("Weights should not be None")
 
         return self.f([weight, x])

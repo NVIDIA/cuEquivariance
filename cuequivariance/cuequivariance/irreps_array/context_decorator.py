@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from functools import wraps
-from typing import Optional, Union, Type
+from typing import Optional, Type, Union
 
 import cuequivariance as cue
 import cuequivariance.irreps_array as irreps_array

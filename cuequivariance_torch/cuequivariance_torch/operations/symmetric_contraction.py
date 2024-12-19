@@ -41,7 +41,6 @@ class SymmetricContraction(torch.nn.Module):
         use_fallback (bool, optional): If `None` (default), a CUDA kernel will be used if available.
                 If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
                 If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
-        optimize_fallback (bool, optional): Whether to optimize fallback. Defaults to None.
 
     Examples:
         >>> irreps_in = cue.Irreps("O3", "32x0e + 32x1o")
@@ -109,7 +108,6 @@ class SymmetricContraction(torch.nn.Module):
         math_dtype: Optional[torch.dtype] = None,
         original_mace: bool = False,
         use_fallback: Optional[bool] = None,
-        optimize_fallback: Optional[bool] = None,
     ):
         super().__init__()
 
@@ -155,7 +153,6 @@ class SymmetricContraction(torch.nn.Module):
             device=device,
             math_dtype=math_dtype or dtype,
             use_fallback=use_fallback,
-            optimize_fallback=optimize_fallback,
         )
 
     def extra_repr(self) -> str:
@@ -180,10 +177,6 @@ class SymmetricContraction(torch.nn.Module):
         Returns:
             torch.Tensor: The output tensor. It has shape (batch, irreps_out.dim).
         """
-        torch._assert(
-            x.shape[-1] == self.irreps_in.dim,
-            f"Input tensor must have shape (..., {self.irreps_in.dim}), got {x.shape}",
-        )
 
         if self.projection is not None:
             weight = torch.einsum("zau,ab->zbu", self.weight, self.projection)
