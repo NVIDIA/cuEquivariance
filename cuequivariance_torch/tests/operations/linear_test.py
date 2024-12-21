@@ -16,6 +16,9 @@ import copy
 
 import pytest
 import torch
+from tests.utils import (
+    module_with_mode,
+)
 
 import cuequivariance as cue
 import cuequivariance_torch as cuet
@@ -169,3 +172,49 @@ def test_linear_copy(
     ).to(device)
 
     copy.deepcopy(linear)
+
+
+export_modes = ["compile", "script", "jit"]
+
+
+@pytest.mark.parametrize("irreps_in", list_of_irreps)
+@pytest.mark.parametrize("irreps_out", list_of_irreps)
+@pytest.mark.parametrize("layout", [cue.mul_ir, cue.ir_mul])
+@pytest.mark.parametrize("shared_weights", [True, False])
+@pytest.mark.parametrize("mode", export_modes)
+@pytest.mark.parametrize("use_fallback", [True, False])
+def test_export(
+    irreps_in: cue.Irreps,
+    irreps_out: cue.Irreps,
+    layout: cue.IrrepsLayout,
+    shared_weights: bool,
+    mode: str,
+    use_fallback: bool,
+    tmp_path: str,
+):
+    if not torch.cuda.is_available():
+        pytest.skip("CUDA is not available")
+
+    torch.manual_seed(0)
+    m = cuet.Linear(
+        irreps_in,
+        irreps_out,
+        layout=layout,
+        shared_weights=shared_weights,
+        device=device,
+        dtype=torch.float32,
+        use_fallback=use_fallback,
+    )
+
+    x = torch.randn(10, irreps_in.dim, dtype=torch.float32).cuda()
+
+    if shared_weights:
+        inputs = (x,)
+    else:
+        w = torch.randn(10, m.weight_numel, dtype=torch.float32).cuda()
+        inputs = (x, w)
+
+    out1 = m(*inputs)
+    m = module_with_mode(mode, m, inputs, torch.float32, tmp_path)
+    out2 = m(*inputs)
+    torch.testing.assert_close(out1, out2)

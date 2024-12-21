@@ -14,14 +14,13 @@
 # limitations under the License.
 import logging
 import math
-from typing import Optional
+from typing import List, Optional
 
 import torch
 import torch.fx
 
 import cuequivariance.segmented_tensor_product as stp
 import cuequivariance_torch as cuet
-from cuequivariance_torch.primitives.tensor_product import broadcast_shapes, prod
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +32,6 @@ class SymmetricTensorProduct(torch.nn.Module):
     Args:
         descriptors (list of SegmentedTensorProduct): The list of SegmentedTensorProduct descriptors.
         math_dtype (torch.dtype, optional): The data type of the coefficients and calculations.
-        optimize_fallback (bool, optional): If `True`, the torch.fx graph will be optimized before execution. Because the optimization takes time, it is turned off by default.
     """
 
     def __init__(
@@ -43,7 +41,6 @@ class SymmetricTensorProduct(torch.nn.Module):
         device: Optional[torch.device] = None,
         math_dtype: Optional[torch.dtype] = None,
         use_fallback: Optional[bool] = None,
-        optimize_fallback: Optional[bool] = None,
     ):
         super().__init__()
 
@@ -69,7 +66,6 @@ class SymmetricTensorProduct(torch.nn.Module):
             device=device,
             math_dtype=math_dtype,
             use_fallback=use_fallback,
-            optimize_fallback=optimize_fallback,
         )
 
     def forward(self, x0: torch.Tensor) -> torch.Tensor:
@@ -107,9 +103,6 @@ class IWeightedSymmetricTensorProduct(torch.nn.Module):
         The list of SegmentedTensorProduct descriptors
     math_dtype : torch.dtype, optional
         The data type of the coefficients and calculations
-    optimize_fallback : bool, optional
-        If `True`, the torch.fx graph will be optimized before execution
-        Because the optimization takes time, it is turned off by default.
     """
 
     def __init__(
@@ -119,7 +112,6 @@ class IWeightedSymmetricTensorProduct(torch.nn.Module):
         device: Optional[torch.device] = None,
         math_dtype: Optional[torch.dtype] = None,
         use_fallback: Optional[bool] = None,
-        optimize_fallback: Optional[bool] = None,
     ):
         super().__init__()
 
@@ -153,9 +145,9 @@ class IWeightedSymmetricTensorProduct(torch.nn.Module):
                 descriptors,
                 device,
                 math_dtype=math_dtype,
-                optimize_fallback=optimize_fallback,
             )
 
+    @torch.jit.ignore
     def __repr__(self):
         has_cuda_kernel = (
             "(with CUDA kernel)"
@@ -179,9 +171,9 @@ class IWeightedSymmetricTensorProduct(torch.nn.Module):
         x0 : torch.Tensor
             The input tensor for the first operand. It should have the shape (i0.max() + 1, x0_size).
         i0 : torch.Tensor
-            The index tensor for the first operand. It should have the shape (...).
+            The index tensor for the first operand. It should have the shape (batch).
         x1 : torch.Tensor
-            The repeated input tensor. It should have the shape (..., x1_size).
+            The repeated input tensor. It should have the shape (batch, x1_size).
 
         Returns
         -------
@@ -194,13 +186,15 @@ class IWeightedSymmetricTensorProduct(torch.nn.Module):
             x0.ndim == 2,
             f"Expected 2 dims (i0.max() + 1, x0_size), got shape {x0.shape}",
         )
-        shape = broadcast_shapes([i0.shape, x1.shape[:-1]])
-        i0 = i0.expand(shape).reshape((prod(shape),))
-        x1 = x1.expand(shape + (x1.shape[-1],)).reshape((prod(shape), x1.shape[-1]))
-
-        out = self.f(x0, i0, x1)
-        out = out.reshape(shape + (self.x2_size,))
-        return out
+        torch._assert(
+            i0.ndim == 1,
+            f"Expected 1 dim (batch), got shape {i0.shape}",
+        )
+        torch._assert(
+            x1.ndim == 2,
+            f"Expected 2 dims (batch, x1_size), got shape {x1.shape}",
+        )
+        return self.f(x0, i0, x1)
 
 
 def _check_descriptors(descriptors: list[stp.SegmentedTensorProduct]):
@@ -338,7 +332,6 @@ class FallbackImpl(torch.nn.Module):
         stps: list[stp.SegmentedTensorProduct],
         device: Optional[torch.device],
         math_dtype: Optional[torch.dtype],
-        optimize_fallback: Optional[bool],
     ):
         super().__init__()
         self.fs = torch.nn.ModuleList(
@@ -348,7 +341,6 @@ class FallbackImpl(torch.nn.Module):
                     device=device,
                     math_dtype=math_dtype,
                     use_fallback=True,
-                    optimize_fallback=optimize_fallback,
                 )
                 for d in stps
             ]
@@ -357,6 +349,7 @@ class FallbackImpl(torch.nn.Module):
     def forward(
         self, x0: torch.Tensor, i0: torch.Tensor, x1: torch.Tensor
     ) -> torch.Tensor:
-        return sum(
-            f([x0[i0]] + [x1] * (f.descriptor.num_operands - 2)) for f in self.fs
-        )
+        fs: List[torch.Tensor] = [
+            f([x0[i0]] + [x1] * (f.num_operands - 2)) for f in self.fs
+        ]
+        return torch.sum(torch.stack(fs), dim=0)

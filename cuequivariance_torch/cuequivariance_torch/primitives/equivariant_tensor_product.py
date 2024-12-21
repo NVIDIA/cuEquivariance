@@ -119,7 +119,6 @@ class EquivariantTensorProduct(torch.nn.Module):
         device (torch.device): device of the Module.
         math_dtype (torch.dtype): dtype for internal computations.
         use_fallback (bool, optional):  Determines the computation method. If `None` (default), a CUDA kernel will be used if available. If `False`, a CUDA kernel will be used, and an exception is raised if it's not available. If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
-        optimize_fallback (bool): whether to optimize the fallback implementation.
     Raises:
         RuntimeError: If `use_fallback` is `False` and no CUDA kernel is available.
 
@@ -128,7 +127,7 @@ class EquivariantTensorProduct(torch.nn.Module):
         >>> e = cue.descriptors.fully_connected_tensor_product(
         ...    cue.Irreps("SO3", "2x1"), cue.Irreps("SO3", "2x1"), cue.Irreps("SO3", "2x1")
         ... )
-        >>> w = torch.ones(e.inputs[0].dim, device=device)
+        >>> w = torch.ones(1, e.inputs[0].dim, device=device)
         >>> x1 = torch.ones(17, e.inputs[1].dim, device=device)
         >>> x2 = torch.ones(17, e.inputs[2].dim, device=device)
         >>> tp = cuet.EquivariantTensorProduct(e, layout=cue.ir_mul, device=device)
@@ -155,7 +154,6 @@ class EquivariantTensorProduct(torch.nn.Module):
         device: Optional[torch.device] = None,
         math_dtype: Optional[torch.dtype] = None,
         use_fallback: Optional[bool] = None,
-        optimize_fallback: Optional[bool] = None,
     ):
         super().__init__()
         if not isinstance(layout_in, tuple):
@@ -217,7 +215,6 @@ class EquivariantTensorProduct(torch.nn.Module):
                         device=device,
                         math_dtype=math_dtype,
                         use_fallback=use_fallback,
-                        optimize_fallback=optimize_fallback,
                     )
                 )
             elif e.num_inputs == 2:
@@ -227,7 +224,6 @@ class EquivariantTensorProduct(torch.nn.Module):
                         device=device,
                         math_dtype=math_dtype,
                         use_fallback=use_fallback,
-                        optimize_fallback=optimize_fallback,
                     )
                 )
             else:
@@ -239,7 +235,6 @@ class EquivariantTensorProduct(torch.nn.Module):
                     device=device,
                     math_dtype=math_dtype,
                     use_fallback=use_fallback,
-                    optimize_fallback=optimize_fallback,
                 )
             )
 
@@ -259,7 +254,10 @@ class EquivariantTensorProduct(torch.nn.Module):
 
         # assert len(inputs) == len(self.etp.inputs)
         for a, dim in zip(inputs, self.operands_dims):
-            assert a.shape[-1] == dim
+            torch._assert(
+                a.shape[-1] == dim,
+                f"Expected last dimension of input to be {dim}, got {a.shape[-1]}",
+            )
 
         # Transpose inputs
         inputs = self.transpose_in(inputs)

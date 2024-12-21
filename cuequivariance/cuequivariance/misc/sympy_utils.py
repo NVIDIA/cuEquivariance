@@ -13,8 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from fractions import Fraction
-import numpy as np
 
+import numpy as np
 import sympy
 
 
