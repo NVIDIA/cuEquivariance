@@ -14,6 +14,9 @@
 # limitations under the License.
 import pytest
 import torch
+from tests.utils import (
+    module_with_mode,
+)
 
 import cuequivariance_torch as cuet
 
@@ -48,3 +51,21 @@ def test_transpose(use_fallback: bool, dtype: torch.dtype):
 
     m = cuet.TransposeSegments(segments, device, use_fallback=use_fallback)
     torch.testing.assert_close(m(x), xt)
+
+
+export_modes = ["compile", "script", "jit"]
+
+
+@pytest.mark.parametrize("mode", export_modes)
+@pytest.mark.parametrize("use_fallback", [True, False])
+def test_export(mode, use_fallback, tmp_path):
+    dtype = torch.float32
+    x = torch.tensor(
+        [[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 10, 11, 12, 13]], dtype=dtype, device=device
+    )
+    segments = [(2, 3), (2, 2)]
+    m = cuet.TransposeSegments(segments, device, use_fallback=use_fallback)
+    out1 = m(x)
+    m = module_with_mode(mode, m, (x,), dtype, tmp_path)
+    out2 = m(x)
+    torch.testing.assert_close(out1, out2)

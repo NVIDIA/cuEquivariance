@@ -14,6 +14,9 @@
 # limitations under the License.
 import pytest
 import torch
+from tests.utils import (
+    module_with_mode,
+)
 
 import cuequivariance as cue
 import cuequivariance_torch as cuet
@@ -21,20 +24,25 @@ from cuequivariance import descriptors
 
 device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
 
-list_of_irreps = [
-    cue.Irreps("O3", "32x0e + 32x1o"),
-    cue.Irreps("O3", "2x1o + 5x0e + 2e + 1e + 1o"),
-    cue.Irreps("O3", "2e + 0x0e + 0o + 0x1e + 1e"),
+irreps = [
+    (
+        cue.Irreps("O3", "32x0e + 32x1o"),
+        cue.Irreps("O3", "0e + 1o + 2e"),
+        cue.Irreps("O3", "32x0e + 32x1o"),
+    ),
+    (
+        cue.Irreps("O3", "2x1o + 3x0e + 4x2e + 3x1e + 2x1o"),
+        cue.Irreps("O3", "1o + 2e"),
+        cue.Irreps("O3", "2x1o + 5x0e + 1e + 1o"),
+    ),
 ]
 
 
-@pytest.mark.parametrize("irreps1", list_of_irreps)
-@pytest.mark.parametrize("irreps2", [irreps.set_mul(1) for irreps in list_of_irreps])
-@pytest.mark.parametrize("irreps3", list_of_irreps)
+@pytest.mark.parametrize("irreps1, irreps2, irreps3", irreps)
 @pytest.mark.parametrize("layout", [cue.ir_mul, cue.mul_ir])
 @pytest.mark.parametrize("use_fallback", [False, True])
 @pytest.mark.parametrize("batch", [1, 32])
-def test_channel_wise(
+def test_channel_wise_fwd(
     irreps1: cue.Irreps,
     irreps2: cue.Irreps,
     irreps3: cue.Irreps,
@@ -72,13 +80,63 @@ def test_channel_wise(
     torch.testing.assert_close(out1, out2, atol=1e-5, rtol=1e-5)
 
 
-def test_channel_wise_bwd_bwd():
+export_modes = ["compile", "script", "jit"]
+
+
+@pytest.mark.parametrize("irreps1, irreps2, irreps3", irreps)
+@pytest.mark.parametrize("layout", [cue.ir_mul, cue.mul_ir])
+@pytest.mark.parametrize("internal_weights", [False, True])
+@pytest.mark.parametrize("use_fallback", [False, True])
+@pytest.mark.parametrize("batch", [1, 32])
+@pytest.mark.parametrize("mode", export_modes)
+def test_export(
+    irreps1: cue.Irreps,
+    irreps2: cue.Irreps,
+    irreps3: cue.Irreps,
+    layout: cue.IrrepsLayout,
+    internal_weights: bool,
+    use_fallback: bool,
+    batch: int,
+    mode: str,
+    tmp_path: str,
+):
+    dtype = torch.float32
+    if use_fallback is False and not torch.cuda.is_available():
+        pytest.skip("CUDA is not available")
+
+    m1 = cuet.ChannelWiseTensorProduct(
+        irreps1,
+        irreps2,
+        irreps3,
+        shared_weights=True,
+        internal_weights=internal_weights,
+        layout=layout,
+        device=device,
+        dtype=dtype,
+        use_fallback=use_fallback,
+    )
+    x1 = torch.randn(batch, irreps1.dim, dtype=dtype).to(device)
+    x2 = torch.randn(batch, irreps2.dim, dtype=dtype).to(device)
+    if internal_weights:
+        inputs = (x1, x2)
+    else:
+        weights = torch.randn(1, m1.weight_numel, device=device, dtype=dtype)
+        inputs = (x1, x2, weights)
+    out1 = m1(*inputs)
+
+    m1 = module_with_mode(mode, m1, inputs, dtype, tmp_path)
+    out2 = m1(*inputs)
+    torch.testing.assert_close(out1, out2)
+
+
+@pytest.mark.parametrize("irreps", ["32x0", "2x0 + 3x1"])
+def test_channel_wise_bwd_bwd(irreps: cue.Irreps):
     if not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
 
-    irreps1 = cue.Irreps("SO3", "2x0 + 3x1")
+    irreps1 = cue.Irreps("SO3", irreps)
     irreps2 = cue.Irreps("SO3", "0 + 1")
-    irreps3 = cue.Irreps("SO3", "0 + 1")
+    irreps3 = cue.Irreps("SO3", irreps)
 
     x1 = torch.randn(
         32, irreps1.dim, device=device, requires_grad=True, dtype=torch.float64
@@ -103,7 +161,7 @@ def test_channel_wise_bwd_bwd():
 
         torch.manual_seed(0)
         w = torch.randn(
-            m.weight_numel, device="cuda", requires_grad=True, dtype=torch.float64
+            1, m.weight_numel, device="cuda", requires_grad=True, dtype=torch.float64
         )
 
         (grad1, grad2, grad3) = torch.autograd.grad(

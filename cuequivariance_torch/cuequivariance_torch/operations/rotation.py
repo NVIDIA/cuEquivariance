@@ -41,7 +41,6 @@ class Rotation(torch.nn.Module):
         device: Optional[torch.device] = None,
         math_dtype: Optional[torch.dtype] = None,
         use_fallback: Optional[bool] = None,
-        optimize_fallback: Optional[bool] = None,
     ):
         super().__init__()
         (irreps,) = default_irreps(irreps)
@@ -62,7 +61,6 @@ class Rotation(torch.nn.Module):
             device=device,
             math_dtype=math_dtype,
             use_fallback=use_fallback,
-            optimize_fallback=optimize_fallback,
         )
 
     def forward(
@@ -158,8 +156,6 @@ class Inversion(torch.nn.Module):
         use_fallback (bool, optional): If `None` (default), a CUDA kernel will be used if available.
                 If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
                 If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
-
-        optimize_fallback (bool, optional): Whether to optimize fallback. Defaults to None.
     """
 
     def __init__(
@@ -172,7 +168,6 @@ class Inversion(torch.nn.Module):
         device: Optional[torch.device] = None,
         math_dtype: Optional[torch.dtype] = None,
         use_fallback: Optional[bool] = None,
-        optimize_fallback: Optional[bool] = None,
     ):
         super().__init__()
         (irreps,) = default_irreps(irreps)
@@ -191,7 +186,6 @@ class Inversion(torch.nn.Module):
             device=device,
             math_dtype=math_dtype,
             use_fallback=use_fallback,
-            optimize_fallback=optimize_fallback,
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

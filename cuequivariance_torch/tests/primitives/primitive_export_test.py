@@ -1,5 +1,8 @@
 import pytest
 import torch
+from tests.utils import (
+    module_with_mode,
+)
 
 import cuequivariance as cue
 from cuequivariance_torch.primitives.symmetric_tensor_product import (
@@ -14,8 +17,11 @@ from cuequivariance_torch.primitives.tensor_product import (
 
 device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
 
+export_modes = ["script", "export"]
 
-def test_script_symmetric_contraction():
+
+@pytest.mark.parametrize("mode", export_modes)
+def test_script_symmetric_contraction(mode, tmp_path):
     if not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
 
@@ -28,13 +34,16 @@ def test_script_symmetric_contraction():
     i0 = torch.zeros(batch, device=device, dtype=torch.int32)
     x1 = torch.randn(batch, ds[0].operands[1].size, device=device, dtype=torch.float32)
 
-    module = SymmetricTensorProduct(ds, device, torch.float32)
-    module = torch.jit.script(module)
+    m = SymmetricTensorProduct(ds, device, torch.float32)
+    inputs = (x0, i0, x1)
+    module = module_with_mode(mode, m, inputs, torch.float32, tmp_path)
+    out1 = m(*inputs)
+    out2 = module(*inputs)
+    torch.testing.assert_close(out1, out2)
 
-    assert module(x0, i0, x1).shape == (batch, ds[0].operands[-1].size)
 
-
-def test_script_fused_tp_3():
+@pytest.mark.parametrize("mode", export_modes)
+def test_script_fused_tp_3(mode, tmp_path):
     if not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
 
@@ -49,14 +58,16 @@ def test_script_fused_tp_3():
     batch = 12
     x0 = torch.randn(batch, d.operands[0].size, device=device, dtype=torch.float32)
     x1 = torch.randn(batch, d.operands[1].size, device=device, dtype=torch.float32)
+    inputs = [x0, x1]
+    m = FusedTensorProductOp3(d, (0, 1), device, torch.float32)
+    module = module_with_mode(mode, m, (inputs,), torch.float32, tmp_path)
+    out1 = m(inputs)
+    out2 = module(inputs)
+    torch.testing.assert_close(out1, out2)
 
-    module = FusedTensorProductOp3(d, (0, 1), device, torch.float32)
-    module = torch.jit.script(module)
 
-    assert module([x0, x1]).shape == (batch, d.operands[2].size)
-
-
-def test_script_fused_tp_4():
+@pytest.mark.parametrize("mode", export_modes)
+def test_script_fused_tp_4(mode, tmp_path):
     if not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
 
@@ -74,13 +85,16 @@ def test_script_fused_tp_4():
     x1 = torch.randn(batch, d.operands[1].size, device=device, dtype=torch.float32)
     x2 = torch.randn(batch, d.operands[2].size, device=device, dtype=torch.float32)
 
-    module = FusedTensorProductOp4(d, (0, 1, 2), device, torch.float32)
-    module = torch.jit.script(module)
+    inputs = [x0, x1, x2]
+    m = FusedTensorProductOp4(d, [0, 1, 2], device, torch.float32)
+    module = module_with_mode(mode, m, (inputs,), torch.float32, tmp_path)
+    out1 = m(inputs)
+    out2 = module(inputs)
+    torch.testing.assert_close(out1, out2)
 
-    assert module([x0, x1, x2]).shape == (batch, d.operands[3].size)
 
-
-def test_script_uniform_tp_3():
+@pytest.mark.parametrize("mode", export_modes)
+def test_script_uniform_tp_3(mode, tmp_path):
     if not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
 
@@ -95,14 +109,17 @@ def test_script_uniform_tp_3():
     batch = 12
     x0 = torch.randn(batch, d.operands[0].size, device=device, dtype=torch.float32)
     x1 = torch.randn(batch, d.operands[1].size, device=device, dtype=torch.float32)
+    inputs = [x0, x1]
 
-    module = TensorProductUniform3x1d(d, device, torch.float32)
-    module = torch.jit.script(module)
+    m = TensorProductUniform3x1d(d, device, torch.float32)
+    module = module_with_mode(mode, m, (inputs,), torch.float32, tmp_path)
+    out1 = m(inputs)
+    out2 = module(inputs)
+    torch.testing.assert_close(out1, out2)
 
-    assert module([x0, x1]).shape == (batch, d.operands[2].size)
 
-
-def test_script_uniform_tp_4():
+@pytest.mark.parametrize("mode", export_modes)
+def test_script_uniform_tp_4(mode, tmp_path):
     if not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
 
@@ -118,8 +135,10 @@ def test_script_uniform_tp_4():
     x0 = torch.randn(batch, d.operands[0].size, device=device, dtype=torch.float32)
     x1 = torch.randn(batch, d.operands[1].size, device=device, dtype=torch.float32)
     x2 = torch.randn(batch, d.operands[2].size, device=device, dtype=torch.float32)
+    inputs = [x0, x1, x2]
 
-    module = TensorProductUniform4x1d(d, device, torch.float32)
-    module = torch.jit.script(module)
-
-    assert module([x0, x1, x2]).shape == (batch, d.operands[3].size)
+    m = TensorProductUniform4x1d(d, device, torch.float32)
+    module = module_with_mode(mode, m, (inputs,), torch.float32, tmp_path)
+    out1 = m(inputs)
+    out2 = module(inputs)
+    torch.testing.assert_close(out1, out2)

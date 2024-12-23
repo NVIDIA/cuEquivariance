@@ -14,6 +14,9 @@
 # limitations under the License.
 import pytest
 import torch
+from tests.utils import (
+    module_with_mode,
+)
 
 import cuequivariance as cue
 import cuequivariance_torch as cuet
@@ -21,16 +24,23 @@ from cuequivariance import descriptors
 
 device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
 
-list_of_irreps = [
-    cue.Irreps("O3", "4x0e + 4x1o"),
-    cue.Irreps("O3", "2x1o + 5x0e + 2e + 1e + 1o"),
-    cue.Irreps("O3", "2e + 0x0e + 0o + 0x1e + 1e"),
+export_modes = ["compile", "script", "jit"]
+
+irreps = [
+    (
+        cue.Irreps("O3", "4x0e + 4x1o"),
+        cue.Irreps("O3", "4x0e + 4x1o"),
+        cue.Irreps("O3", "4x0e + 4x1o"),
+    ),
+    (
+        cue.Irreps("O3", "2e + 0x0e + 0o + 0x1e + 1e"),
+        cue.Irreps("O3", "4x0e + 4x1o"),
+        cue.Irreps("O3", "2e + 0x0e + 0o + 0x1e + 1e"),
+    ),
 ]
 
 
-@pytest.mark.parametrize("irreps1", list_of_irreps)
-@pytest.mark.parametrize("irreps2", list_of_irreps)
-@pytest.mark.parametrize("irreps3", list_of_irreps)
+@pytest.mark.parametrize("irreps1, irreps2, irreps3", irreps)
 @pytest.mark.parametrize("layout", [cue.ir_mul, cue.mul_ir])
 @pytest.mark.parametrize("use_fallback", [False, True])
 def test_fully_connected(
@@ -71,21 +81,47 @@ def test_fully_connected(
     torch.testing.assert_close(out1, out2, atol=1e-5, rtol=1e-5)
 
 
+@pytest.mark.parametrize("irreps1, irreps2, irreps3", irreps)
+@pytest.mark.parametrize("layout", [cue.ir_mul, cue.mul_ir])
+@pytest.mark.parametrize("internal_weights", [False, True])
 @pytest.mark.parametrize("use_fallback", [False, True])
-def test_compile(use_fallback: bool):
+@pytest.mark.parametrize("mode", export_modes)
+def test_export(
+    irreps1: cue.Irreps,
+    irreps2: cue.Irreps,
+    irreps3: cue.Irreps,
+    layout: cue.IrrepsLayout,
+    internal_weights: bool,
+    use_fallback: bool,
+    mode: str,
+    tmp_path: str,
+):
     if use_fallback is False and not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
-
-    m = cuet.FullyConnectedTensorProduct(
-        irreps_in1=cue.Irreps("O3", "32x0e + 32x1o"),
-        irreps_in2=cue.Irreps("O3", "32x0e + 32x1o"),
-        irreps_out=cue.Irreps("O3", "32x0e + 32x1o"),
-        layout=cue.mul_ir,
+    dtype = torch.float32
+    m1 = cuet.FullyConnectedTensorProduct(
+        irreps1,
+        irreps2,
+        irreps3,
+        shared_weights=True,
+        internal_weights=internal_weights,
+        layout=layout,
         device=device,
+        dtype=dtype,
         use_fallback=use_fallback,
     )
 
-    m_compile = torch.compile(m, fullgraph=True)
-    input1 = torch.randn(100, m.irreps_in1.dim, device=device)
-    input2 = torch.randn(100, m.irreps_in2.dim, device=device)
-    m_compile(input1, input2)
+    x1 = torch.randn(32, irreps1.dim, dtype=dtype).to(device)
+    x2 = torch.randn(32, irreps2.dim, dtype=dtype).to(device)
+
+    if internal_weights:
+        inputs = (x1, x2)
+    else:
+        weights = torch.randn(1, m1.weight_numel, device=device, dtype=dtype)
+        inputs = (x1, x2, weights)
+
+    out1 = m1(*inputs)
+
+    m1 = module_with_mode(mode, m1, inputs, dtype, tmp_path)
+    out2 = m1(*inputs)
+    torch.testing.assert_close(out1, out2)

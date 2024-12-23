@@ -36,7 +36,6 @@ class ChannelWiseTensorProduct(torch.nn.Module):
         use_fallback (bool, optional): If `None` (default), a CUDA kernel will be used if available.
                 If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
                 If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
-        optimize_fallback (bool, optional): Whether to optimize fallback. Defaults to None.
 
     Note:
         In e3nn there was a irrep_normalization and path_normalization parameters.
@@ -59,7 +58,6 @@ class ChannelWiseTensorProduct(torch.nn.Module):
         dtype: Optional[torch.dtype] = None,
         math_dtype: Optional[torch.dtype] = None,
         use_fallback: Optional[bool] = None,
-        optimize_fallback: Optional[bool] = None,
     ):
         super().__init__()
         irreps_in1, irreps_in2 = default_irreps(irreps_in1, irreps_in2)
@@ -88,7 +86,7 @@ class ChannelWiseTensorProduct(torch.nn.Module):
             if not self.shared_weights:
                 raise ValueError("Internal weights should be shared")
             self.weight = torch.nn.Parameter(
-                torch.randn(self.weight_numel, device=device, dtype=dtype)
+                torch.randn(1, self.weight_numel, device=device, dtype=dtype)
             )
         else:
             self.weight = None
@@ -101,7 +99,6 @@ class ChannelWiseTensorProduct(torch.nn.Module):
             device=device,
             math_dtype=math_dtype,
             use_fallback=use_fallback,
-            optimize_fallback=optimize_fallback,
         )
 
     def extra_repr(self) -> str:
@@ -137,15 +134,14 @@ class ChannelWiseTensorProduct(torch.nn.Module):
                 or if shared weights are used and weight is not a 1D tensor,
                 or if shared weights are not used and weight is not a 2D tensor.
         """
-        if self.internal_weights:
+        if self.weight is not None:
             if weight is not None:
                 raise ValueError("Internal weights are used, weight should be None")
-
-            weight = self.weight
-
-        if self.shared_weights and weight.ndim != 1:
-            raise ValueError("Shared weights should be 1D tensor")
-        if not self.shared_weights and weight.ndim != 2:
-            raise ValueError("Weights should be 2D tensor")
-
-        return self.f([weight, x1, x2])
+            return self.f([self.weight, x1, x2])
+        else:
+            if weight is None:
+                raise ValueError(
+                    "Internal weights are not used, weight should not be None"
+                )
+            else:
+                return self.f([weight, x1, x2])

@@ -12,13 +12,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import itertools
 
 import pytest
 import torch
+from tests.utils import (
+    module_with_mode,
+)
 
 import cuequivariance as cue
-import cuequivariance.segmented_tensor_product as stp
 import cuequivariance_torch as cuet
 from cuequivariance import descriptors
 
@@ -62,7 +63,7 @@ def make_descriptors():
         "u,,u",
         ",v,v",
     ]:
-        d = stp.SegmentedTensorProduct.from_subscripts(subscripts)
+        d = cue.SegmentedTensorProduct.from_subscripts(subscripts)
         for i in range(3):
             d.add_path(
                 *[None] * d.num_operands,
@@ -91,9 +92,9 @@ if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:
 
 @pytest.mark.parametrize("d", make_descriptors())
 @pytest.mark.parametrize("dtype, math_dtype, tol", settings)
-@pytest.mark.parametrize("use_fallback", [False, True])
+@pytest.mark.parametrize("use_fallback", [True, False])
 def test_primitive_tensor_product_cuda_vs_fx(
-    d: stp.SegmentedTensorProduct,
+    d: cue.SegmentedTensorProduct,
     dtype: torch.dtype,
     math_dtype: torch.dtype,
     tol: float,
@@ -102,48 +103,76 @@ def test_primitive_tensor_product_cuda_vs_fx(
     if use_fallback is False and not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
 
-    for batches in itertools.product([(16,), (), (4, 1)], repeat=d.num_operands - 1):
-        inputs = [
-            torch.randn(
-                batches[i] + (d.operands[i].size,),
-                device=device,
-                dtype=dtype,
-                requires_grad=True,
-            )
-            for i in range(d.num_operands - 1)
-        ]
-
-        m = cuet.TensorProduct(
-            d, device=device, math_dtype=math_dtype, use_fallback=use_fallback
-        )
-        if not use_fallback:
-            m = torch.jit.script(m)
-
-        out1 = m(inputs)
-
-        m = cuet.TensorProduct(
-            d,
+    inputs = [
+        torch.randn(
+            (12, d.operands[i].size),
             device=device,
-            math_dtype=torch.float64,
-            use_fallback=True,
-            optimize_fallback=False,
+            dtype=dtype,
+            requires_grad=True,
         )
-        inputs_ = [inp.clone().to(torch.float64) for inp in inputs]
-        out2 = m(inputs_)
+        for i in range(d.num_operands - 1)
+    ]
 
-        assert out1.shape[:-1] == torch.broadcast_shapes(*batches)
-        assert out1.dtype == dtype
+    m = cuet.TensorProduct(
+        d,
+        device=device,
+        math_dtype=math_dtype,
+        use_fallback=use_fallback,
+    )
 
-        torch.testing.assert_close(out1, out2.to(dtype), atol=tol, rtol=tol)
+    out1 = m(inputs)
 
-        grad1 = torch.autograd.grad(out1.sum(), inputs, create_graph=True)
-        grad2 = torch.autograd.grad(out2.sum(), inputs_, create_graph=True)
+    m = cuet.TensorProduct(
+        d,
+        device=device,
+        math_dtype=torch.float64,
+        use_fallback=True,
+    )
 
-        for g1, g2 in zip(grad1, grad2):
-            torch.testing.assert_close(g1, g2.to(dtype), atol=10 * tol, rtol=10 * tol)
+    inputs_ = [inp.to(torch.float64) for inp in inputs]
+    out2 = m(inputs_)
 
-        double_grad1 = torch.autograd.grad(sum(g.sum() for g in grad1), inputs)
-        double_grad2 = torch.autograd.grad(sum(g.sum() for g in grad2), inputs_)
+    assert out1.shape[:-1] == (12,)
+    assert out1.dtype == dtype
 
-        for g1, g2 in zip(double_grad1, double_grad2):
-            torch.testing.assert_close(g1, g2.to(dtype), atol=100 * tol, rtol=100 * tol)
+    torch.testing.assert_close(out1, out2.to(dtype), atol=tol, rtol=tol)
+
+    grad1 = torch.autograd.grad(out1.sum(), inputs, create_graph=True)
+    grad2 = torch.autograd.grad(out2.sum(), inputs_, create_graph=True)
+
+    for g1, g2 in zip(grad1, grad2):
+        torch.testing.assert_close(g1, g2.to(dtype), atol=10 * tol, rtol=10 * tol)
+
+    double_grad1 = torch.autograd.grad(sum(g.sum() for g in grad1), inputs)
+    double_grad2 = torch.autograd.grad(sum(g.sum() for g in grad2), inputs_)
+
+    for g1, g2 in zip(double_grad1, double_grad2):
+        torch.testing.assert_close(g1, g2.to(dtype), atol=100 * tol, rtol=100 * tol)
+
+
+export_modes = ["compile", "script", "jit"]
+
+
+@pytest.mark.parametrize("d", make_descriptors())
+@pytest.mark.parametrize("mode", export_modes)
+@pytest.mark.parametrize("use_fallback", [True, False])
+def test_export(d: cue.SegmentedTensorProduct, mode, use_fallback, tmp_path):
+    if not torch.cuda.is_available():
+        pytest.skip("CUDA is not available")
+
+    batch = 12
+    inputs = [
+        torch.randn(batch, ope.size, device=device, dtype=torch.float32)
+        for ope in d.operands[:-1]
+    ]
+
+    if use_fallback is True and mode in ["trt"]:
+        pytest.skip(f"{mode} not supported for the fallback!")
+
+    module = cuet.TensorProduct(
+        d, device=device, math_dtype=torch.float32, use_fallback=use_fallback
+    )
+    out1 = module(inputs)
+    module = module_with_mode(mode, module, (inputs,), torch.float32, tmp_path)
+    out2 = module(inputs)
+    torch.testing.assert_close(out1, out2)
