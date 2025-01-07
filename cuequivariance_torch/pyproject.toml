@@ -21,8 +21,8 @@ build-backend = "hatchling.build"
 name = "cuequivariance-torch"
 dynamic = ["version"]
 description = "CUDA accelerated equivariant operations"
-readme = "../README.md"
-license = { file = "../LICENSES/LICENSE" }
+readme = "README.md"
+license = { file = "LICENSE" }
 authors = [{ name = "NVIDIA Corporation" }]
 requires-python = ">=3.10"
 dependencies = [
