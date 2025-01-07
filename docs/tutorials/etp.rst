@@ -91,8 +91,8 @@ We can execute an :class:`cuequivariance.EquivariantTensorProduct` with PyTorch.
     )
     module = cuet.EquivariantTensorProduct(e, layout=cue.ir_mul, use_fallback=True)
 
-    w = torch.randn(e.inputs[0].dim)
-    x = torch.randn(e.inputs[1].dim)
+    w = torch.randn(1, e.inputs[0].dim)
+    x = torch.randn(1, e.inputs[1].dim)
 
     module([w, x])
 
