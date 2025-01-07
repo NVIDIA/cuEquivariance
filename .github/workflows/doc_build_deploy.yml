@@ -1,4 +1,4 @@
-name: Build Documentation
+name: Build Documentation and Deploy
 
 on:
   # Runs on pushes targeting the default branch
@@ -35,7 +35,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v3
         with:
-          python-version: "3.11"
+          python-version: "3.12"
       - name: Build sphinx
         run: |
           python -m pip install --upgrade pip
