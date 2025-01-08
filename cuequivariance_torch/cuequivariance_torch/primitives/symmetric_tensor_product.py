@@ -320,7 +320,11 @@ class CUDAKernel(torch.nn.Module):
         i0 = i0.to(torch.int32)
         x0 = x0.reshape(x0.shape[0], x0.shape[1] // self.u, self.u)
         x1 = x1.reshape(x1.shape[0], x1.shape[1] // self.u, self.u)
-        if not torch.jit.is_scripting() and not torch.compiler.is_compiling():
+        if (
+            not torch.jit.is_scripting()
+            and not torch.jit.is_tracing()
+            and not torch.compiler.is_compiling()
+        ):
             logger.debug(
                 f"Calling SymmetricTensorContraction: {self.descriptors}, input shapes: {x0.shape}, {i0.shape}, {x1.shape}"
             )

@@ -251,7 +251,11 @@ class EquivariantTensorProduct(torch.nn.Module):
         """
         If ``indices`` is not None, the first input is indexed by ``indices``.
         """
-        if not torch.jit.is_scripting() and not torch.compiler.is_compiling():
+        if (
+            not torch.jit.is_scripting()
+            and not torch.jit.is_tracing()
+            and not torch.compiler.is_compiling()
+        ):
             if not isinstance(inputs, (list, tuple)):
                 raise ValueError(
                     "inputs should be a list of tensors followed by optional indices"
