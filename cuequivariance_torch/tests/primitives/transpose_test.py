@@ -53,6 +53,20 @@ def test_transpose(use_fallback: bool, dtype: torch.dtype):
     torch.testing.assert_close(m(x), xt)
 
 
+@pytest.mark.parametrize("use_fallback", [False, True])
+@pytest.mark.parametrize("dtype", dtypes)
+def test_transpose_empty_tensor(use_fallback: bool, dtype: torch.dtype):
+    if use_fallback is False and not torch.cuda.is_available():
+        pytest.skip("CUDA is not available")
+
+    x = torch.zeros((0, 10), dtype=dtype, device=device)
+    segments = [(2, 3), (2, 2)]
+    xt = torch.zeros((0, 10), dtype=dtype, device=device)
+
+    m = cuet.TransposeSegments(segments, device, use_fallback=use_fallback)
+    torch.testing.assert_close(m(x), xt)
+
+
 export_modes = ["compile", "script", "jit"]
 
 

@@ -130,20 +130,23 @@ if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:
     ]
 
 
-@pytest.mark.parametrize("e", make_descriptors())
+@pytest.mark.parametrize("batch_size", [0, 5])
 @pytest.mark.parametrize("dtype, math_dtype, atol, rtol", settings2)
+@pytest.mark.parametrize("e", make_descriptors())
 def test_precision_cuda_vs_fx(
     e: cue.EquivariantTensorProduct,
     dtype: torch.dtype,
     math_dtype: torch.dtype,
     atol: float,
     rtol: float,
+    batch_size: int,
 ):
     if not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
 
     inputs = [
-        torch.randn((1024, inp.dim), device=device, dtype=dtype) for inp in e.inputs
+        torch.randn((batch_size, inp.dim), device=device, dtype=dtype)
+        for inp in e.inputs
     ]
     m = cuet.EquivariantTensorProduct(
         e, layout=cue.ir_mul, device=device, math_dtype=math_dtype, use_fallback=False
@@ -151,11 +154,7 @@ def test_precision_cuda_vs_fx(
     y0 = m(inputs)
 
     m = cuet.EquivariantTensorProduct(
-        e,
-        layout=cue.ir_mul,
-        device=device,
-        math_dtype=torch.float64,
-        use_fallback=True,
+        e, layout=cue.ir_mul, device=device, math_dtype=torch.float64, use_fallback=True
     )
     inputs = [x.to(torch.float64) for x in inputs]
     y1 = m(inputs).to(dtype)

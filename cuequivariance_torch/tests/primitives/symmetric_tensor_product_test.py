@@ -55,10 +55,11 @@ if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:
     ]
 
 
+@pytest.mark.parametrize("batch_size", [0, 3])
 @pytest.mark.parametrize("ds", make_descriptors())
 @pytest.mark.parametrize("dtype, math_dtype, tol", settings1)
 def test_primitive_indexed_symmetric_tensor_product_cuda_vs_fx(
-    ds: list[stp.SegmentedTensorProduct], dtype, math_dtype, tol: float
+    ds: list[stp.SegmentedTensorProduct], dtype, math_dtype, tol: float, batch_size: int
 ):
     use_fallback = not torch.cuda.is_available()
 
@@ -67,9 +68,9 @@ def test_primitive_indexed_symmetric_tensor_product_cuda_vs_fx(
     )
 
     x0 = torch.randn((2, m.x0_size), device=device, dtype=dtype, requires_grad=True)
-    i0 = torch.tensor([0, 1, 0], dtype=torch.int32, device=device)
+    i0 = torch.randint(0, x0.size(0), (batch_size,), dtype=torch.int32, device=device)
     x1 = torch.randn(
-        (i0.size(0), m.x1_size), device=device, dtype=dtype, requires_grad=True
+        (batch_size, m.x1_size), device=device, dtype=dtype, requires_grad=True
     )
     x0_ = x0.clone().to(torch.float64)
     x1_ = x1.clone().to(torch.float64)
