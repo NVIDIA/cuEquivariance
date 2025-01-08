@@ -251,13 +251,24 @@ class EquivariantTensorProduct(torch.nn.Module):
         """
         If ``indices`` is not None, the first input is indexed by ``indices``.
         """
-
-        # assert len(inputs) == len(self.etp.inputs)
-        for a, dim in zip(inputs, self.operands_dims):
-            torch._assert(
-                a.shape[-1] == dim,
-                f"Expected last dimension of input to be {dim}, got {a.shape[-1]}",
-            )
+        if not torch.jit.is_scripting() and not torch.compiler.is_compiling():
+            if not isinstance(inputs, (list, tuple)):
+                raise ValueError(
+                    "inputs should be a list of tensors followed by optional indices"
+                )
+            if len(inputs) != self.etp.num_inputs:
+                raise ValueError(
+                    f"Expected {self.etp.num_inputs} inputs, got {len(inputs)}"
+                )
+            for oid, input in enumerate(inputs):
+                torch._assert(
+                    input.ndim == 2,
+                    f"input {oid} should have ndim=2",
+                )
+                torch._assert(
+                    input.shape[1] == self.operands_dims[oid],
+                    f"input {oid} should have shape (batch, {self.operands_dims[oid]}), got {input.shape}",
+                )
 
         # Transpose inputs
         inputs = self.transpose_in(inputs)
