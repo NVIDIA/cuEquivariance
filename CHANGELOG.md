@@ -2,6 +2,7 @@
 
 ### Breaking Changes
 
+- `cuet.TensorProduct` and `cuet.EquivariantTensorProduct` now require inputs to be of shape `(batch_size, dim)` or `(1, dim)`. Inputs of dimension `(dim,)` are no more allowed.
 - `cuet.TensorProduct` and `cuet.EquivariantTensorProduct` are no more variadic functions. They now require a list of `torch.Tensor` as input.
 - `cuex.IrrepsArray` is an alias for `cuex.RepArray`.
 - `cuex.RepArray.irreps` and `cuex.RepArray.segments` are not functions anymore. They are now properties.
