@@ -39,7 +39,7 @@ def fully_connected_tensor_product(
         irreps3 (Irreps): Irreps of the output.
 
     Returns:
-        EquivariantTensorProduct: Descriptor of the fully connected tensor product.
+        :class:`cue.EquivariantTensorProduct <cuequivariance.EquivariantTensorProduct>`: Descriptor of the fully connected tensor product.
 
     Examples:
         >>> cue.descriptors.fully_connected_tensor_product(
@@ -102,7 +102,7 @@ def full_tensor_product(
         irreps3_filter (sequence of Irrep, optional): Irreps of the output to consider.
 
     Returns:
-        EquivariantTensorProduct: Descriptor of the full tensor product.
+        :class:`cue.EquivariantTensorProduct <cuequivariance.EquivariantTensorProduct>`: Descriptor of the full tensor product.
     """
     G = irreps1.irrep_class
 
@@ -163,7 +163,7 @@ def channelwise_tensor_product(
         irreps3_filter (sequence of Irrep, optional): Irreps of the output to consider.
 
     Returns:
-        EquivariantTensorProduct: Descriptor of the channelwise tensor product.
+        :class:`cue.EquivariantTensorProduct <cuequivariance.EquivariantTensorProduct>`: Descriptor of the channelwise tensor product.
     """
     G = irreps1.irrep_class
 
@@ -254,7 +254,7 @@ def elementwise_tensor_product(
         irreps3_filter (sequence of Irrep, optional): Irreps of the output to consider.
 
     Returns:
-        EquivariantTensorProduct: Descriptor of the elementwise tensor product.
+        :class:`cue.EquivariantTensorProduct <cuequivariance.EquivariantTensorProduct>`: Descriptor of the elementwise tensor product.
     """
     G = irreps1.irrep_class
 
@@ -306,7 +306,7 @@ def linear(
         irreps_out (Irreps): Irreps of the output.
 
     Returns:
-        EquivariantTensorProduct: Descriptor of the linear transformation.
+        :class:`cue.EquivariantTensorProduct <cuequivariance.EquivariantTensorProduct>`: Descriptor of the linear transformation.
     """
     d = stp.SegmentedTensorProduct.from_subscripts("uv_iu_iv")
     for mul, ir in irreps_in:

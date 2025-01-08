@@ -34,7 +34,7 @@ def symmetric_contraction(
         degree (int): The degree of the symmetric contraction.
 
     Returns:
-        EquivariantTensorProduct:
+        :class:`cue.EquivariantTensorProduct <cuequivariance.EquivariantTensorProduct>`:
             The descriptor of the symmetric contraction.
             The operands are the weights, the input degree times and the output.
 

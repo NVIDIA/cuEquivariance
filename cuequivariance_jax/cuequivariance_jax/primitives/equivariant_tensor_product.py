@@ -33,7 +33,7 @@ def equivariant_tensor_product(
     """Compute the equivariant tensor product of the input arrays.
 
     Args:
-        e (EquivariantTensorProduct): The equivariant tensor product descriptor.
+        e (:class:`cue.EquivariantTensorProduct <cuequivariance.EquivariantTensorProduct>`): The equivariant tensor product descriptor.
         *inputs (RepArray or jax.Array): The input arrays.
         dtype_output (jnp.dtype, optional): The data type for the output array. Defaults to None.
         dtype_math (jnp.dtype, optional): The data type for computational operations. Defaults to None.
