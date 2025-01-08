@@ -14,11 +14,11 @@ import cuequivariance_jax as cuex  # noqa: F401
 @dataclass(frozen=True, init=False, repr=False)
 class RepArray:
     """
-    A `jax.Array` decorated with a dict of `Rep` for the axes transforming under a group representation.
+    A :class:`jax.Array <jax.Array>` decorated with a dict of :class:`cue.Rep <cuequivariance.Rep>` for the axes transforming under a group representation.
 
     Example:
 
-    You can create a `RepArray` by specifying the `Rep` for each axis:
+    You can create a :class:`cuex.RepArray <cuequivariance_jax.RepArray>` by specifying the :class:`cue.Rep <cuequivariance.Rep>` for each axis:
 
     >>> cuex.RepArray({0: cue.SO3(1), 1: cue.SO3(1)}, jnp.eye(3))
     {0: 1, 1: 1}
@@ -26,7 +26,7 @@ class RepArray:
      [0. 1. 0.]
      [0. 0. 1.]]
 
-    By default, arguments that are not `Rep` will be automatically converted into `IrrepsAndLayout`:
+    By default, arguments that are not :class:`cue.Rep <cuequivariance.Rep>` will be automatically converted into :class:`cue.IrrepsAndLayout <cuequivariance.IrrepsAndLayout>`:
 
     >>> with cue.assume(cue.SO3, cue.ir_mul):
     ...     x = cuex.RepArray({0: "1", 1: "2"}, jnp.ones((3, 5)))
@@ -40,7 +40,7 @@ class RepArray:
 
     .. rubric:: IrrepsArray
 
-    An ``IrrepsArray`` is just a special case of a ``RepArray`` where the last axis is a `IrrepsAndLayout`:
+    An ``IrrepsArray`` is just a special case of a ``RepArray`` where the last axis is a :class:`cue.IrrepsAndLayout <cuequivariance.IrrepsAndLayout>`:
 
     >>> x = cuex.RepArray(
     ...     cue.Irreps("SO3", "2x0"), jnp.zeros((3, 2)), cue.ir_mul
