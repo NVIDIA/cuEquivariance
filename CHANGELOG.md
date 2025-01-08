@@ -6,6 +6,7 @@
 - `cuex.IrrepsArray` is an alias for `cuex.RepArray`.
 - `cuex.RepArray.irreps` and `cuex.RepArray.segments` are not functions anymore. They are now properties.
 - `cuex.IrrepsArray.is_simple` is replaced by `cuex.RepArray.is_irreps_array`.
+- The function `cuet.spherical_harmonics` is replaced by the Torch Module `cuet.SphericalHarmonics`. This was done to allow the use of `torch.jit.script` and `torch.compile`.
 
 ### Added
 
