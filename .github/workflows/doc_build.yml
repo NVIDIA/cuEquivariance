@@ -14,7 +14,7 @@ jobs:
         uses: actions/setup-python@v3
         with:
           python-version: "3.12"
-      - name: Build sphinx
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install pytest
@@ -22,4 +22,6 @@ jobs:
           python -m pip install ./cuequivariance_jax
           python -m pip install ./cuequivariance_torch
           pip install -r docs/requirements.txt
+      - name: Build sphinx
+        run: |
           sphinx-build -b html docs docs/public
