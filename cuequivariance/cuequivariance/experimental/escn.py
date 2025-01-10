@@ -182,9 +182,67 @@ def escn_tp_compact(
 
 
 class SphericalSignal(cue.Rep):
-    def __init__(self, mul: int, l_max: int, m_max: int):
+    """Representation of a signal on the sphere.
+
+    Args:
+        mul (int): Multiplicity of the signal. The multiplicity is always the innermost dimension (stride 1).
+        l_max (int): Maximum angular resolution.
+        m_max (int): Maximum angular resolution around the principal axis.
+        primary (str): "m" or "l".
+            If "m", all the components with the same m are contiguous in memory.
+            If "l", all the components with the same l are contiguous in memory.
+
+
+    primary="m":
+    l=
+     0 1 2    m
+        +-+   =
+        |0|  -2
+      +-+-+
+      |1|2|  -1
+    +-+-+-+
+    |3|4|5|   0
+    +-+-+-+
+      |6|7|   1
+      +-+-+
+        |8|   2
+        +-+
+
+    primary="l":
+    l=      +-+
+      0     |0|
+          +-+-+-+
+      1   |1|2|3|
+        +-+-+-+-+-+
+      2 |4|5|6|7|8|
+        +-+-+-+-+-+
+    m=  -2-1 0 1 2
+    """
+
+    def __init__(self, mul: int, l_max: int, m_max: int, primary: str):
         self.mul = mul
         self.l_max = l_max
         self.m_max = m_max
+        self.primary = primary
 
-    # TODO
+    def _dim(self):
+        d = 0
+        for ell in range(self.l_max + 1):
+            m_max = min(ell, self.m_max)
+            d += (2 * m_max + 1) * self.mul
+        return d
+
+    def algebra(self=None) -> np.ndarray:
+        # note: shall we make an SO2 representation only since m_max can be smaller than l_max?
+        return cue.SO3.algebra()
+
+    def continuous_generators(self) -> np.ndarray:
+        # note: if m_max is smaller than l_max, this is actually not a full representation of SO3
+        # but it's a representation of the subgroup SO3 along the principal axis
+        raise NotImplementedError
+
+    def discrete_generators(self) -> np.ndarray:
+        return np.zeros((0, self.dim, self.dim))
+
+    def trivial(self):
+        raise NotImplementedError
