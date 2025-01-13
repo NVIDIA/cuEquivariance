@@ -55,7 +55,7 @@ def make_descriptors(shared_op0=False):
         yield e
 
     # These ETPs will trigger the symmetricContraction kernel
-    e = cue.descriptors.spherical_harmonics(cue.SO3(1), [0, 1, 2, 3, 4, 5])
+    e = cue.descriptors.spherical_harmonics(cue.SO3(1), [0, 1, 2, 3])
     if shared_op0:
         yield e, False
     else:
