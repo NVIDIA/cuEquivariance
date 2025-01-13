@@ -170,9 +170,9 @@ class SymmetricContraction(torch.nn.Module):
         Perform the forward pass of the symmetric contraction operation.
 
         Args:
-            x (torch.Tensor): The input tensor. It should have shape (..., irreps_in.dim).
+            x (torch.Tensor): The input tensor. It should have shape (batch, irreps_in.dim).
             indices (torch.Tensor): The index of the weight to use for each batch element.
-                It should have shape (...).
+                It should have shape (batch,).
 
         Returns:
             torch.Tensor: The output tensor. It has shape (batch, irreps_out.dim).
