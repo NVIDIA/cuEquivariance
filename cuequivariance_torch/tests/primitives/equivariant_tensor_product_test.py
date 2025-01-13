@@ -148,9 +148,6 @@ def test_precision_cuda_vs_fx(
     if not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
 
-    if shared_op0 and batch_size == 0:
-        pytest.skip("shared_op0 requires batch_size > 0")  # TODO: fix this
-
     inputs = [
         torch.randn(
             (1 if shared_op0 and i == 0 else batch_size, inp.dim),
