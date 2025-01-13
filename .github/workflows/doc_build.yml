@@ -2,7 +2,7 @@ name: Build Documentation
 
 on:
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "release" ]
 
 jobs:
   build:
