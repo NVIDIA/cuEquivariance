@@ -85,15 +85,21 @@ def equivariant_tensor_product(
             f"Unexpected number of inputs. Expected {e.num_inputs}, got {len(inputs)}."
         )
 
-    for x, rep in zip(inputs, e.inputs):
+    for i, (x, rep) in enumerate(zip(inputs, e.inputs)):
         if isinstance(x, cuex.RepArray):
-            assert x.rep(-1) == rep
+            assert (
+                x.rep(-1) == rep
+            ), f"Input {i} should have representation {rep}, got {x.rep(-1)}."
         else:
-            assert x.ndim >= 1
-            assert x.shape[-1] == rep.dim
+            assert (
+                x.ndim >= 1
+            ), f"Input {i} should have at least one dimension, got {x.ndim}."
+            assert (
+                x.shape[-1] == rep.dim
+            ), f"Input {i} should have dimension {rep.dim}, got {x.shape[-1]}."
             if not rep.is_scalar():
                 raise ValueError(
-                    f"Inputs should be RepArray unless the input is scalar. Got {type(x)} for {rep}."
+                    f"Input {i} should be a RepArray unless the input is scalar. Got {type(x)} for {rep}."
                 )
 
     inputs: list[jax.Array] = [getattr(x, "array", x) for x in inputs]
