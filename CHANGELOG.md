@@ -11,7 +11,7 @@
 
 ### Added
 
-- Support of `torch.jit.script` and `torch.compile`. Known issue: the export in c++ is not working.
+- Add an experimental support for `torch.jit.script` and `torch.compile`. Known issue: the export in c++ is not working.
 - Add `cue.IrrepsAndLayout`: A simple class that inherits from `cue.Rep` and contains a `cue.Irreps` and a `cue.IrrepsLayout`.
 - Add `cuex.RepArray` for representing an array of any kind of representations (not only irreps like before with `cuex.IrrepsArray`).
 

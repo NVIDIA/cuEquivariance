@@ -89,8 +89,6 @@ if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:
         (torch.bfloat16, torch.float32, 1.0),
     ]
 
-export_modes = ["script", "export", "onnx", "trt", "jit"]
-
 
 @pytest.mark.parametrize("batch_size", [0, 3])
 @pytest.mark.parametrize("use_fallback", [True, False])
@@ -158,6 +156,10 @@ def test_export(d: cue.SegmentedTensorProduct, mode, use_fallback, tmp_path):
     if not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
 
+    exp_inputs = [
+        torch.randn(1, ope.size, device=device, dtype=torch.float32)
+        for ope in d.operands[:-1]
+    ]
     batch = 12
     inputs = [
         torch.randn(batch, ope.size, device=device, dtype=torch.float32)
@@ -171,6 +173,9 @@ def test_export(d: cue.SegmentedTensorProduct, mode, use_fallback, tmp_path):
         d, device=device, math_dtype=torch.float32, use_fallback=use_fallback
     )
     out1 = module(*inputs)
-    module = module_with_mode(mode, module, inputs, torch.float32, tmp_path)
+    out11 = module(*exp_inputs)
+    module = module_with_mode(mode, module, exp_inputs, torch.float32, tmp_path)
     out2 = module(*inputs)
+    out22 = module(*exp_inputs)
     torch.testing.assert_close(out1, out2)
+    torch.testing.assert_close(out11, out22)
