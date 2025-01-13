@@ -104,6 +104,7 @@ class IWeightedSymmetricTPDispatcher(Dispatcher):
                 f"Expected x0 to have shape (batch, dim), got {x0.shape}",
             )
             indices = torch.arange(x1.shape[0], dtype=torch.int32, device=x1.device)
+            indices = indices % x0.shape[0]
         return self.tp(x0, indices, x1)
 
 
