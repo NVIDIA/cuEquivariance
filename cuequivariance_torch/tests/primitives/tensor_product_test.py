@@ -90,22 +90,24 @@ if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:
     ]
 
 
-@pytest.mark.parametrize("d", make_descriptors())
-@pytest.mark.parametrize("dtype, math_dtype, tol", settings)
+@pytest.mark.parametrize("batch_size", [0, 3])
 @pytest.mark.parametrize("use_fallback", [True, False])
+@pytest.mark.parametrize("dtype, math_dtype, tol", settings)
+@pytest.mark.parametrize("d", make_descriptors())
 def test_primitive_tensor_product_cuda_vs_fx(
     d: cue.SegmentedTensorProduct,
     dtype: torch.dtype,
     math_dtype: torch.dtype,
     tol: float,
     use_fallback: bool,
+    batch_size: int,
 ):
     if use_fallback is False and not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
 
     inputs = [
         torch.randn(
-            (12, d.operands[i].size),
+            (batch_size, d.operands[i].size),
             device=device,
             dtype=dtype,
             requires_grad=True,
@@ -114,25 +116,19 @@ def test_primitive_tensor_product_cuda_vs_fx(
     ]
 
     m = cuet.TensorProduct(
-        d,
-        device=device,
-        math_dtype=math_dtype,
-        use_fallback=use_fallback,
+        d, device=device, math_dtype=math_dtype, use_fallback=use_fallback
     )
 
-    out1 = m(inputs)
+    out1 = m(*inputs)
 
     m = cuet.TensorProduct(
-        d,
-        device=device,
-        math_dtype=torch.float64,
-        use_fallback=True,
+        d, device=device, math_dtype=torch.float64, use_fallback=True
     )
 
     inputs_ = [inp.to(torch.float64) for inp in inputs]
-    out2 = m(inputs_)
+    out2 = m(*inputs_)
 
-    assert out1.shape[:-1] == (12,)
+    assert out1.shape[:-1] == (batch_size,)
     assert out1.dtype == dtype
 
     torch.testing.assert_close(out1, out2.to(dtype), atol=tol, rtol=tol)
@@ -160,6 +156,10 @@ def test_export(d: cue.SegmentedTensorProduct, mode, use_fallback, tmp_path):
     if not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
 
+    exp_inputs = [
+        torch.randn(1, ope.size, device=device, dtype=torch.float32)
+        for ope in d.operands[:-1]
+    ]
     batch = 12
     inputs = [
         torch.randn(batch, ope.size, device=device, dtype=torch.float32)
@@ -172,7 +172,10 @@ def test_export(d: cue.SegmentedTensorProduct, mode, use_fallback, tmp_path):
     module = cuet.TensorProduct(
         d, device=device, math_dtype=torch.float32, use_fallback=use_fallback
     )
-    out1 = module(inputs)
-    module = module_with_mode(mode, module, (inputs,), torch.float32, tmp_path)
-    out2 = module(inputs)
+    out1 = module(*inputs)
+    out11 = module(*exp_inputs)
+    module = module_with_mode(mode, module, exp_inputs, torch.float32, tmp_path)
+    out2 = module(*inputs)
+    out22 = module(*exp_inputs)
     torch.testing.assert_close(out1, out2)
+    torch.testing.assert_close(out11, out22)

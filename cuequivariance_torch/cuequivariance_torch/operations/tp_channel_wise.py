@@ -101,6 +101,7 @@ class ChannelWiseTensorProduct(torch.nn.Module):
             use_fallback=use_fallback,
         )
 
+    @torch.jit.ignore
     def extra_repr(self) -> str:
         return (
             f"shared_weights={self.shared_weights}"
@@ -137,11 +138,12 @@ class ChannelWiseTensorProduct(torch.nn.Module):
         if self.weight is not None:
             if weight is not None:
                 raise ValueError("Internal weights are used, weight should be None")
-            return self.f([self.weight, x1, x2])
+            else:
+                return self.f(self.weight, x1, x2)
         else:
             if weight is None:
                 raise ValueError(
                     "Internal weights are not used, weight should not be None"
                 )
             else:
-                return self.f([weight, x1, x2])
+                return self.f(weight, x1, x2)

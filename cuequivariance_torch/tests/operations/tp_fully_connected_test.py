@@ -75,7 +75,9 @@ def test_fully_connected(
         d = d.add_or_transpose_modes("uvw,ui,vj,wk+ijk")
     m2 = cuet.TensorProduct(d, math_dtype=torch.float64, use_fallback=True).to(device)
     out2 = m2(
-        [m1.weight.to(torch.float64), x1.to(torch.float64), x2.to(torch.float64)],
+        m1.weight.to(torch.float64),
+        x1.to(torch.float64),
+        x2.to(torch.float64),
     ).to(out1.dtype)
 
     torch.testing.assert_close(out1, out2, atol=1e-5, rtol=1e-5)

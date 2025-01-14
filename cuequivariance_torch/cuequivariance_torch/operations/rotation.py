@@ -90,9 +90,7 @@ class Rotation(torch.nn.Module):
         encodings_beta = encode_rotation_angle(beta, self.lmax)
         encodings_alpha = encode_rotation_angle(alpha, self.lmax)
 
-        return self.f(
-            [encodings_gamma, encodings_beta, encodings_alpha, x],
-        )
+        return self.f(encodings_gamma, encodings_beta, encodings_alpha, x)
 
 
 def encode_rotation_angle(angle: torch.Tensor, ell: int) -> torch.Tensor:
@@ -190,4 +188,4 @@ class Inversion(torch.nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Apply the inversion layer."""
-        return self.f([x])
+        return self.f(x)

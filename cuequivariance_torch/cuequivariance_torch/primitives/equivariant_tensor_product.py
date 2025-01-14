@@ -69,7 +69,7 @@ TRANSPOSE_DISPATCHERS = [
 ]
 
 
-class TPDispatcher(Dispatcher):
+class TPDispatcher(cuet._Wrapper):
     def forward(
         self,
         inputs: List[torch.Tensor],
@@ -77,9 +77,8 @@ class TPDispatcher(Dispatcher):
     ) -> torch.Tensor:
         if indices is not None:
             # TODO: at some point we will have kernel for this
-            assert len(inputs) >= 1
             inputs[0] = inputs[0][indices]
-        return self.tp(inputs)
+        return self.module(inputs)
 
 
 class SymmetricTPDispatcher(Dispatcher):
@@ -105,6 +104,7 @@ class IWeightedSymmetricTPDispatcher(Dispatcher):
                 f"Expected x0 to have shape (batch, dim), got {x0.shape}",
             )
             indices = torch.arange(x1.shape[0], dtype=torch.int32, device=x1.device)
+            indices = indices % x0.shape[0]
         return self.tp(x0, indices, x1)
 
 
@@ -131,14 +131,14 @@ class EquivariantTensorProduct(torch.nn.Module):
         >>> x1 = torch.ones(17, e.inputs[1].dim, device=device)
         >>> x2 = torch.ones(17, e.inputs[2].dim, device=device)
         >>> tp = cuet.EquivariantTensorProduct(e, layout=cue.ir_mul, device=device)
-        >>> tp([w, x1, x2])
+        >>> tp(w, x1, x2)
         tensor([[0., 0., 0., 0., 0., 0.],...)
 
         You can optionally index the first input tensor:
 
         >>> w = torch.ones(3, e.inputs[0].dim, device=device)
         >>> indices = torch.randint(3, (17,))
-        >>> tp([w, x1, x2], indices=indices)
+        >>> tp(w, x1, x2, indices=indices)
         tensor([[0., 0., 0., 0., 0., 0.],...)
     """
 
@@ -229,14 +229,13 @@ class EquivariantTensorProduct(torch.nn.Module):
             else:
                 raise NotImplementedError("This should not happen")
         else:
-            self.tp = TPDispatcher(
-                cuet.TensorProduct(
-                    e.ds[0],
-                    device=device,
-                    math_dtype=math_dtype,
-                    use_fallback=use_fallback,
-                )
+            tp = cuet.TensorProduct(
+                e.ds[0],
+                device=device,
+                math_dtype=math_dtype,
+                use_fallback=use_fallback,
             )
+            self.tp = TPDispatcher(tp, tp.descriptor)
 
         self.operands_dims = [op.dim for op in e.operands]
 
@@ -245,24 +244,33 @@ class EquivariantTensorProduct(torch.nn.Module):
 
     def forward(
         self,
-        inputs: List[torch.Tensor],
+        x0: torch.Tensor,
+        x1: Optional[torch.Tensor] = None,
+        x2: Optional[torch.Tensor] = None,
+        x3: Optional[torch.Tensor] = None,
         indices: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """
         If ``indices`` is not None, the first input is indexed by ``indices``.
         """
+
+        if x3 is not None and x2 is not None and x1 is not None:
+            inputs = [x0, x1, x2, x3]
+        elif x2 is not None and x1 is not None:
+            inputs = [x0, x1, x2]
+        elif x1 is not None:
+            inputs = [x0, x1]
+        else:
+            inputs = [x0]
+
         if (
             not torch.jit.is_scripting()
             and not torch.jit.is_tracing()
             and not torch.compiler.is_compiling()
         ):
-            if not isinstance(inputs, (list, tuple)):
-                raise ValueError(
-                    "inputs should be a list of tensors followed by optional indices"
-                )
             if len(inputs) != self.etp.num_inputs:
                 raise ValueError(
-                    f"Expected {self.etp.num_inputs} inputs, got {len(inputs)}"
+                    f"Expected {self.etp.num_inputs} input tensors, got {len(inputs)}"
                 )
             for oid, input in enumerate(inputs):
                 torch._assert(

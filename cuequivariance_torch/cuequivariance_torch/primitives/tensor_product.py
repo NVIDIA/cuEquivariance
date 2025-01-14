@@ -68,6 +68,7 @@ class TensorProduct(torch.nn.Module):
             math_dtype = torch.get_default_dtype()
 
         self.has_cuda = False
+        self.f = None
         self.num_operands = descriptor.num_operands
 
         if use_fallback is False:
@@ -88,8 +89,10 @@ class TensorProduct(torch.nn.Module):
                     "pip install cuequivariance-ops-torch-cu12"
                 )
 
-        if not self.has_cuda:
+        if self.f is None:
             self.f = _tensor_product_fx(descriptor, device, math_dtype, True)
+
+        self.f = _Wrapper(self.f, descriptor)
 
         self.operands_dims = [ope.size for ope in descriptor.operands]
 
@@ -100,12 +103,21 @@ class TensorProduct(torch.nn.Module):
         )
         return f"TensorProduct({self.descriptor} {has_cuda_kernel})"
 
-    def forward(self, inputs: List[torch.Tensor]):
+    def forward(
+        self,
+        x0: torch.Tensor,
+        x1: Optional[torch.Tensor] = None,
+        x2: Optional[torch.Tensor] = None,
+        x3: Optional[torch.Tensor] = None,
+        x4: Optional[torch.Tensor] = None,
+        x5: Optional[torch.Tensor] = None,
+        x6: Optional[torch.Tensor] = None,
+    ):
         r"""
         Perform the tensor product based on the specified descriptor.
 
         Args:
-            inputs (list of torch.Tensor): The input tensors. The number of input tensors should match the number of operands in the descriptor minus one.
+            x0, x1[, x2, x3, x4, x5, x6]: The input tensors. The number of input tensors should match the number of operands in the descriptor minus one.
                 Each input tensor should have a shape of (batch, operand_size) or (1, operand_size)
                 where `operand_size` corresponds to the size of each operand as defined in
                 the tensor product descriptor.
@@ -116,13 +128,40 @@ class TensorProduct(torch.nn.Module):
                 It has a shape of (batch, last_operand_size), where
                 `last_operand_size` is the size of the last operand in the descriptor.
         """
+
+        if (
+            x6 is not None
+            and x5 is not None
+            and x4 is not None
+            and x3 is not None
+            and x2 is not None
+            and x1 is not None
+        ):
+            inputs = [x0, x1, x2, x3, x4, x5, x6]
+        elif (
+            x5 is not None
+            and x4 is not None
+            and x3 is not None
+            and x2 is not None
+            and x1 is not None
+        ):
+            inputs = [x0, x1, x2, x3, x4, x5]
+        elif x4 is not None and x3 is not None and x2 is not None and x1 is not None:
+            inputs = [x0, x1, x2, x3, x4]
+        elif x3 is not None and x2 is not None and x1 is not None:
+            inputs = [x0, x1, x2, x3]
+        elif x2 is not None and x1 is not None:
+            inputs = [x0, x1, x2]
+        elif x1 is not None:
+            inputs = [x0, x1]
+        else:
+            inputs = [x0]
+
         if (
             not torch.jit.is_scripting()
             and not torch.jit.is_tracing()
             and not torch.compiler.is_compiling()
         ):
-            if not isinstance(inputs, (list, tuple)):
-                raise ValueError("inputs should be a list of tensors")
             if len(inputs) != self.num_operands - 1:
                 raise ValueError(
                     f"Expected {self.num_operands - 1} input tensors, got {len(inputs)}"
@@ -183,8 +222,7 @@ def _tensor_product_fx(
             torch.fx.Proxy(graph.placeholder(f"input_{i}"), tracer)
             for i in range(num_inputs)
         ]
-        for input in inputs:
-            torch._assert(input.ndim == 2, "input should have ndim=2")
+
         operand_subscripts = [
             f"Z{operand.subscripts}" for operand in descriptor.operands
         ]
@@ -308,7 +346,7 @@ def _tensor_product_fx(
             "No FX implementation for empty paths and non-empty inputs"
         )
 
-    return _Wrapper(graphmod, descriptor)
+    return graphmod
 
 
 class _Caller(torch.nn.Module):
@@ -378,21 +416,6 @@ class _Wrapper(torch.nn.Module):
         self.descriptor = descriptor
 
     def forward(self, args: List[torch.Tensor]):
-        if (
-            not torch.jit.is_scripting()
-            and not torch.jit.is_tracing()
-            and not torch.compiler.is_compiling()
-        ):
-            for oid, arg in enumerate(args):
-                torch._assert(
-                    arg.ndim == 2,
-                    f"input {oid} should have ndim=2",
-                )
-                torch._assert(
-                    arg.shape[1] == self.descriptor.operands[oid].size,
-                    f"input {oid} should have shape (batch, {self.descriptor.operands[oid].size})",
-                )
-
         return self.module(args)
 
 
@@ -511,8 +534,8 @@ class FusedTensorProductOp3(torch.nn.Module):
     def __repr__(self) -> str:
         return f"FusedTensorProductOp3({self.descriptor} (output last operand))"
 
-    def forward(self, inputs: List[torch.Tensor]) -> torch.Tensor:
-        x0, x1 = self._perm(inputs[0], inputs[1])
+    def forward(self, x0: torch.Tensor, x1: torch.Tensor) -> torch.Tensor:
+        x0, x1 = self._perm(x0, x1)
 
         if (
             not torch.jit.is_scripting()
@@ -576,8 +599,10 @@ class FusedTensorProductOp4(torch.nn.Module):
     def __repr__(self) -> str:
         return f"FusedTensorProductOp4({self.descriptor} (output last operand))"
 
-    def forward(self, inputs: List[torch.Tensor]) -> torch.Tensor:
-        x0, x1, x2 = self._perm(inputs[0], inputs[1], inputs[2])
+    def forward(
+        self, x0: torch.Tensor, x1: torch.Tensor, x2: torch.Tensor
+    ) -> torch.Tensor:
+        x0, x1, x2 = self._perm(x0, x1, x2)
 
         if (
             not torch.jit.is_scripting()
@@ -639,9 +664,7 @@ class TensorProductUniform3x1d(TensorProductUniform1d):
     def __repr__(self):
         return f"TensorProductUniform3x1d({self.descriptor} (output last operand))"
 
-    def forward(self, inputs: List[torch.Tensor]) -> torch.Tensor:
-        x0, x1 = inputs
-
+    def forward(self, x0: torch.Tensor, x1: torch.Tensor) -> torch.Tensor:
         if (
             not torch.jit.is_scripting()
             and not torch.jit.is_tracing()
@@ -650,7 +673,6 @@ class TensorProductUniform3x1d(TensorProductUniform1d):
             logger.debug(
                 f"Calling TensorProductUniform3x1d: {self.descriptor}, input shapes: {x0.shape}, {x1.shape}"
             )
-
         torch._assert(x0.ndim == 2, "input should be (batch, dim) or (1, dim)")
         torch._assert(x1.ndim == 2, "input should be (batch, dim) or (1, dim)")
 
@@ -664,9 +686,9 @@ class TensorProductUniform4x1d(TensorProductUniform1d):
     def __repr__(self):
         return f"TensorProductUniform4x1d({self.descriptor} (output last operand))"
 
-    def forward(self, inputs: List[torch.Tensor]):
-        x0, x1, x2 = inputs
-
+    def forward(
+        self, x0: torch.Tensor, x1: torch.Tensor, x2: torch.Tensor
+    ) -> torch.Tensor:
         if (
             not torch.jit.is_scripting()
             and not torch.jit.is_tracing()
@@ -675,7 +697,6 @@ class TensorProductUniform4x1d(TensorProductUniform1d):
             logger.debug(
                 f"Calling TensorProductUniform4x1d: {self.descriptor}, input shapes: {x0.shape}, {x1.shape}, {x2.shape}"
             )
-
         torch._assert(x0.ndim == 2, "input should be (batch, dim) or (1, dim)")
         torch._assert(x1.ndim == 2, "input should be (batch, dim) or (1, dim)")
         torch._assert(x2.ndim == 2, "input should be (batch, dim) or (1, dim)")

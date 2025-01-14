@@ -2,9 +2,9 @@ name: Run Style Check
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "release" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "release" ]
 
 
 jobs:
@@ -23,7 +23,8 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        python -m pip install ruff==0.8.2
+        python -m pip install --upgrade uv
+        python -m uv pip install ruff==0.8.2
     - name: Style check
       run: |
         ruff check cuequivariance

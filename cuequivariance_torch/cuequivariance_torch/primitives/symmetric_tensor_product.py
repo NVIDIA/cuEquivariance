@@ -344,10 +344,7 @@ class FallbackImpl(torch.nn.Module):
         self.fs = torch.nn.ModuleList(
             [
                 cuet.TensorProduct(
-                    d,
-                    device=device,
-                    math_dtype=math_dtype,
-                    use_fallback=True,
+                    d, device=device, math_dtype=math_dtype, use_fallback=True
                 )
                 for d in stps
             ]
@@ -356,7 +353,22 @@ class FallbackImpl(torch.nn.Module):
     def forward(
         self, x0: torch.Tensor, i0: torch.Tensor, x1: torch.Tensor
     ) -> torch.Tensor:
-        fs: List[torch.Tensor] = [
-            f([x0[i0]] + [x1] * (f.num_operands - 2)) for f in self.fs
-        ]
-        return torch.sum(torch.stack(fs), dim=0)
+        outs: List[torch.Tensor] = []
+
+        for f in self.fs:
+            if f.num_operands == 8:
+                outs.append(f(x0[i0], x1, x1, x1, x1, x1, x1))
+            elif f.num_operands == 7:
+                outs.append(f(x0[i0], x1, x1, x1, x1, x1))
+            elif f.num_operands == 6:
+                outs.append(f(x0[i0], x1, x1, x1, x1))
+            elif f.num_operands == 5:
+                outs.append(f(x0[i0], x1, x1, x1))
+            elif f.num_operands == 4:
+                outs.append(f(x0[i0], x1, x1))
+            elif f.num_operands == 3:
+                outs.append(f(x0[i0], x1))
+            else:
+                outs.append(f(x0[i0]))
+
+        return torch.sum(torch.stack(outs), dim=0)
