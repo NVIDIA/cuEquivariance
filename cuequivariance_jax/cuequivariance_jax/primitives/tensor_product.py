@@ -16,9 +16,10 @@ import logging
 from functools import partial
 
 import jax
+import jax.core
+import jax.extend
 import jax.lax
 import jax.numpy as jnp
-from jax import core
 from jax.interpreters import ad, batching, mlir, xla
 
 from cuequivariance import segmented_tensor_product as stp
@@ -160,7 +161,7 @@ def tensor_product(
 
 ################################################################################
 
-tensor_product_p = core.Primitive("tensor_product")
+tensor_product_p = jax.extend.core.Primitive("tensor_product")
 tensor_product_p.multiple_results = True
 
 
@@ -249,12 +250,12 @@ def tensor_product_impl(
 
 
 def tensor_product_abstract_eval(
-    *inputs: core.ShapedArray,
+    *inputs: jax.core.ShapedArray,
     shapes: tuple[tuple[int, ...], ...],
     d: stp.SegmentedTensorProduct,
     exe: TensorProductExecution,
     **options,
-) -> tuple[core.ShapedArray, ...]:
+) -> tuple[jax.core.ShapedArray, ...]:
     # assert that all input/output are used
     assert exe.max_in_buffer + 1 == len(exe.in_buffers) == len(inputs)
     assert exe.max_out_buffer + 1 == len(exe.out_buffers)
@@ -269,7 +270,7 @@ def tensor_product_abstract_eval(
 
     outputs = [None] * len(exe.out_buffers)
     for c in exe.computations:
-        out = core.ShapedArray(
+        out = jax.core.ShapedArray(
             shape=shapes[c.out_operand] + (d.operands[c.out_operand].size,),
             dtype=options["dtype_output"],
         )
@@ -291,6 +292,7 @@ def tensor_product_jvp(
     out_tangents = [ad.Zero(p.aval) for p in out_primals]
 
     jvp = exe.jvp([not isinstance(t, ad.Zero) for t in tangents])
+    del exe
 
     permutations: list[tuple[int, ...]] = d.symmetries()
     for multiplicator, exe in jvp.group_by_symmetries(permutations):

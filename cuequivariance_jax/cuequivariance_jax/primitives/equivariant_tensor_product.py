@@ -87,16 +87,16 @@ def equivariant_tensor_product(
 
     for i, (x, rep) in enumerate(zip(inputs, e.inputs)):
         if isinstance(x, cuex.RepArray):
-            assert (
-                x.rep(-1) == rep
-            ), f"Input {i} should have representation {rep}, got {x.rep(-1)}."
+            assert x.rep(-1) == rep, (
+                f"Input {i} should have representation {rep}, got {x.rep(-1)}."
+            )
         else:
-            assert (
-                x.ndim >= 1
-            ), f"Input {i} should have at least one dimension, got {x.ndim}."
-            assert (
-                x.shape[-1] == rep.dim
-            ), f"Input {i} should have dimension {rep.dim}, got {x.shape[-1]}."
+            assert x.ndim >= 1, (
+                f"Input {i} should have at least one dimension, got {x.ndim}."
+            )
+            assert x.shape[-1] == rep.dim, (
+                f"Input {i} should have dimension {rep.dim}, got {x.shape[-1]}."
+            )
             if not rep.is_scalar():
                 raise ValueError(
                     f"Input {i} should be a RepArray unless the input is scalar. Got {type(x)} for {rep}."
