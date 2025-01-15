@@ -34,32 +34,42 @@ class OutBuffer(Buffer):
 T = TypeVar("T")
 
 
-class Computation(tuple):
-    def __new__(cls, elements):
-        elements = list(elements)
-        assert all(isinstance(b, Buffer) for b in elements), elements
-        assert sum(isinstance(b, OutBuffer) for b in elements) == 1, elements
-        return super().__new__(cls, elements)
+class Computation:
+    buffers: tuple[Buffer, ...]  # one buffer per operand
+
+    def __init__(self, buffers: Sequence[Buffer]):
+        if isinstance(buffers, Computation):
+            buffers = buffers.buffers
+        self.buffers = tuple(buffers)
+        assert all(isinstance(b, Buffer) for b in self.buffers), self.buffers
+        assert sum(isinstance(b, OutBuffer) for b in self.buffers) == 1, self.buffers
+
+    def __hash__(self) -> int:
+        return hash(self.buffers)
 
     @property
     def num_operands(self) -> int:
-        return len(self)
+        return len(self.buffers)
 
     @property
     def in_buffers(self) -> tuple[InBuffer, ...]:
-        return tuple(b for b in self if isinstance(b, InBuffer))
+        return tuple(b for b in self.buffers if isinstance(b, InBuffer))
 
     @property
     def out_buffer(self) -> OutBuffer:
-        return next(b for b in self if isinstance(b, OutBuffer))
+        return next(b for b in self.buffers if isinstance(b, OutBuffer))
 
     @property
     def in_operands(self) -> tuple[int, ...]:
-        return tuple(oid for oid, b in enumerate(self) if isinstance(b, InBuffer))
+        return tuple(
+            oid for oid, b in enumerate(self.buffers) if isinstance(b, InBuffer)
+        )
 
     @property
     def out_operand(self) -> int:
-        return next(oid for oid, b in enumerate(self) if isinstance(b, OutBuffer))
+        return next(
+            oid for oid, b in enumerate(self.buffers) if isinstance(b, OutBuffer)
+        )
 
     def map_operands(
         self,
@@ -68,12 +78,14 @@ class Computation(tuple):
     ) -> list[Optional[T]]:
         in_buffers = list(in_buffers)
         if out_buffers is None:
-            return [in_buffers[b] if isinstance(b, InBuffer) else None for b in self]
+            return [
+                in_buffers[b] if isinstance(b, InBuffer) else None for b in self.buffers
+            ]
         else:
             out_buffers = list(out_buffers)
             return [
                 in_buffers[b] if isinstance(b, InBuffer) else out_buffers[b]
-                for b in self
+                for b in self.buffers
             ]
 
     def map_inputs(
@@ -108,7 +120,8 @@ class TensorProductExecution:
             text += [
                 "  "
                 + " ".join(
-                    IVARS[b] if isinstance(b, InBuffer) else OVARS[b] for b in comp
+                    IVARS[b] if isinstance(b, InBuffer) else OVARS[b]
+                    for b in comp.buffers
                 )
             ]
         return "\n".join(text)
@@ -121,7 +134,7 @@ class TensorProductExecution:
     def num_operands(self) -> int:
         assert not self.is_trivial
         for c in self.computations:
-            return len(c)
+            return c.num_operands
 
     @property
     def in_buffers(self) -> tuple[int, ...]:
@@ -182,7 +195,7 @@ class TensorProductExecution:
                         if isinstance(b, InBuffer)
                         else OutBuffer(int(f_out(b)))
                     )
-                    for b in comp
+                    for b in comp.buffers
                 )
                 for comp in self.computations
             )
@@ -215,7 +228,7 @@ class TensorProductExecution:
                 if bid is None:
                     continue  # the tangent is zero
 
-                c = list(computation)
+                c = list(computation.buffers)
                 c[oid] = InBuffer(bid)
                 new_computations.append(Computation(c))
 
@@ -257,18 +270,18 @@ class TensorProductExecution:
                 continue  # cotangent is zero
 
             for oid in comp.in_operands:
-                if not is_undefined_primal[comp[oid]]:
+                if not is_undefined_primal[comp.buffers[oid]]:
                     continue  # nothing to transpose
 
-                c = [None] * len(comp)
+                c = [None] * comp.num_operands
                 # undefined primal -> output
-                c[oid] = OutBuffer(primals_new_bid[comp[oid]])
+                c[oid] = OutBuffer(primals_new_bid[comp.buffers[oid]])
                 # output -> cotangent input
                 c[comp.out_operand] = InBuffer(cotangents_new_bid[comp.out_buffer])
                 # rest of inputs
                 for i in range(comp.num_operands):
                     if i != oid and i != comp.out_operand:
-                        c[i] = InBuffer(primals_new_bid[comp[i]])
+                        c[i] = InBuffer(primals_new_bid[comp.buffers[i]])
 
                 new_computations.append(Computation(c))
 
@@ -289,8 +302,11 @@ class TensorProductExecution:
         for c in self.computations:
             found_bucket = False
             for bucket in buckets:
-                rep = bucket[0]
-                if any(Computation(rep[p] for p in perm) == c for perm in permutations):
+                rep: Computation = bucket[0]
+                if any(
+                    Computation(rep.buffers[p] for p in perm) == c
+                    for perm in permutations
+                ):
                     bucket.append(c)
                     found_bucket = True
                     break
@@ -311,7 +327,7 @@ class TensorProductExecution:
 
         def partition(computation: Computation) -> list[list[int]]:
             bid_to_oid = defaultdict(list)
-            for oid, b in enumerate(computation):
+            for oid, b in enumerate(computation.buffers):
                 b = (type(b), b)
                 bid_to_oid[b].append(oid)
             return sorted(map(sorted, bid_to_oid.values()))
