@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import logging
+import math
 from functools import partial
 
 import jax
@@ -45,6 +46,7 @@ def tensor_product(
     algorithm: str = "sliced",
     use_custom_primitive: bool = True,
     use_custom_kernels: bool = False,
+    name: str | None = None,
 ) -> jax.Array:
     """
     Compute the last operand of a `SegmentedTensorProduct`.
@@ -92,6 +94,7 @@ def tensor_product(
         algorithm=algorithm,
         use_custom_primitive=use_custom_primitive,
         use_custom_kernels=use_custom_kernels,
+        name=name,
     )
 
     if len(inputs) > d.num_operands - 1:
@@ -140,6 +143,7 @@ def tensor_product(
         algorithm=algorithm,
         use_custom_primitive=use_custom_primitive,
         use_custom_kernels=use_custom_kernels,
+        name=name,
     )
 
     # inputs of shape (..., ope.size) with identical ndim
@@ -217,6 +221,7 @@ def tensor_product_impl(
     assert exe.max_in_buffer + 1 == len(exe.in_buffers) == len(inputs)
     assert exe.max_out_buffer + 1 == len(exe.out_buffers)
     use_custom_kernels = options.pop("use_custom_kernels", True)
+    name = options.pop("name", None)
 
     def dispatch(
         inputs: list[jax.Array],
@@ -227,9 +232,44 @@ def tensor_product_impl(
             # TODO: call custom kernels here
             pass
 
-        return tensor_product_vanilla_impl(
+        outputs = tensor_product_vanilla_impl(
             *inputs, shapes=shapes, d=d, exe=exe, **options
         )
+
+        if name is not None:
+            flops = 0
+            for c in exe.computations:
+                flops += d.flop_cost(c.out_operand)
+            flops *= math.prod(jnp.broadcast_shapes(*shapes))
+            # node: why broadcast_shapes? because accumulations require all entries to be calculated
+
+            io_items = sum(x.size for x in list(inputs) + list(outputs))
+            # node: still need to multiply by itemsize to get bytes
+
+            def kmgt(n: int) -> str:
+                if n >= 1e12:
+                    return f"{n / 1e12:.1f}T"
+                if n >= 1e9:
+                    return f"{n / 1e9:.1f}G"
+                if n >= 1e6:
+                    return f"{n / 1e6:.1f}M"
+                if n >= 1e3:
+                    return f"{n / 1e3:.1f}K"
+                return f"{n}"
+
+            text = f"{d}\nshape of operands {shapes}\n{exe}\n{flops=} ({kmgt(flops)})\n{io_items=} ({kmgt(io_items)})"
+            tab = "   | "
+            text = tab + text.replace("\n", f"\n{tab}")
+
+            def _print(*args):
+                print(f"cuex.tensor_product: {name}\n{text}")
+                return args
+
+            outputs = jax.pure_callback(
+                _print, outputs, *outputs, vmap_method="expand_dims"
+            )
+
+        return outputs
 
     outputs = [0] * len(exe.out_buffers)
     for partition, ex in exe.group_by_identical_buffers():
@@ -294,6 +334,10 @@ def tensor_product_jvp(
     jvp = exe.jvp([not isinstance(t, ad.Zero) for t in tangents])
     del exe
 
+    name = options.pop("name", None)
+    if name is not None:
+        name = f"{name}->jvp"
+
     permutations: list[tuple[int, ...]] = d.symmetries()
     for multiplicator, exe in jvp.group_by_symmetries(permutations):
         # tensor_product_prim can remove unused inputs
@@ -304,6 +348,7 @@ def tensor_product_jvp(
             d=multiplicator * d,
             exe=exe.map_buffers(None, lambda b: exe.out_buffers.index(b)),
             **options,
+            name=name,
         )
         for i, t in zip(exe.out_buffers, tmp):
             out_tangents[i] = ad.add_tangents(out_tangents[i], t)
@@ -319,6 +364,10 @@ def tensor_product_transpose(
     exe: TensorProductExecution,
     **options,
 ) -> tuple[jax.Array | ad.Zero | None, ...]:
+    name = options.pop("name", None)
+    if name is not None:
+        name = f"{name}->transpose"
+
     tr = exe.transpose(
         [ad.is_undefined_primal(x) for x in inputs],
         [not isinstance(x, ad.Zero) for x in cotangents],
@@ -330,6 +379,7 @@ def tensor_product_transpose(
         d=d,
         exe=tr.map_buffers(None, lambda b: tr.out_buffers.index(b)),
         **options,
+        name=name,
     )
     outputs = [None] * len(inputs)
 

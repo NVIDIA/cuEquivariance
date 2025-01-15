@@ -32,6 +32,7 @@ def symmetric_tensor_product(
     algorithm: str = "sliced",
     use_custom_primitive: bool = True,
     use_custom_kernels: bool = False,
+    name: str | None = None,
 ) -> jax.Array:
     """
     Compute the sum of the STPs evaluated on the input (all input operands are the same).
@@ -67,6 +68,7 @@ def symmetric_tensor_product(
                 algorithm=algorithm,
                 use_custom_primitive=use_custom_primitive,
                 use_custom_kernels=use_custom_kernels,
+                name=name,
             )
 
         return fn
@@ -136,6 +138,7 @@ def symmetric_tensor_product(
             algorithm=algorithm,
             use_custom_primitive=use_custom_primitive,
             use_custom_kernels=use_custom_kernels,
+            name=name,
         )
 
     return output
