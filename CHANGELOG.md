@@ -1,5 +1,7 @@
 ## Latest Changes
 
+## 0.2.0 (2025-01-24)
+
 ### Breaking Changes
 
 - `cuet.TensorProduct` and `cuet.EquivariantTensorProduct` now require inputs to be of shape `(batch_size, dim)` or `(1, dim)`. Inputs of dimension `(dim,)` are no more allowed.
