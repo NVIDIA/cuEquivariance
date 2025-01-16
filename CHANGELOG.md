@@ -4,7 +4,6 @@
 
 - Minimal python version is now 3.10 in all packages.
 - `cuet.TensorProduct` and `cuet.EquivariantTensorProduct` now require inputs to be of shape `(batch_size, dim)` or `(1, dim)`. Inputs of dimension `(dim,)` are no more allowed.
-- `cuet.TensorProduct` and `cuet.EquivariantTensorProduct` are no more variadic functions. They now require a list of `torch.Tensor` as input.
 - `cuex.IrrepsArray` is an alias for `cuex.RepArray`.
 - `cuex.RepArray.irreps` and `cuex.RepArray.segments` are not functions anymore. They are now properties.
 - `cuex.IrrepsArray.is_simple` is replaced by `cuex.RepArray.is_irreps_array`.
@@ -12,7 +11,7 @@
 
 ### Added
 
-- Add an experimental support for `torch.jit.script` and `torch.compile`. Known issue: the export in c++ is not working.
+- Add an experimental support for `torch.compile`. Known issue: the export in c++ is not working.
 - Add `cue.IrrepsAndLayout`: A simple class that inherits from `cue.Rep` and contains a `cue.Irreps` and a `cue.IrrepsLayout`.
 - Add `cuex.RepArray` for representing an array of any kind of representations (not only irreps like before with `cuex.IrrepsArray`).
 
