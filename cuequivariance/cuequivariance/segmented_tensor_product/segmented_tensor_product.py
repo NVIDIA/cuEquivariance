@@ -514,8 +514,7 @@ class SegmentedTensorProduct:
         d = self.move_operand_last(operand)
         subscripts = (
             d.coefficient_subscripts
-            + ","
-            + ",".join(operand.subscripts for operand in d.operands[:-1])
+            + "".join("," + operand.subscripts for operand in d.operands[:-1])
             + "->"
             + d.operands[-1].subscripts
         )

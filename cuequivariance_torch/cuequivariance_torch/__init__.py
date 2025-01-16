@@ -18,7 +18,7 @@ __version__ = (
     importlib.resources.files(__package__).joinpath("VERSION").read_text().strip()
 )
 
-from .primitives.tensor_product import TensorProduct
+from .primitives.tensor_product import TensorProduct, _Wrapper
 from .primitives.symmetric_tensor_product import (
     SymmetricTensorProduct,
     IWeightedSymmetricTensorProduct,
@@ -57,4 +57,5 @@ __all__ = [
     "vector_to_euler_angles",
     "SphericalHarmonics",
     "layers",
+    "_Wrapper",
 ]

@@ -3,7 +3,7 @@ name: Build Documentation and Deploy
 on:
   # Runs on pushes targeting the default branch
   push:
-    branches: ["main"]
+    branches: [ "main", "release" ]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -38,11 +38,12 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pytest
-          python -m pip install ./cuequivariance
-          python -m pip install ./cuequivariance_jax
-          python -m pip install ./cuequivariance_torch
-          pip install -r docs/requirements.txt
+          python -m pip install --upgrade uv
+          python -m uv pip install pytest
+          python -m uv pip install ./cuequivariance
+          python -m uv pip install ./cuequivariance_jax
+          python -m uv pip install ./cuequivariance_torch
+          python -m uv pip install -r docs/requirements.txt
       - name: Build sphinx
         run: |
           sphinx-build -b html docs docs/public

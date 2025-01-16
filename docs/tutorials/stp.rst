@@ -112,7 +112,7 @@ Now we can execute the linear layer with random input and weight tensors.
    w = torch.randn(1, d.operands[0].size)
    x1 = torch.randn(3000, irreps1.dim)
 
-   x2 = linear_torch([w, x1])
+   x2 = linear_torch(w, x1)
 
    assert x2.shape == (3000, irreps2.dim)
 

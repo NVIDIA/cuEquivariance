@@ -122,4 +122,4 @@ class Linear(torch.nn.Module):
         if weight is None:
             raise ValueError("Weights should not be None")
 
-        return self.f([weight, x])
+        return self.f(weight, x)

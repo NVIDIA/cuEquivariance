@@ -17,28 +17,30 @@ import timeit
 import pytest
 import torch
 import torch._dynamo
-from tests.utils import (
-    module_with_mode,
-)
+from tests.utils import module_with_mode
 
 import cuequivariance as cue
 import cuequivariance_torch as cuet
-from cuequivariance import descriptors
 
 device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
 
 
-def make_descriptors():
+def make_descriptors(shared_op0=False):
     # This ETP will trigger the fusedTP kernel
-    yield descriptors.fully_connected_tensor_product(
+    e = cue.descriptors.fully_connected_tensor_product(
         cue.Irreps("O3", "32x0e + 32x1o"),
         cue.Irreps("O3", "0e + 1o + 2e"),
         cue.Irreps("O3", "32x0e + 32x1o"),
     ).flatten_coefficient_modes()
+    if shared_op0:
+        yield e, False
+        yield e, True
+    else:
+        yield e
 
     # This ETP will trigger the uniform1dx4 kernel
-    yield (
-        descriptors.channelwise_tensor_product(
+    e = (
+        cue.descriptors.channelwise_tensor_product(
             cue.Irreps("O3", "32x0e + 32x1o"),
             cue.Irreps("O3", "0e + 1o + 2e"),
             cue.Irreps("O3", "0e + 1o"),
@@ -46,12 +48,29 @@ def make_descriptors():
         .flatten_coefficient_modes()
         .squeeze_modes()
     )
+    if shared_op0:
+        yield e, False
+        yield e, True
+    else:
+        yield e
 
     # These ETPs will trigger the symmetricContraction kernel
-    yield descriptors.spherical_harmonics(cue.SO3(1), [1, 2, 3])
-    yield descriptors.symmetric_contraction(
-        cue.Irreps("O3", "32x0e + 32x1o"), cue.Irreps("O3", "32x0e + 32x1o"), [1, 2, 3]
+    e = cue.descriptors.spherical_harmonics(cue.SO3(1), [0, 1, 2, 3])
+    if shared_op0:
+        yield e, False
+    else:
+        yield e
+
+    e = cue.descriptors.symmetric_contraction(
+        cue.Irreps("O3", "32x0e + 32x1o"),
+        cue.Irreps("O3", "32x0e + 32x1o"),
+        [0, 1, 2, 3],
     )
+    if shared_op0:
+        yield e, False
+        yield e, True
+    else:
+        yield e
 
 
 settings1 = [
@@ -77,20 +96,11 @@ def test_performance_cuda_vs_fx(
     if not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
 
-    m = cuet.EquivariantTensorProduct(
-        e,
-        layout=cue.ir_mul,
-        device=device,
-        math_dtype=math_dtype,
-        use_fallback=False,
+    m_custom = cuet.EquivariantTensorProduct(
+        e, layout=cue.ir_mul, device=device, math_dtype=math_dtype, use_fallback=False
     )
-
-    m1 = cuet.EquivariantTensorProduct(
-        e,
-        layout=cue.ir_mul,
-        device=device,
-        math_dtype=math_dtype,
-        use_fallback=True,
+    m_fallback = cuet.EquivariantTensorProduct(
+        e, layout=cue.ir_mul, device=device, math_dtype=math_dtype, use_fallback=True
     )
 
     inputs = [
@@ -98,22 +108,12 @@ def test_performance_cuda_vs_fx(
     ]
 
     for _ in range(10):
-        m(inputs)
-        m1(inputs)
+        m_custom(*inputs)
+        m_fallback(*inputs)
     torch.cuda.synchronize()
 
-    def f():
-        ret = m(inputs)
-        ret = torch.sum(ret)
-        return ret
-
-    def f1():
-        ret = m1(inputs)
-        ret = torch.sum(ret)
-        return ret
-
-    t0 = timeit.Timer(f).timeit(number=10)
-    t1 = timeit.Timer(f1).timeit(number=10)
+    t0 = timeit.Timer(lambda: torch.sum(m_custom(*inputs))).timeit(number=10)
+    t1 = timeit.Timer(lambda: torch.sum(m_fallback(*inputs))).timeit(number=10)
     assert t0 < t1
 
 
@@ -130,35 +130,39 @@ if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:
     ]
 
 
-@pytest.mark.parametrize("e", make_descriptors())
+@pytest.mark.parametrize("batch_size", [0, 5])
 @pytest.mark.parametrize("dtype, math_dtype, atol, rtol", settings2)
+@pytest.mark.parametrize("e, shared_op0", make_descriptors(True))
 def test_precision_cuda_vs_fx(
     e: cue.EquivariantTensorProduct,
+    shared_op0: bool,
     dtype: torch.dtype,
     math_dtype: torch.dtype,
     atol: float,
     rtol: float,
+    batch_size: int,
 ):
     if not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
 
     inputs = [
-        torch.randn((1024, inp.dim), device=device, dtype=dtype) for inp in e.inputs
+        torch.randn(
+            (1 if shared_op0 and i == 0 else batch_size, inp.dim),
+            device=device,
+            dtype=dtype,
+        )
+        for i, inp in enumerate(e.inputs)
     ]
     m = cuet.EquivariantTensorProduct(
         e, layout=cue.ir_mul, device=device, math_dtype=math_dtype, use_fallback=False
     )
-    y0 = m(inputs)
+    y0 = m(*inputs)
 
     m = cuet.EquivariantTensorProduct(
-        e,
-        layout=cue.ir_mul,
-        device=device,
-        math_dtype=torch.float64,
-        use_fallback=True,
+        e, layout=cue.ir_mul, device=device, math_dtype=torch.float64, use_fallback=True
     )
     inputs = [x.to(torch.float64) for x in inputs]
-    y1 = m(inputs).to(dtype)
+    y1 = m(*inputs).to(dtype)
 
     torch.testing.assert_close(y0, y1, atol=atol, rtol=rtol)
 
@@ -191,10 +195,36 @@ def test_export(
         use_fallback=use_fallback,
         device=device,
     )
-    inputs = [
-        torch.randn((512, inp.dim), device=device, dtype=dtype) for inp in e.inputs
+    exp_inputs = [
+        torch.randn((512, inp.irreps.dim), device=device, dtype=dtype)
+        for inp in e.inputs
     ]
-    res = m(inputs)
-    m = module_with_mode(mode, m, [inputs], math_dtype, tmp_path)
-    res_script = m(inputs)
+    inputs = [
+        torch.randn((1024, inp.dim), device=device, dtype=dtype) for inp in e.inputs
+    ]
+    res = m(*inputs)
+    m = module_with_mode(mode, m, exp_inputs, math_dtype, tmp_path)
+    res_script = m(*inputs)
     torch.testing.assert_close(res, res_script, atol=atol, rtol=rtol)
+
+
+@pytest.mark.parametrize("batch_size", [0, 5])
+@pytest.mark.parametrize("use_fallback", [True, False])
+def test_high_degrees(use_fallback: bool, batch_size: int):
+    if not use_fallback and not torch.cuda.is_available():
+        pytest.skip("CUDA is not available")
+
+    e = cue.descriptors.spherical_harmonics(cue.SO3(1), [0, 1, 2, 3, 4, 5])
+    m = cuet.EquivariantTensorProduct(
+        e,
+        layout=cue.mul_ir,
+        device=device,
+        math_dtype=torch.float32,
+        use_fallback=use_fallback,
+    )
+    inputs = [
+        torch.randn((batch_size, rep.dim), device=device, dtype=torch.float32)
+        for rep in e.inputs
+    ]
+    output = m(*inputs)
+    assert output.shape == (batch_size, e.output.dim)

@@ -63,9 +63,11 @@ class SphericalHarmonics(nn.Module):
             torch.Tensor: The spherical harmonics of the input vectors of shape (batch, dim),
             where dim is the sum of 2*l+1 for l in ls.
         """
-        torch._assert(vectors.ndim == 2, "Input must have shape (batch, 3)")
+        torch._assert(
+            vectors.ndim == 2, f"Input must have shape (batch, 3) - got {vectors.shape}"
+        )
 
         if self.normalize:
             vectors = torch.nn.functional.normalize(vectors, dim=1)
 
-        return self.f([vectors])
+        return self.f(vectors)

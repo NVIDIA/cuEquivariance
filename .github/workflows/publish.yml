@@ -31,6 +31,10 @@ jobs:
         python -m pip install --upgrade pip
         python -m pip install hatchling twine
 
+    - name: Replace symlinks with actual files
+      run: |
+        find . -type l -exec sh -c 'cp --remove-destination "$(readlink -f "$1")" "$1"' _ {} \;
+
     - name: Build & Publish cuequivariance
       working-directory: cuequivariance
       run: |
