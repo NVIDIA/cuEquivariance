@@ -1,3 +1,5 @@
+## Latest Changes
+
 ## 0.2.0 (2025-01-24)
 
 ### Breaking Changes
