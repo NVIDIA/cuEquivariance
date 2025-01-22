@@ -178,3 +178,14 @@ def test_UnshapedArray_bug():
         return jnp.sum(a) + jnp.sum(b)
 
     jax.jit(jax.grad(f, 0))(w, x)
+
+
+def test_multiple_operand_shape_bug():
+    # This was causing an issue in the past.
+    # Before, it was not possible to have an input
+    # with a different shape than the output of the same operand.
+    def h(x):
+        d = cue.descriptors.spherical_harmonics(cue.SO3(1), [2]).d
+        return cuex.tensor_product(d, x, x)
+
+    assert jax.jacobian(h)(jnp.array([1.0, 0.0, 0.0])).shape == (5, 3)
