@@ -151,7 +151,7 @@ def tensor_product(
         jnp.reshape(input, (1,) * (len(output_shape) + 1 - input.ndim) + input.shape)
         for input in inputs
     ]
-    shapes = tuple(input.shape[:-1] for input in inputs) + (output_shape,)
+    output_shapes = tuple(None for _ in inputs) + (output_shape,)
     exe = TensorProductExecution(
         [
             Computation(
@@ -159,7 +159,9 @@ def tensor_product(
             )
         ]
     )
-    (output,) = tensor_product_prim(*inputs, shapes=shapes, d=d, exe=exe, **options)
+    (output,) = tensor_product_prim(
+        *inputs, output_shapes=output_shapes, d=d, exe=exe, **options
+    )
     return output
 
 
@@ -188,7 +190,7 @@ def clean_inputs(
 
 def tensor_product_prim(
     *inputs: jax.Array,  # input buffers
-    shapes: tuple[tuple[int, ...], ...],  # shapes of the operands
+    output_shapes: tuple[tuple[int, ...] | None, ...],  # shapes of the operands
     d: stp.SegmentedTensorProduct,
     exe: TensorProductExecution,
     **options,
@@ -202,18 +204,18 @@ def tensor_product_prim(
 
     if options.pop("use_custom_primitive", True):
         return tensor_product_p.bind(
-            *unique_inputs, shapes=shapes, d=d, exe=exe, **options
+            *unique_inputs, output_shapes=output_shapes, d=d, exe=exe, **options
         )
     else:
         return tensor_product_vanilla_impl(
-            *unique_inputs, shapes=shapes, d=d, exe=exe, **options
+            *unique_inputs, output_shapes=output_shapes, d=d, exe=exe, **options
         )
 
 
 def tensor_product_impl(
     platform: str | None,
     *inputs: jax.Array,
-    shapes: tuple[tuple[int, ...], ...],
+    output_shapes: tuple[tuple[int, ...] | None, ...],
     d: stp.SegmentedTensorProduct,
     exe: TensorProductExecution,
     **options,
@@ -233,14 +235,15 @@ def tensor_product_impl(
             pass
 
         outputs = tensor_product_vanilla_impl(
-            *inputs, shapes=shapes, d=d, exe=exe, **options
+            *inputs, output_shapes=output_shapes, d=d, exe=exe, **options
         )
 
         if name is not None:
             flops = 0
             for c in exe.computations:
-                flops += d.flop_cost(c.out_operand)
-            flops *= math.prod(jnp.broadcast_shapes(*shapes))
+                flops += d.flop_cost(c.out_operand) * math.prod(
+                    output_shapes[c.out_operand]
+                )
             # node: why broadcast_shapes? because accumulations require all entries to be calculated
 
             io_items = sum(x.size for x in list(inputs) + list(outputs))
@@ -257,7 +260,7 @@ def tensor_product_impl(
                     return f"{n / 1e3:.1f}K"
                 return f"{n}"
 
-            text = f"{d}\nshape of operands {shapes}\n{exe}\n{flops=} ({kmgt(flops)})\n{io_items=} ({kmgt(io_items)})"
+            text = f"{d}\nshape of operands {output_shapes}\n{exe}\n{flops=} ({kmgt(flops)})\n{io_items=} ({kmgt(io_items)})"
             tab = "   | "
             text = tab + text.replace("\n", f"\n{tab}")
 
@@ -291,7 +294,7 @@ def tensor_product_impl(
 
 def tensor_product_abstract_eval(
     *inputs: jax.core.ShapedArray,
-    shapes: tuple[tuple[int, ...], ...],
+    output_shapes: tuple[tuple[int, ...] | None, ...],
     d: stp.SegmentedTensorProduct,
     exe: TensorProductExecution,
     **options,
@@ -302,16 +305,15 @@ def tensor_product_abstract_eval(
 
     for c in exe.computations:
         for oid, x in zip(c.in_operands, c.map_inputs(inputs)):
-            expected_shape = shapes[oid] + (d.operands[oid].size,)
-            if x.shape != expected_shape:
+            if x.shape[-1] != d.operands[oid].size:
                 raise ValueError(
-                    f"cuex.tensor_product: expected input to have shape {expected_shape}, got {x.shape}"
+                    f"cuex.tensor_product: expected input to have size {d.operands[oid].size}, got {x.shape[-1]}"
                 )
 
     outputs = [None] * len(exe.out_buffers)
     for c in exe.computations:
         out = jax.core.ShapedArray(
-            shape=shapes[c.out_operand] + (d.operands[c.out_operand].size,),
+            shape=output_shapes[c.out_operand] + (d.operands[c.out_operand].size,),
             dtype=options["dtype_output"],
         )
         assert outputs[c.out_buffer] is None or outputs[c.out_buffer] == out
@@ -323,12 +325,14 @@ def tensor_product_jvp(
     primals: tuple[jax.Array, ...],
     tangents: tuple[jax.Array | ad.Zero, ...],
     *,
-    shapes: tuple[tuple[int, ...], ...],
+    output_shapes: tuple[tuple[int, ...] | None, ...],
     d: stp.SegmentedTensorProduct,
     exe: TensorProductExecution,
     **options,
 ) -> tuple[tuple[jax.Array, ...], tuple[jax.Array | ad.Zero, ...]]:
-    out_primals = tensor_product_prim(*primals, shapes=shapes, d=d, exe=exe, **options)
+    out_primals = tensor_product_prim(
+        *primals, output_shapes=output_shapes, d=d, exe=exe, **options
+    )
     out_tangents = [ad.Zero(p.aval) for p in out_primals]
 
     jvp = exe.jvp([not isinstance(t, ad.Zero) for t in tangents])
@@ -344,7 +348,7 @@ def tensor_product_jvp(
         tmp = tensor_product_prim(
             *primals,
             *[t for t in tangents if not isinstance(t, ad.Zero)],
-            shapes=shapes,
+            output_shapes=output_shapes,
             d=multiplicator * d,
             exe=exe.map_buffers(None, lambda b: exe.out_buffers.index(b)),
             **options,
@@ -359,7 +363,7 @@ def tensor_product_jvp(
 def tensor_product_transpose(
     cotangents: tuple[jax.Array | ad.Zero, ...],
     *inputs: jax.Array | ad.UndefinedPrimal,
-    shapes: tuple[tuple[int, ...], ...],
+    output_shapes: tuple[tuple[int, ...] | None, ...],
     d: stp.SegmentedTensorProduct,
     exe: TensorProductExecution,
     **options,
@@ -368,6 +372,22 @@ def tensor_product_transpose(
     if name is not None:
         name = f"{name}->transpose"
 
+    # The cotangents replace the outputs as inputs
+    # The undefined primal inputs become outputs
+    del output_shapes
+    output_shapes = [None] * d.num_operands
+    for comp in exe.computations:
+        for oid, x in zip(comp.in_operands, comp.map_inputs(inputs)):
+            if ad.is_undefined_primal(x):
+                undefined_primal_shape = x.aval.shape[:-1]
+                # if the following assert fails, we need to change the internal API of the primitive
+                assert (
+                    output_shapes[oid] is None
+                    or output_shapes[oid] == undefined_primal_shape
+                )
+                output_shapes[oid] = undefined_primal_shape
+    output_shapes = tuple(output_shapes)
+
     tr = exe.transpose(
         [ad.is_undefined_primal(x) for x in inputs],
         [not isinstance(x, ad.Zero) for x in cotangents],
@@ -375,7 +395,7 @@ def tensor_product_transpose(
     tmp = tensor_product_prim(
         *[x for x in inputs if not ad.is_undefined_primal(x)],
         *[x for x in cotangents if not isinstance(x, ad.Zero)],
-        shapes=shapes,
+        output_shapes=output_shapes,
         d=d,
         exe=tr.map_buffers(None, lambda b: tr.out_buffers.index(b)),
         **options,
@@ -398,7 +418,7 @@ def tensor_product_batching(
     batched_inputs: tuple[jax.Array, ...],
     batch_axes: tuple[int | None, ...],
     *,
-    shapes: tuple[tuple[int, ...], ...],
+    output_shapes: tuple[tuple[int, ...] | None, ...],
     d: stp.SegmentedTensorProduct,
     exe: TensorProductExecution,
     **options,
@@ -409,33 +429,24 @@ def tensor_product_batching(
         else:
             return jnp.moveaxis(input, axis, 0)
 
+    assert len(batched_inputs) == len(batch_axes)
     batched_inputs = [
         prepare(input, axis) for input, axis in zip(batched_inputs, batch_axes)
     ]
     new_dim = max(input.shape[0] for input in batched_inputs)
 
-    new_shapes = [None] * d.num_operands
+    new_output_shapes = [None] * d.num_operands
     for comp in exe.computations:
-        # inputs
-        for oid, input in zip(comp.in_operands, comp.map_inputs(batched_inputs)):
-            expected = input.shape[:-1]
-            if new_shapes[oid] is None:
-                new_shapes[oid] = expected
-            assert new_shapes[oid] == expected
-
-        # output
         oid = comp.out_operand
-        expected = (new_dim,) + shapes[oid]
-        if new_shapes[oid] is None:
-            new_shapes[oid] = expected
-        assert new_shapes[oid] == expected
-
-    new_shapes = tuple(new_shapes)
-    assert all(s is not None for s in new_shapes)
+        expected = (new_dim,) + output_shapes[oid]
+        if new_output_shapes[oid] is None:
+            new_output_shapes[oid] = expected
+        assert new_output_shapes[oid] == expected
+    new_output_shapes = tuple(new_output_shapes)
 
     outputs = tensor_product_prim(
         *batched_inputs,
-        shapes=new_shapes,
+        output_shapes=new_output_shapes,
         d=d,
         exe=exe,
         **options,
