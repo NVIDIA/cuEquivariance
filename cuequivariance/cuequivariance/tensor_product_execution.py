@@ -24,11 +24,19 @@ class Buffer(int):
 
 
 class InBuffer(Buffer):
-    pass
+    def __eq__(self, other: Any) -> bool:
+        return isinstance(other, InBuffer) and int(self) == int(other)
+
+    def __hash__(self) -> int:
+        return hash(("in", int(self)))
 
 
 class OutBuffer(Buffer):
-    pass
+    def __eq__(self, other: Any) -> bool:
+        return isinstance(other, OutBuffer) and int(self) == int(other)
+
+    def __hash__(self) -> int:
+        return hash(("out", int(self)))
 
 
 T = TypeVar("T")
@@ -44,8 +52,19 @@ class Computation:
         assert all(isinstance(b, Buffer) for b in self.buffers), self.buffers
         assert sum(isinstance(b, OutBuffer) for b in self.buffers) == 1, self.buffers
 
+    def __eq__(self, other: Any) -> bool:
+        return isinstance(other, Computation) and self.buffers == other.buffers
+
     def __hash__(self) -> int:
         return hash(self.buffers)
+
+    def __repr__(self):
+        IVARS = "abcdefghijklmnopqrstuvwxyz"
+        OVARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+        return " ".join(
+            IVARS[b] if isinstance(b, InBuffer) else OVARS[b] for b in self.buffers
+        )
 
     @property
     def num_operands(self) -> int:
@@ -103,6 +122,12 @@ class TensorProductExecution:
     def __init__(self, computations: tuple[Computation, ...]):
         self.computations = tuple(Computation(c) for c in computations)
 
+    def __eq__(self, other: Any) -> bool:
+        return (
+            isinstance(other, TensorProductExecution)
+            and self.computations == other.computations
+        )
+
     def __hash__(self) -> int:
         return hash(self.computations)
 
@@ -117,13 +142,7 @@ class TensorProductExecution:
             )
         ]
         for comp in self.computations:
-            text += [
-                "  "
-                + " ".join(
-                    IVARS[b] if isinstance(b, InBuffer) else OVARS[b]
-                    for b in comp.buffers
-                )
-            ]
+            text += [f"  {comp}"]
         return "\n".join(text)
 
     @property
