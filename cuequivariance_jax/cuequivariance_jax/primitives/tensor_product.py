@@ -29,6 +29,9 @@ from cuequivariance.tensor_product_execution import (
     OutBuffer,
     TensorProductExecution,
 )
+from cuequivariance_jax.primitives.tensor_product_ops_impl import (
+    tensor_product_ops_impl,
+)
 from cuequivariance_jax.primitives.tensor_product_vanilla_impl import (
     tensor_product_vanilla_impl,
 )
@@ -226,8 +229,12 @@ def tensor_product_impl(
         exe: TensorProductExecution,
     ) -> list[jax.Array]:
         if platform == "cuda" and use_custom_kernels:
-            # TODO: call custom kernels here
-            pass
+            try:
+                return tensor_product_ops_impl(
+                    *inputs, output_shapes=output_shapes, d=d, exe=exe, **options
+                )
+            except NotImplementedError as e:
+                logger.info(f"{e}. Falling back to JAX.")
 
         return tensor_product_vanilla_impl(
             *inputs, output_shapes=output_shapes, d=d, exe=exe, **options

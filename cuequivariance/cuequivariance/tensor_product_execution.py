@@ -165,6 +165,22 @@ class TensorProductExecution:
     def num_outputs_per_operand(self) -> tuple[int, ...]:
         return tuple(len(s) for s in self.out_buffers_per_operand)
 
+    def get_in_buffer_operands(self, buffer: int) -> set[int]:
+        return {
+            ope
+            for c in self.computations
+            for ope, b in enumerate(c)
+            if isinstance(b, InBuffer) and b == buffer
+        }
+
+    def get_out_buffer_operands(self, buffer: int) -> set[int]:
+        return {
+            ope
+            for c in self.computations
+            for ope, b in enumerate(c)
+            if isinstance(b, OutBuffer) and b == buffer
+        }
+
     def map_buffers(
         self,
         f_in: Optional[Callable[[int], int]],
