@@ -24,11 +24,13 @@ class Buffer(int):
 
 
 class InBuffer(Buffer):
-    pass
+    def __repr__(self):
+        return f"InBuffer({int(self)})"
 
 
 class OutBuffer(Buffer):
-    pass
+    def __repr__(self):
+        return f"OutBuffer({int(self)})"
 
 
 T = TypeVar("T")
