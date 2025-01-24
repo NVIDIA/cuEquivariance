@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 def tensor_product_vanilla_impl(
     *inputs: jax.Array,  # input buffers
-    shapes: tuple[tuple[int, ...], ...],  # shapes of the operands
+    output_shapes: tuple[tuple[int, ...] | None, ...],  # shapes of the operands
     d: stp.SegmentedTensorProduct,
     exe: TensorProductExecution,
     **options,
@@ -39,18 +39,20 @@ def tensor_product_vanilla_impl(
     outputs = [0] * len(exe.out_buffers)
 
     for c in exe.computations:
+        shape = output_shapes[c.out_operand]
+        assert shape is not None
         out = sum_cat_list_list(
             d.operands[c.out_operand],
             tp_list_list(
                 *c.map_inputs(inputs),
-                shape=shapes[c.out_operand],
+                shape=shape,
                 d=d.move_operand_last(c.out_operand),
                 **options,
             ),
-            shapes[c.out_operand],
+            shape,
             options["dtype_output"],
         )
-        assert out.shape == shapes[c.out_operand] + (d.operands[c.out_operand].size,)
+        assert out.shape == shape + (d.operands[c.out_operand].size,)
         outputs[c.out_buffer] += out
 
     return tuple(outputs)
