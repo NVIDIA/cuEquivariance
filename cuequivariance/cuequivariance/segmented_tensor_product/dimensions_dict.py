@@ -14,8 +14,13 @@
 # limitations under the License.
 
 
+def format_set(s: set[int]) -> str:
+    if len(s) == 0:
+        return ""
+    if len(s) == 1:
+        return str(next(iter(s)))
+    return "{" + ", ".join(str(i) for i in sorted(s)) + "}"
+
+
 def format_dimensions_dict(dims: dict[str, set[int]]) -> str:
-    return " ".join(
-        f"{m}={next(iter(dd))}" if len(dd) == 1 else f"{m}={dd}"
-        for m, dd in sorted(dims.items())
-    )
+    return " ".join(f"{m}={format_set(dd)}" for m, dd in sorted(dims.items()))

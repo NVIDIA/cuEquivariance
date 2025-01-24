@@ -16,42 +16,100 @@
 Segmented Tensor Product
 ========================
 
-In this example, we will show how to create a custom tensor product descriptor and execute it.
-First we need to import the necessary modules.
+In this example, we are showing how to create a custom tensor product descriptor and execute it.
+First, we need to import the necessary modules.
 
 .. jupyter-execute::
 
    import itertools
+   import numpy as np
    import torch
    import jax
    import jax.numpy as jnp
 
    import cuequivariance as cue
-   import cuequivariance.segmented_tensor_product as stp
-   import cuequivariance_torch as cuet # to execute the tensor product with PyTorch
-   import cuequivariance_jax as cuex   # to execute the tensor product with JAX
+   import cuequivariance_torch as cuet  # to execute the tensor product with PyTorch
+   import cuequivariance_jax as cuex    # to execute the tensor product with JAX
 
-.. currentmodule:: cuequivariance
+Basic Tools
+-----------
 
-Now, we will create a custom tensor product descriptor that represents the tensor product of the two representations. See :ref:`tuto_irreps` for more information on irreps.
+Creating a tensor product descriptor using the :class:`cue.SegmentedTensorProduct <cuequivariance.SegmentedTensorProduct>` class.
+
+.. jupyter-execute::
+
+   d = cue.SegmentedTensorProduct.from_subscripts("a,ia,ja+ij")
+   print(d.to_text())
+
+This descriptor has 3 operands.
+
+.. jupyter-execute::
+
+   d.num_operands
+
+Its coefficients have indices "ij".
+
+.. jupyter-execute::
+
+   d.coefficient_subscripts
+
+Adding segments to the two operands.
+
+.. jupyter-execute::
+
+   d.add_segment(0, (200,))
+   d.add_segments(1, [(3, 100), (5, 200)])
+   d.add_segments(2, [(1, 200), (1, 100)])
+   print(d.to_text())
+
+Observing that "j" is always set to 1, squeezing it.
+
+.. jupyter-execute::
+
+   d = d.squeeze_modes("j")
+   print(d.to_text())
+
+Adding paths between the segments.
+
+.. jupyter-execute::
+
+   d.add_path(0, 1, 0, c=np.array([1.0, 2.0, 0.0, 0.0, 0.0]))
+   print(d.to_text())
+
+Flattening the index "i" of the coefficients.
+
+.. jupyter-execute::
+
+   d = d.flatten_modes("i")
+   # d = d.flatten_coefficient_modes()
+   print(d.to_text())
+
+Equivalently, :meth:`flatten_coefficient_modes <cuequivariance.SegmentedTensorProduct.flatten_coefficient_modes>` can be used.
+
+
+
+Equivariant Linear Layer
+------------------------
+
+Now, we are creating a custom tensor product descriptor that represents the tensor product of the two representations. See :ref:`tuto_irreps` for more information on irreps.
 
 .. jupyter-execute::
 
    irreps1 = cue.Irreps("O3", "32x0e + 32x1o")
    irreps2 = cue.Irreps("O3", "16x0e + 48x1o")
 
-The tensor product descriptor is created step by step. First, we create an empty descriptor given its subscripts.
+The tensor product descriptor is created step by step. First, we are creating an empty descriptor given its subscripts.
 In the case of the linear layer, we have 3 operands: the weight, the input, and the output.
 The subscripts of this tensor product are "uv,iu,iv" where "uv" represents the modes of the weight, "iu" represents the modes of the input, and "iv" represents the modes of the output.
 
 .. jupyter-execute::
 
-   d = stp.SegmentedTensorProduct.from_subscripts("uv,iu,iv")
+   d = cue.SegmentedTensorProduct.from_subscripts("uv,iu,iv")
    d
 
 Each operand of the tensor product descriptor has a list of segments.
 We can add segments to the descriptor using the :meth:`add_segment <cuequivariance.SegmentedTensorProduct.add_segment>` method.
-We can add the segments of the input and output representations to the descriptor.
+We are adding the segments of the input and output representations to the descriptor.
 
 .. jupyter-execute::
 
@@ -62,7 +120,7 @@ We can add the segments of the input and output representations to the descripto
 
    d
 
-Now we can enumerate all the possible pairs of irreps and add weight segements and paths between them when the irreps are the same.
+Enumerating all the possible pairs of irreps and adding weight segements and paths between them when the irreps are the same.
 
 .. jupyter-execute::
 
@@ -74,23 +132,23 @@ Now we can enumerate all the possible pairs of irreps and add weight segements a
 
    d
 
-We can see the two paths we added:
+Printing the paths.
 
 .. jupyter-execute::
 
       d.paths
 
 
-Finally, we can normalize the paths for the last operand such that the output is normalized to variance 1.
+Normalizing the paths for the last operand such that the output is normalized to variance 1.
 
 .. jupyter-execute::
 
    d = d.normalize_paths_for_operand(-1)
    d.paths
 
-As we can see, the paths coefficients has been normalized.
+As we can see, the paths coefficients have been normalized.
 
-Now we can create a tensor product from the descriptor and execute it. In PyTorch, we can use the :class:`cuet.TensorProduct <cuequivariance_torch.TensorProduct>` class.
+Now we are creating a tensor product from the descriptor and executing it. In PyTorch, we can use the :class:`cuet.TensorProduct <cuequivariance_torch.TensorProduct>` class.
 
 .. jupyter-execute::
 
@@ -105,7 +163,7 @@ In JAX, we can use the :func:`cuex.tensor_product <cuequivariance_jax.tensor_pro
    linear_jax = cuex.tensor_product(d)
    linear_jax
 
-Now we can execute the linear layer with random input and weight tensors.
+Now we are executing the linear layer with random input and weight tensors.
 
 .. jupyter-execute::
 
@@ -116,7 +174,7 @@ Now we can execute the linear layer with random input and weight tensors.
 
    assert x2.shape == (3000, irreps2.dim)
 
-Now we can verify that the output is well normalized.
+Now we are verifying that the output is well normalized.
 
 .. jupyter-execute::
 
