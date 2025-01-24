@@ -1,4 +1,4 @@
-.. SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+.. SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
    SPDX-License-Identifier: Apache-2.0
 
    Licensed under the Apache License, Version 2.0 (the "License");
@@ -50,7 +50,7 @@ The subscripts of this tensor product are "uv,iu,iv" where "uv" represents the m
    d
 
 Each operand of the tensor product descriptor has a list of segments.
-We can add segments to the descriptor using the `add_segment` method.
+We can add segments to the descriptor using the :meth:`add_segment <cuequivariance.SegmentedTensorProduct.add_segment>` method.
 We can add the segments of the input and output representations to the descriptor.
 
 .. jupyter-execute::
@@ -90,7 +90,7 @@ Finally, we can normalize the paths for the last operand such that the output is
 
 As we can see, the paths coefficients has been normalized.
 
-Now we can create a tensor product from the descriptor and execute it. In PyTorch, we can use the :class:`cuet.TensorProduct` class.
+Now we can create a tensor product from the descriptor and execute it. In PyTorch, we can use the :class:`cuet.TensorProduct <cuequivariance_torch.TensorProduct>` class.
 
 .. jupyter-execute::
 
@@ -98,7 +98,7 @@ Now we can create a tensor product from the descriptor and execute it. In PyTorc
    linear_torch
 
 
-In JAX, we can use the :func:`cuex.tensor_product` function.
+In JAX, we can use the :func:`cuex.tensor_product <cuequivariance_jax.tensor_product>` function.
 
 .. jupyter-execute::
 
