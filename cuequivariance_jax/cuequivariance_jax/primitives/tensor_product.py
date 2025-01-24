@@ -233,8 +233,8 @@ def tensor_product_impl(
                 return tensor_product_ops_impl(
                     *inputs, output_shapes=output_shapes, d=d, exe=exe, **options
                 )
-            except NotImplementedError as e:
-                logger.info(f"{e}. Falling back to JAX.")
+            except NotImplementedError:
+                pass
 
         return tensor_product_vanilla_impl(
             *inputs, output_shapes=output_shapes, d=d, exe=exe, **options
