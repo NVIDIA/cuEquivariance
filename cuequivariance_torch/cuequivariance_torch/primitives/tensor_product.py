@@ -711,3 +711,48 @@ def _permutation_module(permutation: Tuple[int, ...]):
     inputs = [graph.placeholder(f"input_{i}") for i in range(len(permutation))]
     graph.output([inputs[i] for i in permutation])
     return torch.fx.GraphModule(dict(), graph, class_name="perm")
+
+
+class BatchedLinear(torch.nn.Module):
+    def __init__(
+        self,
+        descriptor: stp.SegmentedTensorProduct,
+        device: Optional[torch.device],
+        math_dtype: torch.dtype,
+    ):
+        super().__init__()
+        import cuequivariance_ops_torch as ops
+
+        self.descriptor = descriptor
+
+        assert descriptor.subscripts in ["u,uv,v", "uv,v,u"]
+        assert descriptor.coefficient_subscripts == ""
+
+        self._f = ops.BatchLinear(
+            operand_segment_modes=[ope.subscripts for ope in descriptor.operands],
+            operand_segment_offsets=[
+                [s.start for s in ope.segment_slices()] for ope in descriptor.operands
+            ],
+            operand_segment_shapes=[ope.segments for ope in descriptor.operands],
+            path_indices=[path.indices for path in descriptor.paths],
+            path_coefficients=[path.coefficients.item() for path in descriptor.paths],
+            math_dtype=math_dtype,
+        ).to(device=device)
+
+    def forward(
+        self, x: torch.Tensor, w: torch.Tensor, i: torch.Tensor
+    ) -> torch.Tensor:
+        if (
+            not torch.jit.is_scripting()
+            and not torch.jit.is_tracing()
+            and not torch.compiler.is_compiling()
+        ):
+            logger.debug(
+                f"Calling BatchedLinear: {self.descriptor}, input shapes: {x.shape}, {w.shape}, {i.shape}"
+            )
+
+        torch._assert(x.ndim == 2, "input should be (batch, x_dim)")
+        torch._assert(w.ndim == 2, "input should be (i.max() + 1, w_dim)")
+        torch._assert(i.ndim == 1, "input should be (batch,)")
+
+        return self._f(x, w, i)
