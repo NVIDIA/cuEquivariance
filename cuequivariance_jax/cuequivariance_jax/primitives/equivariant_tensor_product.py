@@ -28,7 +28,8 @@ def equivariant_tensor_product(
     precision: jax.lax.Precision = jax.lax.Precision.HIGHEST,
     algorithm: str = "sliced",
     use_custom_primitive: bool = True,
-    use_custom_kernels: bool = False,
+    use_custom_kernels: bool | None = False,
+    name: str | None = None,
 ) -> cuex.RepArray:
     """Compute the equivariant tensor product of the input arrays.
 
@@ -78,6 +79,7 @@ def equivariant_tensor_product(
             algorithm=algorithm,
             use_custom_primitive=use_custom_primitive,
             use_custom_kernels=use_custom_kernels,
+            name=name,
         )
 
     if len(inputs) != e.num_inputs:
@@ -113,6 +115,7 @@ def equivariant_tensor_product(
         algorithm=algorithm,
         use_custom_primitive=use_custom_primitive,
         use_custom_kernels=use_custom_kernels,
+        name=name,
     )
 
     return cuex.RepArray(e.output, x)

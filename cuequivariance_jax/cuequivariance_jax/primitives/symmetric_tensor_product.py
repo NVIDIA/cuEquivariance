@@ -31,7 +31,8 @@ def symmetric_tensor_product(
     precision: jax.lax.Precision = jax.lax.Precision.HIGHEST,
     algorithm: str = "sliced",
     use_custom_primitive: bool = True,
-    use_custom_kernels: bool = False,
+    use_custom_kernels: bool | None = False,
+    name: str | None = None,
 ) -> jax.Array:
     """
     Compute the sum of the STPs evaluated on the input (all input operands are the same).
@@ -54,6 +55,9 @@ def symmetric_tensor_product(
     """
     assert any(d.num_operands >= 2 for d in ds)
 
+    if name is None:
+        name = "symmetric_tensor_product"
+
     # currying
     if len(inputs) == 0:
 
@@ -67,6 +71,7 @@ def symmetric_tensor_product(
                 algorithm=algorithm,
                 use_custom_primitive=use_custom_primitive,
                 use_custom_kernels=use_custom_kernels,
+                name=name,
             )
 
         return fn
@@ -136,6 +141,7 @@ def symmetric_tensor_product(
             algorithm=algorithm,
             use_custom_primitive=use_custom_primitive,
             use_custom_kernels=use_custom_kernels,
+            name=name + f"_{n_in - n_un}",
         )
 
     return output

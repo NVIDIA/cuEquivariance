@@ -47,7 +47,8 @@ def tensor_product(
     precision: jax.lax.Precision = jax.lax.Precision.HIGHEST,
     algorithm: str = "sliced",
     use_custom_primitive: bool = True,
-    use_custom_kernels: bool = False,
+    use_custom_kernels: bool | None = False,
+    name: str | None = None,
 ) -> jax.Array:
     """
     Compute the last operand of a `SegmentedTensorProduct`.
@@ -88,6 +89,9 @@ def tensor_product(
     if isinstance(precision, str):
         precision = jax.lax.Precision[precision]
 
+    if name is None:
+        name = "tensor_product"
+
     options = dict(
         dtype_output=dtype_output,
         dtype_math=dtype_math,
@@ -95,6 +99,7 @@ def tensor_product(
         algorithm=algorithm,
         use_custom_primitive=use_custom_primitive,
         use_custom_kernels=use_custom_kernels,
+        name=name,
     )
 
     if len(inputs) > d.num_operands - 1:
@@ -143,6 +148,7 @@ def tensor_product(
         algorithm=algorithm,
         use_custom_primitive=use_custom_primitive,
         use_custom_kernels=use_custom_kernels,
+        name=name,
     )
 
     # inputs of shape (..., ope.size) with identical ndim
@@ -304,6 +310,8 @@ def tensor_product_jvp(
     jvp = exe.jvp([not isinstance(t, ad.Zero) for t in tangents])
     del exe
 
+    options["name"] = options.get("name", "tensor_product") + "->jvp"
+
     permutations: list[tuple[int, ...]] = d.symmetries()
     for multiplicator, exe in jvp.group_by_symmetries(permutations):
         # tensor_product_prim can remove unused inputs
@@ -344,6 +352,8 @@ def tensor_product_transpose(
                 )
                 output_shapes[oid] = undefined_primal_shape
     output_shapes = tuple(output_shapes)
+
+    options["name"] = options.get("name", "tensor_product") + "->transpose"
 
     tr = exe.transpose(
         [ad.is_undefined_primal(x) for x in inputs],
@@ -399,6 +409,8 @@ def tensor_product_batching(
             new_output_shapes[oid] = expected
         assert new_output_shapes[oid] == expected
     new_output_shapes = tuple(new_output_shapes)
+
+    options["name"] = options.get("name", "tensor_product") + "->batching"
 
     outputs = tensor_product_prim(
         *batched_inputs,
