@@ -20,6 +20,8 @@ import jax.core
 import jax.extend
 import jax.lax
 import jax.numpy as jnp
+import numpy as np
+from jax.experimental.mosaic.gpu import profiler
 from jax.interpreters import ad, batching, mlir, xla
 
 import cuequivariance as cue
@@ -198,6 +200,7 @@ def tensor_product_prim(
     output_shapes: tuple[tuple[int, ...] | None, ...],  # shapes of the operands
     d: cue.SegmentedTensorProduct,
     exe: TensorProductExecution,
+    use_custom_primitive: bool = True,
     **options,
 ) -> tuple[jax.Array, ...]:  # output buffers
     if exe.is_trivial:
@@ -207,7 +210,7 @@ def tensor_product_prim(
 
     unique_inputs, exe = clean_inputs(list(inputs), exe)
 
-    if options.pop("use_custom_primitive", True):
+    if use_custom_primitive:
         return tensor_product_p.bind(
             *unique_inputs, output_shapes=output_shapes, d=d, exe=exe, **options
         )
@@ -217,30 +220,130 @@ def tensor_product_prim(
         )
 
 
+def produce_minimal_code(
+    *inputs: jax.Array,
+    output_shapes: tuple[tuple[int, ...] | None, ...],
+    d: cue.SegmentedTensorProduct,
+    exe: TensorProductExecution,
+    dtype_output: jnp.dtype,
+    dtype_math: jnp.dtype,
+    **unused_options,
+) -> str:
+    def format_dtype(dtype: jnp.dtype) -> str:
+        dtype = jnp.dtype(dtype)
+        return f"jnp.{dtype.name}"
+
+    mincode = """import jax.numpy as jnp
+import cuequivariance as cue
+from cuequivariance.tensor_product_execution import InBuffer, OutBuffer
+from cuequivariance_jax.primitives.tensor_product import tensor_product_prim
+"""
+    mincode += (
+        "inputs = ["
+        + ", ".join([f"jnp.zeros({x.shape}, {format_dtype(x.dtype)})" for x in inputs])
+        + "]\n"
+    )
+    mincode += f"output_shapes = {output_shapes}\n"
+    mincode += f'd = cue.SegmentedTensorProduct.from_base64("{d.to_base64()}")\n'
+    mincode += f"exe = cue.TensorProductExecution({exe.computations})\n"
+    mincode += f"dtype_output = {format_dtype(dtype_output)}\n"
+    mincode += f"dtype_math = {format_dtype(dtype_math)}\n"
+    # tensor_product_prim(
+    #     *inputs,
+    #     output_shapes=output_shapes,
+    #     d=d,
+    #     exe=exe,
+    #     dtype_output=dtype_output,
+    #     dtype_math=dtype_math,
+    #     use_custom_kernels=True,
+    # )
+    mincode += "# " + ", ".join([f"{k}={v}" for k, v in unused_options.items()])
+    return mincode
+
+
+def profile_and_select_implementation(
+    name: str, impls: list[tuple[str, callable]], *inputs: jax.Array
+):
+    # import time
+    # t0 = time.perf_counter()
+
+    with jax.ensure_compile_time_eval():
+        dummy_inputs = [np.random.normal(size=x.shape).astype(x.dtype) for x in inputs]
+        dummy_inputs = [jax.device_put(x) for x in dummy_inputs]
+        ref = None
+        # first_runtime: float | None = None
+        best: tuple[str, float, callable] | None = None
+        for impl_name, impl in impls:
+            try:
+                out, runtime = profiler.measure(impl, mode="cupti")(*dummy_inputs)
+            except NotImplementedError:
+                continue
+            else:
+                if ref is None:
+                    ref = out
+                    best = impl_name, runtime, impl
+                    # first_runtime = runtime
+                else:
+                    diff = max(
+                        [
+                            np.max(np.abs(a - b))
+                            for a, b in zip(jax.tree.leaves(out), jax.tree.leaves(ref))
+                        ]
+                    )
+                    if diff > 1e-3:
+                        raise ValueError(
+                            f"cuex.tensor_product: {name} implementation {impl_name} produced different results, diff={diff}"
+                        )
+                    if runtime < best[1]:
+                        best = impl_name, runtime, impl
+        assert best is not None
+    impl_name, runtime, impl = best
+
+    # dt = time.perf_counter() - t0
+    # speedup = first_runtime / runtime
+    # print(
+    #     f"cuex.tensor_product: {name}: selected {impl_name} with runtime {runtime:.2f} ms, speedup {speedup:.2f}x, (profiled in {dt:.1f} s)"
+    # )
+
+    return impl(*inputs)
+
+
 def tensor_product_impl(
     platform: str | None,
     *inputs: jax.Array,
     output_shapes: tuple[tuple[int, ...] | None, ...],
     d: cue.SegmentedTensorProduct,
     exe: TensorProductExecution,
+    name: str = "tensor_product",
+    use_custom_kernels: bool | None = True,
     **options,
 ) -> tuple[jax.Array, ...]:
     assert exe.max_in_buffer + 1 == len(exe.in_buffers) == len(inputs)
     assert exe.max_out_buffer + 1 == len(exe.out_buffers)
-    use_custom_kernels = options.pop("use_custom_kernels", True)
 
     def dispatch(
         inputs: list[jax.Array],
         d: cue.SegmentedTensorProduct,
         exe: TensorProductExecution,
     ) -> list[jax.Array]:
-        if platform == "cuda" and use_custom_kernels:
-            try:
+        if platform == "cuda":
+            if use_custom_kernels is None:
+                kwargs = dict(output_shapes=output_shapes, d=d, exe=exe, **options)
+                outputs = profile_and_select_implementation(
+                    name,
+                    [
+                        ("vanilla", partial(tensor_product_vanilla_impl, **kwargs)),
+                        ("ops", partial(tensor_product_ops_impl, **kwargs)),
+                    ],
+                    *inputs,
+                )
+                # print(produce_minimal_code(*inputs, **kwargs))
+                # print()
+                return outputs
+            if use_custom_kernels is True:
                 return tensor_product_ops_impl(
                     *inputs, output_shapes=output_shapes, d=d, exe=exe, **options
                 )
-            except NotImplementedError:
-                pass
 
         return tensor_product_vanilla_impl(
             *inputs, output_shapes=output_shapes, d=d, exe=exe, **options
