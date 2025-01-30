@@ -549,16 +549,6 @@ class FusedTensorProductOp3(torch.nn.Module):
         torch._assert(x0.ndim == 2, "input should be (batch, dim) or (1, dim)")
         torch._assert(x1.ndim == 2, "input should be (batch, dim) or (1, dim)")
 
-        batch = max(x0.shape[0], x1.shape[0])
-
-        if batch > 1:
-            if x0.shape[0] == 1:
-                x0 = x0.squeeze(0)
-            if x1.shape[0] == 1:
-                x1 = x1.squeeze(0)
-
-        # ops.FusedTensorProductOp3 expects inputs
-        # of shape (Z, dim) or (dim,)
         return self._f(x0, x1)
 
 
@@ -617,18 +607,6 @@ class FusedTensorProductOp4(torch.nn.Module):
         torch._assert(x1.ndim == 2, "input should be (batch, dim) or (1, dim)")
         torch._assert(x2.ndim == 2, "input should be (batch, dim) or (1, dim)")
 
-        batch = max(x0.shape[0], x1.shape[0], x2.shape[0])
-
-        if batch > 1:
-            if x0.shape[0] == 1:
-                x0 = x0.squeeze(0)
-            if x1.shape[0] == 1:
-                x1 = x1.squeeze(0)
-            if x2.shape[0] == 1:
-                x2 = x2.squeeze(0)
-
-        # ops.FusedTensorProductOp4 expects inputs
-        # of shape (Z, dim) or (dim,)
         return self._f(x0, x1, x2)
 
 
