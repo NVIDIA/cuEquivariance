@@ -14,11 +14,11 @@
 # limitations under the License.
 import pytest
 import torch
-from tests.utils import (
-    module_with_mode,
-)
 
 import cuequivariance as cue
+from cuequivariance_torch._tests.utils import (
+    module_with_mode,
+)
 from cuequivariance_torch.primitives.symmetric_tensor_product import (
     CUDAKernel as SymmetricTensorProduct,
 )
