@@ -113,6 +113,7 @@ class EquivariantTensorProduct(torch.nn.Module):
 
     Args:
         e (cuequivariance.EquivariantTensorProduct): Equivariant tensor product.
+        index_first_input (bool, optional): If `True`, the first input tensor is indexed by `indices`. Default is `False`.
         layout (IrrepsLayout): layout for inputs and output.
         layout_in (IrrepsLayout): layout for inputs.
         layout_out (IrrepsLayout): layout for output.
@@ -136,6 +137,7 @@ class EquivariantTensorProduct(torch.nn.Module):
 
         You can optionally index the first input tensor:
 
+        >>> tp = cuet.EquivariantTensorProduct(e, layout=cue.ir_mul, device=device, index_first_input=True)
         >>> w = torch.ones(3, e.inputs[0].dim, device=device)
         >>> indices = torch.randint(3, (17,))
         >>> tp(w, x1, x2, indices=indices)
@@ -146,6 +148,7 @@ class EquivariantTensorProduct(torch.nn.Module):
         self,
         e: cue.EquivariantTensorProduct,
         *,
+        index_first_input: bool = False,
         layout: Optional[cue.IrrepsLayout] = None,
         layout_in: Optional[
             Union[cue.IrrepsLayout, tuple[Optional[cue.IrrepsLayout], ...]]
@@ -209,8 +212,12 @@ class EquivariantTensorProduct(torch.nn.Module):
             )  # special case for Spherical Harmonics ls = [1]
         ):
             if e.num_inputs == 1:
+                if index_first_input:
+                    raise NotImplementedError(
+                        "Indexing the first input is not supported for a single input"
+                    )
                 self.tp = SymmetricTPDispatcher(
-                    cuet.SymmetricTensorProduct(
+                    cuet._SymmetricTensorProduct(
                         e.ds,
                         device=device,
                         math_dtype=math_dtype,
@@ -219,7 +226,7 @@ class EquivariantTensorProduct(torch.nn.Module):
                 )
             elif e.num_inputs == 2:
                 self.tp = IWeightedSymmetricTPDispatcher(
-                    cuet.IWeightedSymmetricTensorProduct(
+                    cuet._IWeightedSymmetricTensorProduct(
                         e.ds,
                         device=device,
                         math_dtype=math_dtype,
@@ -229,18 +236,43 @@ class EquivariantTensorProduct(torch.nn.Module):
             else:
                 raise NotImplementedError("This should not happen")
         else:
-            tp = cuet.TensorProduct(
-                e.ds[0],
-                device=device,
-                math_dtype=math_dtype,
-                use_fallback=use_fallback,
-            )
-            self.tp = TPDispatcher(tp, tp.descriptor)
+            assert len(e.ds) == 1
 
+            tp = None
+            if (
+                index_first_input
+                and e.d.subscripts.canonicalize()
+                in [
+                    "uv,u,v",
+                    "uv,v,u",
+                ]
+                and use_fallback is not False
+            ):
+                try:
+                    tp = cuet._BatchLinear(
+                        e.ds[0], device=device, math_dtype=math_dtype
+                    )
+                except NotImplementedError:
+                    pass
+
+            if tp is None:
+                tp = TPDispatcher(
+                    cuet.TensorProduct(
+                        e.ds[0],
+                        device=device,
+                        math_dtype=math_dtype,
+                        use_fallback=use_fallback,
+                    ),
+                    e.ds[0],
+                )
+
+            self.tp = tp
+
+        self.index_first_input = index_first_input
         self.operands_dims = [op.dim for op in e.operands]
 
-    def extra_repr(self) -> str:
-        return str(self.etp)
+    # def extra_repr(self) -> str:
+    #     return str(self.etp)
 
     def forward(
         self,
@@ -253,6 +285,10 @@ class EquivariantTensorProduct(torch.nn.Module):
         """
         If ``indices`` is not None, the first input is indexed by ``indices``.
         """
+        torch._assert(
+            indices is None or self.index_first_input,
+            "indices can only be used with index_first_input=True",
+        )
 
         if x3 is not None and x2 is not None and x1 is not None:
             inputs = [x0, x1, x2, x3]
