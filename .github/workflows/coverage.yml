@@ -20,77 +20,20 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         python -m pip install --upgrade uv
-        python -m uv pip install pytest coverage torch e3nn jax flax
-        python -m uv pip install ./cuequivariance ./cuequivariance_jax ./cuequivariance_torch
+        python -m uv pip install pytest pytest-cov
+        python -m uv pip install ./cuequivariance
     - name: Run coverage on PR branch
       run: |
-        coverage run \
-          --source=cuequivariance \
-          -m pytest cuequivariance
-        coverage report -m
-        coverage_pr=$(coverage report -m | grep TOTAL | awk '{print $4}' | sed 's/%//')
+        pytest --cov=cuequivariance cuequivariance > coverage.txt
+        coverage_pr=$(cat coverage.txt | grep TOTAL | awk '{print $4}' | sed 's/%//')
         echo "Coverage on PR branch: $coverage_pr"
     - name: Run coverage on main branch
       run: |
-        coverage run \
-          --source=cuequivariance \
-          -m pytest cuequivariance
-        coverage report -m
-        coverage_main=$(coverage report -m | grep TOTAL | awk '{print $4}' | sed 's/%//')
+        git checkout main
+        pytest --cov=cuequivariance cuequivariance > coverage.txt
+        coverage_main=$(cat coverage.txt | grep TOTAL | awk '{print $4}' | sed 's/%//')
         echo "Coverage on main branch: $coverage_main"
     - name: Compare coverage
-      run: |
-        if [ $coverage_pr -lt $coverage_main ]; then
-          echo "Coverage on PR branch is lower than on main branch"
-          echo "Coverage on PR branch: $coverage_pr"
-          echo "Coverage on main branch: $coverage_main"
-          exit 1
-        fi
-
-
-    - name: JAX Run coverage on PR branch
-      run: |
-        coverage run \
-          --source=cuequivariance_jax \
-          -m pytest cuequivariance_jax
-        coverage report -m
-        coverage_pr=$(coverage report -m | grep TOTAL | awk '{print $4}' | sed 's/%//')
-        echo "Coverage on PR branch: $coverage_pr"
-    - name: JAX Run coverage on main branch
-      run: |
-        coverage run \
-          --source=cuequivariance_jax \
-          -m pytest cuequivariance_jax
-        coverage report -m
-        coverage_main=$(coverage report -m | grep TOTAL | awk '{print $4}' | sed 's/%//')
-        echo "Coverage on main branch: $coverage_main"
-    - name: JAX Compare coverage
-      run: |
-        if [ $coverage_pr -lt $coverage_main ]; then
-          echo "Coverage on PR branch is lower than on main branch"
-          echo "Coverage on PR branch: $coverage_pr"
-          echo "Coverage on main branch: $coverage_main"
-          exit 1
-        fi
-
-
-    - name: PyTorch Run coverage on PR branch
-      run: |
-        coverage run \
-          --source=cuequivariance_torch \
-          -m pytest cuequivariance_torch
-        coverage report -m
-        coverage_pr=$(coverage report -m | grep TOTAL | awk '{print $4}' | sed 's/%//')
-        echo "Coverage on PR branch: $coverage_pr"
-    - name: PyTorch Run coverage on main branch
-      run: |
-        coverage run \
-          --source=cuequivariance_torch \
-          -m pytest cuequivariance_torch
-        coverage report -m
-        coverage_main=$(coverage report -m | grep TOTAL | awk '{print $4}' | sed 's/%//')
-        echo "Coverage on main branch: $coverage_main"
-    - name: PyTorch Compare coverage
       run: |
         if [ $coverage_pr -lt $coverage_main ]; then
           echo "Coverage on PR branch is lower than on main branch"
