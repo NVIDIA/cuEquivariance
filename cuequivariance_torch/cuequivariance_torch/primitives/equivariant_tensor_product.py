@@ -241,11 +241,7 @@ class EquivariantTensorProduct(torch.nn.Module):
             tp = None
             if (
                 index_first_input
-                and e.d.subscripts.canonicalize()
-                in [
-                    "uv,u,v",
-                    "uv,v,u",
-                ]
+                and e.d.subscripts.canonicalize() in ["uv,u,v", "uv,v,u"]
                 and use_fallback is not False
             ):
                 try:
