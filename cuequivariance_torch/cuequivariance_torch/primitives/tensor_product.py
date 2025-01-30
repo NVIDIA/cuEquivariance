@@ -549,16 +549,6 @@ class FusedTensorProductOp3(torch.nn.Module):
         torch._assert(x0.ndim == 2, "input should be (batch, dim) or (1, dim)")
         torch._assert(x1.ndim == 2, "input should be (batch, dim) or (1, dim)")
 
-        batch = max(x0.shape[0], x1.shape[0])
-
-        if batch > 1:
-            if x0.shape[0] == 1:
-                x0 = x0.squeeze(0)
-            if x1.shape[0] == 1:
-                x1 = x1.squeeze(0)
-
-        # ops.FusedTensorProductOp3 expects inputs
-        # of shape (Z, dim) or (dim,)
         return self._f(x0, x1)
 
 
@@ -617,18 +607,6 @@ class FusedTensorProductOp4(torch.nn.Module):
         torch._assert(x1.ndim == 2, "input should be (batch, dim) or (1, dim)")
         torch._assert(x2.ndim == 2, "input should be (batch, dim) or (1, dim)")
 
-        batch = max(x0.shape[0], x1.shape[0], x2.shape[0])
-
-        if batch > 1:
-            if x0.shape[0] == 1:
-                x0 = x0.squeeze(0)
-            if x1.shape[0] == 1:
-                x1 = x1.squeeze(0)
-            if x2.shape[0] == 1:
-                x2 = x2.squeeze(0)
-
-        # ops.FusedTensorProductOp4 expects inputs
-        # of shape (Z, dim) or (dim,)
         return self._f(x0, x1, x2)
 
 
@@ -713,7 +691,7 @@ def _permutation_module(permutation: Tuple[int, ...]):
     return torch.fx.GraphModule(dict(), graph, class_name="perm")
 
 
-class BatchedLinear(torch.nn.Module):
+class BatchLinear(torch.nn.Module):
     def __init__(
         self,
         descriptor: stp.SegmentedTensorProduct,
@@ -752,20 +730,28 @@ class BatchedLinear(torch.nn.Module):
             math_dtype=math_dtype,
         ).to(device=device)
 
+        self.x0_size = descriptor.operands[0].size
+        self.x1_size = descriptor.operands[1].size
+
     def forward(
-        self, x: torch.Tensor, w: torch.Tensor, i: torch.Tensor
+        self, x0: torch.Tensor, x1: torch.Tensor, indices: torch.Tensor
     ) -> torch.Tensor:
+        x0, x1 = self._perm(x0, x1)
+
         if (
             not torch.jit.is_scripting()
             and not torch.jit.is_tracing()
             and not torch.compiler.is_compiling()
         ):
             logger.debug(
-                f"Calling BatchedLinear: {self.descriptor}, input shapes: {x.shape}, {w.shape}, {i.shape}"
+                f"Calling BatchedLinear: {self.descriptor}, input shapes: {x0.shape}, {x1.shape}, {indices.shape}"
             )
 
-        torch._assert(x.ndim == 2, "input should be (batch, x_dim)")
-        torch._assert(w.ndim == 2, "input should be (i.max() + 1, w_dim)")
-        torch._assert(i.ndim == 1, "input should be (batch,)")
+        torch._assert(x0.ndim == 2, "input should be dim=2")
+        torch._assert(x1.ndim == 2, "input should be dim=2")
+        torch._assert(indices.ndim == 1, "indices should be (batch,)")
 
-        return self._f(x, w, i)
+        torch._assert(x0.shape[1] == self.x0_size, "input 0 has wrong size")
+        torch._assert(x1.shape[1] == self.x1_size, "input 1 has wrong size")
+
+        return self._f(x0, x1, indices)
