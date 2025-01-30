@@ -271,7 +271,7 @@ def profile_and_select_implementation(
         dummy_inputs = [np.random.normal(size=x.shape).astype(x.dtype) for x in inputs]
         dummy_inputs = [jax.device_put(x) for x in dummy_inputs]
         ref = None
-        # first_runtime: float | None = None
+        first_runtime: float | None = None
         best: tuple[str, float, callable] | None = None
         for impl_name, impl in impls:
             try:
@@ -282,7 +282,7 @@ def profile_and_select_implementation(
                 if ref is None:
                     ref = out
                     best = impl_name, runtime, impl
-                    # first_runtime = runtime
+                    first_runtime = runtime
                 else:
                     diff = max(
                         [
@@ -300,10 +300,10 @@ def profile_and_select_implementation(
     impl_name, runtime, impl = best
 
     # dt = time.perf_counter() - t0
-    # speedup = first_runtime / runtime
-    # print(
-    #     f"cuex.tensor_product: {name}: selected {impl_name} with runtime {runtime:.2f} ms, speedup {speedup:.2f}x, (profiled in {dt:.1f} s)"
-    # )
+    speedup = first_runtime / runtime
+    print(
+        f"{name:<50}: {impl_name:<10} with runtime {runtime:.2f} ms, speedup {speedup:.2f}x wrt {first_runtime:.2f} ms"
+    )
 
     return impl(*inputs)
 
@@ -326,9 +326,12 @@ def tensor_product_impl(
         d: cue.SegmentedTensorProduct,
         exe: TensorProductExecution,
     ) -> list[jax.Array]:
+        kwargs = dict(output_shapes=output_shapes, d=d, exe=exe, **options)
+
         if platform == "cuda":
+            # print(produce_minimal_code(*inputs, **kwargs))
+            # print()
             if use_custom_kernels is None:
-                kwargs = dict(output_shapes=output_shapes, d=d, exe=exe, **options)
                 outputs = profile_and_select_implementation(
                     name,
                     [
@@ -337,17 +340,11 @@ def tensor_product_impl(
                     ],
                     *inputs,
                 )
-                # print(produce_minimal_code(*inputs, **kwargs))
-                # print()
                 return outputs
             if use_custom_kernels is True:
-                return tensor_product_ops_impl(
-                    *inputs, output_shapes=output_shapes, d=d, exe=exe, **options
-                )
+                return tensor_product_ops_impl(*inputs, **kwargs)
 
-        return tensor_product_vanilla_impl(
-            *inputs, output_shapes=output_shapes, d=d, exe=exe, **options
-        )
+        return tensor_product_vanilla_impl(*inputs, **kwargs)
 
     outputs = [0] * len(exe.out_buffers)
     for partition, ex in exe.group_by_identical_buffers():
