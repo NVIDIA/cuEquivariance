@@ -22,20 +22,18 @@ jobs:
         python -m pip install --upgrade uv
         python -m uv pip install pytest pytest-cov
         python -m uv pip install ./cuequivariance
-    - name: Run coverage on PR branch
+    - name: Run coverage
       run: |
         pytest --cov=cuequivariance cuequivariance > coverage.txt
         coverage_pr=$(cat coverage.txt | grep TOTAL | awk '{print $4}' | sed 's/%//')
         echo "Coverage on PR branch: $coverage_pr"
-    - name: Run coverage on target branch
-      run: |
+
         git fetch origin ${{ github.event.pull_request.base.ref }}:${{ github.event.pull_request.base.ref }}
         git checkout ${{ github.event.pull_request.base.ref }}
         pytest --cov=cuequivariance cuequivariance > coverage.txt
         coverage_target=$(cat coverage.txt | grep TOTAL | awk '{print $4}' | sed 's/%//')
         echo "Coverage on target branch: $coverage_target"
-    - name: Compare coverage
-      run: |
+
         if [ $coverage_pr -lt $coverage_target ]; then
           echo "Coverage on PR branch is lower than on target branch"
           echo "Coverage on PR branch: $coverage_pr"
