@@ -27,18 +27,18 @@ jobs:
         pytest --cov=cuequivariance cuequivariance > coverage.txt
         coverage_pr=$(cat coverage.txt | grep TOTAL | awk '{print $4}' | sed 's/%//')
         echo "Coverage on PR branch: $coverage_pr"
-    - name: Run coverage on main branch
+    - name: Run coverage on target branch
       run: |
-        git fetch origin main:main
-        git checkout main
+        git fetch origin ${{ github.event.pull_request.base.ref }}:${{ github.event.pull_request.base.ref }}
+        git checkout ${{ github.event.pull_request.base.ref }}
         pytest --cov=cuequivariance cuequivariance > coverage.txt
-        coverage_main=$(cat coverage.txt | grep TOTAL | awk '{print $4}' | sed 's/%//')
-        echo "Coverage on main branch: $coverage_main"
+        coverage_target=$(cat coverage.txt | grep TOTAL | awk '{print $4}' | sed 's/%//')
+        echo "Coverage on target branch: $coverage_target"
     - name: Compare coverage
       run: |
-        if [ $coverage_pr -lt $coverage_main ]; then
-          echo "Coverage on PR branch is lower than on main branch"
+        if [ $coverage_pr -lt $coverage_target ]; then
+          echo "Coverage on PR branch is lower than on target branch"
           echo "Coverage on PR branch: $coverage_pr"
-          echo "Coverage on main branch: $coverage_main"
+          echo "Coverage on target branch: $coverage_target"
           exit 1
         fi
