@@ -723,6 +723,19 @@ class BatchedLinear(torch.nn.Module):
         super().__init__()
         import cuequivariance_ops_torch as ops
 
+        descriptor = descriptor.canonicalize_subscripts()
+        if descriptor.subscripts == "uv,u,v":
+            descriptor = descriptor.permute_operands([1, 0, 2])
+            self._perm = _permutation_module([1, 0])
+        elif descriptor.subscripts == "u,vu,v":
+            descriptor = descriptor.permute_operands([1, 0, 2])
+            self._perm = _permutation_module([0, 1])
+        elif descriptor.subscripts == "u,uv,v":
+            self._perm = _permutation_module([0, 1])
+        elif descriptor.subscripts == "uv,v,u":
+            self._perm = _permutation_module([1, 0])
+
+        descriptor = descriptor.canonicalize_subscripts()
         self.descriptor = descriptor
 
         assert descriptor.subscripts in ["u,uv,v", "uv,v,u"]
