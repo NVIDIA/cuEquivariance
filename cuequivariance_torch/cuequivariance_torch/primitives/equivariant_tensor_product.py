@@ -267,8 +267,8 @@ class EquivariantTensorProduct(torch.nn.Module):
         self.index_first_input = index_first_input
         self.operands_dims = [op.dim for op in e.operands]
 
-    # def extra_repr(self) -> str:
-    #     return str(self.etp)
+    def extra_repr(self) -> str:
+        return str(self.etp)
 
     def forward(
         self,
