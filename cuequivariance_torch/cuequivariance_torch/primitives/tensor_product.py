@@ -701,14 +701,23 @@ class BatchLinear(torch.nn.Module):
         super().__init__()
         import cuequivariance_ops_torch as ops
 
+        self.x0_size = descriptor.operands[0].size
+        self.x1_size = descriptor.operands[1].size
+
         descriptor = descriptor.canonicalize_subscripts()
         if descriptor.subscripts == "uv,u,v":
             descriptor = descriptor.permute_operands([1, 0, 2])
             self._perm = _permutation_module([1, 0])
         elif descriptor.subscripts == "u,vu,v":
+            raise NotImplementedError(
+                "vu needs to be the first operand because it is indexed"
+            )
             descriptor = descriptor.permute_operands([1, 0, 2])
             self._perm = _permutation_module([0, 1])
         elif descriptor.subscripts == "u,uv,v":
+            raise NotImplementedError(
+                "uv needs to be the first operand because it is indexed"
+            )
             self._perm = _permutation_module([0, 1])
         elif descriptor.subscripts == "uv,v,u":
             self._perm = _permutation_module([1, 0])
@@ -730,12 +739,12 @@ class BatchLinear(torch.nn.Module):
             math_dtype=math_dtype,
         ).to(device=device)
 
-        self.x0_size = descriptor.operands[0].size
-        self.x1_size = descriptor.operands[1].size
-
     def forward(
         self, x0: torch.Tensor, x1: torch.Tensor, indices: torch.Tensor
     ) -> torch.Tensor:
+        torch._assert(x0.shape[1] == self.x0_size, "input 0 has wrong size")
+        torch._assert(x1.shape[1] == self.x1_size, "input 1 has wrong size")
+
         x0, x1 = self._perm(x0, x1)
 
         if (
@@ -750,8 +759,5 @@ class BatchLinear(torch.nn.Module):
         torch._assert(x0.ndim == 2, "input should be dim=2")
         torch._assert(x1.ndim == 2, "input should be dim=2")
         torch._assert(indices.ndim == 1, "indices should be (batch,)")
-
-        torch._assert(x0.shape[1] == self.x0_size, "input 0 has wrong size")
-        torch._assert(x1.shape[1] == self.x1_size, "input 1 has wrong size")
 
         return self._f(x0, x1, indices)
