@@ -14,11 +14,11 @@
 # limitations under the License.
 import pytest
 import torch
-from tests.utils import (
-    module_with_mode,
-)
 
 import cuequivariance_torch as cuet
+from cuequivariance_torch._tests.utils import (
+    module_with_mode,
+)
 
 device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
 

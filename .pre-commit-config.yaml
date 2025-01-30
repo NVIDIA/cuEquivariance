@@ -1,10 +1,9 @@
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.9.1
+    rev: v0.9.3
     hooks:
       - id: ruff
-        args: ["--fix"]
-      - id: ruff
-        args: ["check", "--select", "I", "--fix"]
+        args: ["--extend-select", "I", "--fix"]
         exclude: __init__.py
       - id: ruff-format
+        exclude: __init__.py
