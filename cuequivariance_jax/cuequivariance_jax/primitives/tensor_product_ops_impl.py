@@ -29,7 +29,11 @@ def tensor_product_ops_impl(
     output_shapes: tuple[tuple[int, ...] | None, ...],  # shapes of the operands
     d: cue.SegmentedTensorProduct,
     exe: cue.TensorProductExecution,
-    **options,
+    dtype_output: jnp.dtype,
+    dtype_math: jnp.dtype,
+    block_u: int,
+    elements_per_thread: int,
+    **_options,
 ) -> tuple[jax.Array, ...]:  # output buffers
     assert exe.max_out_buffer + 1 == len(exe.out_buffers)
 
@@ -65,8 +69,7 @@ def tensor_product_ops_impl(
     else:
         num_u = 1
 
-    if num_u % 64 != 0:
-        # TODO make sure to be in sync with the backend
+    if num_u % block_u != 0:
         logger.info("🛶 can't use tensor_product_uniform_1d for" + detail_str)
         raise NotImplementedError()
 
@@ -111,14 +114,14 @@ def tensor_product_ops_impl(
         outputs.append(
             jnp.zeros(
                 (math.prod(output_shapes[ope]), num_segments, size // num_segments),
-                dtype=options["dtype_output"],
+                dtype=dtype_output,
             )
         )
 
     logger.info("🎉 use tensor_product_uniform_1d for" + detail_str)
 
     outputs = tensor_product_uniform_1d(
-        options["dtype_math"],
+        dtype_math,
         [ope.num_segments for ope in d.operands],
         [path.indices for path in d.paths],
         [path.coefficients.item() for path in d.paths],
@@ -130,6 +133,8 @@ def tensor_product_ops_impl(
             )
             for computation in exe.computations
         ],
+        block_u=block_u,
+        elements_per_thread=elements_per_thread,
     )
 
     outputs = [

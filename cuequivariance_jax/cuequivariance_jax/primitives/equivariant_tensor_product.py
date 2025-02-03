@@ -25,11 +25,10 @@ def equivariant_tensor_product(
     *inputs: cuex.RepArray | jax.Array,
     dtype_output: jnp.dtype | None = None,
     dtype_math: jnp.dtype | None = None,
-    precision: jax.lax.Precision = jax.lax.Precision.HIGHEST,
-    algorithm: str = "sliced",
     use_custom_primitive: bool = True,
     use_custom_kernels: bool | None = False,
     name: str | None = None,
+    **options,
 ) -> cuex.RepArray:
     """Compute the equivariant tensor product of the input arrays.
 
@@ -38,10 +37,9 @@ def equivariant_tensor_product(
         *inputs (RepArray or jax.Array): The input arrays.
         dtype_output (jnp.dtype, optional): The data type for the output array. Defaults to None.
         dtype_math (jnp.dtype, optional): The data type for computational operations. Defaults to None.
-        precision (jax.lax.Precision, optional): The precision for the computation. Defaults to ``jax.lax.Precision.HIGHEST``.
-        algorithm (str, optional): One of "sliced", "stacked", "compact_stacked", "indexed_compact", "indexed_vmap", "indexed_for_loop". Defaults to "sliced". See :class:`cuex.tensor_product <cuequivariance_jax.tensor_product>` for more information.
         use_custom_primitive (bool, optional): Whether to use custom JVP rules. Defaults to True.
         use_custom_kernels (bool, optional): Whether to use custom kernels. Defaults to True.
+        name (str, optional): The name of the operation. Defaults to None.
 
     Returns:
         RepArray: The result of the equivariant tensor product.
@@ -75,11 +73,10 @@ def equivariant_tensor_product(
             *inputs,
             dtype_output=dtype_output,
             dtype_math=dtype_math,
-            precision=precision,
-            algorithm=algorithm,
             use_custom_primitive=use_custom_primitive,
             use_custom_kernels=use_custom_kernels,
             name=name,
+            **options,
         )
 
     if len(inputs) != e.num_inputs:
@@ -111,11 +108,10 @@ def equivariant_tensor_product(
         *inputs,
         dtype_output=dtype_output,
         dtype_math=dtype_math,
-        precision=precision,
-        algorithm=algorithm,
         use_custom_primitive=use_custom_primitive,
         use_custom_kernels=use_custom_kernels,
         name=name,
+        **options,
     )
 
     return cuex.RepArray(e.output, x)

@@ -32,6 +32,7 @@ def tensor_product_vanilla_impl(
     output_shapes: tuple[tuple[int, ...] | None, ...],  # shapes of the operands
     d: stp.SegmentedTensorProduct,
     exe: TensorProductExecution,
+    dtype_output: jnp.dtype,
     **options,
 ) -> tuple[jax.Array, ...]:  # output buffers
     assert exe.max_out_buffer + 1 == len(exe.out_buffers)
@@ -47,10 +48,11 @@ def tensor_product_vanilla_impl(
                 *c.map_inputs(inputs),
                 shape=shape,
                 d=d.move_operand_last(c.out_operand),
+                dtype_output=dtype_output,
                 **options,
             ),
             shape,
-            options["dtype_output"],
+            dtype_output,
         )
         assert out.shape == shape + (d.operands[c.out_operand].size,)
         outputs[c.out_buffer] += out

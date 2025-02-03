@@ -28,11 +28,10 @@ def symmetric_tensor_product(
     *inputs: jax.Array,
     dtype_output: jnp.dtype | None = None,
     dtype_math: jnp.dtype | None = None,
-    precision: jax.lax.Precision = jax.lax.Precision.HIGHEST,
-    algorithm: str = "sliced",
     use_custom_primitive: bool = True,
     use_custom_kernels: bool | None = False,
     name: str | None = None,
+    **options,
 ) -> jax.Array:
     """
     Compute the sum of the STPs evaluated on the input (all input operands are the same).
@@ -42,10 +41,9 @@ def symmetric_tensor_product(
         *inputs (jax.Array): The input arrays. The last input is repeated to match the number of input operands of each STP.
         dtype_output (jnp.dtype, optional): The data type for the output array.
         dtype_math (jnp.dtype, optional): The data type for mathematical operations.
-        precision (jax.lax.Precision, optional): The precision for the computation. Defaults to jax.lax.Precision.HIGHEST.
-        algorithm (str, optional): One of "sliced", "stacked", "compact_stacked", "indexed_compact", "indexed_vmap", "indexed_for_loop". Defaults to "sliced".
         use_custom_primitive (bool, optional): Whether to use custom JVP rules. Defaults to True.
         use_custom_kernels (bool, optional): Whether to use custom kernels. Defaults to True.
+        name (str, optional): The name of the operation.
 
     Returns:
         jax.Array: The result of the tensor product computation.
@@ -67,11 +65,10 @@ def symmetric_tensor_product(
                 *inputs,
                 dtype_output=dtype_output,
                 dtype_math=dtype_math,
-                precision=precision,
-                algorithm=algorithm,
                 use_custom_primitive=use_custom_primitive,
                 use_custom_kernels=use_custom_kernels,
                 name=name,
+                **options,
             )
 
         return fn
@@ -137,11 +134,10 @@ def symmetric_tensor_product(
             *d_inputs,
             dtype_output=dtype_output,
             dtype_math=dtype_math,
-            precision=precision,
-            algorithm=algorithm,
             use_custom_primitive=use_custom_primitive,
             use_custom_kernels=use_custom_kernels,
             name=name + f"_{n_in - n_un}",
+            **options,
         )
 
     return output
