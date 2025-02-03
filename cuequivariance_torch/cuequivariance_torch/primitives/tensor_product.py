@@ -689,3 +689,83 @@ def _permutation_module(permutation: Tuple[int, ...]):
     inputs = [graph.placeholder(f"input_{i}") for i in range(len(permutation))]
     graph.output([inputs[i] for i in permutation])
     return torch.fx.GraphModule(dict(), graph, class_name="perm")
+
+
+class _BatchLinear(torch.nn.Module):
+    def __init__(
+        self,
+        descriptor: stp.SegmentedTensorProduct,
+        *,
+        device: Optional[torch.device],
+        math_dtype: torch.dtype,
+    ):
+        super().__init__()
+        try:
+            import cuequivariance_ops_torch as ops
+        except ImportError:
+            raise NotImplementedError()
+
+        if not torch.cuda.is_available():
+            raise NotImplementedError()
+
+        if descriptor.num_operands != 3:
+            raise NotImplementedError()
+
+        self.descriptor = descriptor
+        self.x0_size = descriptor.operands[0].size
+        self.x1_size = descriptor.operands[1].size
+
+        descriptor = descriptor.canonicalize_subscripts()
+        if descriptor.subscripts == "uv,u,v":
+            descriptor = descriptor.permute_operands([1, 0, 2])
+            self._perm = _permutation_module([1, 0])
+        elif descriptor.subscripts == "u,vu,v":
+            raise NotImplementedError()
+            descriptor = descriptor.permute_operands([1, 0, 2])
+            self._perm = _permutation_module([0, 1])
+        elif descriptor.subscripts == "u,uv,v":
+            raise NotImplementedError()
+            self._perm = _permutation_module([0, 1])
+        elif descriptor.subscripts == "uv,v,u":
+            self._perm = _permutation_module([1, 0])
+        else:
+            raise NotImplementedError()
+
+        descriptor = descriptor.canonicalize_subscripts()
+
+        assert descriptor.subscripts in ["u,uv,v", "uv,v,u"]
+        assert descriptor.coefficient_subscripts == ""
+
+        self._f = ops.BatchLinear(
+            operand_segment_modes=[ope.subscripts for ope in descriptor.operands],
+            operand_segment_offsets=[
+                [s.start for s in ope.segment_slices()] for ope in descriptor.operands
+            ],
+            operand_segment_shapes=[ope.segments for ope in descriptor.operands],
+            path_indices=[path.indices for path in descriptor.paths],
+            path_coefficients=[path.coefficients.item() for path in descriptor.paths],
+            math_dtype=math_dtype,
+        ).to(device=device)
+
+    def forward(
+        self, inputs: List[torch.Tensor], indices: torch.Tensor
+    ) -> torch.Tensor:
+        [x0, x1] = inputs
+        torch._assert(x0.shape[1] == self.x0_size, "input 0 has wrong size")
+        torch._assert(x1.shape[1] == self.x1_size, "input 1 has wrong size")
+
+        if (
+            not torch.jit.is_scripting()
+            and not torch.jit.is_tracing()
+            and not torch.compiler.is_compiling()
+        ):
+            logger.debug(
+                f"Calling BatchedLinear: {self.descriptor}, input shapes: {x0.shape}, {x1.shape}, {indices.shape}"
+            )
+
+        torch._assert(x0.ndim == 2, "input should be dim=2")
+        torch._assert(x1.ndim == 2, "input should be dim=2")
+        torch._assert(indices.ndim == 1, "indices should be (batch,)")
+
+        x0, x1 = self._perm(x0, x1)
+        return self._f(x0, x1, indices)

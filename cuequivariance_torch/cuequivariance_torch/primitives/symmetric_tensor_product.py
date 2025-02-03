@@ -25,7 +25,7 @@ import cuequivariance_torch as cuet
 logger = logging.getLogger(__name__)
 
 
-class SymmetricTensorProduct(torch.nn.Module):
+class _SymmetricTensorProduct(torch.nn.Module):
     """
     PyTorch module
 
@@ -61,7 +61,7 @@ class SymmetricTensorProduct(torch.nn.Module):
         self.x0_size = d_max.operands[0].size
         self.x1_size = d_max.operands[1].size if d_max.num_operands >= 3 else 1
 
-        self.f = cuet.IWeightedSymmetricTensorProduct(
+        self.f = cuet._IWeightedSymmetricTensorProduct(
             descriptors,
             device=device,
             math_dtype=math_dtype,
@@ -93,7 +93,7 @@ class SymmetricTensorProduct(torch.nn.Module):
         )
 
 
-class IWeightedSymmetricTensorProduct(torch.nn.Module):
+class _IWeightedSymmetricTensorProduct(torch.nn.Module):
     """
     PyTorch module
 

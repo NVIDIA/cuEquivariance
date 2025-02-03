@@ -63,7 +63,7 @@ def test_primitive_indexed_symmetric_tensor_product_cuda_vs_fx(
 ):
     use_fallback = not torch.cuda.is_available()
 
-    m = cuet.IWeightedSymmetricTensorProduct(
+    m = cuet._IWeightedSymmetricTensorProduct(
         ds, math_dtype=math_dtype, device=device, use_fallback=use_fallback
     )
 
@@ -76,7 +76,7 @@ def test_primitive_indexed_symmetric_tensor_product_cuda_vs_fx(
     x1_ = x1.clone().to(torch.float64)
 
     out1 = m(x0, i0, x1)
-    m = cuet.IWeightedSymmetricTensorProduct(
+    m = cuet._IWeightedSymmetricTensorProduct(
         ds, math_dtype=torch.float64, device=device, use_fallback=True
     )
     out2 = m(x0_, i0, x1_)
@@ -120,7 +120,7 @@ def test_math_dtype(dtype: torch.dtype, math_dtype: torch.dtype, use_fallback: b
     ds = descriptors.symmetric_contraction(
         cue.Irreps("SO3", "0 + 1 + 2"), cue.Irreps("SO3", "0"), [1, 2, 3]
     ).ds
-    m = cuet.IWeightedSymmetricTensorProduct(
+    m = cuet._IWeightedSymmetricTensorProduct(
         ds, math_dtype=math_dtype, device=device, use_fallback=use_fallback
     )
     x0 = torch.randn((20, m.x0_size), dtype=dtype, device=device)
@@ -165,7 +165,7 @@ def test_export(
     if use_fallback is True and mode in ["trt"]:
         pytest.skip(f"{mode} not supported for the fallback!")
 
-    m = cuet.IWeightedSymmetricTensorProduct(
+    m = cuet._IWeightedSymmetricTensorProduct(
         ds, math_dtype=math_dtype, device=device, use_fallback=use_fallback
     )
     x0 = torch.randn((2, m.x0_size), device=device, dtype=dtype, requires_grad=True)
