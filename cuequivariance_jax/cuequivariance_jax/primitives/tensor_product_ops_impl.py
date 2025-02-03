@@ -35,6 +35,11 @@ def tensor_product_ops_impl(
 
     detail_str = f"\n{d}\n{exe}".replace("\n", "\n  | ")
 
+    if not (2 <= d.num_operands <= 7):
+        # TODO make sure to be in sync with the backend
+        logger.info("🛶 can't use tensor_product_uniform_1d for" + detail_str)
+        raise NotImplementedError()
+
     if not d.all_same_segment_shape():
         logger.info("🛶 can't use tensor_product_uniform_1d for" + detail_str)
         raise NotImplementedError()
@@ -55,6 +60,15 @@ def tensor_product_ops_impl(
         if len(dims) != 1:
             logger.info("🛶 can't use tensor_product_uniform_1d for" + detail_str)
             raise NotImplementedError()
+
+        num_u = next(iter(dims))
+    else:
+        num_u = 1
+
+    if num_u % 64 != 0:
+        # TODO make sure to be in sync with the backend
+        logger.info("🛶 can't use tensor_product_uniform_1d for" + detail_str)
+        raise NotImplementedError()
 
     batch_size = 1
     for shape in [input.shape[:-1] for input in inputs] + [
