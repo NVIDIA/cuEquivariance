@@ -20,14 +20,19 @@ import jax.core
 import jax.extend
 import jax.lax
 import jax.numpy as jnp
+import numpy as np
+from jax.experimental.mosaic.gpu import profiler
 from jax.interpreters import ad, batching, mlir, xla
 
-from cuequivariance import segmented_tensor_product as stp
+import cuequivariance as cue
 from cuequivariance.tensor_product_execution import (
     Computation,
     InBuffer,
     OutBuffer,
     TensorProductExecution,
+)
+from cuequivariance_jax.primitives.tensor_product_ops_impl import (
+    tensor_product_ops_impl,
 )
 from cuequivariance_jax.primitives.tensor_product_vanilla_impl import (
     tensor_product_vanilla_impl,
@@ -37,14 +42,16 @@ logger = logging.getLogger(__name__)
 
 
 def tensor_product(
-    d: stp.SegmentedTensorProduct,
+    d: cue.SegmentedTensorProduct,
     *inputs: jax.Array,
     dtype_output: jnp.dtype | None = None,
     dtype_math: jnp.dtype | None = None,
     precision: jax.lax.Precision = jax.lax.Precision.HIGHEST,
     algorithm: str = "sliced",
     use_custom_primitive: bool = True,
-    use_custom_kernels: bool = False,
+    use_custom_kernels: bool | None = False,
+    name: str | None = None,
+    **options,
 ) -> jax.Array:
     """
     Compute the last operand of a `SegmentedTensorProduct`.
@@ -85,13 +92,18 @@ def tensor_product(
     if isinstance(precision, str):
         precision = jax.lax.Precision[precision]
 
-    options = dict(
+    if name is None:
+        name = "tensor_product"
+
+    kwargs = dict(
         dtype_output=dtype_output,
         dtype_math=dtype_math,
         precision=precision,
         algorithm=algorithm,
         use_custom_primitive=use_custom_primitive,
         use_custom_kernels=use_custom_kernels,
+        name=name,
+        **options,
     )
 
     if len(inputs) > d.num_operands - 1:
@@ -103,7 +115,7 @@ def tensor_product(
     if len(inputs) < d.num_operands - 1:
 
         def _partial(*remaining_inputs: jax.Array) -> jax.Array:
-            return tensor_product(d, *inputs, *remaining_inputs, **options)
+            return tensor_product(d, *inputs, *remaining_inputs, **kwargs)
 
         return _partial
 
@@ -133,13 +145,15 @@ def tensor_product(
         else:
             dtype_math = dtype_output
 
-    options = dict(
+    kwargs = dict(
         dtype_output=dtype_output,
         dtype_math=dtype_math,
         precision=precision,
         algorithm=algorithm,
         use_custom_primitive=use_custom_primitive,
         use_custom_kernels=use_custom_kernels,
+        name=name,
+        **options,
     )
 
     # inputs of shape (..., ope.size) with identical ndim
@@ -156,7 +170,7 @@ def tensor_product(
         ]
     )
     (output,) = tensor_product_prim(
-        *inputs, output_shapes=output_shapes, d=d, exe=exe, **options
+        *inputs, output_shapes=output_shapes, d=d, exe=exe, **kwargs
     )
     return output
 
@@ -187,8 +201,9 @@ def clean_inputs(
 def tensor_product_prim(
     *inputs: jax.Array,  # input buffers
     output_shapes: tuple[tuple[int, ...] | None, ...],  # shapes of the operands
-    d: stp.SegmentedTensorProduct,
+    d: cue.SegmentedTensorProduct,
     exe: TensorProductExecution,
+    use_custom_primitive: bool = True,
     **options,
 ) -> tuple[jax.Array, ...]:  # output buffers
     if exe.is_trivial:
@@ -198,7 +213,7 @@ def tensor_product_prim(
 
     unique_inputs, exe = clean_inputs(list(inputs), exe)
 
-    if options.pop("use_custom_primitive", True):
+    if use_custom_primitive:
         return tensor_product_p.bind(
             *unique_inputs, output_shapes=output_shapes, d=d, exe=exe, **options
         )
@@ -208,30 +223,156 @@ def tensor_product_prim(
         )
 
 
+def produce_minimal_code(
+    *inputs: jax.Array,
+    output_shapes: tuple[tuple[int, ...] | None, ...],
+    d: cue.SegmentedTensorProduct,
+    exe: TensorProductExecution,
+    dtype_output: jnp.dtype,
+    dtype_math: jnp.dtype,
+    **options,
+) -> str:
+    def format_dtype(dtype: jnp.dtype) -> str:
+        dtype = jnp.dtype(dtype)
+        return f"jnp.{dtype.name}"
+
+    mincode = """import jax.numpy as jnp
+import cuequivariance as cue
+from cuequivariance.tensor_product_execution import InBuffer, OutBuffer
+from cuequivariance_jax.primitives.tensor_product import tensor_product_prim
+"""
+    mincode += (
+        "inputs = ["
+        + ", ".join([f"jnp.zeros({x.shape}, {format_dtype(x.dtype)})" for x in inputs])
+        + "]\n"
+    )
+    mincode += f"output_shapes = {output_shapes}\n"
+    mincode += f'd = cue.SegmentedTensorProduct.from_base64("{d.to_base64()}")\n'
+    mincode += f"exe = cue.TensorProductExecution({exe.computations})\n"
+    mincode += f"dtype_output = {format_dtype(dtype_output)}\n"
+    mincode += f"dtype_math = {format_dtype(dtype_math)}\n"
+    # tensor_product_prim(
+    #     *inputs,
+    #     output_shapes=output_shapes,
+    #     d=d,
+    #     exe=exe,
+    #     dtype_output=dtype_output,
+    #     dtype_math=dtype_math,
+    #     use_custom_kernels=True,
+    # )
+    mincode += "# " + ", ".join([f"{k}={v}" for k, v in options.items()])
+    return mincode
+
+
+def profile_and_select_implementation(
+    name: str, impls: list[tuple[str, callable]], *inputs: jax.Array
+):
+    # import time
+    # t0 = time.perf_counter()
+
+    with jax.ensure_compile_time_eval():
+        dummy_inputs = [np.random.normal(size=x.shape).astype(x.dtype) for x in inputs]
+        dummy_inputs = [jax.device_put(x) for x in dummy_inputs]
+        ref = None
+        first_runtime: float | None = None
+        best: tuple[str, float, callable] | None = None
+        for impl_name, impl in impls:
+            try:
+                out, runtime = profiler.measure(impl, mode="cupti")(*dummy_inputs)
+            except NotImplementedError:
+                continue
+            else:
+                logger.info(f"🚀 {name}: {impl_name} runtime {runtime:.2f} ms")
+                if ref is None:
+                    ref = out
+                    best = impl_name, runtime, impl
+                    first_runtime = runtime
+                else:
+                    dtype = jax.tree.leaves(out)[0].dtype
+                    diff = max(
+                        [
+                            np.max(np.abs(a - b))
+                            for a, b in zip(jax.tree.leaves(out), jax.tree.leaves(ref))
+                        ]
+                    )
+                    if diff > 50.0 * jnp.finfo(dtype).eps:
+                        raise ValueError(
+                            f"cuex.tensor_product: {name} implementation {impl_name} produced different results, diff={diff}"
+                        )
+                    if runtime < best[1]:
+                        best = impl_name, runtime, impl
+        assert best is not None
+    impl_name, runtime, impl = best
+
+    # dt = time.perf_counter() - t0
+    speedup = first_runtime / runtime
+    print(
+        f"{name:<50}: {impl_name:<10} with runtime {runtime:.2f} ms, speedup {speedup:.2f}x wrt {first_runtime:.2f} ms"
+    )
+
+    return impl(*inputs)
+
+
 def tensor_product_impl(
     platform: str | None,
     *inputs: jax.Array,
     output_shapes: tuple[tuple[int, ...] | None, ...],
-    d: stp.SegmentedTensorProduct,
+    d: cue.SegmentedTensorProduct,
     exe: TensorProductExecution,
+    name: str = "tensor_product",
+    use_custom_kernels: bool | None = True,
+    block_u: int | None = None,
+    elements_per_thread: int | None = None,
     **options,
 ) -> tuple[jax.Array, ...]:
     assert exe.max_in_buffer + 1 == len(exe.in_buffers) == len(inputs)
     assert exe.max_out_buffer + 1 == len(exe.out_buffers)
-    use_custom_kernels = options.pop("use_custom_kernels", True)
 
     def dispatch(
         inputs: list[jax.Array],
-        d: stp.SegmentedTensorProduct,
+        d: cue.SegmentedTensorProduct,
         exe: TensorProductExecution,
     ) -> list[jax.Array]:
-        if platform == "cuda" and use_custom_kernels:
-            # TODO: call custom kernels here
-            pass
+        kwargs = dict(output_shapes=output_shapes, d=d, exe=exe, **options)
 
-        return tensor_product_vanilla_impl(
-            *inputs, output_shapes=output_shapes, d=d, exe=exe, **options
-        )
+        if platform == "cuda":
+            # print(produce_minimal_code(*inputs, **kwargs))
+            # print()
+            if use_custom_kernels is None:
+                outputs = profile_and_select_implementation(
+                    name,
+                    [
+                        ("vanilla", partial(tensor_product_vanilla_impl, **kwargs)),
+                    ]
+                    + [
+                        (
+                            f"ops_{bu}_{ept}",
+                            partial(
+                                tensor_product_ops_impl,
+                                **kwargs,
+                                block_u=bu,
+                                elements_per_thread=ept,
+                            ),
+                        )
+                        for bu in ([block_u] if block_u else [16, 32, 64, 128])
+                        for ept in (
+                            [elements_per_thread]
+                            if elements_per_thread
+                            else [1, 2, 4, 8]
+                        )
+                    ],
+                    *inputs,
+                )
+                return outputs
+            if use_custom_kernels is True:
+                return tensor_product_ops_impl(
+                    *inputs,
+                    **kwargs,
+                    block_u=block_u or 16,
+                    elements_per_thread=elements_per_thread or 1,
+                )
+
+        return tensor_product_vanilla_impl(*inputs, **kwargs)
 
     outputs = [0] * len(exe.out_buffers)
     for partition, ex in exe.group_by_identical_buffers():
@@ -254,8 +395,9 @@ def tensor_product_impl(
 def tensor_product_abstract_eval(
     *inputs: jax.core.ShapedArray,
     output_shapes: tuple[tuple[int, ...] | None, ...],
-    d: stp.SegmentedTensorProduct,
+    d: cue.SegmentedTensorProduct,
     exe: TensorProductExecution,
+    dtype_output: jnp.dtype,
     **options,
 ) -> tuple[jax.core.ShapedArray, ...]:
     # assert that all input/output are used
@@ -273,7 +415,7 @@ def tensor_product_abstract_eval(
     for c in exe.computations:
         out = jax.core.ShapedArray(
             shape=output_shapes[c.out_operand] + (d.operands[c.out_operand].size,),
-            dtype=options["dtype_output"],
+            dtype=dtype_output,
         )
         assert outputs[c.out_buffer] is None or outputs[c.out_buffer] == out
         outputs[c.out_buffer] = out
@@ -285,12 +427,13 @@ def tensor_product_jvp(
     tangents: tuple[jax.Array | ad.Zero, ...],
     *,
     output_shapes: tuple[tuple[int, ...] | None, ...],
-    d: stp.SegmentedTensorProduct,
+    d: cue.SegmentedTensorProduct,
     exe: TensorProductExecution,
+    name: str,
     **options,
 ) -> tuple[tuple[jax.Array, ...], tuple[jax.Array | ad.Zero, ...]]:
     out_primals = tensor_product_prim(
-        *primals, output_shapes=output_shapes, d=d, exe=exe, **options
+        *primals, output_shapes=output_shapes, d=d, exe=exe, name=name, **options
     )
     out_tangents = [ad.Zero(p.aval) for p in out_primals]
 
@@ -306,6 +449,7 @@ def tensor_product_jvp(
             output_shapes=output_shapes,
             d=multiplicator * d,
             exe=exe.map_buffers(None, lambda b: exe.out_buffers.index(b)),
+            name=name + "->jvp",
             **options,
         )
         for i, t in zip(exe.out_buffers, tmp):
@@ -318,8 +462,9 @@ def tensor_product_transpose(
     cotangents: tuple[jax.Array | ad.Zero, ...],
     *inputs: jax.Array | ad.UndefinedPrimal,
     output_shapes: tuple[tuple[int, ...] | None, ...],
-    d: stp.SegmentedTensorProduct,
+    d: cue.SegmentedTensorProduct,
     exe: TensorProductExecution,
+    name: str,
     **options,
 ) -> tuple[jax.Array | ad.Zero | None, ...]:
     # The cotangents replace the outputs as inputs
@@ -348,6 +493,7 @@ def tensor_product_transpose(
         output_shapes=output_shapes,
         d=d,
         exe=tr.map_buffers(None, lambda b: tr.out_buffers.index(b)),
+        name=name + "->transpose",
         **options,
     )
     outputs = [None] * len(inputs)
@@ -368,8 +514,9 @@ def tensor_product_batching(
     batch_axes: tuple[int | None, ...],
     *,
     output_shapes: tuple[tuple[int, ...] | None, ...],
-    d: stp.SegmentedTensorProduct,
+    d: cue.SegmentedTensorProduct,
     exe: TensorProductExecution,
+    name: str,
     **options,
 ) -> tuple[tuple[jax.Array, ...], tuple[int, ...]]:
     def prepare(input: jax.Array, axis: int | None) -> jax.Array:
@@ -398,6 +545,7 @@ def tensor_product_batching(
         output_shapes=new_output_shapes,
         d=d,
         exe=exe,
+        name=name + "->batching",
         **options,
     )
 
