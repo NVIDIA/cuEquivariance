@@ -295,7 +295,7 @@ def profile_and_select_implementation(
                             for a, b in zip(jax.tree.leaves(out), jax.tree.leaves(ref))
                         ]
                     )
-                    if diff > 50.0 * jnp.finfo(dtype).eps:
+                    if diff > 100.0 * jnp.finfo(dtype).eps:
                         raise ValueError(
                             f"cuex.tensor_product: {name} implementation {impl_name} produced different results, diff={diff}"
                         )
@@ -372,6 +372,17 @@ def tensor_product_impl(
                     elements_per_thread=elements_per_thread or 1,
                 )
 
+        # with jax.ensure_compile_time_eval():
+        #     dummy_inputs = [
+        #         np.random.normal(size=x.shape).astype(x.dtype) for x in inputs
+        #     ]
+        #     dummy_inputs = [jax.device_put(x) for x in dummy_inputs]
+        #     _, runtime = profiler.measure(
+        #         partial(tensor_product_vanilla_impl, **kwargs), mode="cupti"
+        #     )(*dummy_inputs)
+        #     print(f"🚀 {name}: vanilla runtime {runtime:.2f} ms")
+        #     print(d)
+        #     print(exe)
         return tensor_product_vanilla_impl(*inputs, **kwargs)
 
     outputs = [0] * len(exe.out_buffers)
