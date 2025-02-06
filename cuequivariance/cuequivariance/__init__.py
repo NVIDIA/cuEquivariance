@@ -49,7 +49,12 @@ from cuequivariance.irreps_array import (
 
 from cuequivariance.segmented_tensor_product import SegmentedTensorProduct
 from cuequivariance.equivariant_tensor_product import EquivariantTensorProduct
-from cuequivariance.tensor_product_execution import TensorProductExecution
+from cuequivariance.tensor_product_execution import (
+    TensorProductExecution,
+    InBuffer,
+    OutBuffer,
+    Computation,
+)
 
 from cuequivariance import (
     segmented_tensor_product,
@@ -84,6 +89,9 @@ __all__ = [
     "SegmentedTensorProduct",
     "EquivariantTensorProduct",
     "TensorProductExecution",
+    "InBuffer",
+    "OutBuffer",
+    "Computation",
     "segmented_tensor_product",
     "descriptors",
     "tensor_product_execution",

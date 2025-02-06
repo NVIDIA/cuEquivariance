@@ -87,6 +87,7 @@ class Computation(tuple):
 
 
 class TensorProductExecution:
+    # TODO add an stp into each computations
     computations: tuple[Computation, ...]
     # (num_computations, num_operands)  # which in/out buffer to use for each computation
 
@@ -100,6 +101,7 @@ class TensorProductExecution:
         IVARS = "abcdefghijklmnopqrstuvwxyz"
         OVARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
+        # TODO print the stp's
         text = [
             "({inputs}) -> ({outputs})".format(
                 inputs=", ".join([IVARS[b] for b in self.in_buffers]),
@@ -119,6 +121,7 @@ class TensorProductExecution:
     def is_trivial(self) -> bool:
         return len(self.computations) == 0
 
+    # TODO remove
     @property
     def num_operands(self) -> int:
         assert not self.is_trivial
@@ -144,6 +147,7 @@ class TensorProductExecution:
         assert not self.is_trivial
         return max(self.out_buffers)
 
+    # TODO remove
     @property
     def in_buffers_per_operand(self) -> tuple[tuple[int, ...], ...]:
         x = [set() for _ in range(self.num_operands)]
@@ -152,6 +156,7 @@ class TensorProductExecution:
                 x[i].add(b)
         return tuple(tuple(sorted(s)) for s in x)
 
+    # TODO remove
     @property
     def out_buffers_per_operand(self) -> tuple[tuple[int, ...], ...]:
         x = [set() for _ in range(self.num_operands)]
@@ -159,14 +164,17 @@ class TensorProductExecution:
             x[c.out_operand].add(c.out_buffer)
         return tuple(tuple(sorted(s)) for s in x)
 
+    # TODO remove
     @property
     def num_inputs_per_operand(self) -> tuple[int, ...]:
         return tuple(len(s) for s in self.in_buffers_per_operand)
 
+    # TODO remove
     @property
     def num_outputs_per_operand(self) -> tuple[int, ...]:
         return tuple(len(s) for s in self.out_buffers_per_operand)
 
+    # TODO remove
     def get_in_buffer_operands(self, buffer: int) -> set[int]:
         return {
             ope
@@ -175,6 +183,7 @@ class TensorProductExecution:
             if isinstance(b, InBuffer) and b == buffer
         }
 
+    # TODO remove
     def get_out_buffer_operands(self, buffer: int) -> set[int]:
         return {
             ope
