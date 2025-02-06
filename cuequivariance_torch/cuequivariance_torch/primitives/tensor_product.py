@@ -748,7 +748,7 @@ class _BatchLinear(torch.nn.Module):
         ).to(device=device)
 
     def forward(
-        self, inputs: List[torch.Tensor], indices: torch.Tensor
+        self, inputs: List[torch.Tensor], indices: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
         [x0, x1] = inputs
         torch._assert(x0.shape[1] == self.x0_size, "input 0 has wrong size")
@@ -760,12 +760,12 @@ class _BatchLinear(torch.nn.Module):
             and not torch.compiler.is_compiling()
         ):
             logger.debug(
-                f"Calling BatchedLinear: {self.descriptor}, input shapes: {x0.shape}, {x1.shape}, {indices.shape}"
+                f"Calling BatchedLinear: {self.descriptor}, input shapes: {x0.shape}, {x1.shape}, "
+                + (f"indices: {indices.shape}" if indices is not None else "no indices")
             )
 
         torch._assert(x0.ndim == 2, "input should be dim=2")
         torch._assert(x1.ndim == 2, "input should be dim=2")
-        torch._assert(indices.ndim == 1, "indices should be (batch,)")
 
         x0, x1 = self._perm(x0, x1)
         return self._f(x0, x1, indices)
