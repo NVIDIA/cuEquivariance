@@ -161,11 +161,7 @@ class SymmetricContraction(torch.nn.Module):
             f", weight_shape={self.weight_shape}"
         )
 
-    def forward(
-        self,
-        x: torch.Tensor,
-        indices: torch.Tensor,
-    ) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, indices: torch.Tensor) -> torch.Tensor:
         """
         Perform the forward pass of the symmetric contraction operation.
 
