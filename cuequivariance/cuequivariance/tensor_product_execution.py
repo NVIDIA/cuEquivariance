@@ -27,10 +27,22 @@ class InBuffer(Buffer):
     def __repr__(self):
         return f"InBuffer({int(self)})"
 
+    def __hash__(self) -> int:
+        return hash(("InBuffer", int(self)))
+
+    def __eq__(self, value):
+        return isinstance(value, InBuffer) and int(self) == int(value)
+
 
 class OutBuffer(Buffer):
     def __repr__(self):
         return f"OutBuffer({int(self)})"
+
+    def __hash__(self) -> int:
+        return hash(("OutBuffer", int(self)))
+
+    def __eq__(self, value):
+        return isinstance(value, OutBuffer) and int(self) == int(value)
 
 
 T = TypeVar("T")
@@ -96,6 +108,12 @@ class TensorProductExecution:
 
     def __hash__(self) -> int:
         return hash(self.computations)
+
+    def __eq__(self, value):
+        return (
+            isinstance(value, TensorProductExecution)
+            and self.computations == value.computations
+        )
 
     def __repr__(self):
         IVARS = "abcdefghijklmnopqrstuvwxyz"
