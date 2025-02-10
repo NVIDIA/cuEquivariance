@@ -206,6 +206,15 @@ class Operation:
 
         return jvps
 
+    def operands_with_identical_buffers(self) -> frozenset[frozenset[int]]:
+        """
+        Groups of operands sharing the same buffer.
+        """
+        bid_to_oid = defaultdict(list)
+        for oid, b in enumerate(self.buffers):
+            bid_to_oid[b].append(oid)
+        return frozenset(map(frozenset, bid_to_oid.values()))
+
     @staticmethod
     def group_by_idential_buffers(
         operations: list[Operation],
@@ -220,16 +229,11 @@ class Operation:
                 - frozenset of frozensets of operands bound to identical buffers
                 - list of operations
         """
-
-        def partition(operation: Operation) -> frozenset[frozenset[int]]:
-            bid_to_oid = defaultdict(list)
-            for oid, b in enumerate(operation.buffers):
-                bid_to_oid[b].append(oid)
-            return frozenset(map(frozenset, bid_to_oid.values()))
-
         return [
             (p, list(group))
-            for p, group in itertools.groupby(operations, key=partition)
+            for p, group in itertools.groupby(
+                operations, key=Operation.operands_with_identical_buffers
+            )
         ]
 
     @staticmethod
