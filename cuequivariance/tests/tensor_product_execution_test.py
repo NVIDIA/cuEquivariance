@@ -14,33 +14,6 @@
 # limitations under the License.
 import cuequivariance as cue
 
-# from cuequivariance.tensor_product_execution import InBuffer, OutBuffer
-
-
-# def test_group_by_symmetries():
-#     # x^3
-#     exe = cue.TensorProductExecution(
-#         [(InBuffer(0), InBuffer(0), InBuffer(0), OutBuffer(0))]
-#     )
-#     mul, exe = next(
-#         exe.jvp([True]).group_by_symmetries(
-#             [
-#                 (0, 1, 2, 3),
-#                 (0, 2, 1, 3),
-#                 (1, 0, 2, 3),
-#                 (1, 2, 0, 3),
-#                 (2, 0, 1, 3),
-#                 (2, 1, 0, 3),
-#             ]
-#         )
-#     )
-#     # d/dx (x^3) = 3x^2
-#     assert mul == 3
-#     expected = cue.TensorProductExecution(
-#         [(InBuffer(1), InBuffer(0), InBuffer(0), OutBuffer(0))]
-#     )
-#     assert exe == expected
-
 
 def test_operation_transpose():
     ope = cue.Operation([0, 1, 2, 3])
@@ -55,3 +28,36 @@ def test_operation_transpose():
     assert ope.transpose([True, False, False, True], [True]) == cue.Operation(
         [2, 1, 4, 0]
     )
+
+
+def test_operation_cube():
+    ope = cue.Operation([0, 0, 0, 1])  # x^3
+    jvps = ope.jvp([True])
+    assert jvps == [
+        cue.Operation((1, 0, 0, 2)),
+        cue.Operation((0, 1, 0, 2)),
+        cue.Operation((0, 0, 1, 2)),
+    ]
+
+    [(mul, ope)] = cue.Operation.group_by_operational_symmetries(
+        [
+            (0, 1, 2, 3),
+            (0, 2, 1, 3),
+            (1, 0, 2, 3),
+            (1, 2, 0, 3),
+            (2, 0, 1, 3),
+            (2, 1, 0, 3),
+        ],
+        jvps,
+    )
+    assert mul == 3
+    assert ope == cue.Operation((0, 0, 1, 2))  # d/dx (x^3) = 3x^2 dx
+
+    ope = ope.transpose([False, True], [True])
+    assert ope == cue.Operation((0, 0, 2, 1))
+
+    [(groupped_operands, [ope])] = cue.Operation.group_by_idential_buffers([ope])
+    assert groupped_operands == frozenset(
+        {frozenset({3}), frozenset({0, 1}), frozenset({2})}
+    )
+    assert ope == cue.Operation((0, 0, 2, 1))
