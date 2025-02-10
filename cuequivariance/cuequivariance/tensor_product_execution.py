@@ -17,6 +17,9 @@ from __future__ import annotations
 import itertools
 from collections import defaultdict
 
+IVARS = "abcdefghijklmnopqrstuvwxyz"
+OVARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
 
 class Operation:
     buffers: tuple[int, ...]
@@ -31,12 +34,20 @@ class Operation:
         return f"Operation({self.buffers})"
 
     def to_string(self, num_inputs: int) -> str:
-        IVARS = "abcdefghijklmnopqrstuvwxyz"
-        OVARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-
         return " ".join(
             IVARS[b] if b < num_inputs else OVARS[b - num_inputs] for b in self.buffers
         )
+
+    @staticmethod
+    def list_to_string(
+        operations: list[Operation], num_inputs: int, num_outputs: int
+    ) -> str:
+        i = ", ".join(IVARS[:num_inputs])
+        o = ", ".join(OVARS[:num_outputs])
+        s = f"({i}) -> ({o})"
+        for op in operations:
+            s += "\n  " + op.to_string(num_inputs)
+        return s
 
     def __lt__(self, value):
         assert isinstance(value, Operation)
@@ -91,6 +102,10 @@ class Operation:
 
         Returns:
             Operation: the transposed operation, if any
+
+        New buffers:
+         - new inputs: defined primals + cotangents (=True)
+         - new outputs: undefined primals
         """
         # number of input buffers in the original operation
         # note that self might not involve all input buffers
@@ -114,10 +129,6 @@ class Operation:
         if num_undef_primal == 0:
             # The operation has no undefined primal as input
             return None
-
-        # New buffers:
-        # new inputs: defined primals + cotangents (=True)
-        # new outputs: undefined primals
 
         new_num_inputs = 0
         new_num_outputs = 0
@@ -166,14 +177,14 @@ class Operation:
 
         Returns:
             list[Operation]: the JVPs of the operation
+
+        NEW buffers:
+         - new inputs: original inputs + tangents (=True)
+         - new outputs: original outputs
         """
         # number of input buffers in the original operation
         # note that self might not involve all input buffers
         num_inputs = len(has_tangent)
-
-        # NEW buffers:
-        # new inputs: original inputs + tangents (=True)
-        # new outputs: original outputs
 
         new_num_inputs = num_inputs
         mapping: list[int | None] = []
