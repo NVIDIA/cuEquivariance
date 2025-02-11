@@ -21,41 +21,44 @@ import jax
 import jax.lax
 import jax.numpy as jnp
 
-from cuequivariance import segmented_tensor_product as stp
-from cuequivariance.tensor_product_execution import TensorProductExecution
+import cuequivariance as cue
 
 logger = logging.getLogger(__name__)
 
 
 def tensor_product_vanilla_impl(
-    *inputs: jax.Array,  # input buffers
-    output_shapes: tuple[tuple[int, ...] | None, ...],  # shapes of the operands
-    d: stp.SegmentedTensorProduct,
-    exe: TensorProductExecution,
-    dtype_output: jnp.dtype,
-    **options,
+    inputs: list[jax.Array],  # shape (batch_size, operand_size)
+    outputs_shape_dtype: tuple[jax.ShapeDtypeStruct, ...],
+    indices: list[jax.Array],
+    buffer_index: list[int],
+    descriptors: frozenset[tuple[cue.Operation, cue.SegmentedTensorProduct]],
+    math_dtype: jnp.dtype,
+    name: str,
 ) -> tuple[jax.Array, ...]:  # output buffers
-    assert exe.max_out_buffer + 1 == len(exe.out_buffers)
+    assert len(indices) == 0, "Indices are not supported in tensor_product_vanilla_impl"
 
-    outputs = [0] * len(exe.out_buffers)
+    num_inputs = len(buffer_index) - len(outputs_shape_dtype)
+    outputs = [jnp.zeros(out.shape, out.dtype) for out in outputs_shape_dtype]
 
-    for c in exe.computations:
-        shape = output_shapes[c.out_operand]
-        assert shape is not None
+    for operation, d in descriptors:
+        ope_out, b_out = operation.output_operand_buffer(num_inputs)
+
+        out = outputs_shape_dtype[b_out - num_inputs]
         out = sum_cat_list_list(
-            d.operands[c.out_operand],
+            d.operands[ope_out],
             tp_list_list(
-                *c.map_inputs(inputs),
-                shape=shape,
-                d=d.move_operand_last(c.out_operand),
-                dtype_output=dtype_output,
-                **options,
+                *[inputs[i] for i in operation.input_buffers(num_inputs)],
+                shape=out.shape[:-1],
+                d=d.move_operand_last(ope_out),
+                output_dtype=out.dtype,
+                math_dtype=math_dtype,
+                precision=jax.lax.Precision.HIGHEST,
+                algorithm="compact_stacked" if d.all_same_segment_shape() else "sliced",
             ),
-            shape,
-            dtype_output,
+            out.shape[:-1],
+            out.dtype,
         )
-        assert out.shape == shape + (d.operands[c.out_operand].size,)
-        outputs[c.out_buffer] += out
+        outputs[b_out - num_inputs] += out
 
     return tuple(outputs)
 
@@ -65,7 +68,7 @@ def flatten(x: jax.Array, axis: int) -> jax.Array:
 
 
 def sum_cat_list_list(
-    operand: stp.Operand,
+    operand: cue.segmented_tensor_product.Operand,
     list_list: list[list[jax.Array]] | jax.Array,
     shape: tuple[int, ...],
     dtype: jnp.dtype,
@@ -105,9 +108,9 @@ def sum_cat_list_list(
 def tp_list_list(
     *inputs: jax.Array,
     shape: tuple[int, ...],
-    d: stp.SegmentedTensorProduct,
-    dtype_output: jnp.dtype,
-    dtype_math: jnp.dtype,
+    d: cue.SegmentedTensorProduct,
+    output_dtype: jnp.dtype,
+    math_dtype: jnp.dtype,
     precision: jax.lax.Precision,
     algorithm: str,
     **_options,
@@ -168,7 +171,7 @@ def tp_list_list(
             output_segment_shape = shape + segment_shape
 
         segment = jnp.reshape(segment, output_segment_shape)
-        return segment.astype(dtype_output)
+        return segment.astype(output_dtype)
 
     def prepare():
         if not d.all_same_segment_shape():
@@ -183,7 +186,7 @@ def tp_list_list(
             for ope, input in zip(d.operands, inputs)
         ]
         indices = jnp.asarray(d.indices)
-        coefficients = jnp.asarray(d.stacked_coefficients, dtype=dtype_math)
+        coefficients = jnp.asarray(d.stacked_coefficients, dtype=math_dtype)
         return reshaped_inputs, indices, coefficients
 
     if algorithm == "stacked":
@@ -230,7 +233,7 @@ def tp_list_list(
         reshaped_inputs, indices, coefficients = prepare()
         return (
             jnp.zeros(
-                shape + (ope_out.num_segments,) + ope_out.segment_shape, dtype_output
+                shape + (ope_out.num_segments,) + ope_out.segment_shape, output_dtype
             )
             .at[(slice(None),) * len(shape) + (indices[:, -1],)]
             .add(
@@ -252,7 +255,7 @@ def tp_list_list(
         reshaped_inputs, indices, coefficients = prepare()
         return (
             jnp.zeros(
-                shape + (ope_out.num_segments,) + ope_out.segment_shape, dtype_output
+                shape + (ope_out.num_segments,) + ope_out.segment_shape, output_dtype
             )
             .at[(slice(None),) * len(shape) + (indices[:, -1],)]
             .add(
@@ -289,7 +292,7 @@ def tp_list_list(
             d.num_paths,
             body,
             jnp.zeros(
-                shape + (ope_out.num_segments,) + ope_out.segment_shape, dtype_output
+                shape + (ope_out.num_segments,) + ope_out.segment_shape, output_dtype
             ),
         )
 
@@ -300,7 +303,7 @@ def tp_list_list(
         return [
             [
                 ein(
-                    jnp.asarray(path.coefficients, dtype=dtype_math),
+                    jnp.asarray(path.coefficients, dtype=math_dtype),
                     [
                         jnp.reshape(
                             jax.lax.slice_in_dim(
@@ -326,7 +329,7 @@ def tp_list_list(
 
         return [
             [
-                jnp.zeros(shape + d.get_segment_shape(-1, path), dtype_output) + dummy
+                jnp.zeros(shape + d.get_segment_shape(-1, path), output_dtype) + dummy
                 for path in d.paths[pid_start:pid_end]
             ]
             for pid_start, pid_end in zip(pids[:-1], pids[1:])

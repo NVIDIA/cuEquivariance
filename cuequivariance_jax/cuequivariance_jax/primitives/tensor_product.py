@@ -26,10 +26,9 @@ import cuequivariance as cue
 from cuequivariance_jax.primitives.tensor_product_ops_impl import (
     tensor_product_ops_impl,
 )
-
-# from cuequivariance_jax.primitives.tensor_product_vanilla_impl import (
-#     tensor_product_ops_impl,
-# )
+from cuequivariance_jax.primitives.tensor_product_vanilla_impl import (
+    tensor_product_vanilla_impl,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,13 +40,9 @@ def tensor_product(
     indices: list[jax.Array | None] | None = None,
     *,
     math_dtype: jnp.dtype | None = None,
-    # precision: jax.lax.Precision = jax.lax.Precision.HIGHEST,
-    # algorithm: str = "sliced",
-    # use_custom_primitive: bool = True,
-    # use_custom_kernels: bool | None = False,
     name: str | None = None,
-    # **options,
-) -> jax.Array:
+    impl: str = "auto",
+) -> list[jax.Array]:
     if name is None:
         name = "tensor_product"
 
@@ -86,17 +81,20 @@ def tensor_product(
                 buffer_index.append(len(unique_indices))
                 unique_indices.append(index)
 
-    # TODO: insert naive reference implementation here? (for testing)
-
-    return tensor_product_prim(
-        inputs,
-        outputs_shape_dtype,
-        unique_indices,
-        buffer_index,
-        descriptors,
-        math_dtype,
-        name,
+    kwargs = dict(
+        inputs=inputs,
+        outputs_shape_dtype=outputs_shape_dtype,
+        indices=unique_indices,
+        buffer_index=buffer_index,
+        descriptors=descriptors,
+        math_dtype=math_dtype,
+        name=name,
     )
+
+    if impl == "naive_jax":
+        return tensor_product_vanilla_impl(**kwargs)
+    else:
+        return tensor_product_prim(**kwargs, impl=impl)
 
 
 tensor_product_p = jax.extend.core.Primitive("tensor_product")
@@ -106,11 +104,12 @@ tensor_product_p.multiple_results = True
 def tensor_product_prim(
     inputs: list[jax.Array],  # input buffers
     outputs_shape_dtype: list[jax.ShapeDtypeStruct],  # output shapes and dtypes
-    unique_indices: list[jax.Array],  # index buffers
+    indices: list[jax.Array],  # index buffers
     buffer_index: list[int],  # maps: buffer index -> unique indices index
     descriptors: list[tuple[cue.Operation, cue.SegmentedTensorProduct]],
     math_dtype: jnp.dtype,
     name: str,
+    impl: str = "auto",
     return_none_if_empty: bool = False,
 ) -> tuple[jax.Array, ...]:  # output buffers
     """
@@ -119,7 +118,7 @@ def tensor_product_prim(
     - Maps the outputs back to the original output buffers
     """
     assert len(inputs) + len(outputs_shape_dtype) == len(buffer_index)
-    assert max(buffer_index) < len(unique_indices)
+    assert max(buffer_index) < len(indices)
 
     descriptors = map(
         lambda x: (x[0], x[1].remove_empty_segments().remove_zero_paths()), descriptors
@@ -140,7 +139,7 @@ def tensor_product_prim(
 
     new_outputs = tensor_product_p.bind(
         *[inputs[i] for i in used_buffers[:new_num_inputs]],
-        *[unique_indices[i] for i in used_indices],
+        *[indices[i] for i in used_indices],
         buffer_index=tuple(
             used_indices.index(buffer_index[i]) if buffer_index[i] >= 0 else -1
             for i in used_buffers
@@ -156,6 +155,7 @@ def tensor_product_prim(
         ),
         math_dtype=jnp.dtype(math_dtype),
         name=str(name),
+        impl=impl,
     )
 
     if return_none_if_empty:
@@ -199,6 +199,7 @@ def tensor_product_abstract_eval(
     descriptors: frozenset[tuple[cue.Operation, cue.SegmentedTensorProduct]],
     math_dtype: jnp.dtype,
     name: str,
+    impl: str,
 ) -> tuple[jax.core.ShapedArray, ...]:
     return tuple(
         jax.core.ShapedArray(out.shape, out.dtype) for out in outputs_shape_dtype
@@ -213,14 +214,12 @@ def tensor_product_impl(
     descriptors: frozenset[tuple[cue.Operation, cue.SegmentedTensorProduct]],
     math_dtype: jnp.dtype,
     name: str,
+    impl: str,
 ) -> tuple[jax.Array, ...]:
     num_inputs = len(buffer_index) - len(outputs_shape_dtype)
     inputs, indices = inputs_and_indices[:num_inputs], inputs_and_indices[num_inputs:]
     del inputs_and_indices
 
-    # TODO: add predicate to call CUDA
-    # TODO: call JAX implementation if needed
-    # TODO: move this into another file
     def optimize_paths(ope: cue.Operation, stp: cue.SegmentedTensorProduct):
         for set_of_operands in ope.operands_with_identical_buffers():
             stp = stp.sort_indices_for_identical_operands(set_of_operands)
@@ -228,17 +227,29 @@ def tensor_product_impl(
 
     descriptors = list(map(optimize_paths, *zip(*descriptors)))
 
-    outputs = tensor_product_ops_impl(
-        inputs,
-        outputs_shape_dtype,
-        indices,
-        buffer_index,
-        descriptors,
-        math_dtype,
-        name,
+    outputs = None
+    kwargs = dict(
+        inputs=inputs,
+        outputs_shape_dtype=outputs_shape_dtype,
+        indices=indices,
+        buffer_index=buffer_index,
+        descriptors=descriptors,
+        math_dtype=math_dtype,
+        name=name,
     )
-    assert outputs is not None
 
+    assert impl in ("auto", "cuda", "jax")
+
+    if platform == "cuda" and impl in ("auto", "cuda"):
+        outputs = tensor_product_ops_impl(**kwargs)
+
+    if impl == "cuda" and outputs is None:
+        raise RuntimeError("Failed to use CUDA implementation")
+
+    if outputs is None:
+        outputs = tensor_product_vanilla_impl(**kwargs)
+
+    assert outputs is not None
     return outputs
 
 
