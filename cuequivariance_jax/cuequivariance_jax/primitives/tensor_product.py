@@ -23,6 +23,13 @@ import jax.numpy as jnp
 from jax.interpreters import ad, batching, mlir, xla
 
 import cuequivariance as cue
+from cuequivariance_jax.primitives.tensor_product_ops_impl import (
+    tensor_product_ops_impl,
+)
+
+# from cuequivariance_jax.primitives.tensor_product_vanilla_impl import (
+#     tensor_product_ops_impl,
+# )
 
 logger = logging.getLogger(__name__)
 
@@ -211,56 +218,28 @@ def tensor_product_impl(
     inputs, indices = inputs_and_indices[:num_inputs], inputs_and_indices[num_inputs:]
     del inputs_and_indices
 
-    buffers = list(inputs) + list(outputs_shape_dtype)
-
     # TODO: add predicate to call CUDA
     # TODO: call JAX implementation if needed
     # TODO: move this into another file
-    def reshape(x, shape):
-        if isinstance(x, jax.Array):
-            return jnp.reshape(x, shape)
-        else:
-            return jax.core.ShapedArray(shape, x.dtype)
-
-    new_descriptors: list[tuple[cue.Operation, cue.SegmentedTensorProduct]] = []
-    for ope, stp in descriptors:
-        ope: cue.Operation
-        stp: cue.SegmentedTensorProduct
+    def optimize_paths(ope: cue.Operation, stp: cue.SegmentedTensorProduct):
         for set_of_operands in ope.operands_with_identical_buffers():
             stp = stp.sort_indices_for_identical_operands(set_of_operands)
-        new_descriptors.append((ope, stp))
+        return ope, stp
 
-        for i, operand in zip(ope.buffers, stp.operands):
-            b = buffers[i]
-            buffers[i] = reshape(
-                b, (b.shape[0], operand.num_segments, operand.segment_size)
-            )
+    descriptors = list(map(optimize_paths, *zip(*descriptors)))
 
-    from cuequivariance_ops_jax import (
-        Operation,
-        Path,
-        tensor_product_uniform_1d_jit,
-    )
-
-    operations = []
-    paths = []
-
-    for ope, stp in new_descriptors:
-        operations.append(Operation(ope.buffers, len(paths), stp.num_paths))
-        for path in stp.paths:
-            paths.append(Path(path.indices, path.coefficients.item()))
-
-    outputs = tensor_product_uniform_1d_jit(
-        buffers[:num_inputs],
-        buffers[num_inputs:],
+    outputs = tensor_product_ops_impl(
+        inputs,
+        outputs_shape_dtype,
         indices,
         buffer_index,
-        operations=operations,
-        paths=paths,
-        math_dtype=math_dtype,
-        name=name,
+        descriptors,
+        math_dtype,
+        name,
     )
-    return [jnp.reshape(x, (x.shape[0], x.shape[1] * x.shape[2])) for x in outputs]
+    assert outputs is not None
+
+    return outputs
 
 
 def tensor_product_jvp(

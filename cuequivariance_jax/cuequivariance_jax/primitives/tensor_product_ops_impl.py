@@ -13,132 +13,85 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import logging
-import math
 
 import jax
 import jax.numpy as jnp
 
 import cuequivariance as cue
-from cuequivariance.tensor_product_execution import InBuffer
 
 logger = logging.getLogger(__name__)
 
 
+def reshape(
+    x: jax.Array | jax.ShapeDtypeStruct, shape: tuple[int, ...]
+) -> jax.Array | jax.ShapeDtypeStruct:
+    if isinstance(x, jax.Array):
+        return jnp.reshape(x, shape)
+    else:
+        return jax.ShapeDtypeStruct(shape, x.dtype)
+
+
 def tensor_product_ops_impl(
-    *inputs: jax.Array,  # input buffers
-    output_shapes: tuple[tuple[int, ...] | None, ...],  # shapes of the operands
-    d: cue.SegmentedTensorProduct,
-    exe: cue.TensorProductExecution,
-    dtype_output: jnp.dtype,
-    dtype_math: jnp.dtype,
-    block_u: int,
-    elements_per_thread: int,
-    **_options,
-) -> tuple[jax.Array, ...]:  # output buffers
-    assert exe.max_out_buffer + 1 == len(exe.out_buffers)
+    inputs: list[jax.Array],  # shape (batch_size, operand_size)
+    outputs_shape_dtype: tuple[jax.ShapeDtypeStruct, ...],
+    indices: list[jax.Array],
+    buffer_index: list[int],
+    descriptors: frozenset[tuple[cue.Operation, cue.SegmentedTensorProduct]],
+    math_dtype: jnp.dtype,
+    name: str,
+) -> list[jax.Array] | None:
+    num_inputs = len(buffer_index) - len(outputs_shape_dtype)
 
-    detail_str = f"\n{d}\n{exe}".replace("\n", "\n  | ")
+    buffers = list(inputs) + list(outputs_shape_dtype)
+    for ope, stp in descriptors:
+        if len(stp.subscripts.modes()) != 1:
+            logger.info(f"Unsupported STP: {stp}")
+            return None
+        if not stp.all_same_segment_shape():
+            logger.info(f"Unsupported STP: {stp}")
+            return None
 
-    if not (2 <= d.num_operands <= 7):
-        # TODO make sure to be in sync with the backend
-        logger.info("🛶 can't use tensor_product_uniform_1d for" + detail_str)
-        raise NotImplementedError()
+        for i, operand in zip(ope.buffers, stp.operands):
+            b = buffers[i]
+            shape = (b.shape[0], operand.num_segments, operand.segment_size)
+            if b.ndim == 2:
+                b = buffers[i] = reshape(b, shape)
+            if b.shape != shape:
+                logger.info(f"Shape mismatch: {b.shape} != {shape} for {i} {stp} {ope}")
+                return None
 
-    if not d.all_same_segment_shape():
-        logger.info("🛶 can't use tensor_product_uniform_1d for" + detail_str)
-        raise NotImplementedError()
+    if not all(b.ndim == 3 for b in buffers):
+        logger.info("All buffers must be used")
+        return None
+    if len({b.shape[2] for b in buffers}.union({1})) != 2:
+        logger.info("Not compatible with Uniform 1D")
+        return None
 
     try:
-        from cuequivariance_ops_jax import tensor_product_uniform_1d
+        from cuequivariance_ops_jax import (
+            Operation,
+            Path,
+            tensor_product_uniform_1d_jit,
+        )
     except ImportError:
-        logger.info("🛶 can't import cuequivariance_ops_jax")
-        raise NotImplementedError()
+        logger.info("cuequivariance_ops_jax is not installed")
+        return None
 
-    modes = d.subscripts.modes()
-    if len(modes) > 1:
-        logger.info("🛶 can't use tensor_product_uniform_1d for" + detail_str)
-        raise NotImplementedError()
+    operations = []
+    paths = []
+    for ope, stp in descriptors:
+        operations.append(Operation(ope.buffers, len(paths), stp.num_paths))
+        for path in stp.paths:
+            paths.append(Path(path.indices, path.coefficients.item()))
 
-    if len(modes) == 1:
-        dims: set[int] = d.get_dims(modes[0])
-        if len(dims) != 1:
-            logger.info("🛶 can't use tensor_product_uniform_1d for" + detail_str)
-            raise NotImplementedError()
-
-        num_u = next(iter(dims))
-    else:
-        num_u = 1
-
-    if num_u % block_u != 0:
-        logger.info("🛶 can't use tensor_product_uniform_1d for" + detail_str)
-        raise NotImplementedError()
-
-    batch_size = 1
-    for shape in [input.shape[:-1] for input in inputs] + [
-        shape for shape in output_shapes if shape is not None
-    ]:
-        n = math.prod(shape)
-        if n > 1:
-            if n != batch_size and batch_size != 1:
-                logger.info("🛶 can't use tensor_product_uniform_1d for" + detail_str)
-                raise NotImplementedError()
-            batch_size = n
-
-    reshaped_inputs = []
-    for index, input in enumerate(inputs):
-        operands = {
-            (d.operands[op].size, d.operands[op].num_segments)
-            for op in exe.get_in_buffer_operands(index)
-        }
-        if len(operands) != 1:
-            logger.info("🛶 can't use tensor_product_uniform_1d for" + detail_str)
-            raise NotImplementedError()
-        size, num_segments = operands.pop()
-        reshaped_inputs.append(
-            input.reshape(
-                (math.prod(input.shape[:-1]), num_segments, size // num_segments)
-            )
-        )
-
-    output_operands = []
-    outputs = []
-    for index in exe.out_buffers:
-        operands = exe.get_out_buffer_operands(index)
-        if len(operands) != 1:
-            logger.info("🛶 can't use tensor_product_uniform_1d for" + detail_str)
-            raise NotImplementedError()
-        ope = operands.pop()
-        size, num_segments = d.operands[ope].size, d.operands[ope].num_segments
-
-        output_operands.append(ope)
-        outputs.append(
-            jnp.zeros(
-                (math.prod(output_shapes[ope]), num_segments, size // num_segments),
-                dtype=dtype_output,
-            )
-        )
-
-    logger.info("🎉 use tensor_product_uniform_1d for" + detail_str)
-
-    outputs = tensor_product_uniform_1d(
-        dtype_math,
-        [ope.num_segments for ope in d.operands],
-        [path.indices for path in d.paths],
-        [path.coefficients.item() for path in d.paths],
-        reshaped_inputs,
-        outputs,
-        [
-            tuple(
-                int(b) if isinstance(b, InBuffer) else -1 - int(b) for b in computation
-            )
-            for computation in exe.computations
-        ],
-        block_u=block_u,
-        elements_per_thread=elements_per_thread,
+    outputs = tensor_product_uniform_1d_jit(
+        buffers[:num_inputs],
+        buffers[num_inputs:],
+        indices,
+        buffer_index,
+        operations=operations,
+        paths=paths,
+        math_dtype=math_dtype,
+        name=name,
     )
-
-    outputs = [
-        output.reshape(output_shapes[ope] + (-1,))
-        for ope, output in zip(output_operands, outputs)
-    ]
-    return tuple(outputs)
+    return [jnp.reshape(x, (x.shape[0], x.shape[1] * x.shape[2])) for x in outputs]
