@@ -79,6 +79,8 @@ def tensor_product(
                 buffer_index.append(len(unique_indices))
                 unique_indices.append(index)
 
+    # TODO: insert naive reference implementation here? (for testing)
+
     return tensor_product_prim(
         inputs,
         outputs_shape_dtype,
@@ -95,67 +97,69 @@ tensor_product_p.multiple_results = True
 
 
 def tensor_product_prim(
-    inputs: list[jax.Array],  # inputs
+    inputs: list[jax.Array],  # input buffers
     outputs_shape_dtype: list[jax.ShapeDtypeStruct],  # output shapes and dtypes
-    unique_indices: list[jax.Array],
-    buffer_index: list[int],
+    unique_indices: list[jax.Array],  # index buffers
+    buffer_index: list[int],  # maps: buffer index -> unique indices index
     descriptors: list[tuple[cue.Operation, cue.SegmentedTensorProduct]],
     math_dtype: jnp.dtype,
     name: str,
+    return_none_if_empty: bool = False,
 ) -> tuple[jax.Array, ...]:  # output buffers
-    return tensor_product_p.bind(
-        *inputs,
-        *unique_indices,
-        buffer_index=tuple(buffer_index),
-        outputs_shape_dtype=tuple(outputs_shape_dtype),
-        descriptors=frozenset(descriptors),
-        math_dtype=math_dtype,
-        name=name,
+    """
+    - Filters out unused buffers and indices
+    - Calls the tensor product primitive
+    - Maps the outputs back to the original output buffers
+    """
+    assert len(inputs) + len(outputs_shape_dtype) == len(buffer_index)
+    assert max(buffer_index) < len(unique_indices)
+
+    descriptors = map(
+        lambda x: (x[0], x[1].remove_empty_segments().remove_zero_paths()), descriptors
+    )
+    descriptors = list(filter(lambda x: x[1].num_paths > 0, descriptors))
+
+    used_buffers = set()
+    used_indices = set()
+    for ope, _ in descriptors:
+        for i in ope.buffers:
+            used_buffers.add(i)
+            if buffer_index[i] >= 0:
+                used_indices.add(buffer_index[i])
+    used_buffers = sorted(used_buffers)  # maps: new buffer index -> old buffer index
+    used_indices = sorted(used_indices)  # maps: new index -> old index
+
+    new_num_inputs = sum([i < len(inputs) for i in used_buffers])
+
+    new_outputs = tensor_product_p.bind(
+        *[inputs[i] for i in used_buffers[:new_num_inputs]],
+        *[unique_indices[i] for i in used_indices],
+        buffer_index=tuple(
+            used_indices.index(buffer_index[i]) if buffer_index[i] >= 0 else -1
+            for i in used_buffers
+        ),
+        outputs_shape_dtype=tuple(
+            outputs_shape_dtype[i - len(inputs)] for i in used_buffers[new_num_inputs:]
+        ),
+        descriptors=frozenset(
+            [
+                (cue.Operation([used_buffers.index(i) for i in ope.buffers]), stp)
+                for ope, stp in descriptors
+            ]
+        ),
+        math_dtype=jnp.dtype(math_dtype),
+        name=str(name),
     )
 
+    if return_none_if_empty:
+        outputs = [None] * len(outputs_shape_dtype)
+    else:
+        outputs = [jnp.zeros(out.shape, out.dtype) for out in outputs_shape_dtype]
 
-def clean_inputs(
-    inputs: list[jax.Array], operations: list[cue.Operation]
-) -> tuple[list[jax.Array], list[cue.Operation]]:
-    num_inputs = len(inputs)
+    for i, output in zip(used_buffers[new_num_inputs:], new_outputs):
+        outputs[i - len(inputs)] = output
 
-    in_buffers = set()
-    for ope in operations:
-        in_buffers.update(ope.input_buffers(num_inputs))
-    in_buffers = sorted(in_buffers)
-
-    # remove unused inputs
-    inputs = [inputs[i] for i in in_buffers]
-    operations = [
-        cue.Operation(
-            [
-                in_buffers.index(i) if i < num_inputs else i - num_inputs + len(inputs)
-                for i in ope.buffers
-            ]
-        )
-        for ope in operations
-    ]
-    num_inputs = len(inputs)
-
-    # remove duplicate inputs
-    unique_inputs = []
-    for x in inputs:
-        if id(x) not in map(id, unique_inputs):
-            unique_inputs.append(x)
-    unique_ids = list(map(id, unique_inputs))
-    operations = [
-        cue.Operation(
-            [
-                unique_ids.index(id(inputs[i]))
-                if i < num_inputs
-                else i - num_inputs + len(unique_inputs)
-                for i in ope.buffers
-            ]
-        )
-        for ope in operations
-    ]
-
-    return unique_inputs, operations
+    return tuple(outputs)
 
 
 def map_indices(
@@ -203,14 +207,15 @@ def tensor_product_impl(
     math_dtype: jnp.dtype,
     name: str,
 ) -> tuple[jax.Array, ...]:
-    print(platform, name)
-
     num_inputs = len(buffer_index) - len(outputs_shape_dtype)
     inputs, indices = inputs_and_indices[:num_inputs], inputs_and_indices[num_inputs:]
     del inputs_and_indices
 
     buffers = list(inputs) + list(outputs_shape_dtype)
 
+    # TODO: add predicate to call CUDA
+    # TODO: call JAX implementation if needed
+    # TODO: move this into another file
     def reshape(x, shape):
         if isinstance(x, jax.Array):
             return jnp.reshape(x, shape)
@@ -230,9 +235,6 @@ def tensor_product_impl(
             buffers[i] = reshape(
                 b, (b.shape[0], operand.num_segments, operand.segment_size)
             )
-
-        print(stp)
-        print(ope.to_string(num_inputs))
 
     from cuequivariance_ops_jax import (
         Operation,
@@ -372,13 +374,14 @@ def tensor_product_transpose(
         tr_descriptors,
         math_dtype,
         name + "_transpose",
+        return_none_if_empty=True,
     )
 
-    outputs = [None] * len(inputs)
+    outputs = [None] * (len(inputs) + len(indices))
     i = 0
     for b, input in enumerate(inputs):
         if ad.is_undefined_primal(input):
-            outputs[b] = tmp[i]
+            outputs[b] = tmp[i] if tmp[i] is not None else ad.Zero(input.aval)
             i += 1
     return tuple(outputs)
 
