@@ -23,22 +23,22 @@ import cuequivariance_jax as cuex
 def equivariant_tensor_product(
     e: cue.EquivariantTensorProduct,
     *inputs: cuex.RepArray | jax.Array,
-    dtype_output: jnp.dtype | None = None,
-    dtype_math: jnp.dtype | None = None,
-    use_custom_primitive: bool = True,
-    use_custom_kernels: bool | None = False,
+    indices: list[jax.Array | None] | None = None,
+    output_batch_shape: tuple[int, ...] | None = None,
+    output_dtype: jnp.dtype | None = None,
+    math_dtype: jnp.dtype | None = None,
     name: str | None = None,
-    **options,
+    impl: str = "auto",
 ) -> cuex.RepArray:
     """Compute the equivariant tensor product of the input arrays.
 
     Args:
         e (:class:`cue.EquivariantTensorProduct <cuequivariance.EquivariantTensorProduct>`): The equivariant tensor product descriptor.
         *inputs (RepArray or jax.Array): The input arrays.
-        dtype_output (jnp.dtype, optional): The data type for the output array. Defaults to None.
-        dtype_math (jnp.dtype, optional): The data type for computational operations. Defaults to None.
-        use_custom_primitive (bool, optional): Whether to use custom JVP rules. Defaults to True.
-        use_custom_kernels (bool, optional): Whether to use custom kernels. Defaults to True.
+        indices (list of jax.Array or None, optional): The indices of the inputs and output.
+        output_batch_shape (tuple of int, optional): The batch shape of the output array.
+        output_dtype (jnp.dtype, optional): The data type for the output array. Defaults to None.
+        math_dtype (jnp.dtype, optional): The data type for computational operations. Defaults to None.
         name (str, optional): The name of the operation. Defaults to None.
 
     Returns:
@@ -71,12 +71,12 @@ def equivariant_tensor_product(
         return lambda *inputs: equivariant_tensor_product(
             e,
             *inputs,
-            dtype_output=dtype_output,
-            dtype_math=dtype_math,
-            use_custom_primitive=use_custom_primitive,
-            use_custom_kernels=use_custom_kernels,
+            indices=indices,
+            output_batch_shape=output_batch_shape,
+            output_dtype=output_dtype,
+            math_dtype=math_dtype,
             name=name,
-            **options,
+            impl=impl,
         )
 
     if len(inputs) != e.num_inputs:
@@ -103,15 +103,34 @@ def equivariant_tensor_product(
 
     inputs: list[jax.Array] = [getattr(x, "array", x) for x in inputs]
 
-    x = cuex.symmetric_tensor_product(
-        e.ds,
-        *inputs,
-        dtype_output=dtype_output,
-        dtype_math=dtype_math,
-        use_custom_primitive=use_custom_primitive,
-        use_custom_kernels=use_custom_kernels,
+    if indices is None:
+        indices = [None] * e.num_operands
+
+    if output_dtype is None:
+        output_dtype = jnp.result_type(*inputs)
+
+    if output_batch_shape is None:
+        if indices[-1] is not None:
+            raise ValueError(
+                "When output indices are provided, output_batch_shape must be provided."
+            )
+        output_batch_shape = jnp.broadcast_shapes(
+            *[
+                x.shape[:-1] if i is None else i.shape + x.shape[1:-1]
+                for i, x in zip(indices, inputs)
+            ]
+        )
+
+    descriptors = [(cue.Operation(e.map_operands(d.num_operands)), d) for d in e.ds]
+
+    [x] = cuex.tensor_product(
+        descriptors,
+        inputs,
+        [jax.ShapeDtypeStruct(output_batch_shape + (e.output.dim,), output_dtype)],
+        indices,
+        math_dtype=math_dtype,
         name=name,
-        **options,
+        impl=impl,
     )
 
     return cuex.RepArray(e.output, x)

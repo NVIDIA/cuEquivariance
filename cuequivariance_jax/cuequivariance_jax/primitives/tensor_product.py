@@ -49,6 +49,7 @@ def tensor_product(
     buffers = inputs + outputs_shape_dtype
 
     for i, buffer in enumerate(buffers):
+        # TODO: automatically vmap here
         assert buffer.ndim == 2, (
             f"Expected buffer {i} to have 2 dimensions, got {buffer.shape}"
         )
@@ -65,21 +66,28 @@ def tensor_product(
     if indices is None:
         indices = [None] * len(buffers)
 
+    if len(indices) != len(buffers):
+        raise ValueError(
+            f"Expected {len(buffers)} indices, got {len(indices)}. "
+            "Please provide an index for each buffer. "
+            "If a buffer does not have an index, please set it to None."
+        )
+
     buffer_index = []
     unique_indices = []
-    for i, index in enumerate(indices):
-        if index is None:
+    for idx in indices:
+        if idx is None:
             buffer_index.append(-1)
         else:
             found = False
-            for j, unique_index in enumerate(unique_indices):
-                if index is unique_index:
+            for j, uidx in enumerate(unique_indices):
+                if idx is uidx:
                     buffer_index.append(j)
                     found = True
                     break
             if not found:
                 buffer_index.append(len(unique_indices))
-                unique_indices.append(index)
+                unique_indices.append(idx)
 
     kwargs = dict(
         inputs=inputs,
@@ -121,7 +129,11 @@ def tensor_product_prim(
     assert max(buffer_index) < len(indices)
 
     descriptors = map(
-        lambda x: (x[0], x[1].remove_empty_segments().remove_zero_paths()), descriptors
+        lambda x: (
+            x[0],
+            x[1].consolidate_modes().remove_empty_segments().consolidate_paths(),
+        ),
+        descriptors,
     )
     descriptors = list(filter(lambda x: x[1].num_paths > 0, descriptors))
 
