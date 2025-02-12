@@ -262,6 +262,7 @@ def tensor_product_jvp(
     descriptors: frozenset[tuple[cue.Operation, cue.SegmentedTensorProduct]],
     math_dtype: jnp.dtype,
     name: str,
+    impl: str,
 ) -> tuple[tuple[jax.Array, ...], tuple[jax.Array | ad.Zero, ...]]:
     num_inputs = len(buffer_index) - len(outputs_shape_dtype)
 
@@ -281,6 +282,7 @@ def tensor_product_jvp(
         descriptors,
         math_dtype,
         name,
+        impl=impl,
     )
 
     jvp_indices, jvp_buffer_index = map_indices(
@@ -308,6 +310,7 @@ def tensor_product_jvp(
         jvp_descriptors,
         math_dtype,
         name + "_jvp",
+        impl=impl,
     )
 
     return out_primals, out_tangents
@@ -321,6 +324,7 @@ def tensor_product_transpose(
     descriptors: frozenset[tuple[cue.Operation, cue.SegmentedTensorProduct]],
     math_dtype: jnp.dtype,
     name: str,
+    impl: str,
 ) -> tuple[jax.Array | ad.Zero | None, ...]:
     num_inputs = len(buffer_index) - len(outputs_shape_dtype)
     inputs, indices = inputs_and_indices[:num_inputs], inputs_and_indices[num_inputs:]
@@ -364,6 +368,7 @@ def tensor_product_transpose(
         tr_descriptors,
         math_dtype,
         name + "_transpose",
+        impl=impl,
         return_none_if_empty=True,
     )
 
@@ -385,6 +390,7 @@ def tensor_product_batching(
     descriptors: frozenset[tuple[cue.Operation, cue.SegmentedTensorProduct]],
     math_dtype: jnp.dtype,
     name: str,
+    impl: str,
 ) -> tuple[tuple[jax.Array, ...], tuple[int, ...]]:
     num_inputs = len(buffer_index) - len(outputs_shape_dtype)
 
@@ -443,6 +449,7 @@ def tensor_product_batching(
         descriptors=descriptors,
         math_dtype=math_dtype,
         name=name + "_batching",
+        impl=impl,
     )
     outputs = tuple(jnp.reshape(x, (max_m, max_n, *x.shape[1:])) for x in outputs)
     outputs = tuple(
