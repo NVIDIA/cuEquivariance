@@ -23,13 +23,13 @@ import jax.numpy as jnp
 from jax.interpreters import ad, batching, mlir, xla
 
 import cuequivariance as cue
+from cuequivariance_jax.primitives.primitives_utils import reshape
 from cuequivariance_jax.primitives.tensor_product_ops_impl import (
     tensor_product_ops_impl,
 )
 from cuequivariance_jax.primitives.tensor_product_vanilla_impl import (
     tensor_product_vanilla_impl,
 )
-from cuequivariance_jax.primitives.utils import reshape
 
 logger = logging.getLogger(__name__)
 
@@ -49,11 +49,20 @@ def tensor_product(
 
     buffers = inputs + outputs_shape_dtype
 
+    if indices is None:
+        indices = [None] * len(buffers)
+
+    # def fn(x: jax.Array, idx: jax.Array | None) -> tuple[int, ...]:
+    #     if idx is None:
+    #         return x.shape
+    #     return idx.shape + x.shape[1:]
+
+    # broadcast_inputs_shape = jnp.broadcast_shapes(*map(fn, inputs, indices))
+
     def fn(
         buffer: jax.Array | jax.ShapeDtypeStruct, idx: jax.Array | None
     ) -> jax.Array | jax.ShapeDtypeStruct:
         if buffer.ndim == 1 and idx is None:
-            # "shared weights"
             return reshape(buffer, (1, buffer.shape[0]))
         return buffer
 
@@ -77,9 +86,6 @@ def tensor_product(
     assert math_dtype in (jnp.float32, jnp.float64), (
         f"math_dtype must be float32 or float64, got {math_dtype}"
     )
-
-    if indices is None:
-        indices = [None] * len(buffers)
 
     if len(indices) != len(buffers):
         raise ValueError(
@@ -115,9 +121,14 @@ def tensor_product(
     )
 
     if impl == "naive_jax":
-        return tensor_product_vanilla_impl(**kwargs)
+        outputs = tensor_product_vanilla_impl(**kwargs)
     else:
-        return tensor_product_prim(**kwargs, impl=impl)
+        outputs = tensor_product_prim(**kwargs, impl=impl)
+
+    def fn(x: jax.Array, shape: tuple[int, ...]) -> jax.Array:
+        return jnp.reshape(x, shape)
+
+    return list(map(fn, outputs, [out.shape for out in outputs_shape_dtype]))
 
 
 tensor_product_p = jax.extend.core.Primitive("tensor_product")
@@ -464,10 +475,10 @@ def tensor_product_batching(
 
     batched_inputs = [fn(x) for x in batched_inputs]
 
-    new_outputs_shape_dtype = [
+    new_outputs_shape_dtype = tuple(
         jax.ShapeDtypeStruct((max_m * max_n, *out.shape[1:]), out.dtype)
         for out in outputs_shape_dtype
-    ]
+    )
 
     outputs = tensor_product_p.bind(
         *batched_inputs,

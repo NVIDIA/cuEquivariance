@@ -23,7 +23,14 @@ import cuequivariance_jax as cuex
 jax.config.update("jax_enable_x64", True)
 
 
-@pytest.mark.parametrize("shape", [(2, 3), ()])
+@pytest.mark.parametrize(
+    "shape",
+    [
+        # (2, 3),  # TODO: change when broadcasting is supported again
+        (),
+        (10,),
+    ],
+)
 def test_spherical_harmonics(shape):
     x = cuex.RepArray(cue.Irreps(cue.O3, "1o"), np.random.randn(*shape, 3), cue.ir_mul)
     y = cuex.spherical_harmonics([0, 1, 2], x)

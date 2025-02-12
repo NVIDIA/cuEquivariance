@@ -19,7 +19,7 @@ import jax
 import jax.numpy as jnp
 
 import cuequivariance as cue
-from cuequivariance_jax.primitives.utils import reshape
+from cuequivariance_jax.primitives.primitives_utils import reshape
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +61,9 @@ def tensor_product_ops_impl(
         logger.info("All buffers must be used")
         return None
     if len({b.shape[2] for b in buffers}.union({1})) != 2:
+        logger.info("Not compatible with Uniform 1D")
+        return None
+    if max(b.shape[2] for b in buffers) % 32 != 0:
         logger.info("Not compatible with Uniform 1D")
         return None
 
