@@ -99,7 +99,8 @@ def sum_cat_list_list(
 
     for sid, segments in enumerate(list_list):
         for x in segments:
-            assert x.shape == batch_shape + operand[sid]
+            target_shape = batch_shape + operand[sid]
+            assert jnp.broadcast_shapes(x.shape, target_shape) == target_shape
             assert x.dtype == dtype
 
     def sum(segments: list[jax.Array], size: int) -> jax.Array:
@@ -119,6 +120,7 @@ def sum_cat_list_list(
         ],
         axis=-1,
     )
+    out = jnp.broadcast_to(out, batch_shape + (operand.size,))
     assert out.shape == batch_shape + (operand.size,)
     return out
 
@@ -132,6 +134,13 @@ def tp_list_list(
     precision: jax.lax.Precision,
     algorithm: str,
 ) -> list[list[jax.Array]]:
+    broadcasted_batch_shape = jnp.broadcast_shapes(
+        *[input.shape[:-1] for input in inputs]
+    )
+    out_batch_shape = tuple(
+        min(b, c) for b, c in zip(broadcasted_batch_shape, out_batch_shape)
+    )
+
     NAME = "CUEQUIVARIANCE_MAX_PATH_UNROLL"
     threshold_num_paths = int(os.environ.get(NAME, "1000"))
     if d.num_paths > threshold_num_paths and algorithm in ["sliced", "stacked"]:

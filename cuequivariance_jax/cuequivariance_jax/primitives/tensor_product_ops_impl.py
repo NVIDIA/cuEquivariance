@@ -13,22 +13,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import logging
+import re
 
 import jax
 import jax.numpy as jnp
 
 import cuequivariance as cue
+from cuequivariance_jax.primitives.utils import reshape
 
 logger = logging.getLogger(__name__)
 
 
-def reshape(
-    x: jax.Array | jax.ShapeDtypeStruct, shape: tuple[int, ...]
-) -> jax.Array | jax.ShapeDtypeStruct:
-    if isinstance(x, jax.Array):
-        return jnp.reshape(x, shape)
-    else:
-        return jax.ShapeDtypeStruct(shape, x.dtype)
+def sanitize_string(s):
+    return re.sub(r"[^A-Za-z_]", "", s)
 
 
 def tensor_product_ops_impl(
@@ -84,6 +81,7 @@ def tensor_product_ops_impl(
         for path in stp.paths:
             paths.append(Path(path.indices, path.coefficients.item()))
 
+    logger.info(f"Using cuequivariance_ops_jax for {name}")
     outputs = tensor_product_uniform_1d_jit(
         buffers[:num_inputs],
         buffers[num_inputs:],
@@ -92,6 +90,6 @@ def tensor_product_ops_impl(
         operations=operations,
         paths=paths,
         math_dtype=math_dtype,
-        name=name,
+        name=sanitize_string(name),
     )
     return [jnp.reshape(x, (x.shape[0], x.shape[1] * x.shape[2])) for x in outputs]

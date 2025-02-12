@@ -29,6 +29,7 @@ from cuequivariance_jax.primitives.tensor_product_ops_impl import (
 from cuequivariance_jax.primitives.tensor_product_vanilla_impl import (
     tensor_product_vanilla_impl,
 )
+from cuequivariance_jax.primitives.utils import reshape
 
 logger = logging.getLogger(__name__)
 
@@ -48,10 +49,24 @@ def tensor_product(
 
     buffers = inputs + outputs_shape_dtype
 
+    def fn(
+        buffer: jax.Array | jax.ShapeDtypeStruct, idx: jax.Array | None
+    ) -> jax.Array | jax.ShapeDtypeStruct:
+        if buffer.ndim == 1 and idx is None:
+            # "shared weights"
+            return reshape(buffer, (1, buffer.shape[0]))
+        return buffer
+
+    buffers = list(map(fn, buffers, indices))
+
     for i, buffer in enumerate(buffers):
         # TODO: automatically vmap here
         assert buffer.ndim == 2, (
             f"Expected buffer {i} to have 2 dimensions, got {buffer.shape}"
+        )
+    for i, idx in enumerate(indices):
+        assert idx is None or idx.ndim == 1, (
+            f"Expected index {i} to have 1 dimension, got {idx.shape}"
         )
 
     if math_dtype is None:
@@ -90,8 +105,8 @@ def tensor_product(
                 unique_indices.append(idx)
 
     kwargs = dict(
-        inputs=inputs,
-        outputs_shape_dtype=outputs_shape_dtype,
+        inputs=buffers[: len(inputs)],
+        outputs_shape_dtype=buffers[len(inputs) :],
         indices=unique_indices,
         buffer_index=buffer_index,
         descriptors=descriptors,
