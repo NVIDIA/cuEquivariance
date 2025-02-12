@@ -20,7 +20,10 @@ import cuequivariance.segmented_tensor_product as stp
 
 def test_user_friendly():
     d = stp.SegmentedTensorProduct.from_subscripts("ia_jb_kab+ijk")
-    assert str(d) == "ia,jb,kab+ijk sizes=0,0,0 num_segments=0,0,0 num_paths=0"
+    assert (
+        str(d)
+        == "ia,jb,kab+ijk sizes=0,0,0 num_segments=0,0,0 num_paths=0 a= b= i= j= k="
+    )
 
     with pytest.raises(ValueError):
         d.add_path(0, 0, 0, c=np.ones((2, 2, 3)))  # need to add segments first
@@ -233,11 +236,14 @@ def test_to_text():
     assert (
         text
         == """u,u,u sizes=50,64,50 num_segments=4,5,4 num_paths=29 u={12, 14}
-operand #0 subscripts=u u: [12, 12, 12, 14]
-operand #1 subscripts=u u: [12, 12, 12, 14, 14]
-operand #2 subscripts=u u: [12, 12, 12, 14]
+operand #0 subscripts=u
+  | u: [12, 12, 12, 14]
+operand #1 subscripts=u
+  | u: [12, 12, 12, 14, 14]
+operand #2 subscripts=u
+  | u: [12, 12, 12, 14]
 Flop cost: 0->704 1->704 2->704
-Memory cost from 164 to 1056
+Memory cost: 164
 Path indices: 0 0 0, 0 0 1, 0 0 2, 0 1 0, 0 1 1, 0 1 2, 0 2 0, 0 2 1, 0 2 2, 1 0 0, 1 0 1, 1 0 2, 1 1 0, 1 1 1, 1 1 2, 1 2 0, 1 2 1, 1 2 2, 2 0 0, 2 0 1, 2 0 2, 2 1 0, 2 1 1, 2 1 2, 2 2 0, 2 2 1, 2 2 2, 3 3 3, 3 4 3
 Path coefficients: [1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0]"""
     )

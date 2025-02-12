@@ -266,47 +266,62 @@ class SegmentedTensorProduct:
             >>> d = d.flatten_coefficient_modes()
             >>> print(d.to_text())
             uvw,u,v,w sizes=320,16,16,16 num_segments=5,4,4,4 num_paths=16 u=4 v=4 w=4
+            operand #0 subscripts=uvw
+              | u: [4] * 5
+              | v: [4] * 5
+              | w: [4] * 5
+            operand #1 subscripts=u
+              | u: [4] * 4
+            operand #2 subscripts=v
+              | v: [4] * 4
+            operand #3 subscripts=w
+              | w: [4] * 4
             Flop cost: 0->1344 1->2368 2->2368 3->2368
-            Memory cost from 368 to 1216
+            Memory cost: 368
             Path indices: 0 0 0 0, 1 0 1 1, 1 0 2 2, 1 0 3 3, 2 1 0 1, 2 2 0 2, ...
             Path coefficients: [0.17...]
         """
         out = f"{self}"
         dims = self.get_dimensions_dict()
         for oid, operand in enumerate(self.operands):
+            out += f"\noperand #{oid} subscripts={operand.subscripts}"
             for i, ch in enumerate(operand.subscripts):
                 if len(dims[ch]) == 1:
-                    continue
-
-                out += (
-                    f"\noperand #{oid} subscripts={operand.subscripts} {ch}: ["
-                    + ", ".join(str(s[i]) for s in operand.segments)
-                    + "]"
-                )
+                    out += f"\n  | {ch}: [{operand.segments[0][i]}] * {len(operand.segments)}"
+                else:
+                    out += (
+                        f"\n  | {ch}: ["
+                        + ", ".join(str(s[i]) for s in operand.segments)
+                        + "]"
+                    )
 
         out += f"\nFlop cost: {' '.join(f'{oid}->{self.flop_cost(oid)}' for oid in range(self.num_operands))}"
-        out += f"\nMemory cost from {self.memory_cost('global')} to {self.memory_cost('sequential')}"
+        out += f"\nMemory cost: {self.memory_cost('global')}"
 
-        out += "\nPath indices: " + ", ".join(
-            " ".join(str(i) for i in row) for row in self.indices
-        )
+        if len(self.paths) > 0:
+            out += "\nPath indices: " + ", ".join(
+                " ".join(str(i) for i in row) for row in self.indices
+            )
 
-        if coefficient_formatter is not None:
-            formatter = {"float": coefficient_formatter}
-            if all(len(dims[ch]) == 1 for ch in self.coefficient_subscripts):
-                out += "\nPath coefficients: " + np.array2string(
-                    self.stacked_coefficients,
-                    max_line_width=np.inf,
-                    formatter=formatter,
-                    threshold=np.inf,
-                )
-            else:
-                out += "\nPath coefficients:\n" + "\n".join(
-                    np.array2string(
-                        path.coefficients, formatter=formatter, threshold=np.inf
+            if coefficient_formatter is not None:
+                formatter = {"float": coefficient_formatter}
+                if all(len(dims[ch]) == 1 for ch in self.coefficient_subscripts):
+                    out += "\nPath coefficients: " + np.array2string(
+                        self.stacked_coefficients,
+                        max_line_width=np.inf,
+                        formatter=formatter,
+                        threshold=np.inf,
                     )
-                    for path in self.paths
-                )
+                else:
+                    out += "\nPath coefficients:\n" + "\n".join(
+                        np.array2string(
+                            path.coefficients, formatter=formatter, threshold=np.inf
+                        )
+                        for path in self.paths
+                    )
+        else:
+            out += "\nNo paths."
+
         return out
 
     def to_dict(self, extended: bool = False) -> dict[str, Any]:
@@ -372,10 +387,10 @@ class SegmentedTensorProduct:
 
     def get_dimensions_dict(self) -> dict[str, set[int]]:
         """Get the dimensions of the tensor product."""
-        dims: dict[str, set[int]] = dict()
+        dims: dict[str, set[int]] = {ch: set() for ch in self.subscripts.modes()}
         for operand in self.operands:
             for m, dd in operand.get_dimensions_dict().items():
-                dims.setdefault(m, set()).update(dd)
+                dims[m].update(dd)
         # Note: no need to go through the coefficients since must be contracted with the operands
         return dims
 
@@ -687,13 +702,13 @@ class SegmentedTensorProduct:
             >>> d.add_path(0, None, None, c=np.ones((10, 10)))
             1
             >>> d
-            uv,ui,vj+ij sizes=4,26,30 num_segments=1,2,2 num_paths=2 i={10, 3} j={10, 5} u=2 v=2
+            uv,ui,vj+ij sizes=4,26,30 num_segments=1,2,2 num_paths=2 i={3, 10} j={5, 10} u=2 v=2
 
             When the dimensions of the modes cannot be inferred, we can provide them:
             >>> d.add_path(None, None, None, c=np.ones((2, 2)), dims={"u": 2, "v": 2})
             2
             >>> d
-            uv,ui,vj+ij sizes=8,30,34 num_segments=2,3,3 num_paths=3 i={2, 10, 3} j={10, 2, 5} u=2 v=2
+            uv,ui,vj+ij sizes=8,30,34 num_segments=2,3,3 num_paths=3 i={2, 3, 10} j={2, 5, 10} u=2 v=2
         """
         return self.insert_path(len(self.paths), *segments, c=c, dims=dims)
 
@@ -776,7 +791,7 @@ class SegmentedTensorProduct:
         Examples:
             >>> d = cue.SegmentedTensorProduct.from_subscripts("ab,ax,by+xy")
             >>> d.canonicalize_subscripts()
-            uv,ui,vj+ij sizes=0,0,0 num_segments=0,0,0 num_paths=0
+            uv,ui,vj+ij sizes=0,0,0 num_segments=0,0,0 num_paths=0 i= j= u= v=
 
         This is useful to identify equivalent descriptors.
         """
