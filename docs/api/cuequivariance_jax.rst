@@ -54,7 +54,6 @@ Extra Modules
    :toctree: generated/
    :template: class_template.rst
 
-   flax_linen.Linear
    flax_linen.LayerNorm
 
 .. autosummary::

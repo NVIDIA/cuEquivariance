@@ -98,13 +98,6 @@ Now we can create a tensor product from the descriptor and execute it. In PyTorc
    linear_torch
 
 
-In JAX, we can use the :func:`cuex.tensor_product <cuequivariance_jax.tensor_product>` function.
-
-.. jupyter-execute::
-
-   linear_jax = cuex.tensor_product(d)
-   linear_jax
-
 Now we can execute the linear layer with random input and weight tensors.
 
 .. jupyter-execute::
@@ -122,14 +115,20 @@ Now we can verify that the output is well normalized.
 
    x2.var()
 
-And finally the JAX version.
+
+
+In JAX, we can use the :func:`cuex.tensor_product <cuequivariance_jax.tensor_product>` function.
 
 .. jupyter-execute::
 
    w = jax.random.normal(jax.random.key(0), (d.operands[0].size,))
    x1 = jax.random.normal(jax.random.key(1), (3000, irreps1.dim))
 
-   x2 = linear_jax(w, x1)
+   [x2] = cuex.tensor_product(
+      [(cue.Operation([0, 1, 2]), d)],
+      [w, x1],
+      [jax.ShapeDtypeStruct((3000, irreps2.dim), jnp.float32)],
+   )
 
    assert x2.shape == (3000, irreps2.dim)
    x2.var()
