@@ -60,6 +60,7 @@ class EquivariantTensorProduct:
         self,
         d: Union[stp.SegmentedTensorProduct, Sequence[stp.SegmentedTensorProduct]],
         operands: list[cue.Rep],
+        symmetrize: bool = True,
     ):
         operands = tuple(operands)
         if isinstance(d, stp.SegmentedTensorProduct):
@@ -68,11 +69,11 @@ class EquivariantTensorProduct:
                 assert operands[oid].dim == d.operands[oid].size
             ds = [d]
         else:
-            ds = list(d)
+            ds = []
 
             nin = len(operands) - 1
 
-            for d in ds:
+            for d in list(d):
                 # all non-repeated input operands are the same
                 for i in range(nin - 1):
                     if not (i < d.num_operands - 1):
@@ -94,6 +95,10 @@ class EquivariantTensorProduct:
                         f"Output size mismatch: {operands[-1]} vs {d.operands[-1]}"
                     )
 
+                if symmetrize:
+                    d = d.symmetrize_operands(range(nin - 1, d.num_operands - 1))
+                ds.append(d)
+
             # all non-repeated inputs have the same operands
             for i in range(nin - 1):
                 assert len({d.operands[i] for d in ds if i < d.num_operands - 1}) <= 1
@@ -109,6 +114,12 @@ class EquivariantTensorProduct:
 
     def __hash__(self) -> int:
         return hash((self.operands, tuple(self.ds)))
+
+    def __mul__(self, factor: float) -> EquivariantTensorProduct:
+        return EquivariantTensorProduct([d * factor for d in self.ds], self.operands)
+
+    def __rmul__(self, factor: float) -> EquivariantTensorProduct:
+        return self.__mul__(factor)
 
     @property
     def d(self) -> stp.SegmentedTensorProduct:
@@ -229,18 +240,16 @@ class EquivariantTensorProduct:
             [d.flatten_coefficient_modes() for d in self.ds], self.operands
         )
 
-    def _map_operands_from_stp_to_etp(self, d: stp.SegmentedTensorProduct) -> list[int]:
+    def map_operands(self, num_operand: int) -> list[int]:
         inputs = list(range(self.num_operands - 1))
         output = self.num_operands - 1
 
-        if d.num_operands == self.num_operands:
+        if num_operand == self.num_operands:
             return inputs + [output]
-        if d.num_operands < self.num_operands:
-            return inputs[: d.num_operands - 1] + [output]
-        if d.num_operands > self.num_operands:
-            return (
-                inputs + [inputs[-1]] * (d.num_operands - self.num_operands) + [output]
-            )
+        if num_operand < self.num_operands:
+            return inputs[: num_operand - 1] + [output]
+        if num_operand > self.num_operands:
+            return inputs + [inputs[-1]] * (num_operand - self.num_operands) + [output]
 
     def change_layout(
         self, layout: Union[cue.IrrepsLayout, list[cue.IrrepsLayout]]
@@ -254,7 +263,7 @@ class EquivariantTensorProduct:
         layouts = [cue.IrrepsLayout.as_layout(layout) for layout in layouts]
 
         def f(d: stp.SegmentedTensorProduct) -> stp.SegmentedTensorProduct:
-            ii = self._map_operands_from_stp_to_etp(d)
+            ii = self.map_operands(d.num_operands)
             assert len(ii) == d.num_operands
 
             operands = [self.operands[i] for i in ii]
@@ -422,7 +431,7 @@ class EquivariantTensorProduct:
         for eid, e in enumerate(es):
             for d in e.ds:
                 d = copy.deepcopy(d)
-                ii = e._map_operands_from_stp_to_etp(d)
+                ii = e.map_operands(d.num_operands)
                 for oid in range(d.num_operands):
                     if stacked[ii[oid]]:
                         for e_ in reversed(es[:eid]):

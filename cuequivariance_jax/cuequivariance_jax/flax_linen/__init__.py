@@ -13,10 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .linear import Linear
 from .layer_norm import LayerNorm
 
 __all__ = [
-    "Linear",
     "LayerNorm",
 ]

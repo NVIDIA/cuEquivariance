@@ -1,5 +1,9 @@
 ## Latest Changes
 
+### Fixed
+
+- `cue.descriptor.full_tensor_product` was ignoring the `irreps3_filter` argument.
+
 ## 0.2.0 (2025-01-24)
 
 ### Breaking Changes

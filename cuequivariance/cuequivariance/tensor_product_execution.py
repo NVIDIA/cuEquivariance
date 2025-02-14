@@ -12,393 +12,251 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from __future__ import annotations
+
 import itertools
 from collections import defaultdict
-from typing import Any, Callable, Generator, Optional, Sequence, TypeVar
 
-import numpy as np
-
-
-class Buffer(int):
-    pass
+IVARS = "abcdefghijklmnopqrstuvwxyz"
+OVARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
-class InBuffer(Buffer):
-    pass
+class Operation:
+    buffers: tuple[int, ...]
 
-
-class OutBuffer(Buffer):
-    pass
-
-
-T = TypeVar("T")
-
-
-class Computation(tuple):
-    def __new__(cls, elements):
-        elements = list(elements)
-        assert all(isinstance(b, Buffer) for b in elements), elements
-        assert sum(isinstance(b, OutBuffer) for b in elements) == 1, elements
-        return super().__new__(cls, elements)
-
-    @property
-    def num_operands(self) -> int:
-        return len(self)
-
-    @property
-    def in_buffers(self) -> tuple[InBuffer, ...]:
-        return tuple(b for b in self if isinstance(b, InBuffer))
-
-    @property
-    def out_buffer(self) -> OutBuffer:
-        return next(b for b in self if isinstance(b, OutBuffer))
-
-    @property
-    def in_operands(self) -> tuple[int, ...]:
-        return tuple(oid for oid, b in enumerate(self) if isinstance(b, InBuffer))
-
-    @property
-    def out_operand(self) -> int:
-        return next(oid for oid, b in enumerate(self) if isinstance(b, OutBuffer))
-
-    def map_operands(
-        self,
-        in_buffers: Sequence[T],
-        out_buffers: Optional[Sequence[T]] = None,
-    ) -> list[Optional[T]]:
-        in_buffers = list(in_buffers)
-        if out_buffers is None:
-            return [in_buffers[b] if isinstance(b, InBuffer) else None for b in self]
-        else:
-            out_buffers = list(out_buffers)
-            return [
-                in_buffers[b] if isinstance(b, InBuffer) else out_buffers[b]
-                for b in self
-            ]
-
-    def map_inputs(
-        self,
-        in_buffers: Sequence[T],
-    ) -> list[T]:
-        in_buffers = list(in_buffers)
-        return [in_buffers[b] for b in self.in_buffers]
-
-
-class TensorProductExecution:
-    computations: tuple[Computation, ...]
-    # (num_computations, num_operands)  # which in/out buffer to use for each computation
-
-    def __init__(self, computations: tuple[Computation, ...]):
-        self.computations = tuple(Computation(c) for c in computations)
-
-    def __hash__(self) -> int:
-        return hash(self.computations)
+    def __init__(self, buffers: tuple[int, ...]):
+        assert len(buffers) > 0, buffers
+        assert all(isinstance(b, int) for b in buffers), buffers
+        assert all(i >= 0 for i in buffers), buffers
+        self.buffers = tuple(int(b) for b in buffers)
 
     def __repr__(self):
-        IVARS = "abcdefghijklmnopqrstuvwxyz"
-        OVARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        return f"Operation({self.buffers})"
 
-        text = [
-            "({inputs}) -> ({outputs})".format(
-                inputs=", ".join([IVARS[b] for b in self.in_buffers]),
-                outputs=", ".join([OVARS[b] for b in self.out_buffers]),
-            )
-        ]
-        for comp in self.computations:
-            text += [
-                "  "
-                + " ".join(
-                    IVARS[b] if isinstance(b, InBuffer) else OVARS[b] for b in comp
-                )
-            ]
-        return "\n".join(text)
-
-    @property
-    def is_trivial(self) -> bool:
-        return len(self.computations) == 0
-
-    @property
-    def num_operands(self) -> int:
-        assert not self.is_trivial
-        for c in self.computations:
-            return len(c)
-
-    @property
-    def in_buffers(self) -> tuple[int, ...]:
-        return tuple(sorted({b for c in self.computations for b in c.in_buffers}))
-
-    @property
-    def out_buffers(self) -> tuple[int, ...]:
-        return tuple(sorted({c.out_buffer for c in self.computations}))
-
-    @property
-    def max_in_buffer(self) -> int:
-        if len(self.in_buffers) == 0:
-            return -1
-        return max(self.in_buffers)
-
-    @property
-    def max_out_buffer(self) -> int:
-        assert not self.is_trivial
-        return max(self.out_buffers)
-
-    @property
-    def in_buffers_per_operand(self) -> tuple[tuple[int, ...], ...]:
-        x = [set() for _ in range(self.num_operands)]
-        for c in self.computations:
-            for i, b in zip(c.in_operands, c.in_buffers):
-                x[i].add(b)
-        return tuple(tuple(sorted(s)) for s in x)
-
-    @property
-    def out_buffers_per_operand(self) -> tuple[tuple[int, ...], ...]:
-        x = [set() for _ in range(self.num_operands)]
-        for c in self.computations:
-            x[c.out_operand].add(c.out_buffer)
-        return tuple(tuple(sorted(s)) for s in x)
-
-    @property
-    def num_inputs_per_operand(self) -> tuple[int, ...]:
-        return tuple(len(s) for s in self.in_buffers_per_operand)
-
-    @property
-    def num_outputs_per_operand(self) -> tuple[int, ...]:
-        return tuple(len(s) for s in self.out_buffers_per_operand)
-
-    def map_buffers(
-        self,
-        f_in: Optional[Callable[[int], int]],
-        f_out: Optional[Callable[[int], int]] = None,
-    ) -> "TensorProductExecution":
-        if f_in is None:
-            f_in = lambda b: b  # noqa
-        if f_out is None:
-            f_out = lambda b: b  # noqa
-        return TensorProductExecution(
-            tuple(
-                Computation(
-                    (
-                        InBuffer(int(f_in(b)))
-                        if isinstance(b, InBuffer)
-                        else OutBuffer(int(f_out(b)))
-                    )
-                    for b in comp
-                )
-                for comp in self.computations
-            )
+    def to_string(self, num_inputs: int) -> str:
+        return " ".join(
+            IVARS[b] if b < num_inputs else OVARS[b - num_inputs] for b in self.buffers
         )
 
-    def simplify(self) -> "TensorProductExecution":
-        return self.map_buffers(
-            lambda b: self.in_buffers.index(b),
-            lambda b: self.out_buffers.index(b),
-        )
+    @staticmethod
+    def list_to_string(
+        operations: list[Operation], num_inputs: int, num_outputs: int
+    ) -> str:
+        i = ", ".join(IVARS[:num_inputs])
+        o = ", ".join(OVARS[:num_outputs])
+        s = f"({i}) -> ({o})"
+        for op in operations:
+            s += "\n  " + op.to_string(num_inputs)
+        return s
 
-    def jvp(self, has_tangent: list[bool]) -> "TensorProductExecution":
-        assert self.max_in_buffer < len(has_tangent)
+    def __lt__(self, value):
+        assert isinstance(value, Operation)
+        return self.buffers < value.buffers
 
-        bid = len(has_tangent)
+    def __hash__(self) -> int:
+        return hash(self.buffers)
 
-        tangents_new_bid = []
-        for has in has_tangent:
-            if has:
-                tangents_new_bid.append(bid)
-                bid += 1
-            else:
-                tangents_new_bid.append(None)
+    def __eq__(self, value):
+        assert isinstance(value, Operation)
+        return self.buffers == value.buffers
 
-        new_computations = []
-        for computation in self.computations:
-            for oid, bid in zip(
-                computation.in_operands, computation.map_inputs(tangents_new_bid)
-            ):
-                if bid is None:
-                    continue  # the tangent is zero
+    def permute_operands(self, permutation: tuple[int, ...]) -> Operation:
+        return Operation(tuple(self.buffers[p] for p in permutation))
 
-                c = list(computation)
-                c[oid] = InBuffer(bid)
-                new_computations.append(Computation(c))
+    def input_operands_buffers(self, num_inputs: int) -> list[tuple[int, int]]:
+        return [(op, i) for op, i in enumerate(self.buffers) if i < num_inputs]
 
-        return TensorProductExecution(tuple(new_computations))
+    def output_operand_buffer(self, num_inputs: int) -> tuple[int, int]:
+        def _raise():
+            raise ValueError(
+                f"Operation must have exactly one output buffer. {self=} {num_inputs=}"
+            )
+
+        result = None
+        for op, i in enumerate(self.buffers):
+            if i < num_inputs:
+                continue
+            if result is not None:
+                _raise()
+            result = (op, i)
+        if result is None:
+            _raise()
+
+        return result
+
+    def input_buffers(self, num_inputs: int) -> list[int]:
+        return [i for i in self.buffers if i < num_inputs]
+
+    def output_buffer(self, num_inputs: int) -> int:
+        return self.output_operand_buffer(num_inputs)[1]
 
     def transpose(
         self,
         is_undefined_primal: list[bool],
         has_cotangent: list[bool],
-    ) -> "TensorProductExecution":
-        assert self.max_in_buffer < len(is_undefined_primal)
-        assert self.max_out_buffer < len(has_cotangent)
+    ) -> Operation | None:
+        """
+        Args:
+            is_undefined_primal (list[bool]): whether the primal is undefined
+            has_cotangent (list[bool]): whether the cotangent is defined
 
-        in_bid = 0
-        out_bid = 0
+        Returns:
+            Operation: the transposed operation, if any
 
-        primals_new_bid = []
+        New buffers:
+         - new inputs: defined primals + cotangents (=True)
+         - new outputs: undefined primals
+        """
+        # number of input buffers in the original operation
+        # note that self might not involve all input buffers
+        num_inputs = len(is_undefined_primal)
+
+        if not has_cotangent[self.output_buffer(num_inputs) - num_inputs]:
+            # The output buffer of self has no cotangent,
+            # so there is no contribution to the primal.
+            return None
+
+        num_undef_primal = 0
+        for i in self.input_buffers(num_inputs):
+            if is_undefined_primal[i]:
+                num_undef_primal += 1
+
+        if num_undef_primal > 1:
+            raise ValueError(
+                f"Operation must have at most one undefined primal input. {self=} {is_undefined_primal=}."
+                " Otherwise it means that the operation has not been linearized correctly."
+            )
+        if num_undef_primal == 0:
+            # The operation has no undefined primal as input
+            return None
+
+        new_num_inputs = 0
+        new_num_outputs = 0
+        primals_to_new_input: list[int | None] = []
+        primals_to_new_output: list[int | None] = []
+
         for undef in is_undefined_primal:
             if undef:
-                primals_new_bid.append(out_bid)
-                out_bid += 1
+                primals_to_new_input.append(None)
+                primals_to_new_output.append(new_num_outputs)
+                new_num_outputs += 1
             else:
-                primals_new_bid.append(in_bid)
-                in_bid += 1
+                primals_to_new_input.append(new_num_inputs)
+                primals_to_new_output.append(None)
+                new_num_inputs += 1
 
-        cotangents_new_bid = []
+        outputs_to_new_input: list[int | None] = []
         for has in has_cotangent:
             if has:
-                cotangents_new_bid.append(in_bid)
-                in_bid += 1
+                outputs_to_new_input.append(new_num_inputs)
+                new_num_inputs += 1
             else:
-                cotangents_new_bid.append(None)
+                outputs_to_new_input.append(None)
 
-        del in_bid, out_bid
+        # output buffers are identified by their index being >= new_num_inputs
+        primals_to_new_output = [
+            None if i is None else new_num_inputs + i for i in primals_to_new_output
+        ]
 
-        new_computations = []
-        for comp in self.computations:
-            if not has_cotangent[comp.out_buffer]:
-                continue  # cotangent is zero
+        new_buffers = []
+        for i in self.buffers:
+            if i < num_inputs:
+                if is_undefined_primal[i]:
+                    new_buffers.append(primals_to_new_output[i])
+                else:
+                    new_buffers.append(primals_to_new_input[i])
+            else:
+                new_buffers.append(outputs_to_new_input[i - num_inputs])
 
-            for oid in comp.in_operands:
-                if not is_undefined_primal[comp[oid]]:
-                    continue  # nothing to transpose
+        return Operation(tuple(new_buffers))
 
-                c = [None] * len(comp)
-                # undefined primal -> output
-                c[oid] = OutBuffer(primals_new_bid[comp[oid]])
-                # output -> cotangent input
-                c[comp.out_operand] = InBuffer(cotangents_new_bid[comp.out_buffer])
-                # rest of inputs
-                for i in range(comp.num_operands):
-                    if i != oid and i != comp.out_operand:
-                        c[i] = InBuffer(primals_new_bid[comp[i]])
-
-                new_computations.append(Computation(c))
-
-        return TensorProductExecution(tuple(new_computations))
-
-    def group_by_symmetries(
-        self, permutations: list[tuple[int, ...]]
-    ) -> Generator[tuple[int, "TensorProductExecution"], None, None]:
-        """Used in JVP. Allows to avoid redundant computations.
-
-        Keeps only one computation per equivalence class of computations
-
+    def jvp(self, has_tangent: list[bool]) -> list[Operation]:
+        """
         Args:
-            permutations (list[tuple[int, ...]]): permutations of operands
-                that define the equivalence relation
+            has_tangent (list[bool]): whether the input has a tangent
+
+        Returns:
+            list[Operation]: the JVPs of the operation
+
+        NEW buffers:
+         - new inputs: original inputs + tangents (=True)
+         - new outputs: original outputs
         """
-        buckets: list[list[Computation]] = []
-        for c in self.computations:
-            found_bucket = False
-            for bucket in buckets:
-                rep = bucket[0]
-                if any(Computation(rep[p] for p in perm) == c for perm in permutations):
-                    bucket.append(c)
-                    found_bucket = True
-                    break
-            if not found_bucket:
-                buckets.append([c])
-        by_mul = defaultdict(list)
-        for bucket in buckets:
-            by_mul[len(bucket)].append(bucket[0])
-        for mul, reps in by_mul.items():
-            yield mul, TensorProductExecution(tuple(reps))
+        # number of input buffers in the original operation
+        # note that self might not involve all input buffers
+        num_inputs = len(has_tangent)
 
-    def group_by_identical_buffers(
-        self,
-    ) -> Generator[tuple[list[list[int]], "TensorProductExecution"], None, None]:
-        """Used in the evaluation of the TP.
-        If two inputs are identical we don't need to compute the assymetric part twice.
+        new_num_inputs = num_inputs
+        mapping: list[int | None] = []
+        for has in has_tangent:
+            if has:
+                mapping.append(new_num_inputs)
+                new_num_inputs += 1
+            else:
+                mapping.append(None)
+
+        jvps = []
+        for op, i in self.input_operands_buffers(num_inputs):
+            if has_tangent[i]:
+                new_buffers = list(self.buffers)
+                new_buffers[op] = mapping[i]
+                op, i = self.output_operand_buffer(num_inputs)
+                new_buffers[op] += new_num_inputs - num_inputs
+                jvps.append(Operation(new_buffers))
+
+        return jvps
+
+    def operands_with_identical_buffers(self) -> frozenset[frozenset[int]]:
+        """
+        Groups of operands sharing the same buffer.
+        """
+        bid_to_oid = defaultdict(list)
+        for oid, b in enumerate(self.buffers):
+            bid_to_oid[b].append(oid)
+        return frozenset(map(frozenset, bid_to_oid.values()))
+
+    @staticmethod
+    def group_by_idential_buffers(
+        operations: list[Operation],
+    ) -> list[tuple[frozenset[frozenset[int]], list[Operation]]]:
+        """
+        Args:
+            operations (list[Operation]): the operations to group
+            num_inputs (int): the number of input buffers
+
+        Returns:
+            list of tuples of:
+                - frozenset of frozensets of operands bound to identical buffers
+                - list of operations
+        """
+        return [
+            (p, list(group))
+            for p, group in itertools.groupby(
+                operations, key=Operation.operands_with_identical_buffers
+            )
+        ]
+
+    @staticmethod
+    def group_by_operational_symmetries(
+        symmetries: list[tuple[int, ...]],
+        operations: list[Operation],
+    ) -> list[tuple[int, Operation]]:
+        """
+        Args:
+            symmetries (list[tuple[int, ...]]): the permutation group
+            operations (list[Operation]): the operations to group
+
+        Returns:
+            list of tuples of:
+                - multiplicity
+                - list of operations
         """
 
-        def partition(computation: Computation) -> list[list[int]]:
-            bid_to_oid = defaultdict(list)
-            for oid, b in enumerate(computation):
-                b = (type(b), b)
-                bid_to_oid[b].append(oid)
-            return sorted(map(sorted, bid_to_oid.values()))
+        def partition(operation: Operation) -> tuple[int, ...]:
+            return frozenset(operation.permute_operands(perm) for perm in symmetries)
 
-        for p, group in itertools.groupby(self.computations, key=partition):
-            yield p, TensorProductExecution(tuple(group))
-
-    def display(self, ax=None):
-        import matplotlib.pyplot as plt
-
-        if ax is None:
-            ax = plt.gca()
-
-        in_buffers: list[dict[int, Any]] = [{} for _ in range(self.num_operands)]
-        out_buffers: list[dict[int, Any]] = [{} for _ in range(self.num_operands)]
-
-        RADIUS = 0.06
-
-        color_cycle = itertools.cycle(plt.rcParams["axes.prop_cycle"].by_key()["color"])
-
-        for c, color in zip(self.computations, color_cycle):
-            assert isinstance(c, Computation)
-
-            if c.out_buffer not in out_buffers[c.out_operand]:
-                y = len(out_buffers[c.out_operand])
-                art_out = plt.Circle(
-                    (c.out_operand + 1 / 6, 0.5 * y + 0.25),
-                    RADIUS,
-                    color="black",
-                    fill=False,
-                )
-                ax.add_artist(art_out)
-                ax.annotate(
-                    f"{int(c.out_buffer)}",
-                    xy=art_out.center,
-                    horizontalalignment="center",
-                    verticalalignment="center",
-                    color="red",
-                )
-                out_buffers[c.out_operand][c.out_buffer] = art_out
-            art_out = out_buffers[c.out_operand][c.out_buffer]
-
-            for oid, b in zip(c.in_operands, c.in_buffers):
-                if b not in in_buffers[oid]:
-                    y = self.in_buffers_per_operand[oid].index(b)
-                    art = plt.Circle(
-                        (oid - 1 / 6, 0.5 * y), RADIUS, color="black", fill=False
-                    )
-                    ax.add_artist(art)
-                    ax.annotate(
-                        f"{int(b)}",
-                        xy=art.center,
-                        horizontalalignment="center",
-                        verticalalignment="center",
-                    )
-                    in_buffers[oid][b] = art
-
-                art = in_buffers[oid][b]
-
-                start, end = np.array(art.center), np.array(art_out.center)
-                rand_tr = np.random.randn(2) * RADIUS * 0.1
-                start, end = start + rand_tr, end + rand_tr
-                length = np.linalg.norm(end - start)
-                if length > 2 * RADIUS:
-                    ax.annotate(
-                        "",
-                        xytext=start + (end - start) * RADIUS / length,
-                        xy=end - (end - start) * RADIUS / length,
-                        arrowprops=dict(arrowstyle="->", color=color),
-                    )
-
-        y_min, y_max = 0, 0
-        for art in ax.get_children():
-            if not isinstance(art, plt.Circle):
-                continue
-            y_min = min(y_min, art.center[1])
-            y_max = max(y_max, art.center[1])
-
-        ax.set_ylim(y_min - 0.2, y_max + 0.2)
-        ax.set_xlim(-0.5, self.num_operands - 0.5)
-        ax.set_aspect("equal", adjustable="box")
-
-        ax.set_xticks(
-            range(self.num_operands), [f"operand {i}" for i in range(self.num_operands)]
-        )
-        ax.set_yticks([])
-        for i in range(self.num_operands + 1):
-            ax.axvline(i - 0.5, color="black", lw=1)
-
-        return ax
+        groups = []
+        for _, group in itertools.groupby(operations, key=partition):
+            group = sorted(group)
+            groups.append((len(group), group[0]))
+        return groups

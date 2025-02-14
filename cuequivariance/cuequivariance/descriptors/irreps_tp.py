@@ -122,6 +122,9 @@ def full_tensor_product(
         enumerate(irreps1), enumerate(irreps2)
     ):
         for ir3 in ir1 * ir2:
+            if irreps3_filter is not None and ir3 not in irreps3_filter:
+                continue
+
             # for loop over the different solutions of the Clebsch-Gordan decomposition
             for cg in cue.clebsch_gordan(ir1, ir2, ir3):
                 d.add_path(i1, i2, None, c=cg)

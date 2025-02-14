@@ -24,7 +24,6 @@ from .rep_array.vmap import vmap
 from .rep_array.utils import concatenate, randn, as_irreps_array, clebsch_gordan
 
 from .primitives.tensor_product import tensor_product
-from .primitives.symmetric_tensor_product import symmetric_tensor_product
 from .primitives.equivariant_tensor_product import equivariant_tensor_product
 
 from .operations.activation import (
@@ -47,7 +46,6 @@ __all__ = [
     "as_irreps_array",
     "clebsch_gordan",
     "tensor_product",
-    "symmetric_tensor_product",
     "equivariant_tensor_product",
     "normalspace",
     "normalize_function",
