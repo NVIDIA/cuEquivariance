@@ -106,6 +106,11 @@ def equivariant_tensor_product(
     if indices is None:
         indices = [None] * e.num_operands
 
+    if len(indices) != e.num_operands:
+        raise ValueError(
+            f"Unexpected number of indices. indices should None or a list of length {e.num_operands}, got a list of length {len(indices)}."
+        )
+
     if output_dtype is None:
         output_dtype = jnp.result_type(*inputs)
 

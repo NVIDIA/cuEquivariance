@@ -52,12 +52,12 @@ def tensor_product(
     if indices is None:
         indices = [None] * len(buffers)
 
-    # def fn(x: jax.Array, idx: jax.Array | None) -> tuple[int, ...]:
-    #     if idx is None:
-    #         return x.shape
-    #     return idx.shape + x.shape[1:]
-
-    # broadcast_inputs_shape = jnp.broadcast_shapes(*map(fn, inputs, indices))
+    if len(indices) != len(buffers):
+        raise ValueError(
+            f"Expected {len(buffers)} indices, got {len(indices)}. "
+            "Please provide an index for each buffer. "
+            "If a buffer does not have an index, please set it to None."
+        )
 
     def fn(
         buffer: jax.Array | jax.ShapeDtypeStruct, idx: jax.Array | None
@@ -69,7 +69,6 @@ def tensor_product(
     buffers = list(map(fn, buffers, indices))
 
     for i, buffer in enumerate(buffers):
-        # TODO: automatically vmap here
         assert buffer.ndim == 2, (
             f"Expected buffer {i} to have 2 dimensions, got {buffer.shape}"
         )
@@ -86,13 +85,6 @@ def tensor_product(
     assert math_dtype in (jnp.float32, jnp.float64), (
         f"math_dtype must be float32 or float64, got {math_dtype}"
     )
-
-    if len(indices) != len(buffers):
-        raise ValueError(
-            f"Expected {len(buffers)} indices, got {len(indices)}. "
-            "Please provide an index for each buffer. "
-            "If a buffer does not have an index, please set it to None."
-        )
 
     buffer_index = []
     unique_indices = []
@@ -421,7 +413,7 @@ def tensor_product_transpose(
 
 def tensor_product_batching(
     batched_inputs_and_indices: tuple[jax.Array, ...],
-    batch_axes: tuple[int | None, ...],
+    batch_axes_of_inputs_and_indices: tuple[int | None, ...],
     *,
     buffer_index: tuple[int, ...],
     outputs_shape_dtype: tuple[jax.ShapeDtypeStruct, ...],
@@ -436,20 +428,19 @@ def tensor_product_batching(
         batched_inputs_and_indices[:num_inputs],
         batched_inputs_and_indices[num_inputs:],
     )
+    del batched_inputs_and_indices
+    batch_axes_of_inputs, batch_axes_of_indices = (
+        batch_axes_of_inputs_and_indices[:num_inputs],
+        batch_axes_of_inputs_and_indices[num_inputs:],
+    )
+    del batch_axes_of_inputs_and_indices
 
-    assert len(batched_indices) == 0, "Batching not supported with indexed buffers"
-
-    for i, batch_axis in zip(buffer_index, batch_axes[:num_inputs]):
-        if i >= 0 and batch_axis is not None:
-            raise ValueError("Batching an indexed buffer is not supported.")
-
-    new_dim = {
-        input.shape[axis]
-        for input, axis in zip(batched_inputs_and_indices, batch_axes)
-        if axis is not None
-    }
-    assert len(new_dim) == 1, "Expected all batched inputs to have the same size"
-    new_dim = new_dim.pop()
+    for i in buffer_index[num_inputs:]:
+        if i >= 0:
+            raise ValueError("Batching is not supported when outputs have indices")
+    for i, axis in zip(buffer_index[:num_inputs], batch_axes_of_inputs):
+        if i >= 0 and axis is not None:
+            raise ValueError("Batching is not supported for inputs that have indices")
 
     def prepare(input: jax.Array, axis: int | None) -> jax.Array:
         if axis is None:
@@ -457,31 +448,57 @@ def tensor_product_batching(
         else:
             return jnp.moveaxis(input, axis, 0)
 
-    assert len(batched_inputs) == len(batch_axes)
     batched_inputs = [
-        prepare(input, axis) for input, axis in zip(batched_inputs, batch_axes)
+        input if i >= 0 else prepare(input, axis)
+        for i, input, axis in zip(buffer_index, batched_inputs, batch_axes_of_inputs)
+    ]
+    batched_indices = [
+        prepare(input, axis)
+        for input, axis in zip(batched_indices, batch_axes_of_indices)
     ]
 
-    max_m = max(x.shape[0] for x in batched_inputs)
-    max_n = max(x.shape[1] for x in batched_inputs)
+    # possible input buffer shapes:
+    #  - (new_dim | 1, batch_size | 1, size)
+    #  - (max_index, size)
+    # possible indices shapes:
+    #  - (new_dim | 1, batch_size)
+    new_dim = 1
+    batch_size = 1
+    for x in batched_inputs:
+        if x.ndim == 3:
+            if x.shape[0] != 1:
+                new_dim = x.shape[0]
+            if x.shape[1] != 1:
+                batch_size = x.shape[1]
+    for x in batched_indices:
+        if x.shape[0] != 1:
+            new_dim = x.shape[0]
+        if x.shape[1] != 1:
+            batch_size = x.shape[1]
 
-    def fn(x: jax.Array) -> jax.Array:
-        assert x.ndim == 3
+    def flatten_input(x: jax.Array) -> jax.Array:
         m, n, d = x.shape
         if (m, n) == (1, 1):
             return jnp.reshape(x, (1, d))
-        x = jnp.broadcast_to(x, (max_m, max_n, d))
-        return jnp.reshape(x, (max_m * max_n, d))
+        x = jnp.broadcast_to(x, (new_dim, batch_size, d))
+        return jnp.reshape(x, (new_dim * batch_size, d))
 
-    batched_inputs = [fn(x) for x in batched_inputs]
+    batched_inputs = [flatten_input(x) if x.ndim == 3 else x for x in batched_inputs]
+
+    def flatten_index(x: jax.Array) -> jax.Array:
+        x = jnp.broadcast_to(x, (new_dim, batch_size))
+        return jnp.reshape(x, (new_dim * batch_size))
+
+    batched_indices = [flatten_index(x) for x in batched_indices]
 
     new_outputs_shape_dtype = tuple(
-        jax.ShapeDtypeStruct((max_m * max_n, *out.shape[1:]), out.dtype)
+        jax.ShapeDtypeStruct((new_dim * batch_size, *out.shape[1:]), out.dtype)
         for out in outputs_shape_dtype
     )
 
     outputs = tensor_product_p.bind(
         *batched_inputs,
+        *batched_indices,
         buffer_index=buffer_index,
         outputs_shape_dtype=new_outputs_shape_dtype,
         descriptors=descriptors,
@@ -489,7 +506,9 @@ def tensor_product_batching(
         name=name + "_batching",
         impl=impl,
     )
-    outputs = tuple(jnp.reshape(x, (max_m, max_n, *x.shape[1:])) for x in outputs)
+    outputs = tuple(
+        jnp.reshape(x, (new_dim, batch_size, *x.shape[1:])) for x in outputs
+    )
     outputs = tuple(
         jnp.sum(x, axis=1, keepdims=True) if y.shape[0] == 1 else x
         for x, y in zip(outputs, outputs_shape_dtype)

@@ -83,3 +83,37 @@ def test_multiple_operand_shape_bug():
 #         [jax.ShapeDtypeStruct((2, 2, 3), jnp.float32)],
 #     )
 #     assert out.shape == (2, 2, 3)
+
+
+def test_vmap():
+    e = cue.descriptors.full_tensor_product(
+        cue.Irreps("SO3", "1"), cue.Irreps("SO3", "1"), cue.Irreps("SO3", "1")
+    )
+
+    def f(x1, x2, i1):
+        return cuex.tensor_product(
+            [
+                (cue.Operation([0, 1, 2]), e.ds[0]),
+                (cue.Operation([0, 1, 3]), e.ds[0]),
+            ],
+            [x1, x2],
+            [
+                jax.ShapeDtypeStruct((2, 3), jnp.float32),
+                jax.ShapeDtypeStruct((1, 3), jnp.float32),
+            ],
+            indices=[i1, None, None, None],
+        )
+
+    def g(outs):
+        return jax.tree.map(jnp.shape, outs)
+
+    x1 = jnp.ones((3, 3))
+    x2 = jnp.ones((2, 3))
+    i1 = jnp.array([0, 2])
+    assert g(f(x1, x2, i1)) == [(2, 3), (1, 3)]
+
+    bx2 = jnp.ones((4, 2, 3))
+    bi1 = jnp.array([[0, 2], [1, 2], [0, 0], [1, 1]])
+    assert g(jax.vmap(f, (None, 0, None))(x1, bx2, i1)) == [(4, 2, 3), (4, 1, 3)]
+    assert g(jax.vmap(f, (None, None, 0))(x1, x2, bi1)) == [(4, 2, 3), (4, 1, 3)]
+    assert g(jax.vmap(f, (None, 0, 0))(x1, bx2, bi1)) == [(4, 2, 3), (4, 1, 3)]
