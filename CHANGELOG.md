@@ -1,5 +1,9 @@
 ## Latest Changes
 
+### Fixed
+- Identified bug in CUDA kernel, disable CUDA kernel for `cuet.TransposeSegments` and `cuet.TransposeIrrepsLayout`.
+
+
 ## 0.2.0 (2025-01-24)
 
 ### Breaking Changes
