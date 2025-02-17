@@ -210,7 +210,7 @@ class EquivariantTensorProduct(torch.nn.Module):
         ):
             if e.num_inputs == 1:
                 self.tp = SymmetricTPDispatcher(
-                    cuet.SymmetricTensorProduct(
+                    cuet._SymmetricTensorProduct(
                         e.ds,
                         device=device,
                         math_dtype=math_dtype,
@@ -219,7 +219,7 @@ class EquivariantTensorProduct(torch.nn.Module):
                 )
             elif e.num_inputs == 2:
                 self.tp = IWeightedSymmetricTPDispatcher(
-                    cuet.IWeightedSymmetricTensorProduct(
+                    cuet._IWeightedSymmetricTensorProduct(
                         e.ds,
                         device=device,
                         math_dtype=math_dtype,
@@ -229,13 +229,32 @@ class EquivariantTensorProduct(torch.nn.Module):
             else:
                 raise NotImplementedError("This should not happen")
         else:
-            tp = cuet.TensorProduct(
-                e.ds[0],
-                device=device,
-                math_dtype=math_dtype,
-                use_fallback=use_fallback,
-            )
-            self.tp = TPDispatcher(tp, tp.descriptor)
+            assert len(e.ds) == 1
+
+            tp = None
+            if (
+                e.d.subscripts.canonicalize() in ["uv,u,v", "uv,v,u"]
+                and use_fallback is not True
+            ):
+                try:
+                    tp = cuet._BatchLinear(
+                        e.ds[0], device=device, math_dtype=math_dtype
+                    )
+                except NotImplementedError:
+                    pass
+
+            if tp is None:
+                tp = TPDispatcher(
+                    cuet.TensorProduct(
+                        e.ds[0],
+                        device=device,
+                        math_dtype=math_dtype,
+                        use_fallback=use_fallback,
+                    ),
+                    e.ds[0],
+                )
+
+            self.tp = tp
 
         self.operands_dims = [op.dim for op in e.operands]
 
@@ -253,7 +272,6 @@ class EquivariantTensorProduct(torch.nn.Module):
         """
         If ``indices`` is not None, the first input is indexed by ``indices``.
         """
-
         if x3 is not None and x2 is not None and x1 is not None:
             inputs = [x0, x1, x2, x3]
         elif x2 is not None and x1 is not None:

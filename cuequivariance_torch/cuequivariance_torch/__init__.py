@@ -18,10 +18,10 @@ __version__ = (
     importlib.resources.files(__package__).joinpath("VERSION").read_text().strip()
 )
 
-from .primitives.tensor_product import TensorProduct, _Wrapper
+from .primitives.tensor_product import TensorProduct, _Wrapper, _BatchLinear
 from .primitives.symmetric_tensor_product import (
-    SymmetricTensorProduct,
-    IWeightedSymmetricTensorProduct,
+    _SymmetricTensorProduct,
+    _IWeightedSymmetricTensorProduct,
 )
 from .primitives.transpose import TransposeSegments, TransposeIrrepsLayout
 
@@ -42,8 +42,10 @@ from cuequivariance_torch import layers
 
 __all__ = [
     "TensorProduct",
-    "SymmetricTensorProduct",
-    "IWeightedSymmetricTensorProduct",
+    "_Wrapper",
+    "_BatchLinear",
+    "_SymmetricTensorProduct",
+    "_IWeightedSymmetricTensorProduct",
     "TransposeSegments",
     "TransposeIrrepsLayout",
     "EquivariantTensorProduct",
@@ -57,5 +59,4 @@ __all__ = [
     "vector_to_euler_angles",
     "SphericalHarmonics",
     "layers",
-    "_Wrapper",
 ]
