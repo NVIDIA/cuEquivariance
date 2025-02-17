@@ -61,10 +61,14 @@ def tensor_product_ops_impl(
         logger.info("All buffers must be used")
         return None
     if len({b.shape[2] for b in buffers}.union({1})) != 2:
-        logger.info("Not compatible with Uniform 1D")
+        logger.info(
+            f"Buffer shapes not compatible with Uniform 1D: {[b.shape for b in buffers]}"
+        )
         return None
     if max(b.shape[2] for b in buffers) % 32 != 0:
-        logger.info("Not compatible with Uniform 1D")
+        logger.info(
+            f"Buffer shapes not compatible with Uniform 1D: {[b.shape for b in buffers]}"
+        )
         return None
 
     try:
