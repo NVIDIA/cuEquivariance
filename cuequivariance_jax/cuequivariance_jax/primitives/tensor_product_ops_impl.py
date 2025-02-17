@@ -42,10 +42,10 @@ def tensor_product_ops_impl(
     buffers = list(inputs) + list(outputs_shape_dtype)
     for ope, stp in descriptors:
         if len(stp.subscripts.modes()) != 1:
-            logger.info(f"Unsupported STP: {stp}")
+            logger.info(f"Unsupported STP: {stp} for {name}")
             return None
         if not stp.all_same_segment_shape():
-            logger.info(f"Unsupported STP: {stp}")
+            logger.info(f"Unsupported STP: {stp} for {name}")
             return None
 
         for i, operand in zip(ope.buffers, stp.operands):
@@ -54,20 +54,22 @@ def tensor_product_ops_impl(
             if b.ndim == 2:
                 b = buffers[i] = reshape(b, shape)
             if b.shape != shape:
-                logger.info(f"Shape mismatch: {b.shape} != {shape} for {i} {stp} {ope}")
+                logger.info(
+                    f"Shape mismatch: {b.shape} != {shape} for {i} {stp} {ope} for {name}"
+                )
                 return None
 
     if not all(b.ndim == 3 for b in buffers):
-        logger.info("All buffers must be used")
+        logger.info(f"All buffers must be used, for {name}")
         return None
     if len({b.shape[2] for b in buffers}.union({1})) != 2:
         logger.info(
-            f"Buffer shapes not compatible with Uniform 1D: {[b.shape for b in buffers]}"
+            f"Buffer shapes not compatible {[b.shape for b in buffers]}, for {name}"
         )
         return None
     if max(b.shape[2] for b in buffers) % 32 != 0:
         logger.info(
-            f"Buffer shapes not compatible with Uniform 1D: {[b.shape for b in buffers]}"
+            f"Buffer shapes not compatible {[b.shape for b in buffers]}, for {name}"
         )
         return None
 
