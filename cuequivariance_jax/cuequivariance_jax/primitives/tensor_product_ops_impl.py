@@ -69,7 +69,7 @@ def tensor_product_ops_impl(
         return None
     if max(b.shape[2] for b in buffers) % 32 != 0:
         logger.info(
-            f"Buffer shapes not compatible {[b.shape for b in buffers]}, for {name}"
+            f"Extend must be a multiple of 32, got {[b.shape for b in buffers]}, for {name}"
         )
         return None
 
