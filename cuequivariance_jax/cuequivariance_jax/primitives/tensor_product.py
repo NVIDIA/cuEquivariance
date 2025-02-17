@@ -253,6 +253,7 @@ def tensor_product_impl(
     def optimize_paths(ope: cue.Operation, stp: cue.SegmentedTensorProduct):
         for set_of_operands in ope.operands_with_identical_buffers():
             stp = stp.sort_indices_for_identical_operands(set_of_operands)
+        stp = stp.sort_paths()
         return ope, stp
 
     descriptors = list(map(optimize_paths, *zip(*descriptors)))
