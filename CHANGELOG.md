@@ -1,5 +1,11 @@
 ## Latest Changes
 
+### Breaking Changes
+- `cuet.SymmetricTensorProduct` and `cuet.IWeightedSymmetricTensorProduct` are now private. They are not available in the public API anymore. Use `cuet.EquivariantTensorProduct` instead.
+
+### Added
+- Call custom kernel for linear and indexed-linear tensor products (`uv,u,v` with `uv` optionally indexed).
+
 ## 0.2.0 (2025-01-24)
 
 ### Breaking Changes
