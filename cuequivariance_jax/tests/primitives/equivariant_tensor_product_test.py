@@ -57,7 +57,7 @@ def make_uniform1d_descriptors():
 
 @pytest.mark.parametrize("e", make_uniform1d_descriptors())
 def test_custom_kernel(e: cue.EquivariantTensorProduct):
-    if not jax.devices("cuda"):
+    if jax.default_backend() != "gpu":
         pytest.skip("test_custom_kernel requires CUDA")
 
     jax.config.update("jax_enable_x64", True)
