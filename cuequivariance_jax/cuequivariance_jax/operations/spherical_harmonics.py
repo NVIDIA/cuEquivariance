@@ -50,7 +50,9 @@ def spherical_harmonics(
         vector = _normalize(vector)
 
     return cuex.equivariant_tensor_product(
-        descriptors.spherical_harmonics(ir, ls, vector.layout), vector
+        descriptors.spherical_harmonics(ir, ls, vector.layout),
+        vector,
+        name="spherical_harmonics",
     )
 
 
