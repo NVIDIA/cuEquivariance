@@ -59,6 +59,15 @@ def tensor_product_ops_impl(
                 )
                 return None
 
+    for b in buffers:
+        if b.dtype.type not in {jnp.float32, jnp.float64, jnp.float16, jnp.bfloat16}:
+            logger.info(f"Unsupported buffer type: {b.dtype} for {name}")
+            return None
+    for i in indices:
+        if i.dtype.type != jnp.int32:
+            logger.info(f"Unsupported index type: {i.dtype} for {name}")
+            return None
+
     if not all(b.ndim == 3 for b in buffers):
         logger.info(f"All buffers must be used, for {name}")
         return None
@@ -72,6 +81,27 @@ def tensor_product_ops_impl(
             f"Extend must be a multiple of 32, got {[b.shape for b in buffers]}, for {name}"
         )
         return None
+
+    math_dtype = jnp.dtype(math_dtype)
+    if math_dtype.type not in {jnp.float32, jnp.float64}:
+        logger.info(f"Unsupported math_dtype: {math_dtype} for {name}")
+        return None
+
+    batch_size = 1
+    for i, b in zip(buffer_index, buffers):
+        if i >= 0:
+            batch_size = indices[i].shape[0]
+        elif b.shape[0] != 1:
+            batch_size = b.shape[0]
+
+    # TODO: remove if the backend supports atomic operations for float16/bfloat16
+    for i, b in zip(buffer_index[num_inputs:], buffers[num_inputs:]):
+        if b.dtype.type not in {jnp.float32, jnp.float64}:
+            if i >= 0 or b.shape[0] != batch_size:
+                logger.info(
+                    f"Output buffer {b.shape} of type {b.dtype} and buffer index {i} is not supported for {name}"
+                )
+                return None
 
     try:
         from cuequivariance_ops_jax import (
