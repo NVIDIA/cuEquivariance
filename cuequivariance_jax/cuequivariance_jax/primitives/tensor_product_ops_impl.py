@@ -60,8 +60,7 @@ def tensor_product_ops_impl(
             if b.ndim == 2:
                 b = buffers[i] = reshape(b, shape)
             if b.shape != shape:
-                log(f"Shape mismatch: {b.shape} != {shape} for {i} {stp} {ope}")
-                return None
+                return log(f"Shape mismatch: {b.shape} != {shape} for {i} {stp} {ope}")
 
     for b in buffers:
         if b.dtype.type not in {jnp.float32, jnp.float64, jnp.float16, jnp.bfloat16}:
