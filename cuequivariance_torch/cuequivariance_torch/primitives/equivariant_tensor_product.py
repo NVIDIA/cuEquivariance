@@ -18,7 +18,10 @@ import torch
 
 import cuequivariance as cue
 import cuequivariance_torch as cuet
+from cuequivariance import segmented_tensor_product as stp
 from cuequivariance.irreps_array.misc_ui import default_layout
+
+from .tensor_product import CALL_DISPATCHERS
 
 
 class Dispatcher(torch.nn.Module):
@@ -69,27 +72,42 @@ TRANSPOSE_DISPATCHERS = [
 ]
 
 
-# [Mario] I'm not sure how to handle this case
+class IndexedTPDispatcher(cuet._Wrapper):
+    def __init__(self, module: torch.nn.Module, descriptor: stp.SegmentedTensorProduct):
+        super().__init__()
+        self.module = CALL_DISPATCHERS[descriptor.num_operands - 1 + 2](module)
+        self.descriptor = descriptor
+
+    def forward(
+        self,
+        inputs: List[torch.Tensor],
+        indices: Optional[List[torch.Tensor]] = None,
+        num_outputs: Optional[int] = None,
+    ) -> torch.Tensor:
+        return self.module(inputs, indices, num_outputs)
+
+
 class TPDispatcher(cuet._Wrapper):
     def forward(
         self,
         inputs: List[torch.Tensor],
-        indices: List[Optional[torch.Tensor]],
+        indices: Optional[List[torch.Tensor]] = None,
         num_outputs: Optional[int] = None,
     ) -> torch.Tensor:
-        return self.module(inputs, indices, num_outputs)
+        assert indices is None
+        assert num_outputs is None
+        return self.module(inputs)
 
 
 class SymmetricTPDispatcher(Dispatcher):
     def forward(
         self,
         inputs: List[torch.Tensor],
-        indices: List[Optional[torch.Tensor]],
+        indices: Optional[List[torch.Tensor]] = None,
         num_outputs: Optional[int] = None,
     ) -> torch.Tensor:
         (x0,) = inputs
-        assert indices[0] is None
-        assert indices[1] is None
+        assert indices is None
         assert num_outputs is None
         return self.tp(x0)
 
@@ -98,19 +116,19 @@ class IWeightedSymmetricTPDispatcher(Dispatcher):
     def forward(
         self,
         inputs: List[torch.Tensor],
-        indices: List[Optional[torch.Tensor]],
+        indices: Optional[List[torch.Tensor]] = None,
         num_outputs: Optional[int] = None,
     ) -> torch.Tensor:
         x0, x1 = inputs
-        if indices[0] is None:
+        if indices is None:
             torch._assert(
                 x0.ndim == 2,
                 f"Expected x0 to have shape (batch, dim), got {x0.shape}",
             )
-            indices[0] = torch.arange(x1.shape[0], dtype=torch.int32, device=x1.device)
-            indices[0] = indices[0] % x0.shape[0]
-        assert indices[1] is None
-        assert indices[2] is None
+            indices = [
+                torch.arange(x1.shape[0], dtype=torch.int32, device=x1.device)
+                % x0.shape[0]
+            ]
         assert num_outputs is None
         return self.tp(x0, indices[0], x1)
 
@@ -149,6 +167,7 @@ class EquivariantTensorProduct(torch.nn.Module):
         tensor([[0., 0., 0., 0., 0., 0.],...)
     """
 
+    @torch.jit.ignore
     def __init__(
         self,
         e: cue.EquivariantTensorProduct,
@@ -244,7 +263,10 @@ class EquivariantTensorProduct(torch.nn.Module):
                 use_fallback=use_fallback,
                 indexed=indexed,
             )
-            self.tp = TPDispatcher(tp, tp.descriptor)
+            if indexed:
+                self.tp = IndexedTPDispatcher(tp, tp.descriptor)
+            else:
+                self.tp = TPDispatcher(tp, tp.descriptor)
 
         self.operands_dims = [op.dim for op in e.operands]
 
@@ -257,11 +279,7 @@ class EquivariantTensorProduct(torch.nn.Module):
         x1: Optional[torch.Tensor] = None,
         x2: Optional[torch.Tensor] = None,
         x3: Optional[torch.Tensor] = None,
-        idx0: Optional[torch.Tensor] = None,
-        idx1: Optional[torch.Tensor] = None,
-        idx2: Optional[torch.Tensor] = None,
-        idx3: Optional[torch.Tensor] = None,
-        idx_out: Optional[torch.Tensor] = None,
+        indices: Optional[List[torch.Tensor]] = None,
         num_outputs: Optional[int] = None,
     ) -> torch.Tensor:
         """
@@ -270,16 +288,12 @@ class EquivariantTensorProduct(torch.nn.Module):
 
         if x3 is not None and x2 is not None and x1 is not None:
             inputs = [x0, x1, x2, x3]
-            indices = [idx0, idx1, idx2, idx3, idx_out]
         elif x2 is not None and x1 is not None:
             inputs = [x0, x1, x2]
-            indices = [idx0, idx1, idx2, idx_out]
         elif x1 is not None:
             inputs = [x0, x1]
-            indices = [idx0, idx1, idx_out]
         else:
             inputs = [x0]
-            indices = [idx0, idx_out]
 
         if (
             not torch.jit.is_scripting()

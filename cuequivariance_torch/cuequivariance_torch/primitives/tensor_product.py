@@ -113,7 +113,6 @@ class TensorProduct(torch.nn.Module):
         x4: Optional[torch.Tensor] = None,
         x5: Optional[torch.Tensor] = None,
         x6: Optional[torch.Tensor] = None,
-        **kwargs,
     ):
         r"""
         Perform the tensor product based on the specified descriptor.
@@ -178,7 +177,7 @@ class TensorProduct(torch.nn.Module):
                     f"input {oid} should have shape (batch, {self.operands_dims[oid]}), got {input.shape}",
                 )
 
-        return self.f(inputs, **kwargs)
+        return self.f(inputs)
 
 
 def to_notypeconv(t, *args, **kwargs):
@@ -358,44 +357,44 @@ class _Caller(torch.nn.Module):
 
 
 class _NoArgCaller(_Caller):
-    def forward(self, args: List[torch.Tensor], **kwargs):
-        return self.module(**kwargs)
+    def forward(self, args: List[torch.Tensor]):
+        return self.module()
 
 
 class _OneArgCaller(_Caller):
-    def forward(self, args: List[torch.Tensor], **kwargs):
-        return self.module(args[0], **kwargs)
+    def forward(self, args: List[torch.Tensor]):
+        return self.module(args[0])
 
 
 class _TwoArgCaller(_Caller):
-    def forward(self, args: List[torch.Tensor], **kwargs):
-        return self.module(args[0], args[1], **kwargs)
+    def forward(self, args: List[torch.Tensor]):
+        return self.module(args[0], args[1])
 
 
 class _ThreeArgCaller(_Caller):
-    def forward(self, args: List[torch.Tensor], **kwargs):
-        return self.module(args[0], args[1], args[2], **kwargs)
+    def forward(self, args: List[torch.Tensor]):
+        return self.module(args[0], args[1], args[2])
 
 
 class _FourArgCaller(_Caller):
-    def forward(self, args: List[torch.Tensor], **kwargs):
-        return self.module(args[0], args[1], args[2], args[3], **kwargs)
+    def forward(self, args: List[torch.Tensor]):
+        return self.module(args[0], args[1], args[2], args[3])
 
 
 class _FiveArgCaller(_Caller):
-    def forward(self, args: List[torch.Tensor], **kwargs):
-        return self.module(args[0], args[1], args[2], args[3], args[4], **kwargs)
+    def forward(self, args: List[torch.Tensor]):
+        return self.module(args[0], args[1], args[2], args[3], args[4])
 
 
 class _SixArgCaller(_Caller):
-    def forward(self, args: List[torch.Tensor], **kwargs):
-        return self.module(args[0], args[1], args[2], args[3], args[4], args[5], **kwargs)
+    def forward(self, args: List[torch.Tensor]):
+        return self.module(args[0], args[1], args[2], args[3], args[4], args[5])
 
 
 class _SevenArgCaller(_Caller):
-    def forward(self, args: List[torch.Tensor], **kwargs):
+    def forward(self, args: List[torch.Tensor]):
         return self.module(
-            args[0], args[1], args[2], args[3], args[4], args[5], args[6], **kwargs
+            args[0], args[1], args[2], args[3], args[4], args[5], args[6]
         )
 
 
@@ -417,8 +416,8 @@ class _Wrapper(torch.nn.Module):
         self.module = CALL_DISPATCHERS[descriptor.num_operands - 1](module)
         self.descriptor = descriptor
 
-    def forward(self, args: List[torch.Tensor], **kwargs):
-        return self.module(args, **kwargs)
+    def forward(self, args: List[torch.Tensor]):
+        return self.module(args)
 
 
 def _tensor_product_cuda(
@@ -472,7 +471,9 @@ def _tensor_product_cuda(
                     return TensorProductUniform4x1d(d, device, math_dtype)
 
     if indexed:
-        raise NotImplementedError(f"No cuda kernel found for {descriptor} with indexed inputs.")
+        raise NotImplementedError(
+            f"No cuda kernel found for {descriptor} with indexed inputs."
+        )
 
     supported_targets = [
         stp.Subscripts(subscripts)
@@ -667,7 +668,7 @@ class TensorProductUniform3x1d(TensorProductUniform1d):
         # ops.TensorProductUniform1d expects inputs
         # of shape (Z, dim) or (1, dim)
         return self._f(x0, x1)
-    
+
 
 class TensorProductUniform4x1d(TensorProductUniform1d):
     @torch.jit.ignore
@@ -692,8 +693,8 @@ class TensorProductUniform4x1d(TensorProductUniform1d):
         # ops.TensorProductUniform1d expects inputs
         # of shape (Z, dim) or (1, dim)
         return self._f(x0, x1, x2)
-    
-    
+
+
 class TensorProductUniform3x1dIndexed(torch.nn.Module):
     def __init__(
         self,
@@ -722,9 +723,19 @@ class TensorProductUniform3x1dIndexed(torch.nn.Module):
 
     @torch.jit.ignore
     def __repr__(self):
-        return f"TensorProductUniform3x1dIndexed({self.descriptor} (output last operand))"
+        return (
+            f"TensorProductUniform3x1dIndexed({self.descriptor} (output last operand))"
+        )
 
-    def forward(self, x0: torch.Tensor, x1: torch.Tensor, op_idx0: Optional[torch.Tensor], op_idx1: Optional[torch.Tensor], op_idx_out: Optional[torch.Tensor], num_output_rows: int) -> torch.Tensor:
+    def forward(
+        self,
+        x0: torch.Tensor,
+        x1: torch.Tensor,
+        op_idx0: Optional[torch.Tensor],
+        op_idx1: Optional[torch.Tensor],
+        op_idx_out: Optional[torch.Tensor],
+        num_output_rows: int,
+    ) -> torch.Tensor:
         if (
             not torch.jit.is_scripting()
             and not torch.jit.is_tracing()
@@ -769,9 +780,21 @@ class TensorProductUniform4x1dIndexed(torch.nn.Module):
 
     @torch.jit.ignore
     def __repr__(self):
-        return f"TensorProductUniform4x1dIndexed({self.descriptor} (output last operand))"
+        return (
+            f"TensorProductUniform4x1dIndexed({self.descriptor} (output last operand))"
+        )
 
-    def forward(self, x0: torch.Tensor, x1: torch.Tensor, x2: torch.Tensor, op_idx0: Optional[torch.Tensor], op_idx1: Optional[torch.Tensor], op_idx2: Optional[torch.Tensor], op_idx_out: Optional[torch.Tensor], num_output_rows) -> torch.Tensor:
+    def forward(
+        self,
+        x0: torch.Tensor,
+        x1: torch.Tensor,
+        x2: torch.Tensor,
+        op_idx0: Optional[torch.Tensor],
+        op_idx1: Optional[torch.Tensor],
+        op_idx2: Optional[torch.Tensor],
+        op_idx_out: Optional[torch.Tensor],
+        num_output_rows,
+    ) -> torch.Tensor:
         if (
             not torch.jit.is_scripting()
             and not torch.jit.is_tracing()
@@ -785,7 +808,9 @@ class TensorProductUniform4x1dIndexed(torch.nn.Module):
 
         # ops.TensorProductUniform1d expects inputs
         # of shape (Z, dim) or (1, dim)
-        return self._f(x0, x1, x2, op_idx0, op_idx1, op_idx2, op_idx_out, num_output_rows)
+        return self._f(
+            x0, x1, x2, op_idx0, op_idx1, op_idx2, op_idx_out, num_output_rows
+        )
 
 
 def _permutation_module(permutation: Tuple[int, ...]):

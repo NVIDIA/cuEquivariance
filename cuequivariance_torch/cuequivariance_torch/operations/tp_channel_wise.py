@@ -116,7 +116,6 @@ class ChannelWiseTensorProduct(torch.nn.Module):
         x1: torch.Tensor,
         x2: torch.Tensor,
         weight: Optional[torch.Tensor] = None,
-        **kwargs,
     ) -> torch.Tensor:
         """
         Perform the forward pass of the fully connected tensor product operation.
@@ -142,11 +141,11 @@ class ChannelWiseTensorProduct(torch.nn.Module):
             if weight is not None:
                 raise ValueError("Internal weights are used, weight should be None")
             else:
-                return self.f(self.weight, x1, x2, **kwargs)
+                return self.f(self.weight, x1, x2)
         else:
             if weight is None:
                 raise ValueError(
                     "Internal weights are not used, weight should not be None"
                 )
             else:
-                return self.f(weight, x1, x2, **kwargs)
+                return self.f(weight, x1, x2)
