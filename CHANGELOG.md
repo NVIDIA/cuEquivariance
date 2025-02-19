@@ -10,11 +10,13 @@
 - The interface of `cuex.tensor_product` is changed. Now it takes a list of `tuple[cue.Operation, cue.SegmentedTensorProduct]` instead of a single `cue.SegmentedTensorProduct`. This allows `cuex.tensor_product` to execute any sort of non-homogeneous polynomials.
 
 ### Fixed
+- Identified bug in CUDA kernel, disable CUDA kernel for `cuet.TransposeSegments` and `cuet.TransposeIrrepsLayout`.
 - `cue.descriptor.full_tensor_product` was ignoring the `irreps3_filter` argument.
 
 ### Added
 - JAX Bindings to the uniform 1d JIT kernel. This kernel handles any kind of non-homogeneous polynomials as long as the contraction pattern (subscripts) have only one index. It handles batched/shared/indexed input/output. The indexed input/output are handled by atomic operations.
 - Added `__mul__` to `cue.EquivariantTensorProduct` to allow rescaling the equivariant tensor product.
+
 
 ## 0.2.0 (2025-01-24)
 

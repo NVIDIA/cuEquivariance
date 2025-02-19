@@ -497,6 +497,13 @@ def _tensor_product_cuda(
         return FusedTensorProductOp4(descriptor, perm[:3], device, math_dtype)
 
 
+def _permutation_module(permutation: Tuple[int, ...]):
+    graph = torch.fx.Graph()
+    inputs = [graph.placeholder(f"input_{i}") for i in range(len(permutation))]
+    graph.output([inputs[i] for i in permutation])
+    return torch.fx.GraphModule(dict(), graph, class_name="perm")
+
+
 class FusedTensorProductOp3(torch.nn.Module):
     def __init__(
         self,
@@ -684,8 +691,119 @@ class TensorProductUniform4x1d(TensorProductUniform1d):
         return self._f(x0, x1, x2)
 
 
-def _permutation_module(permutation: Tuple[int, ...]):
-    graph = torch.fx.Graph()
-    inputs = [graph.placeholder(f"input_{i}") for i in range(len(permutation))]
-    graph.output([inputs[i] for i in permutation])
-    return torch.fx.GraphModule(dict(), graph, class_name="perm")
+class TensorProductUniform3x1dIndexed(torch.nn.Module):
+    def __init__(
+        self,
+        descriptor: stp.SegmentedTensorProduct,
+        device: Optional[torch.device],
+        math_dtype: torch.dtype,
+    ):
+        super().__init__()
+        import cuequivariance_ops_torch as ops
+
+        self.descriptor = descriptor
+
+        assert len(descriptor.subscripts.modes()) == 1
+        assert descriptor.all_same_segment_shape()
+        assert descriptor.coefficient_subscripts == ""
+        u = next(iter(descriptor.get_dims(descriptor.subscripts.modes()[0])))
+
+        self._f = ops.TensorProductUniform3x1dIndexed(
+            operand_dim=[ope.ndim for ope in descriptor.operands],
+            operand_extent=u,
+            operand_num_segments=[ope.num_segments for ope in descriptor.operands],
+            path_indices=[path.indices for path in descriptor.paths],
+            path_coefficients=[float(path.coefficients) for path in descriptor.paths],
+            math_dtype=math_dtype,
+        ).to(device=device)
+
+    @torch.jit.ignore
+    def __repr__(self):
+        return (
+            f"TensorProductUniform3x1dIndexed({self.descriptor} (output last operand))"
+        )
+
+    def forward(
+        self,
+        x0: torch.Tensor,
+        x1: torch.Tensor,
+        op_idx0: Optional[torch.Tensor],
+        op_idx1: Optional[torch.Tensor],
+        op_idx_out: Optional[torch.Tensor],
+        num_output_rows: int,
+    ) -> torch.Tensor:
+        if (
+            not torch.jit.is_scripting()
+            and not torch.jit.is_tracing()
+            and not torch.compiler.is_compiling()
+        ):
+            logger.debug(
+                f"Calling TensorProductUniform3x1d: {self.descriptor}, input shapes: {x0.shape}, {x1.shape}"
+            )
+        torch._assert(x0.ndim == 2, "input should be (batch, dim) or (1, dim)")
+        torch._assert(x1.ndim == 2, "input should be (batch, dim) or (1, dim)")
+
+        # ops.TensorProductUniform1d expects inputs
+        # of shape (Z, dim) or (1, dim)
+        return self._f(x0, x1, op_idx0, op_idx1, op_idx_out, num_output_rows)
+
+
+class TensorProductUniform4x1dIndexed(torch.nn.Module):
+    def __init__(
+        self,
+        descriptor: stp.SegmentedTensorProduct,
+        device: Optional[torch.device],
+        math_dtype: torch.dtype,
+    ):
+        super().__init__()
+        import cuequivariance_ops_torch as ops
+
+        self.descriptor = descriptor
+
+        assert len(descriptor.subscripts.modes()) == 1
+        assert descriptor.all_same_segment_shape()
+        assert descriptor.coefficient_subscripts == ""
+        u = next(iter(descriptor.get_dims(descriptor.subscripts.modes()[0])))
+
+        self._f = ops.TensorProductUniform4x1dIndexed(
+            operand_dim=[ope.ndim for ope in descriptor.operands],
+            operand_extent=u,
+            operand_num_segments=[ope.num_segments for ope in descriptor.operands],
+            path_indices=[path.indices for path in descriptor.paths],
+            path_coefficients=[float(path.coefficients) for path in descriptor.paths],
+            math_dtype=math_dtype,
+        ).to(device=device)
+
+    @torch.jit.ignore
+    def __repr__(self):
+        return (
+            f"TensorProductUniform4x1dIndexed({self.descriptor} (output last operand))"
+        )
+
+    def forward(
+        self,
+        x0: torch.Tensor,
+        x1: torch.Tensor,
+        x2: torch.Tensor,
+        op_idx0: Optional[torch.Tensor],
+        op_idx1: Optional[torch.Tensor],
+        op_idx2: Optional[torch.Tensor],
+        op_idx_out: Optional[torch.Tensor],
+        num_output_rows,
+    ) -> torch.Tensor:
+        if (
+            not torch.jit.is_scripting()
+            and not torch.jit.is_tracing()
+            and not torch.compiler.is_compiling()
+        ):
+            logger.debug(
+                f"Calling TensorProductUniform4x1d: {self.descriptor}, input shapes: {x0.shape}, {x1.shape}"
+            )
+        torch._assert(x0.ndim == 2, "input should be (batch, dim) or (1, dim)")
+        torch._assert(x1.ndim == 2, "input should be (batch, dim) or (1, dim)")
+
+        # ops.TensorProductUniform1d expects inputs
+        # of shape (Z, dim) or (1, dim)
+        return self._f(
+            x0, x1, x2, op_idx0, op_idx1, op_idx2, op_idx_out, num_output_rows
+        )
