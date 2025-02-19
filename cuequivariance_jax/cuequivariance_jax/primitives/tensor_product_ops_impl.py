@@ -36,9 +36,10 @@ def tensor_product_ops_impl(
     descriptors: frozenset[tuple[cue.Operation, cue.SegmentedTensorProduct]],
     math_dtype: jnp.dtype,
     name: str,
-) -> list[jax.Array] | None:
+) -> tuple[list[jax.Array] | None, str]:
     def log(msg: str):
         logger.info(f"[{name}] {msg}")
+        return None, name
 
     num_inputs = len(buffer_index) - len(outputs_shape_dtype)
 
@@ -49,11 +50,9 @@ def tensor_product_ops_impl(
     # Reshape buffers to 3D by using the STP informations
     for ope, stp in descriptors:
         if len(stp.subscripts.modes()) != 1:
-            log(f"Unsupported STP: {stp}")
-            return None
+            return log(f"Unsupported STP: {stp}")
         if not stp.all_same_segment_shape():
-            log(f"Unsupported STP: {stp}")
-            return None
+            return log(f"Unsupported STP: {stp}")
 
         for i, operand in zip(ope.buffers, stp.operands):
             b = buffers[i]
@@ -66,27 +65,24 @@ def tensor_product_ops_impl(
 
     for b in buffers:
         if b.dtype.type not in {jnp.float32, jnp.float64, jnp.float16, jnp.bfloat16}:
-            log(f"Unsupported buffer type: {b.dtype}")
-            return None
+            return log(f"Unsupported buffer type: {b.dtype}")
+
     for i in indices:
         if i.dtype.type != jnp.int32:
-            log(f"Unsupported index type: {i.dtype}")
-            return None
+            return log(f"Unsupported index type: {i.dtype}")
 
     if not all(b.ndim == 3 for b in buffers):
-        log("All buffers must be used")
-        return None
+        return log("All buffers must be used")
+
     if len({b.shape[2] for b in buffers}.union({1})) != 2:
-        log(f"Buffer shapes not compatible {[b.shape for b in buffers]}")
-        return None
+        return log(f"Buffer shapes not compatible {[b.shape for b in buffers]}")
+
     if max(b.shape[2] for b in buffers) % 32 != 0:
-        log(f"Extend must be a multiple of 32, got {[b.shape for b in buffers]}")
-        return None
+        return log(f"Extend must be a multiple of 32, got {[b.shape for b in buffers]}")
 
     math_dtype = jnp.dtype(math_dtype)
     if math_dtype.type not in {jnp.float32, jnp.float64}:
-        log(f"Unsupported math_dtype: {math_dtype}")
-        return None
+        return log(f"Unsupported math_dtype: {math_dtype}")
 
     batch_size = 1
     for i, b in zip(buffer_index, buffers):
@@ -99,10 +95,9 @@ def tensor_product_ops_impl(
     for i, b in zip(buffer_index[num_inputs:], buffers[num_inputs:]):
         if b.dtype.type not in {jnp.float32, jnp.float64}:
             if i >= 0 or b.shape[0] != batch_size:
-                log(
+                return log(
                     f"Output buffer {b.shape} of type {b.dtype} and buffer index {i} is not supported"
                 )
-                return None
 
     try:
         from cuequivariance_ops_jax import (
@@ -111,8 +106,7 @@ def tensor_product_ops_impl(
             tensor_product_uniform_1d_jit,
         )
     except ImportError:
-        log("cuequivariance_ops_jax is not installed")
-        return None
+        return log("cuequivariance_ops_jax is not installed")
 
     operations = []
     paths = []
@@ -132,4 +126,4 @@ def tensor_product_ops_impl(
         math_dtype=math_dtype,
         name=sanitize_string(name),
     )
-    return [jnp.reshape(x, (x.shape[0], x.shape[1] * x.shape[2])) for x in outputs]
+    return [jnp.reshape(x, (x.shape[0], x.shape[1] * x.shape[2])) for x in outputs], ""

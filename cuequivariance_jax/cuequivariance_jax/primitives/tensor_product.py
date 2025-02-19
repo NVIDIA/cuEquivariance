@@ -302,10 +302,12 @@ def tensor_product_impl(
     assert impl in ("auto", "cuda", "jax")
 
     if platform == "cuda" and impl in ("auto", "cuda"):
-        outputs = tensor_product_ops_impl(**kwargs)
+        outputs, msg = tensor_product_ops_impl(**kwargs)
+    else:
+        msg = f"{platform=}, {impl=}"
 
     if impl == "cuda" and outputs is None:
-        raise RuntimeError("Failed to use CUDA implementation")
+        raise RuntimeError(f"Failed to use CUDA implementation: {msg}")
 
     if outputs is None:
         outputs = tensor_product_vanilla_impl(**kwargs)
