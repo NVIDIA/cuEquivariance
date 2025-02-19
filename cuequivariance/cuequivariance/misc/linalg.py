@@ -279,6 +279,7 @@ def triu_coo(input: np.ndarray, ndim: int) -> tuple[np.ndarray, np.ndarray]:
         [np.sort(indices[:, :ndim], axis=1), indices[:, ndim:]], axis=1
     )
     indices, inverse = np.unique(indices, axis=0, return_inverse=True)
+    inverse = inverse.reshape(-1)
     values = np.bincount(inverse, values)
     return indices, values
 
