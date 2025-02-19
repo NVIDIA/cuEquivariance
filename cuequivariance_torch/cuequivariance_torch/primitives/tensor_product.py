@@ -61,6 +61,7 @@ class TensorProduct(torch.nn.Module):
         device: Optional[torch.device] = None,
         math_dtype: Optional[torch.dtype] = None,
         use_fallback: Optional[bool] = None,
+        indexed: Optional[bool] = False,
     ):
         super().__init__()
         self.descriptor = descriptor
@@ -72,11 +73,11 @@ class TensorProduct(torch.nn.Module):
         self.num_operands = descriptor.num_operands
 
         if use_fallback is False:
-            self.f = _tensor_product_cuda(descriptor, device, math_dtype)
+            self.f = _tensor_product_cuda(descriptor, device, math_dtype, indexed)
             self.has_cuda = True
         elif use_fallback is None:
             try:
-                self.f = _tensor_product_cuda(descriptor, device, math_dtype)
+                self.f = _tensor_product_cuda(descriptor, device, math_dtype, indexed)
                 self.has_cuda = True
             except NotImplementedError as e:
                 logger.info(f"CUDA implementation not available: {e}")
@@ -423,6 +424,7 @@ def _tensor_product_cuda(
     descriptor: stp.SegmentedTensorProduct,
     device: Optional[torch.device],
     math_dtype: torch.dtype,
+    indexed=False,
 ) -> torch.nn.Module:
     logger.debug(f"Starting search for a cuda kernel for {descriptor}")
 
@@ -460,9 +462,18 @@ def _tensor_product_cuda(
                 operand_num_segments=[o.num_segments for o in d.operands],
             ):
                 if descriptor.num_operands == 3:
+                    if indexed:
+                        return TensorProductUniform3x1dIndexed(d, device, math_dtype)
                     return TensorProductUniform3x1d(d, device, math_dtype)
                 else:
+                    if indexed:
+                        return TensorProductUniform4x1dIndexed(d, device, math_dtype)
                     return TensorProductUniform4x1d(d, device, math_dtype)
+
+    if indexed:
+        raise NotImplementedError(
+            f"No cuda kernel found for {descriptor} with indexed inputs."
+        )
 
     supported_targets = [
         stp.Subscripts(subscripts)
@@ -807,3 +818,10 @@ class TensorProductUniform4x1dIndexed(torch.nn.Module):
         return self._f(
             x0, x1, x2, op_idx0, op_idx1, op_idx2, op_idx_out, num_output_rows
         )
+
+
+def _permutation_module(permutation: Tuple[int, ...]):
+    graph = torch.fx.Graph()
+    inputs = [graph.placeholder(f"input_{i}") for i in range(len(permutation))]
+    graph.output([inputs[i] for i in permutation])
+    return torch.fx.GraphModule(dict(), graph, class_name="perm")
