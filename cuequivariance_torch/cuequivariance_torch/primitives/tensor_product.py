@@ -508,6 +508,13 @@ def _tensor_product_cuda(
         return FusedTensorProductOp4(descriptor, perm[:3], device, math_dtype)
 
 
+def _permutation_module(permutation: Tuple[int, ...]):
+    graph = torch.fx.Graph()
+    inputs = [graph.placeholder(f"input_{i}") for i in range(len(permutation))]
+    graph.output([inputs[i] for i in permutation])
+    return torch.fx.GraphModule(dict(), graph, class_name="perm")
+
+
 class FusedTensorProductOp3(torch.nn.Module):
     def __init__(
         self,
@@ -811,7 +818,6 @@ class TensorProductUniform4x1dIndexed(torch.nn.Module):
         return self._f(
             x0, x1, x2, op_idx0, op_idx1, op_idx2, op_idx_out, num_output_rows
         )
-
 
 def _permutation_module(permutation: Tuple[int, ...]):
     graph = torch.fx.Graph()

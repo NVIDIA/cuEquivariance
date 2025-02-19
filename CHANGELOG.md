@@ -1,5 +1,23 @@
 ## Latest Changes
 
+### Breaking Changes
+- In `cuex.equivariant_tensor_product`, the arguments `dtype_math` and `dtype_output` are renamed `math_dtype` and `output_dtype` respectively. Adding consistency with the rest of the library.
+- In `cuex.equivariant_tensor_product`, the arguments `algorithm`, `precision`, `use_custom_primitive` and `use_custom_kernels` are removed. This is to avoid a proliferation of arguments that are not used in all the implementations. An argument `impl: str` is added instead to select the implementation.
+- Removed `cue.TensorProductExecution` and added instead `cue.Operation` that is more lightweight and aligned with the backend.
+- Removed `cuex.symmetric_tensor_product`. `cuex.tensor_product` is now able to handle any non-homogeneous polynomials.
+- Removed `cuex.flax_linen.Linear` to reduce maintenance burden. Use `cue.descriptor.linear` together with `cuex.equivariant_tensor_product` instead.
+- The batching support (`jax.vmap`) of `cuex.equivariant_tensor_product` is currently limited.
+- The interface of `cuex.tensor_product` is changed. Now it takes a list of `tuple[cue.Operation, cue.SegmentedTensorProduct]` instead of a single `cue.SegmentedTensorProduct`. This allows `cuex.tensor_product` to execute any sort of non-homogeneous polynomials.
+
+### Fixed
+- Identified bug in CUDA kernel, disable CUDA kernel for `cuet.TransposeSegments` and `cuet.TransposeIrrepsLayout`.
+- `cue.descriptor.full_tensor_product` was ignoring the `irreps3_filter` argument.
+
+### Added
+- JAX Bindings to the uniform 1d JIT kernel. This kernel handles any kind of non-homogeneous polynomials as long as the contraction pattern (subscripts) have only one index. It handles batched/shared/indexed input/output. The indexed input/output are handled by atomic operations.
+- Added `__mul__` to `cue.EquivariantTensorProduct` to allow rescaling the equivariant tensor product.
+
+
 ## 0.2.0 (2025-01-24)
 
 ### Breaking Changes

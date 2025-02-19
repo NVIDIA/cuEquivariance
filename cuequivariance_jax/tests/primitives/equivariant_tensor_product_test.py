@@ -13,6 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import jax
+import jax.numpy as jnp
+import numpy as np
+import pytest
 
 import cuequivariance as cue
 import cuequivariance_jax as cuex
@@ -20,17 +23,94 @@ import cuequivariance_jax as cuex
 
 def test_special_double_backward():
     e = cue.descriptors.symmetric_contraction(
-        2 * cue.Irreps("O3", "0e + 1o + 2e"), 2 * cue.Irreps("O3", "0e + 1o"), [1, 2]
+        32 * cue.Irreps("O3", "0e + 1o + 2e"), 32 * cue.Irreps("O3", "0e + 1o"), [1, 2]
     )
-    irreps_w = e.inputs[0].irreps
-    irreps_x = e.inputs[1].irreps
+    rep_w, rep_x = e.inputs
     h = cuex.equivariant_tensor_product(e)
 
     h0 = lambda w, x: h(w, x).array.sum() ** 2  # noqa
     h1 = lambda w, x: jax.grad(h0, 1)(w, x).array.sum() ** 2  # noqa
 
-    w = jax.random.normal(jax.random.key(0), (1, irreps_w.dim))
-    x = cuex.RepArray(
-        irreps_x, jax.random.normal(jax.random.key(1), (3, irreps_x.dim)), cue.ir_mul
-    )
+    w = jax.random.normal(jax.random.key(0), (1, rep_w.dim))
+    x = cuex.randn(jax.random.key(1), rep_x, (3,))
     jax.grad(h1, 0)(w, x)
+
+
+def make_uniform1d_descriptors():
+    yield (
+        cue.descriptors.channelwise_tensor_product(
+            64 * cue.Irreps("SO3", "0 + 1 + 2"),
+            cue.Irreps("SO3", "0 + 1 + 2 + 3"),
+            cue.Irreps("SO3", "0 + 1 + 2"),
+        )
+        .squeeze_modes()
+        .flatten_coefficient_modes()
+    )
+    yield (
+        cue.descriptors.symmetric_contraction(
+            64 * cue.Irreps("SO3", "0 + 1 + 2"),
+            64 * cue.Irreps("SO3", "0 + 1"),
+            [0, 1, 2, 3],
+        )
+    )
+
+
+@pytest.mark.parametrize("e", make_uniform1d_descriptors())
+def test_custom_kernel(e: cue.EquivariantTensorProduct):
+    if jax.default_backend() != "gpu":
+        pytest.skip("test_custom_kernel requires CUDA")
+
+    jax.config.update("jax_enable_x64", True)
+
+    num_nodes, num_edges = 30, 100
+    Zs = [num_edges] * e.num_inputs
+    Zs[0] = num_nodes
+    inputs = [
+        cuex.randn(jax.random.key(0), rep, (Z,), jnp.float64)
+        for Z, rep in zip(Zs, e.inputs)
+    ]
+    indices = [None] * e.num_operands
+    indices[0] = jax.random.randint(
+        jax.random.key(1), (num_edges,), 0, num_nodes, jnp.int32
+    )
+    indices[-1] = jax.random.randint(
+        jax.random.key(1), (num_edges,), 0, num_nodes, jnp.int32
+    )
+    output_batch_shape = (num_nodes,)
+
+    def fwd(inputs, indices, impl):
+        return cuex.equivariant_tensor_product(
+            e,
+            indices=indices,
+            output_batch_shape=output_batch_shape,
+            math_dtype=jnp.float64,
+            impl=impl,
+        )(*inputs).array
+
+    out0 = fwd(inputs, indices, impl="jax")
+    out1 = fwd(inputs, indices, impl="cuda")
+    assert out0.shape == out1.shape
+    assert out0.dtype == out1.dtype
+    np.testing.assert_allclose(out0, out1, rtol=0, atol=1e-13)
+
+    def bwd(inputs, indices, impl):
+        return jax.grad(lambda *inputs: fwd(inputs, indices, impl).sum(), argnums=0)(
+            *inputs
+        ).array
+
+    out0 = bwd(inputs, indices, impl="jax")
+    out1 = bwd(inputs, indices, impl="cuda")
+    assert out0.shape == out1.shape
+    assert out0.dtype == out1.dtype
+    np.testing.assert_allclose(out0, out1, rtol=0, atol=1e-13)
+
+    def bwd2(inputs, indices, impl):
+        return jax.grad(lambda *inputs: bwd(inputs, indices, impl).sum(), argnums=1)(
+            *inputs
+        ).array
+
+    out0 = bwd2(inputs, indices, impl="jax")
+    out1 = bwd2(inputs, indices, impl="cuda")
+    assert out0.shape == out1.shape
+    assert out0.dtype == out1.dtype
+    np.testing.assert_allclose(out0, out1, rtol=0, atol=1e-13)

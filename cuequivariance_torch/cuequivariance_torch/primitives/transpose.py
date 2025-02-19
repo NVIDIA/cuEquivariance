@@ -89,6 +89,11 @@ class TransposeSegments(torch.nn.Module):
     ):
         super().__init__()
 
+        if use_fallback is not True:
+            # There is a bug in the CUDA kernel for TransposeIrrepsLayout
+            # TODO remove this when the bug is fixed
+            use_fallback = True
+
         info = _transpose_info(segments, device=device)
         self.f = None
 

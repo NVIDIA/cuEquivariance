@@ -79,6 +79,7 @@ Tutorials
 | :doc:`tutorials/layout`
 | :doc:`tutorials/etp`
 | :doc:`tutorials/stp`
+| :doc:`tutorials/beta`
 
 .. toctree::
    :hidden:

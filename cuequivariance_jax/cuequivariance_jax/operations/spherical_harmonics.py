@@ -25,7 +25,6 @@ def spherical_harmonics(
     ls: list[int],
     vector: cuex.RepArray,
     normalize: bool = True,
-    algorithm: str = "stacked",
 ) -> cuex.RepArray:
     """Compute the spherical harmonics of a vector.
 
@@ -53,7 +52,7 @@ def spherical_harmonics(
     return cuex.equivariant_tensor_product(
         descriptors.spherical_harmonics(ir, ls, vector.layout),
         vector,
-        algorithm=algorithm,
+        name="spherical_harmonics",
     )
 
 

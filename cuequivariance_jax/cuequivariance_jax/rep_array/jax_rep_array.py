@@ -223,13 +223,18 @@ class RepArray:
                 self.array[None],
             )
 
-        # self[jnp.array([0, 1, 2])]
-        assert isinstance(key, jax.Array)
         assert 0 not in self.reps
-        return RepArray(
-            {k + key.ndim - 1: irreps for k, irreps in self.reps.items()},
-            self.array[key],
-        )
+
+        # self[1:4]
+        if isinstance(key, slice):
+            return RepArray(self.reps, self.array[key])
+
+        # self[jnp.array([0, 1, 2])]
+        if isinstance(key, jax.Array):
+            return RepArray(
+                {k + key.ndim - 1: irreps for k, irreps in self.reps.items()},
+                self.array[key],
+            )
 
     @property
     def slice_by_mul(self) -> _MulIndexSliceHelper:

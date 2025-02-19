@@ -12,27 +12,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 import jax
-import numpy as np
-import pytest
-
-import cuequivariance as cue
-import cuequivariance_jax as cuex
-
-jax.config.update("jax_enable_x64", True)
+import jax.numpy as jnp
 
 
-@pytest.mark.parametrize(
-    "shape",
-    [
-        # (2, 3),  # TODO: change when broadcasting is supported again
-        (),
-        (10,),
-    ],
-)
-def test_spherical_harmonics(shape):
-    x = cuex.RepArray(cue.Irreps(cue.O3, "1o"), np.random.randn(*shape, 3), cue.ir_mul)
-    y = cuex.spherical_harmonics([0, 1, 2], x)
-    assert y.shape == shape + (9,)
-    assert y.irreps == cue.Irreps(cue.O3, "0e + 1o + 2e")
+def reshape(
+    x: jax.Array | jax.ShapeDtypeStruct, shape: tuple[int, ...]
+) -> jax.Array | jax.ShapeDtypeStruct:
+    if isinstance(x, jax.Array):
+        return jnp.reshape(x, shape)
+    else:
+        return jax.ShapeDtypeStruct(shape, x.dtype)
