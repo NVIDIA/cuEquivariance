@@ -44,7 +44,7 @@ The segmented tensor product with 3 or 4 operands with one mode can be executed 
     )
     print(e.ds[0])
 
-    device = torch.device("cuda")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     m = cuet.EquivariantTensorProduct(e, layout=cue.ir_mul, device=device)
     x0 = torch.randn(128, e.inputs[0].dim, device=device)
     x1 = torch.randn(128, e.inputs[1].dim, device=device)
@@ -61,11 +61,13 @@ Again for segmented tensor product with 3 or 4 operands with one mode, we can us
     from cuequivariance_torch.primitives.tensor_product import (
         TensorProductUniform4x1dIndexed,
     )
-    m = TensorProductUniform4x1dIndexed(e.ds[0], device, torch.float32)
 
-    x0 = torch.randn(16, e.inputs[0].dim, device=device)
-    i0 = torch.randint(0, 16, (128,), device=device)
-    x1 = torch.randn(128, e.inputs[1].dim, device=device)
-    x2 = torch.randn(128, e.inputs[2].dim, device=device)
-    i_out = torch.randint(0, 16, (128,), device=device)
-    print(m(x0, x1, x2, i0, None, None, i_out, 16).shape)
+    if device.type == "cuda":
+        m = TensorProductUniform4x1dIndexed(e.ds[0], device, torch.float32)
+
+        x0 = torch.randn(16, e.inputs[0].dim, device=device)
+        i0 = torch.randint(0, 16, (128,), device=device)
+        x1 = torch.randn(128, e.inputs[1].dim, device=device)
+        x2 = torch.randn(128, e.inputs[2].dim, device=device)
+        i_out = torch.randint(0, 16, (128,), device=device)
+        print(m(x0, x1, x2, i0, None, None, i_out, 16).shape)
