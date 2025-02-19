@@ -35,7 +35,7 @@ def equivariant_tensor_product(
     Args:
         e (:class:`cue.EquivariantTensorProduct <cuequivariance.EquivariantTensorProduct>`): The equivariant tensor product descriptor.
         *inputs (RepArray or jax.Array): The input arrays.
-        indices (list of jax.Array or None, optional): The indices of the inputs and output.
+        indices (list of jax.Array or None, optional): The optional indices of the inputs and output.
         output_batch_shape (tuple of int, optional): The batch shape of the output array.
         output_dtype (jnp.dtype, optional): The data type for the output array. Defaults to None.
         math_dtype (jnp.dtype, optional): The data type for computational operations. Defaults to None.
@@ -64,6 +64,29 @@ def equivariant_tensor_product(
         >>> cuex.equivariant_tensor_product(e, x)
         {0: 0+1+2}
         [1. ... ]
+
+        The `indices` argument allows to specify a list of optional int32 arrays for each input and for the output (`None` means no index and `indices[-1]` is the output index). The indices are used to select the elements of the input arrays and to specify the output index.
+        In the following example, we will index the output. The input has a batch shape of (3,) and the output has a batch shape of (2,).
+
+        >>> i_out = jnp.array([0, 1, 1], dtype=jnp.int32)
+
+        The `i_out` array is used to map the result to the output indices.
+
+        >>> with cue.assume(cue.SO3, cue.ir_mul):
+        ...    x = cuex.RepArray("1", jnp.array([
+        ...         [0.0, 1.0, 0.0],
+        ...         [0.0, 0.0, 1.0],
+        ...         [1.0, 0.0, 0.0],
+        ...    ]))
+        >>> cuex.equivariant_tensor_product(
+        ...   e,
+        ...   x,
+        ...   indices=[None, i_out],
+        ...   output_batch_shape=(2,),
+        ... )
+        {1: 0+1+2}
+        [[ 1. ... ]
+         [ 2. ... ]]
     """
     assert e.num_inputs > 0
 

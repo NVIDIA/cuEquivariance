@@ -52,6 +52,7 @@ These classes represent tensor products.
    IrrepsAndLayout
    SegmentedTensorProduct
    EquivariantTensorProduct
+   Operation
 
 Descriptors
 -----------
@@ -71,4 +72,3 @@ Utilities
    :template: class_template.rst
 
    assume
-   

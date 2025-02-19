@@ -22,6 +22,27 @@ OVARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
 class Operation:
+    """Descriptor mapping input/output buffers to tensor product operands.
+
+    The buffers are identified by their index (0, 1, 2, ...).
+    The order of the buffers corresponds to the order of the operands.
+
+    Example:
+
+        This list of operations would typically be used for the symmetric contraction operation.
+
+        >>> ops = [
+        ...     Operation((0, 1, 2)),
+        ...     Operation((0, 1, 1, 2)),
+        ...     Operation((0, 1, 1, 1, 2)),
+        ... ]
+        >>> print(Operation.list_to_string(ops, 2, 1))
+        (a, b) -> (C)
+          a b C
+          a b b C
+          a b b b C
+    """
+
     buffers: tuple[int, ...]
 
     def __init__(self, buffers: tuple[int, ...]):
@@ -34,16 +55,14 @@ class Operation:
         return f"Operation({self.buffers})"
 
     def to_string(self, num_inputs: int) -> str:
-        return " ".join(
-            IVARS[b] if b < num_inputs else OVARS[b - num_inputs] for b in self.buffers
-        )
+        return " ".join(IVARS[b] if b < num_inputs else OVARS[b] for b in self.buffers)
 
     @staticmethod
     def list_to_string(
         operations: list[Operation], num_inputs: int, num_outputs: int
     ) -> str:
         i = ", ".join(IVARS[:num_inputs])
-        o = ", ".join(OVARS[:num_outputs])
+        o = ", ".join(OVARS[num_inputs : num_inputs + num_outputs])
         s = f"({i}) -> ({o})"
         for op in operations:
             s += "\n  " + op.to_string(num_inputs)
@@ -102,10 +121,9 @@ class Operation:
 
         Returns:
             Operation: the transposed operation, if any
-
-        New buffers:
-         - new inputs: defined primals + cotangents (=True)
-         - new outputs: undefined primals
+                in the returned operation, the buffers are:
+                 - new inputs: defined primals + cotangents (=True)
+                 - new outputs: undefined primals
         """
         # number of input buffers in the original operation
         # note that self might not involve all input buffers
@@ -177,10 +195,9 @@ class Operation:
 
         Returns:
             list[Operation]: the JVPs of the operation
-
-        NEW buffers:
-         - new inputs: original inputs + tangents (=True)
-         - new outputs: original outputs
+                in the returned operations, the buffers are:
+                 - new inputs: original inputs + tangents (=True)
+                 - new outputs: original outputs
         """
         # number of input buffers in the original operation
         # note that self might not involve all input buffers
@@ -225,7 +242,7 @@ class Operation:
             num_inputs (int): the number of input buffers
 
         Returns:
-            list of tuples of:
+            list of tuples: Each tuple contains:
                 - frozenset of frozensets of operands bound to identical buffers
                 - list of operations
         """
@@ -247,9 +264,9 @@ class Operation:
             operations (list[Operation]): the operations to group
 
         Returns:
-            list of tuples of:
-                - multiplicity
-                - list of operations
+            list of tuples: Each tuple contains:
+                - multiplicity (int)
+                - a representative operation
         """
 
         def partition(operation: Operation) -> tuple[int, ...]:
