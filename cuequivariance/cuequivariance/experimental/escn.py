@@ -118,8 +118,9 @@ def escn_tp(
 def escn_tp_compact(
     irreps_in: cue.Irreps,
     irreps_out: cue.Irreps,
-    m_max: Optional[int] = None,
-) -> stp.SegmentedTensorProduct:
+    m_max: int,
+    with_x_edge: bool = False,
+) -> cue.SegmentedTensorProduct:
     """
     subsrcipts: ``weights[uv],input[u],output[v]``
 
@@ -131,7 +132,7 @@ def escn_tp_compact(
     Args:
         irreps_in (Irreps): Irreps of the input.
         irreps_out (Irreps): Irreps of the output.
-        m_max (int, optional): Maximum angular resolution around the principal axis.
+        m_max (int): Maximum angular resolution around the principal axis.
 
     Returns:
         SegmentedTensorProduct:
@@ -146,45 +147,129 @@ def escn_tp_compact(
     if G not in [cue.SO3]:
         raise NotImplementedError("Only SO3 is supported")
 
-    d = stp.SegmentedTensorProduct.from_subscripts("uv,u,v")
+    if with_x_edge:
+        d = cue.SegmentedTensorProduct.from_subscripts("vu,u,u,v")
+    else:
+        d = cue.SegmentedTensorProduct.from_subscripts("vu,u,v")
 
     l_max_in = max(ir.l for _, ir in irreps_in)
-    for m in range(-l_max_in, l_max_in + 1):
-        mulirs = [(mul, ir) for mul, ir in irreps_in if abs(m) <= ir.l]
-        mul = sum(mul for mul, _ in mulirs)
-        d.add_segment(1, (mul,))
+    for absm in range(0, min(m_max, l_max_in) + 1):
+        mul = sum(mul for mul, ir in irreps_in if absm <= ir.l)
+        for absm in [absm, -absm] if absm > 0 else [0]:  # real, imaginary part
+            d.add_segment(1, (mul,))
+        if with_x_edge:
+            d.add_segment(2, (mul,))
 
     l_max_out = max(ir.l for _, ir in irreps_out)
-    for m in range(-l_max_out, l_max_out + 1):
-        mulirs = [(mul, ir) for mul, ir in irreps_out if abs(m) <= ir.l]
-        mul = sum(mul for mul, _ in mulirs)
-        d.add_segment(2, (mul,))
+    for absm in range(0, min(m_max, l_max_out) + 1):
+        # mulirs = [(mul, ir) for mul, ir in irreps_out if absm <= ir.l]
+        # mul = sum(mul for mul, _ in mulirs)
+        mul = sum(mul for mul, ir in irreps_out if absm <= ir.l)
+        for absm in [absm, -absm] if absm > 0 else [0]:  # real, imaginary part
+            d.add_segment(-1, (mul,))
 
-    if m_max is None:
-        m_max = min(l_max_in, l_max_out)
+    if with_x_edge:
+        # m = 0
+        d.add_path(None, 0, 0, 0, c=1.0)
 
-    # m = 0
-    d.add_path(None, l_max_in, l_max_out, c=1.0)
+        for absm in range(1, min(m_max, l_max_in, l_max_out) + 1):
+            i_real = 1 + 2 * (absm - 1)
+            i_imag = 1 + 2 * (absm - 1) + 1
 
-    for m in range(1, min(m_max, l_max_in, l_max_out) + 1):
-        # "cosine" part
-        d.add_path(None, l_max_in - m, l_max_out - m, c=1.0)
-        i = d.operands[0].num_segments - 1
-        d.add_path(i, l_max_in + m, l_max_out + m, c=1.0)
+            # "cosine" part
+            d.add_path(None, i_real, absm, i_real, c=1.0)
+            i = d.operands[0].num_segments - 1
+            d.add_path(i, i_imag, absm, i_imag, c=1.0)
 
-        # "sine" part
-        d.add_path(None, l_max_in + m, l_max_out - m, c=1.0)
-        i = d.operands[0].num_segments - 1
-        d.add_path(i, l_max_in - m, l_max_out + m, c=-1.0)
+            # "sine" part
+            d.add_path(None, i_real, absm, i_imag, c=1.0)
+            i = d.operands[0].num_segments - 1
+            d.add_path(i, i_imag, absm, i_real, c=-1.0)
+    else:
+        # m = 0
+        d.add_path(None, 0, 0, c=1.0)
 
-    d = d.normalize_paths_for_operand(2)
-    return d  # TODO: return an EquivariantTensorProduct using SphericalSignal
+        for absm in range(1, min(m_max, l_max_in, l_max_out) + 1):
+            i_real = 1 + 2 * (absm - 1)
+            i_imag = 1 + 2 * (absm - 1) + 1
+
+            # "cosine" part
+            d.add_path(None, i_real, i_real, c=1.0)
+            i = d.operands[0].num_segments - 1
+            d.add_path(i, i_imag, i_imag, c=1.0)
+
+            # "sine" part
+            d.add_path(None, i_real, i_imag, c=1.0)
+            i = d.operands[0].num_segments - 1
+            d.add_path(i, i_imag, i_real, c=-1.0)
+
+    return d
 
 
 class SphericalSignal(cue.Rep):
-    def __init__(self, mul: int, l_max: int, m_max: int):
+    """Representation of a signal on the sphere.
+
+    Args:
+        mul (int): Multiplicity of the signal. The multiplicity is always the innermost dimension (stride 1).
+        l_max (int): Maximum angular resolution.
+        m_max (int): Maximum angular resolution around the principal axis.
+        primary (str): "m" or "l".
+            If "m", all the components with the same m are contiguous in memory.
+            If "l", all the components with the same l are contiguous in memory.
+
+
+    primary="m":
+    l=
+     0 1 2 3  m
+        +-+-+   =
+        |0|1|  -2
+      +-+-+-+
+      |2|3|4|  -1
+    +-+-+-+-+
+    |5|6|7|8|   0
+    +-+-+-+-+
+      |9|a|b|   1
+      +-+-+-+
+        |c|d|   2
+        +-+-+
+
+    primary="l":
+    l=      +-+
+      0     |0|
+          +-+-+-+
+      1   |1|2|3|
+        +-+-+-+-+-+
+      2 |4|5|6|7|8|
+        +-+-+-+-+-+
+      3 |9|a|b|c|d|
+        +-+-+-+-+-+
+    m=  -2-1 0 1 2
+    """
+
+    def __init__(self, mul: int, l_max: int, m_max: int, primary: str):
         self.mul = mul
         self.l_max = l_max
         self.m_max = m_max
+        self.primary = primary
 
-    # TODO
+    def _dim(self):
+        d = 0
+        for ell in range(self.l_max + 1):
+            m_max = min(ell, self.m_max)
+            d += (2 * m_max + 1) * self.mul
+        return d
+
+    def algebra(self=None) -> np.ndarray:
+        # note: shall we make an SO2 representation only since m_max can be smaller than l_max?
+        return cue.SO3.algebra()
+
+    def continuous_generators(self) -> np.ndarray:
+        # note: if m_max is smaller than l_max, this is actually not a full representation of SO3
+        # but it's a representation of the subgroup SO3 along the principal axis
+        raise NotImplementedError
+
+    def discrete_generators(self) -> np.ndarray:
+        return np.zeros((0, self.dim, self.dim))
+
+    def trivial(self):
+        raise NotImplementedError
