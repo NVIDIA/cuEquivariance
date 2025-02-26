@@ -20,7 +20,7 @@ def symmetric_contraction(
     irreps_in: cue.Irreps,
     irreps_out: cue.Irreps,
     degrees: list[int],
-) -> cue.EquivariantTensorProduct:
+) -> cue.EquivariantPolynomial:
     r"""
     subscripts: ``weights[u],input[u],output[u]``
 
@@ -34,7 +34,7 @@ def symmetric_contraction(
         degree (int): The degree of the symmetric contraction.
 
     Returns:
-        :class:`cue.EquivariantTensorProduct <cuequivariance.EquivariantTensorProduct>`:
+        :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`:
             The descriptor of the symmetric contraction.
             The operands are the weights, the input degree times and the output.
 
@@ -44,13 +44,13 @@ def symmetric_contraction(
         ...    16 * cue.Irreps("SO3", "0 + 1"),
         ...    [1, 2, 3]
         ... )
-        EquivariantTensorProduct(32x0+80x0+176x0 x (16x0+16x1+16x2)^(1..3) -> 16x0+16x1)
+        EquivariantPolynomial(32x0+80x0+176x0 x (16x0+16x1+16x2)^(1..3) -> 16x0+16x1)
 
         Where ``32x0+80x0+176x0`` are the weights needed for each degree (32 for degree 1, 80 for degree 2, 176 for degree 3).
     """
     degrees = list(degrees)
     if len(degrees) != 1:
-        return cue.EquivariantTensorProduct.stack(
+        return cue.EquivariantPolynomial.stack(
             [
                 symmetric_contraction(irreps_in, irreps_out, [degree])
                 for degree in degrees
@@ -102,11 +102,11 @@ def symmetric_contraction(
         d = d.flatten_coefficient_modes()
 
     d = d.append_modes_to_all_operands("u", {"u": mul})
-    return cue.EquivariantTensorProduct(
-        [d],
+    return cue.EquivariantPolynomial(
         [
             cue.IrrepsAndLayout(irreps_in.new_scalars(d.operands[0].size), cue.ir_mul),
             cue.IrrepsAndLayout(mul * irreps_in, cue.ir_mul),
             cue.IrrepsAndLayout(mul * irreps_out, cue.ir_mul),
         ],
+        cue.SegmentedPolynomial(2, 1, [(cue.Operation([0] + [1] * degree + [2]), d)]),
     )

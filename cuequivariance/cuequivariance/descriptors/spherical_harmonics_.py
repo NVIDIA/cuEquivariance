@@ -23,7 +23,7 @@ from cuequivariance.misc.sympy_utils import sqrtQarray_to_sympy
 
 def spherical_harmonics(
     ir_vec: cue.Irrep, ls: list[int], layout: cue.IrrepsLayout = cue.ir_mul
-) -> cue.EquivariantTensorProduct:
+) -> cue.EquivariantPolynomial:
     """
     subscripts: ``vector[],...,vector[],Yl[]``
 
@@ -33,14 +33,14 @@ def spherical_harmonics(
         layout (IrrepsLayout, optional): layout of the output. Defaults to ``cue.ir_mul``.
 
     Returns:
-        :class:`cue.EquivariantTensorProduct <cuequivariance.EquivariantTensorProduct>`: The descriptor.
+        :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: The descriptor.
 
     Examples:
         >>> spherical_harmonics(cue.SO3(1), [0, 1, 2])
-        EquivariantTensorProduct((1)^(0..2) -> 0+1+2)
+        EquivariantPolynomial((1)^(0..2) -> 0+1+2)
     """
     if len(ls) != 1:
-        return cue.EquivariantTensorProduct.stack(
+        return cue.EquivariantPolynomial.stack(
             [spherical_harmonics(ir_vec, [ell], layout) for ell in ls], [False, True]
         )
 
@@ -54,12 +54,12 @@ def spherical_harmonics(
             indices = poly_degrees_to_path_indices(degrees)
             d.add_path(*indices, i, c=coeff)
 
-    return cue.EquivariantTensorProduct(
-        [d],
+    return cue.EquivariantPolynomial(
         [
             cue.IrrepsAndLayout(cue.Irreps(ir_vec), cue.ir_mul),
             cue.IrrepsAndLayout(cue.Irreps(ir), cue.ir_mul),
         ],
+        cue.SegmentedPolynomial(1, 1, [(cue.Operation([0] * ell + [1]), d)]),
     )
 
 

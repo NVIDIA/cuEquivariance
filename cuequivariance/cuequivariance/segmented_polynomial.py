@@ -14,6 +14,7 @@
 # limitations under the License.
 from __future__ import annotations
 
+import copy
 import dataclasses
 from typing import Callable, Sequence
 
@@ -71,10 +72,24 @@ class SegmentedPolynomial:
         return self.__mul__(factor)
 
     def __repr__(self):
+        return self.to_string()
+
+    def to_string(self, buffer_names: list[str] | None = None) -> str:
+        buffer_txts = (
+            IVARS[: self.num_inputs]
+            + OVARS[self.num_inputs : self.num_inputs + self.num_outputs]
+        )
+        if buffer_names is not None:
+            buffer_txts = [
+                f"{symbol}={name}" for symbol, name in zip(buffer_txts, buffer_names)
+            ]
+
         header = (
-            " ".join(IVARS[: self.num_inputs])
+            " ".join(buffer_txts[: self.num_inputs])
             + " -> "
-            + " ".join(OVARS[self.num_inputs : self.num_inputs + self.num_outputs])
+            + " ".join(
+                buffer_txts[self.num_inputs : self.num_inputs + self.num_outputs]
+            )
             + " "
         )
         ope_txts = [
@@ -153,3 +168,42 @@ class SegmentedPolynomial:
             sum(is_undefined_primal),
             new_tps,
         )
+
+    @classmethod
+    def stack(
+        cls, polys: list[SegmentedPolynomial], stacked: list[bool]
+    ) -> SegmentedPolynomial:
+        assert len(polys) > 0
+        num_inputs = polys[0].num_inputs
+        num_outputs = polys[0].num_outputs
+        assert all(pol.num_inputs == num_inputs for pol in polys)
+        assert all(pol.num_outputs == num_outputs for pol in polys)
+        assert len(stacked) == num_inputs + num_outputs
+
+        tensor_products: list[tuple[cue.Operation, cue.SegmentedTensorProduct]] = []
+        for index, pol in enumerate(polys):
+            for ope, stp in pol.tensor_products:
+                stp = copy.deepcopy(stp)
+                for oid, buffer in enumerate(ope.buffers):
+                    if stacked[buffer]:
+                        for p in reversed(polys[:index]):
+                            stp.insert_segments(oid, 0, p.buffer_segments(buffer))
+                        for p in polys[index + 1 :]:
+                            stp.insert_segments(oid, -1, p.buffer_segments(buffer))
+                tensor_products.append((ope, stp))
+        return cls(num_inputs, num_outputs, tensor_products)
+
+    def buffer_segments(self, buffer: int) -> list[tuple[int, ...]]:
+        segments = None
+        for ope, stp in self.tensor_products:
+            if buffer in ope.buffers:
+                ope = stp.operands[ope.buffers.index(buffer)]
+                if segments is None:
+                    segments = ope.segments
+                elif segments != ope.segments:
+                    raise ValueError(
+                        f"Buffer {buffer} has inconsistent segments: {segments} vs {ope.segments}"
+                    )
+        if segments is None:
+            raise ValueError(f"Buffer {buffer} is not used")
+        return segments
