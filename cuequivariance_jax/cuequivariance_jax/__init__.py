@@ -23,6 +23,7 @@ from .rep_array.jax_rep_array import RepArray, from_segments, IrrepsArray
 from .rep_array.vmap import vmap
 from .rep_array.utils import concatenate, randn, as_irreps_array, clebsch_gordan
 
+from .primitives.segmented_polynomial import segmented_polynomial
 from .primitives.tensor_product import tensor_product
 from .primitives.equivariant_tensor_product import equivariant_tensor_product
 
@@ -45,6 +46,7 @@ __all__ = [
     "randn",
     "as_irreps_array",
     "clebsch_gordan",
+    "segmented_polynomial",
     "tensor_product",
     "equivariant_tensor_product",
     "normalspace",

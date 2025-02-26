@@ -26,12 +26,12 @@ import cuequivariance as cue
 logger = logging.getLogger(__name__)
 
 
-def tensor_product_vanilla_impl(
+def segmented_polynomial_vanilla_impl(
     inputs: list[jax.Array],  # shape (batch_size, operand_size)
     outputs_shape_dtype: tuple[jax.ShapeDtypeStruct, ...],
     indices: list[jax.Array],
     buffer_index: list[int],
-    descriptors: frozenset[tuple[cue.Operation, cue.SegmentedTensorProduct]],
+    polynomial: cue.SegmentedPolynomial,
     math_dtype: jnp.dtype,
     name: str,
 ) -> tuple[jax.Array, ...]:  # output buffers
@@ -52,7 +52,7 @@ def tensor_product_vanilla_impl(
             return buffer.at[idx].add(x)
         return buffer + x
 
-    for operation, d in descriptors:
+    for operation, d in polynomial.tensor_products:
         ope_out, b_out = operation.output_operand_buffer(num_inputs)
 
         out = outputs_shape_dtype[b_out - num_inputs]

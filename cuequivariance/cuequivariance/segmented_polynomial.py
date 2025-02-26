@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Sequence
+from typing import Callable, Sequence
 
 import cuequivariance as cue
 from cuequivariance.operation import IVARS, OVARS
@@ -78,3 +78,68 @@ class SegmentedPolynomial:
         for ope_txt, (_, stp) in zip(ope_txts, self.tensor_products):
             text += "\n" + ope_txt + " " * (n - len(ope_txt)) + " ║ " + str(stp)
         return text
+
+    @property
+    def buffer_sizes(self) -> list[int | None]:
+        sizes = [None] * (self.num_inputs + self.num_outputs)
+        for ope, stp in self.tensor_products:
+            for buffer, operand in zip(ope.buffers, stp.operands):
+                if sizes[buffer] is None:
+                    sizes[buffer] = operand.size
+                if sizes[buffer] != operand.size:
+                    raise ValueError(
+                        f"Buffer {buffer} has inconsistent sizes: {sizes[buffer]} vs {operand.size}"
+                    )
+        return sizes
+
+    @property
+    def input_sizes(self) -> list[int | None]:
+        return self.buffer_sizes[: self.num_inputs]
+
+    @property
+    def output_sizes(self) -> list[int | None]:
+        return self.buffer_sizes[self.num_inputs :]
+
+    def map_tensor_products(
+        self,
+        f: Callable[
+            [cue.Operation, cue.SegmentedTensorProduct],
+            tuple[cue.Operation, cue.SegmentedTensorProduct] | None,
+        ],
+    ) -> SegmentedPolynomial:
+        new_tensor_products = [f(ope, stp) for ope, stp in self.tensor_products]
+        new_tensor_products = [
+            ope_stp for ope_stp in new_tensor_products if ope_stp is not None
+        ]
+        return SegmentedPolynomial(
+            self.num_inputs, self.num_outputs, new_tensor_products
+        )
+
+    def jvp(self, has_tangent: list[bool]) -> SegmentedPolynomial:
+        new_tps = []
+        for ope, stp in self.tensor_products:
+            jvps = ope.jvp(has_tangent)
+            permutations: list[tuple[int, ...]] = stp.symmetries()
+            for multiplicator, ope in cue.Operation.group_by_operational_symmetries(
+                permutations, jvps
+            ):
+                new_tps.append((ope, multiplicator * stp))
+        return SegmentedPolynomial(
+            self.num_inputs + sum(has_tangent), self.num_outputs, new_tps
+        )
+
+    def transpose(
+        self,
+        is_undefined_primal: list[bool],
+        has_cotangent: list[bool],
+    ) -> SegmentedPolynomial:
+        new_tps = []
+        for ope, stp in self.tensor_products:
+            ope = ope.transpose(is_undefined_primal, has_cotangent)
+            if ope is not None:
+                new_tps.append((ope, stp))
+        return SegmentedPolynomial(
+            sum(map(lambda u: not u, is_undefined_primal)) + sum(has_cotangent),
+            sum(is_undefined_primal),
+            new_tps,
+        )
