@@ -14,6 +14,7 @@
 # limitations under the License.
 from __future__ import annotations
 
+import dataclasses
 import itertools
 from collections import defaultdict
 
@@ -21,6 +22,7 @@ IVARS = "abcdefghijklmnopqrstuvwxyz"
 OVARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
+@dataclasses.dataclass(init=False, frozen=True)
 class Operation:
     """Descriptor mapping input/output buffers to tensor product operands.
 
