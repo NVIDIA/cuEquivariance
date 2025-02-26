@@ -61,12 +61,20 @@ class SegmentedPolynomial:
         )
 
     def __repr__(self):
-        text = ""
-        text += " ".join(IVARS[self.num_inputs])
-        text += " -> "
-        text += " ".join(OVARS[self.num_inputs : self.num_inputs + self.num_outputs])
-        tab = "\n  "
-        for ope, stp in self.tensor_products:
-            text += tab + f"{stp}"
-            text += tab + ope.to_string(self.num_inputs)
+        header = (
+            " ".join(IVARS[: self.num_inputs])
+            + " -> "
+            + " ".join(OVARS[self.num_inputs : self.num_inputs + self.num_outputs])
+            + " "
+        )
+        ope_txts = [
+            "  " + ope.to_string(self.num_inputs) for ope, _ in self.tensor_products
+        ]
+        n = max(len(ope_txt) for ope_txt in ope_txts)
+        n = max(len(header), n)
+
+        text = header + "═" * (n - len(header)) + "═╗"
+
+        for ope_txt, (_, stp) in zip(ope_txts, self.tensor_products):
+            text += "\n" + ope_txt + " " * (n - len(ope_txt)) + " ║ " + str(stp)
         return text
