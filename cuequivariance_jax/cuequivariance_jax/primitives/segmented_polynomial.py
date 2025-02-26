@@ -24,18 +24,18 @@ from jax.interpreters import ad, batching, mlir, xla
 
 import cuequivariance as cue
 from cuequivariance_jax.primitives.primitives_utils import reshape
-from cuequivariance_jax.primitives.tensor_product_ops_impl import (
-    tensor_product_ops_impl,
+from cuequivariance_jax.primitives.segmented_polynomial_ops_impl import (
+    segmented_polynomial_ops_impl,
 )
-from cuequivariance_jax.primitives.tensor_product_vanilla_impl import (
-    tensor_product_vanilla_impl,
+from cuequivariance_jax.primitives.segmented_polynomial_vanilla_impl import (
+    segmented_polynomial_vanilla_impl,
 )
 
 logger = logging.getLogger(__name__)
 
 
-def tensor_product(
-    descriptors: list[tuple[cue.Operation, cue.SegmentedTensorProduct]],
+def segmented_polynomial(
+    polynomial: cue.SegmentedPolynomial,
     inputs: list[jax.Array],
     outputs_shape_dtype: list[jax.ShapeDtypeStruct],
     indices: list[jax.Array | None] | None = None,
@@ -44,7 +44,7 @@ def tensor_product(
     name: str | None = None,
     impl: str = "auto",
 ) -> list[jax.Array]:
-    r"""Compute a polynomial described by a list of descriptors.
+    r"""Compute a segmented polynomial.
 
     Features:
       - Calls a CUDA kernel if:
@@ -58,8 +58,7 @@ def tensor_product(
       - Automatic drop of unused buffers and indices
 
     Args:
-        descriptors (list of pairs): The list of descriptors.
-            Each descriptor is formed by a pair of :class:`cue.Operation <cuequivariance.Operation>` and :class:`cue.SegmentedTensorProduct <cuequivariance.SegmentedTensorProduct>`.
+        polynomial (cue.SegmentedPolynomial): The segmented polynomial to compute.
         inputs (list of jax.Array): The input buffers.
         outputs_shape_dtype (list of jax.ShapeDtypeStruct): The output shapes and dtypes.
         indices (list of jax.Array or None, optional): The optional indices of the inputs and outputs.
@@ -75,8 +74,10 @@ def tensor_product(
     """
 
     if name is None:
-        name = "tensor_product"
+        name = "segmented_polynomial"
 
+    assert len(inputs) == polynomial.num_inputs
+    assert len(outputs_shape_dtype) == polynomial.num_outputs
     buffers = inputs + outputs_shape_dtype
 
     if indices is None:
@@ -137,15 +138,15 @@ def tensor_product(
         outputs_shape_dtype=buffers[len(inputs) :],
         indices=unique_indices,
         buffer_index=buffer_index,
-        descriptors=descriptors,
+        polynomial=polynomial,
         math_dtype=math_dtype,
         name=name,
     )
 
     if impl == "naive_jax":
-        outputs = tensor_product_vanilla_impl(**kwargs)
+        outputs = segmented_polynomial_vanilla_impl(**kwargs)
     else:
-        outputs = tensor_product_prim(**kwargs, impl=impl)
+        outputs = segmented_polynomial_prim(**kwargs, impl=impl)
 
     def fn(x: jax.Array, shape: tuple[int, ...]) -> jax.Array:
         return jnp.reshape(x, shape)
@@ -153,16 +154,16 @@ def tensor_product(
     return list(map(fn, outputs, [out.shape for out in outputs_shape_dtype]))
 
 
-tensor_product_p = jax.extend.core.Primitive("tensor_product")
-tensor_product_p.multiple_results = True
+segmented_polynomial_p = jax.extend.core.Primitive("segmented_polynomial")
+segmented_polynomial_p.multiple_results = True
 
 
-def tensor_product_prim(
+def segmented_polynomial_prim(
     inputs: list[jax.Array],  # input buffers
     outputs_shape_dtype: list[jax.ShapeDtypeStruct],  # output shapes and dtypes
     indices: list[jax.Array],  # index buffers
     buffer_index: list[int],  # maps: buffer index -> unique indices index
-    descriptors: list[tuple[cue.Operation, cue.SegmentedTensorProduct]],
+    polynomial: cue.SegmentedPolynomial,
     math_dtype: jnp.dtype,
     name: str,
     impl: str = "auto",
@@ -176,18 +177,21 @@ def tensor_product_prim(
     assert len(inputs) + len(outputs_shape_dtype) == len(buffer_index)
     assert max(buffer_index) < len(indices)
 
-    descriptors = map(
-        lambda x: (
-            x[0],
-            x[1].consolidate_modes().remove_empty_segments().consolidate_paths(),
-        ),
-        descriptors,
-    )
-    descriptors = list(filter(lambda x: x[1].num_paths > 0, descriptors))
+    outputs_shape_dtype = [
+        jax.ShapeDtypeStruct(x.shape, x.dtype) for x in outputs_shape_dtype
+    ]
+
+    def f(ope: cue.Operation, stp: cue.SegmentedTensorProduct):
+        stp = stp.consolidate_modes().remove_empty_segments().consolidate_paths()
+        if stp.num_paths == 0:
+            return None
+        return ope, stp
+
+    polynomial = polynomial.map_tensor_products(f)
 
     used_buffers = set()
     used_indices = set()
-    for ope, _ in descriptors:
+    for ope, _ in polynomial.tensor_products:
         for i in ope.buffers:
             used_buffers.add(i)
             if buffer_index[i] >= 0:
@@ -196,8 +200,16 @@ def tensor_product_prim(
     used_indices = sorted(used_indices)  # maps: new index -> old index
 
     new_num_inputs = sum([i < len(inputs) for i in used_buffers])
+    new_poynomial = cue.SegmentedPolynomial(
+        new_num_inputs,
+        len(used_buffers) - new_num_inputs,
+        [
+            (cue.Operation([used_buffers.index(i) for i in ope.buffers]), stp)
+            for ope, stp in polynomial.tensor_products
+        ],
+    )
 
-    new_outputs = tensor_product_p.bind(
+    new_outputs = segmented_polynomial_p.bind(
         *[inputs[i] for i in used_buffers[:new_num_inputs]],
         *[indices[i] for i in used_indices],
         buffer_index=tuple(
@@ -207,12 +219,7 @@ def tensor_product_prim(
         outputs_shape_dtype=tuple(
             outputs_shape_dtype[i - len(inputs)] for i in used_buffers[new_num_inputs:]
         ),
-        descriptors=frozenset(
-            [
-                (cue.Operation([used_buffers.index(i) for i in ope.buffers]), stp)
-                for ope, stp in descriptors
-            ]
-        ),
+        polynomial=new_poynomial,
         math_dtype=jnp.dtype(math_dtype),
         name=str(name),
         impl=impl,
@@ -252,11 +259,11 @@ def map_indices(
     return new_indices, new_buffer_index
 
 
-def tensor_product_abstract_eval(
+def segmented_polynomial_abstract_eval(
     *inputs_and_indices: jax.core.ShapedArray,
     buffer_index: tuple[int, ...],
     outputs_shape_dtype: tuple[jax.ShapeDtypeStruct, ...],
-    descriptors: frozenset[tuple[cue.Operation, cue.SegmentedTensorProduct]],
+    polynomial: cue.SegmentedPolynomial,
     math_dtype: jnp.dtype,
     name: str,
     impl: str,
@@ -266,12 +273,12 @@ def tensor_product_abstract_eval(
     )
 
 
-def tensor_product_impl(
+def segmented_polynomial_impl(
     platform: str | None,
     *inputs_and_indices: jax.Array,
     buffer_index: tuple[int, ...],
     outputs_shape_dtype: tuple[jax.ShapeDtypeStruct, ...],
-    descriptors: frozenset[tuple[cue.Operation, cue.SegmentedTensorProduct]],
+    polynomial: cue.SegmentedPolynomial,
     math_dtype: jnp.dtype,
     name: str,
     impl: str,
@@ -286,7 +293,7 @@ def tensor_product_impl(
         stp = stp.sort_paths()
         return ope, stp
 
-    descriptors = list(map(optimize_paths, *zip(*descriptors)))
+    polynomial = polynomial.map_tensor_products(optimize_paths)
 
     outputs = None
     kwargs = dict(
@@ -294,7 +301,7 @@ def tensor_product_impl(
         outputs_shape_dtype=outputs_shape_dtype,
         indices=indices,
         buffer_index=buffer_index,
-        descriptors=descriptors,
+        polynomial=polynomial,
         math_dtype=math_dtype,
         name=name,
     )
@@ -302,7 +309,7 @@ def tensor_product_impl(
     assert impl in ("auto", "cuda", "jax")
 
     if platform == "cuda" and impl in ("auto", "cuda"):
-        outputs, msg = tensor_product_ops_impl(**kwargs)
+        outputs, msg = segmented_polynomial_ops_impl(**kwargs)
     else:
         msg = f"{platform=}, {impl=}"
 
@@ -310,19 +317,19 @@ def tensor_product_impl(
         raise RuntimeError(f"Failed to use CUDA implementation: {msg}")
 
     if outputs is None:
-        outputs = tensor_product_vanilla_impl(**kwargs)
+        outputs = segmented_polynomial_vanilla_impl(**kwargs)
 
     assert outputs is not None
     return outputs
 
 
-def tensor_product_jvp(
+def segmented_polynomial_jvp(
     primals_and_indices: tuple[jax.Array, ...],
     tangents_and_zeros: tuple[jax.Array | ad.Zero, ...],
     *,
     buffer_index: tuple[int, ...],
     outputs_shape_dtype: tuple[jax.ShapeDtypeStruct, ...],
-    descriptors: frozenset[tuple[cue.Operation, cue.SegmentedTensorProduct]],
+    polynomial: cue.SegmentedPolynomial,
     math_dtype: jnp.dtype,
     name: str,
     impl: str,
@@ -337,12 +344,12 @@ def tensor_product_jvp(
     assert all(isinstance(t, ad.Zero) for t in tangents_and_zeros[num_inputs:])
     del primals_and_indices, tangents_and_zeros
 
-    out_primals = tensor_product_prim(
+    out_primals = segmented_polynomial_prim(
         primals,
         outputs_shape_dtype,
         indices,
         buffer_index,
-        descriptors,
+        polynomial,
         math_dtype,
         name,
         impl=impl,
@@ -356,21 +363,12 @@ def tensor_product_jvp(
         + [num_inputs + i for i, x in enumerate(outputs_shape_dtype)],
     )
 
-    jvp_descriptors = []
-    for ope, stp in descriptors:
-        jvps = ope.jvp([not isinstance(t, ad.Zero) for t in tangents])
-        permutations: list[tuple[int, ...]] = stp.symmetries()
-        for multiplicator, ope in cue.Operation.group_by_operational_symmetries(
-            permutations, jvps
-        ):
-            jvp_descriptors.append((ope, multiplicator * stp))
-
-    out_tangents = tensor_product_prim(
+    out_tangents = segmented_polynomial_prim(
         list(primals) + [t for t in tangents if not isinstance(t, ad.Zero)],
         outputs_shape_dtype,
         jvp_indices,
         jvp_buffer_index,
-        jvp_descriptors,
+        polynomial.jvp([not isinstance(t, ad.Zero) for t in tangents]),
         math_dtype,
         name + "_jvp",
         impl=impl,
@@ -379,12 +377,12 @@ def tensor_product_jvp(
     return out_primals, out_tangents
 
 
-def tensor_product_transpose(
+def segmented_polynomial_transpose(
     cotangents: tuple[jax.Array | ad.Zero, ...],
     *inputs_and_indices: jax.Array | ad.UndefinedPrimal,
     buffer_index: tuple[int, ...],
     outputs_shape_dtype: tuple[jax.ShapeDtypeStruct, ...],
-    descriptors: frozenset[tuple[cue.Operation, cue.SegmentedTensorProduct]],
+    polynomial: cue.SegmentedPolynomial,
     math_dtype: jnp.dtype,
     name: str,
     impl: str,
@@ -409,16 +407,7 @@ def tensor_product_transpose(
         + [i for i, x in enumerate(inputs) if ad.is_undefined_primal(x)],
     )
 
-    tr_descriptors = []
-    for ope, stp in descriptors:
-        ope = ope.transpose(
-            [ad.is_undefined_primal(x) for x in inputs],
-            [not isinstance(x, ad.Zero) for x in cotangents],
-        )
-        if ope is not None:
-            tr_descriptors.append((ope, stp))
-
-    tmp = tensor_product_prim(
+    tmp = segmented_polynomial_prim(
         [x for x in inputs if not ad.is_undefined_primal(x)]
         + [x for x in cotangents if not isinstance(x, ad.Zero)],  # inputs
         [
@@ -428,7 +417,10 @@ def tensor_product_transpose(
         ],
         tr_indices,
         tr_buffer_index,
-        tr_descriptors,
+        polynomial.transpose(
+            [ad.is_undefined_primal(x) for x in inputs],
+            [not isinstance(x, ad.Zero) for x in cotangents],
+        ),
         math_dtype,
         name + "_transpose",
         impl=impl,
@@ -444,13 +436,13 @@ def tensor_product_transpose(
     return tuple(outputs)
 
 
-def tensor_product_batching(
+def segmented_polynomial_batching(
     batched_inputs_and_indices: tuple[jax.Array, ...],
     batch_axes_of_inputs_and_indices: tuple[int | None, ...],
     *,
     buffer_index: tuple[int, ...],
     outputs_shape_dtype: tuple[jax.ShapeDtypeStruct, ...],
-    descriptors: frozenset[tuple[cue.Operation, cue.SegmentedTensorProduct]],
+    polynomial: cue.SegmentedPolynomial,
     math_dtype: jnp.dtype,
     name: str,
     impl: str,
@@ -529,12 +521,12 @@ def tensor_product_batching(
         for out in outputs_shape_dtype
     )
 
-    outputs = tensor_product_p.bind(
+    outputs = segmented_polynomial_p.bind(
         *batched_inputs,
         *batched_indices,
         buffer_index=buffer_index,
         outputs_shape_dtype=new_outputs_shape_dtype,
-        descriptors=descriptors,
+        polynomial=polynomial,
         math_dtype=math_dtype,
         name=name + "_batching",
         impl=impl,
@@ -549,22 +541,24 @@ def tensor_product_batching(
     return outputs, (0,) * len(outputs)
 
 
-tensor_product_p.def_abstract_eval(tensor_product_abstract_eval)
-tensor_product_p.def_impl(partial(xla.apply_primitive, tensor_product_p))
+segmented_polynomial_p.def_abstract_eval(segmented_polynomial_abstract_eval)
+segmented_polynomial_p.def_impl(partial(xla.apply_primitive, segmented_polynomial_p))
 mlir.register_lowering(
-    tensor_product_p,
+    segmented_polynomial_p,
     mlir.lower_fun(
-        partial(tensor_product_impl, "cuda"), tensor_product_p.multiple_results
+        partial(segmented_polynomial_impl, "cuda"),
+        segmented_polynomial_p.multiple_results,
     ),
     "cuda",
 )
 mlir.register_lowering(
-    tensor_product_p,
+    segmented_polynomial_p,
     mlir.lower_fun(
-        partial(tensor_product_impl, None), tensor_product_p.multiple_results
+        partial(segmented_polynomial_impl, None),
+        segmented_polynomial_p.multiple_results,
     ),
     None,
 )
-ad.primitive_jvps[tensor_product_p] = tensor_product_jvp
-ad.primitive_transposes[tensor_product_p] = tensor_product_transpose
-batching.primitive_batchers[tensor_product_p] = tensor_product_batching
+ad.primitive_jvps[segmented_polynomial_p] = segmented_polynomial_jvp
+ad.primitive_transposes[segmented_polynomial_p] = segmented_polynomial_transpose
+batching.primitive_batchers[segmented_polynomial_p] = segmented_polynomial_batching
