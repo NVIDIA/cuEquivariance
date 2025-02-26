@@ -50,6 +50,7 @@ from cuequivariance.irreps_array import (
 from cuequivariance.operation import Operation
 from cuequivariance.segmented_tensor_product import SegmentedTensorProduct
 from cuequivariance.segmented_polynomial import SegmentedPolynomial
+from cuequivariance.equivariant_polynomial import EquivariantPolynomial
 from cuequivariance.equivariant_tensor_product import EquivariantTensorProduct
 
 from cuequivariance import segmented_tensor_product, descriptors
@@ -81,6 +82,7 @@ __all__ = [
     "Operation",
     "SegmentedTensorProduct",
     "SegmentedPolynomial",
+    "EquivariantPolynomial",
     "EquivariantTensorProduct",
     "segmented_tensor_product",
     "descriptors",

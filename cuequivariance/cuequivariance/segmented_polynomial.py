@@ -60,6 +60,16 @@ class SegmentedPolynomial:
             value.tensor_products,
         )
 
+    def __mul__(self, factor: float) -> SegmentedPolynomial:
+        return SegmentedPolynomial(
+            self.num_inputs,
+            self.num_outputs,
+            [(ope, factor * stp) for ope, stp in self.tensor_products],
+        )
+
+    def __rmul__(self, factor: float) -> SegmentedPolynomial:
+        return self.__mul__(factor)
+
     def __repr__(self):
         header = (
             " ".join(IVARS[: self.num_inputs])
