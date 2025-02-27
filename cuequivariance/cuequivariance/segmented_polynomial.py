@@ -92,17 +92,36 @@ class SegmentedPolynomial:
             )
             + " "
         )
-        ope_txts = [
-            "  " + ope.to_string(self.num_inputs) for ope, _ in self.tensor_products
+        lines = [
+            "│  " + ope.to_string(self.num_inputs) for ope, _ in self.tensor_products
         ]
-        n = max(len(ope_txt) for ope_txt in ope_txts)
-        n = max(len(header), n)
+        if len(lines) > 0:
+            lines[-1] = "╰─" + lines[-1][2:]
+        n = max(len(line) for line in lines)
 
-        text = header + "═" * (n - len(header)) + "═╗"
+        lines = [
+            line + " " + "─" * (n - len(line)) + "─ " + str(stp)
+            for line, (_, stp) in zip(lines, self.tensor_products)
+        ]
 
-        for ope_txt, (_, stp) in zip(ope_txts, self.tensor_products):
-            text += "\n" + ope_txt + " " * (n - len(ope_txt)) + " ║ " + str(stp)
-        return text
+        modes = sorted(
+            {mode for _, stp in self.tensor_products for mode in stp.subscripts.modes()}
+        )
+        if len(modes) > 1:
+            modes = []
+        for a in ["sizes=", "num_segments=", "num_paths="] + [f"{m}=" for m in modes]:
+            if not all(line.count(a) == 1 for line in lines):
+                continue
+
+            splits = [line.split(a) for line in lines]
+            n = max(len(before) for before, _ in splits)
+            lines = [
+                before + " " * (n - len(before)) + a + after for before, after in splits
+            ]
+
+        lines = ["╭ " + header] + lines
+
+        return "\n".join(lines)
 
     @property
     def buffer_sizes(self) -> list[int | None]:
