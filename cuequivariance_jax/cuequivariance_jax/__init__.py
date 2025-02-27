@@ -25,6 +25,7 @@ from .rep_array.utils import concatenate, randn, as_irreps_array, clebsch_gordan
 
 from .primitives.segmented_polynomial import segmented_polynomial
 from .primitives.tensor_product import tensor_product
+from .primitives.equivariant_polynomial import equivariant_polynomial
 from .primitives.equivariant_tensor_product import equivariant_tensor_product
 
 from .operations.activation import (
@@ -48,6 +49,7 @@ __all__ = [
     "clebsch_gordan",
     "segmented_polynomial",
     "tensor_product",
+    "equivariant_polynomial",
     "equivariant_tensor_product",
     "normalspace",
     "normalize_function",
