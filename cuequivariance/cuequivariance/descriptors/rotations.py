@@ -22,7 +22,7 @@ from cuequivariance import segmented_tensor_product as stp
 
 def fixed_axis_angle_rotation(
     irreps: cue.Irreps, axis: np.ndarray, angle: float
-) -> cue.EquivariantTensorProduct:
+) -> cue.EquivariantPolynomial:
     """
     subsrcipts: ``input[u],output[u]``
 
@@ -42,18 +42,18 @@ def fixed_axis_angle_rotation(
         )
 
     d = d.flatten_coefficient_modes()
-    return cue.EquivariantTensorProduct(
-        d,
+    return cue.EquivariantPolynomial(
         [
             cue.IrrepsAndLayout(irreps, cue.ir_mul),
             cue.IrrepsAndLayout(irreps, cue.ir_mul),
         ],
+        cue.SegmentedPolynomial.trivial(d),
     )
 
 
 def yxy_rotation(
     irreps: cue.Irreps, lmax: Optional[int] = None
-) -> cue.EquivariantTensorProduct:
+) -> cue.EquivariantPolynomial:
     """
     subsrcipts: ``gamma[],beta[],alpha[],input[u],output[u]``
 
@@ -69,12 +69,12 @@ def yxy_rotation(
 
     where l is the maximum L in the input and output irreps.
     """
-    cbio = xy_rotation(irreps, lmax).d  # gamma, beta, input, A
-    aio = y_rotation(irreps, lmax).d  # alpha, A, output
+    # gamma, beta, input, A
+    cbio = xy_rotation(irreps, lmax).polynomial.tensor_products[0][1]
+    aio = y_rotation(irreps, lmax).polynomial.tensor_products[0][1]  # alpha, A, output
     cbiao = stp.dot(cbio, aio, (3, 1))  # gamma, beta, input, alpha, output
     cbaio = cbiao.move_operand(2, 3)  # gamma, beta, alpha, input, output
-    return cue.EquivariantTensorProduct(
-        cbaio,
+    return cue.EquivariantPolynomial(
         [
             cue.IrrepsAndLayout(irreps.new_scalars(cbaio.operands[0].size), cue.ir_mul),
             cue.IrrepsAndLayout(irreps.new_scalars(cbaio.operands[1].size), cue.ir_mul),
@@ -82,35 +82,36 @@ def yxy_rotation(
             cue.IrrepsAndLayout(irreps, cue.ir_mul),
             cue.IrrepsAndLayout(irreps, cue.ir_mul),
         ],
+        cue.SegmentedPolynomial.trivial(cbaio),
     )
 
 
 def xy_rotation(
     irreps: cue.Irreps, lmax: Optional[int] = None
-) -> cue.EquivariantTensorProduct:
+) -> cue.EquivariantPolynomial:
     """
     subsrcipts: ``gamma[],beta[],input[u],output[u]``
 
     Rotation around the y-axis followed by rotation around the x-axis
     """
-    cio = y_rotation(irreps, lmax).d  # gamma, input, A
-    bio = x_rotation(irreps, lmax).d  # beta, A, output
+    cio = y_rotation(irreps, lmax).polynomial.tensor_products[0][1]  # gamma, input, A
+    bio = x_rotation(irreps, lmax).polynomial.tensor_products[0][1]  # beta, A, output
     cibo = stp.dot(cio, bio, (2, 1))  # gamma, input, beta, output
     cbio = cibo.move_operand(1, 2)  # gamma, beta, input, output
-    return cue.EquivariantTensorProduct(
-        cbio,
+    return cue.EquivariantPolynomial(
         [
             cue.IrrepsAndLayout(irreps.new_scalars(cbio.operands[0].size), cue.ir_mul),
             cue.IrrepsAndLayout(irreps.new_scalars(cbio.operands[1].size), cue.ir_mul),
             cue.IrrepsAndLayout(irreps, cue.ir_mul),
             cue.IrrepsAndLayout(irreps, cue.ir_mul),
         ],
+        cue.SegmentedPolynomial.trivial(cbio),
     )
 
 
 def yx_rotation(
     irreps: cue.Irreps, lmax: Optional[int] = None
-) -> cue.EquivariantTensorProduct:
+) -> cue.EquivariantPolynomial:
     """
     subsrcipts: ``phi[],theta[],input[u],output[u]``
 
@@ -120,20 +121,20 @@ def yx_rotation(
     bio = y_rotation(irreps, lmax).d
     cibo = stp.dot(cio, bio, (2, 1))
     cbio = cibo.move_operand(1, 2)
-    return cue.EquivariantTensorProduct(
-        cbio,
+    return cue.EquivariantPolynomial(
         [
             cue.IrrepsAndLayout(irreps.new_scalars(cbio.operands[0].size), cue.ir_mul),
             cue.IrrepsAndLayout(irreps.new_scalars(cbio.operands[1].size), cue.ir_mul),
             cue.IrrepsAndLayout(irreps, cue.ir_mul),
             cue.IrrepsAndLayout(irreps, cue.ir_mul),
         ],
+        cue.SegmentedPolynomial.trivial(cbio),
     )
 
 
 def y_rotation(
     irreps: cue.Irreps, lmax: Optional[int] = None
-) -> cue.EquivariantTensorProduct:
+) -> cue.EquivariantPolynomial:
     """
     subsrcipts: ``phi[],input[u],output[u]``
 
@@ -190,19 +191,19 @@ def y_rotation(
         d.add_path(phc, slo, slo, c=c)
 
     d = d.flatten_coefficient_modes()
-    return cue.EquivariantTensorProduct(
-        d,
+    return cue.EquivariantPolynomial(
         [
             cue.IrrepsAndLayout(irreps.new_scalars(d.operands[0].size), cue.ir_mul),
             cue.IrrepsAndLayout(irreps, cue.ir_mul),
             cue.IrrepsAndLayout(irreps, cue.ir_mul),
         ],
+        cue.SegmentedPolynomial.trivial(d),
     )
 
 
 def x_rotation(
     irreps: cue.Irreps, lmax: Optional[int] = None
-) -> cue.EquivariantTensorProduct:
+) -> cue.EquivariantPolynomial:
     """
     subsrcipts: ``phi[],input[u],output[u]``
 
@@ -216,21 +217,23 @@ def x_rotation(
     """
     assert irreps.irrep_class in [cue.SO3, cue.O3]
 
-    dy = y_rotation(irreps, lmax).d
-    dz90 = fixed_axis_angle_rotation(irreps, np.array([0.0, 0.0, 1.0]), np.pi / 2.0).d
+    dy = y_rotation(irreps, lmax).polynomial.tensor_products[0][1]
+    dz90 = fixed_axis_angle_rotation(
+        irreps, np.array([0.0, 0.0, 1.0]), np.pi / 2.0
+    ).polynomial.tensor_products[0][1]
     d = stp.dot(stp.dot(dy, dz90, (1, 1)), dz90, (1, 1))
 
-    return cue.EquivariantTensorProduct(
-        d,
+    return cue.EquivariantPolynomial(
         [
             cue.IrrepsAndLayout(irreps.new_scalars(d.operands[0].size), cue.ir_mul),
             cue.IrrepsAndLayout(irreps, cue.ir_mul),
             cue.IrrepsAndLayout(irreps, cue.ir_mul),
         ],
+        cue.SegmentedPolynomial.trivial(d),
     )
 
 
-def inversion(irreps: cue.Irreps) -> cue.EquivariantTensorProduct:
+def inversion(irreps: cue.Irreps) -> cue.EquivariantPolynomial:
     """
     subsrcipts: ``input[u],output[u]``
     """
@@ -241,10 +244,10 @@ def inversion(irreps: cue.Irreps) -> cue.EquivariantTensorProduct:
         assert np.allclose(H @ H, np.eye(ir.dim), atol=1e-6)
         d.add_path(None, None, c=H, dims={"u": mul})
     d = d.flatten_coefficient_modes()
-    return cue.EquivariantTensorProduct(
-        d,
+    return cue.EquivariantPolynomial(
         [
             cue.IrrepsAndLayout(irreps, cue.ir_mul),
             cue.IrrepsAndLayout(irreps, cue.ir_mul),
         ],
+        cue.SegmentedPolynomial.trivial(d),
     )

@@ -105,6 +105,9 @@ class Operand:
     def __eq__(self, other: Operand) -> bool:
         return self.subscripts == other.subscripts and self.segments == other.segments
 
+    def __lt__(self, other: Operand) -> bool:
+        return (self.subscripts, self.segments) < (other.subscripts, other.segments)
+
     def __repr__(self) -> str:
         dims = format_dimensions_dict(self.get_dimensions_dict())
         return f"Operand(subscripts={self.subscripts} num_segments={self.num_segments} {dims})"

@@ -16,8 +16,10 @@ import numpy as np
 import pytest
 
 import cuequivariance as cue
-import cuequivariance.segmented_tensor_product as stp
-from cuequivariance import descriptors
+
+
+def test_transpose():
+    cue.descriptors.transpose(cue.Irreps(cue.O3, "3x1e"), cue.mul_ir, cue.ir_mul)
 
 
 def test_commutativity_squeeze_flatten():
@@ -25,45 +27,45 @@ def test_commutativity_squeeze_flatten():
     irreps2 = cue.Irreps("O3", "1x0e + 1x1o")
     irreps3 = cue.Irreps("O3", "32x0e + 32x1o")
 
-    d = descriptors.fully_connected_tensor_product(irreps1, irreps2, irreps3).d
+    poly = cue.descriptors.fully_connected_tensor_product(irreps1, irreps2, irreps3)
     assert (
-        d.squeeze_modes().flatten_coefficient_modes()
-        == d.flatten_coefficient_modes().squeeze_modes()
+        poly.squeeze_modes().flatten_coefficient_modes()
+        == poly.flatten_coefficient_modes().squeeze_modes()
     )
 
-    d = descriptors.full_tensor_product(irreps1, irreps2, irreps3).d
+    poly = cue.descriptors.full_tensor_product(irreps1, irreps2, irreps3)
     assert (
-        d.squeeze_modes().flatten_coefficient_modes()
-        == d.flatten_coefficient_modes().squeeze_modes()
+        poly.squeeze_modes().flatten_coefficient_modes()
+        == poly.flatten_coefficient_modes().squeeze_modes()
     )
 
-    d = descriptors.channelwise_tensor_product(irreps1, irreps2, irreps3).d
+    poly = cue.descriptors.channelwise_tensor_product(irreps1, irreps2, irreps3)
     assert (
-        d.squeeze_modes().flatten_coefficient_modes()
-        == d.flatten_coefficient_modes().squeeze_modes()
+        poly.squeeze_modes().flatten_coefficient_modes()
+        == poly.flatten_coefficient_modes().squeeze_modes()
     )
 
-    d = descriptors.linear(irreps1, irreps2).d
+    poly = cue.descriptors.linear(irreps1, irreps2)
     assert (
-        d.squeeze_modes().flatten_coefficient_modes()
-        == d.flatten_coefficient_modes().squeeze_modes()
+        poly.squeeze_modes().flatten_coefficient_modes()
+        == poly.flatten_coefficient_modes().squeeze_modes()
     )
 
 
 @pytest.mark.parametrize("ell", [1, 2, 3, 4])
 def test_spherical_harmonics(ell: int):
-    d = descriptors.spherical_harmonics(cue.SO3(1), [ell]).d
+    poly = cue.descriptors.spherical_harmonics(cue.SO3(1), [ell])
 
     vec = np.random.randn(3)
     axis = np.random.randn(3)
     angle = np.random.rand()
 
-    yl = stp.compute_last_operand(d, *(vec,) * ell)
+    [yl] = poly(vec)
 
     R = cue.SO3(1).rotation(axis, angle)
     Rl = cue.SO3(ell).rotation(axis, angle)
 
-    yl1 = stp.compute_last_operand(d, *(R @ vec,) * ell)
+    [yl1] = poly(R @ vec)
     yl2 = Rl @ yl
 
     np.testing.assert_allclose(yl1, yl2)
@@ -77,7 +79,7 @@ def test_y_rotation(ell: int):
     gamma = -0.5
 
     irrep = cue.SO3(ell)
-    d = descriptors.yxy_rotation(cue.Irreps("SO3", [irrep])).d
+    poly = cue.descriptors.yxy_rotation(cue.Irreps("SO3", [irrep]))
 
     def enc(th: float):
         m = np.arange(1, ell + 1)
@@ -86,7 +88,7 @@ def test_y_rotation(ell: int):
         return np.concatenate([c[::-1], [1.0], s])
 
     x = np.random.randn(irrep.dim)
-    y1 = stp.compute_last_operand(d, enc(gamma), enc(beta), enc(alpha), x)
+    [y1] = poly(enc(gamma), enc(beta), enc(alpha), x)
 
     A = irrep.rotation(np.array([0.0, 1.0, 0.0]), alpha)
     B = irrep.rotation(np.array([1.0, 0.0, 0.0]), beta)

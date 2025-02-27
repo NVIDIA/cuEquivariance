@@ -182,6 +182,32 @@ class SegmentedTensorProduct:
             (tuple(self.operands), tuple(self.paths), self.coefficient_subscripts)
         )
 
+    def __eq__(self, value: SegmentedTensorProduct) -> bool:
+        assert isinstance(value, SegmentedTensorProduct)
+        return (
+            self.operands == value.operands
+            and self.paths == value.paths
+            and self.coefficient_subscripts == value.coefficient_subscripts
+        )
+
+    def __lt__(self, value: SegmentedTensorProduct) -> bool:
+        assert isinstance(value, SegmentedTensorProduct)
+        return (
+            self.num_operands,
+            self.num_paths,
+            self.subscripts,
+            self.operands,
+            self.paths,
+            self.coefficient_subscripts,
+        ) < (
+            value.num_operands,
+            value.num_paths,
+            value.subscripts,
+            value.operands,
+            value.paths,
+            value.coefficient_subscripts,
+        )
+
     def __repr__(self) -> str:
         if max(len(operand) for operand in self.operands) == 1 and len(self.paths) == 1:
             operands = ",".join(

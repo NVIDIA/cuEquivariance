@@ -17,7 +17,6 @@ from typing import Optional
 import numpy as np
 
 import cuequivariance as cue
-from cuequivariance import segmented_tensor_product as stp
 
 
 # The function escn_iu_ju_ku below is a 1:1 adaptation of https://github.com/e3nn/e3nn-jax/blob/a2a81ab451b9cd597d7be27b3e1faba79457475d/e3nn_jax/experimental/linear_shtp.py#L38-L165
@@ -26,7 +25,7 @@ def escn_tp(
     irreps_out: cue.Irreps,
     m_max: Optional[int] = None,
     l_max: Optional[int] = None,
-) -> cue.EquivariantTensorProduct:
+) -> cue.EquivariantPolynomial:
     """
     subsrcipts: ``weights[uv],input[u],output[v]``
 
@@ -39,7 +38,7 @@ def escn_tp(
         l_max (int, optional): Maximum angular resolution along the principal axis.
 
     Returns:
-        EquivariantTensorProduct:
+        EquivariantPolynomial:
             Descriptor of the tensor product part of the eSCN convolution.
 
             - Operand 0: weights
@@ -61,7 +60,7 @@ def escn_tp(
 
         irreps_out = irreps_out.filter(keep=pr)
 
-    d = stp.SegmentedTensorProduct.from_subscripts("iuv,ju,kv+ijk")
+    d = cue.SegmentedTensorProduct.from_subscripts("iuv,ju,kv+ijk")
 
     for mul, ir in irreps_in:
         d.add_segment(1, (ir.dim, mul))
@@ -105,13 +104,13 @@ def escn_tp(
 
     d = d.normalize_paths_for_operand(2)
     d = d.flatten_coefficient_modes()
-    return cue.EquivariantTensorProduct(
-        d,
+    return cue.EquivariantPolynomial(
         [
             cue.IrrepsAndLayout(irreps_in.new_scalars(d.operands[0].size), cue.ir_mul),
             cue.IrrepsAndLayout(irreps_in, cue.ir_mul),
             cue.IrrepsAndLayout(irreps_out, cue.ir_mul),
         ],
+        cue.SegmentedPolynomial.trivial(d),
     )
 
 
@@ -119,7 +118,7 @@ def escn_tp_compact(
     irreps_in: cue.Irreps,
     irreps_out: cue.Irreps,
     m_max: Optional[int] = None,
-) -> stp.SegmentedTensorProduct:
+) -> cue.SegmentedPolynomial:
     """
     subsrcipts: ``weights[uv],input[u],output[v]``
 
@@ -146,7 +145,7 @@ def escn_tp_compact(
     if G not in [cue.SO3]:
         raise NotImplementedError("Only SO3 is supported")
 
-    d = stp.SegmentedTensorProduct.from_subscripts("uv,u,v")
+    d = cue.SegmentedTensorProduct.from_subscripts("uv,u,v")
 
     l_max_in = max(ir.l for _, ir in irreps_in)
     for m in range(-l_max_in, l_max_in + 1):
@@ -178,7 +177,8 @@ def escn_tp_compact(
         d.add_path(i, l_max_in - m, l_max_out + m, c=-1.0)
 
     d = d.normalize_paths_for_operand(2)
-    return d  # TODO: return an EquivariantTensorProduct using SphericalSignal
+    # TODO: return an EquivariantPolynomial using SphericalSignal
+    return cue.SegmentedPolynomial.trivial(d)
 
 
 class SphericalSignal(cue.Rep):
