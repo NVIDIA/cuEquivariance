@@ -191,7 +191,7 @@ class SegmentedPolynomial:
             self.num_inputs, self.num_outputs, new_tensor_products
         )
 
-    def consolidate(self) -> SegmentedPolynomial:
+    def fuse_stps(self) -> SegmentedPolynomial:
         groups = itertools.groupby(
             self.tensor_products,
             key=lambda x: (x[0], x[1].operands, x[1].coefficient_subscripts),
@@ -209,6 +209,30 @@ class SegmentedPolynomial:
         ]
         return SegmentedPolynomial(
             self.num_inputs, self.num_outputs, new_tensor_products
+        )
+
+    def consolidate(self) -> SegmentedPolynomial:
+        def f(ope: cue.Operation, stp: cue.SegmentedTensorProduct):
+            stp = (
+                stp.consolidate_modes()
+                .squeeze_modes()
+                .remove_empty_segments()
+                .consolidate_paths()
+                .sort_paths()
+            )
+            if stp.num_paths == 0:
+                return None
+            return ope, stp
+
+        return self.fuse_stps().map_tensor_products(f)
+
+    def used_buffers(self) -> list[int]:
+        return sorted(
+            set(
+                itertools.chain.from_iterable(
+                    ope.buffers for ope, _ in self.tensor_products
+                )
+            )
         )
 
     def buffer_used(self) -> list[bool]:
@@ -346,3 +370,12 @@ class SegmentedPolynomial:
         if segments is None:
             raise ValueError(f"Buffer {buffer} is not used")
         return segments
+
+    def sort_indices_for_identical_operands(self) -> SegmentedPolynomial:
+        def optimize_paths(ope: cue.Operation, stp: cue.SegmentedTensorProduct):
+            for set_of_operands in ope.operands_with_identical_buffers():
+                stp = stp.sort_indices_for_identical_operands(set_of_operands)
+            stp = stp.sort_paths()
+            return ope, stp
+
+        return self.map_tensor_products(optimize_paths)

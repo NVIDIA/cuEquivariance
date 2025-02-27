@@ -94,10 +94,10 @@ class EquivariantPolynomial:
     def outputs(self) -> tuple[cue.Rep, ...]:
         return self.operands[self.num_inputs :]
 
-    def consolidate(self) -> EquivariantPolynomial:
+    def fuse_stps(self) -> EquivariantPolynomial:
         return EquivariantPolynomial(
             self.operands,
-            self.polynomial.consolidate(),
+            self.polynomial.fuse_stps(),
         )
 
     def buffer_used(self) -> list[bool]:
@@ -142,7 +142,7 @@ class EquivariantPolynomial:
             operands,
             cue.SegmentedPolynomial.stack([pol.polynomial for pol in polys], stacked),
         )
-        return poly.consolidate()
+        return poly.fuse_stps()
 
     def squeeze_modes(self) -> EquivariantPolynomial:
         return EquivariantPolynomial(

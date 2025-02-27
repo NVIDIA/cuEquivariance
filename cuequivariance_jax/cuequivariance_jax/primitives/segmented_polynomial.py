@@ -181,45 +181,26 @@ def segmented_polynomial_prim(
         jax.ShapeDtypeStruct(x.shape, x.dtype) for x in outputs_shape_dtype
     ]
 
-    def f(ope: cue.Operation, stp: cue.SegmentedTensorProduct):
-        stp = stp.consolidate_modes().remove_empty_segments().consolidate_paths()
-        if stp.num_paths == 0:
-            return None
-        return ope, stp
+    polynomial = polynomial.consolidate()
+    used_buffers = polynomial.used_buffers()
+    polynomial = polynomial.remove_unused_buffers()
 
-    polynomial = polynomial.map_tensor_products(f)
-
-    used_buffers = set()
-    used_indices = set()
-    for ope, _ in polynomial.tensor_products:
-        for i in ope.buffers:
-            used_buffers.add(i)
-            if buffer_index[i] >= 0:
-                used_indices.add(buffer_index[i])
-    used_buffers = sorted(used_buffers)  # maps: new buffer index -> old buffer index
-    used_indices = sorted(used_indices)  # maps: new index -> old index
-
-    new_num_inputs = sum([i < len(inputs) for i in used_buffers])
-    new_poynomial = cue.SegmentedPolynomial(
-        new_num_inputs,
-        len(used_buffers) - new_num_inputs,
-        [
-            (cue.Operation([used_buffers.index(i) for i in ope.buffers]), stp)
-            for ope, stp in polynomial.tensor_products
-        ],
+    used_indices = sorted(
+        {buffer_index[i] for i in used_buffers if buffer_index[i] >= 0}
     )
 
-    new_outputs = segmented_polynomial_p.bind(
-        *[inputs[i] for i in used_buffers[:new_num_inputs]],
+    used_outputs = segmented_polynomial_p.bind(
+        *[inputs[i] for i in used_buffers[: polynomial.num_inputs]],
         *[indices[i] for i in used_indices],
         buffer_index=tuple(
             used_indices.index(buffer_index[i]) if buffer_index[i] >= 0 else -1
             for i in used_buffers
         ),
         outputs_shape_dtype=tuple(
-            outputs_shape_dtype[i - len(inputs)] for i in used_buffers[new_num_inputs:]
+            outputs_shape_dtype[i - len(inputs)]
+            for i in used_buffers[polynomial.num_inputs :]
         ),
-        polynomial=new_poynomial,
+        polynomial=polynomial,
         math_dtype=jnp.dtype(math_dtype),
         name=str(name),
         impl=impl,
@@ -230,7 +211,7 @@ def segmented_polynomial_prim(
     else:
         outputs = [jnp.zeros(out.shape, out.dtype) for out in outputs_shape_dtype]
 
-    for i, output in zip(used_buffers[new_num_inputs:], new_outputs):
+    for i, output in zip(used_buffers[polynomial.num_inputs :], used_outputs):
         outputs[i - len(inputs)] = output
 
     return tuple(outputs)
@@ -287,13 +268,7 @@ def segmented_polynomial_impl(
     inputs, indices = inputs_and_indices[:num_inputs], inputs_and_indices[num_inputs:]
     del inputs_and_indices
 
-    def optimize_paths(ope: cue.Operation, stp: cue.SegmentedTensorProduct):
-        for set_of_operands in ope.operands_with_identical_buffers():
-            stp = stp.sort_indices_for_identical_operands(set_of_operands)
-        stp = stp.sort_paths()
-        return ope, stp
-
-    polynomial = polynomial.map_tensor_products(optimize_paths)
+    polynomial = polynomial.sort_indices_for_identical_operands()
 
     outputs = None
     kwargs = dict(
