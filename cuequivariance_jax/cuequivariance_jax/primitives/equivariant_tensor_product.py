@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import warnings
+
 import jax
 import jax.numpy as jnp
 
@@ -88,6 +90,12 @@ def equivariant_tensor_product(
         [[ 1. ... ]
          [ 2. ... ]]
     """
+    warnings.warn(
+        "equivariant_tensor_product is deprecated and will be removed in a future version. "
+        "Please use cuex.equivariant_polynomial instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     assert e.num_inputs > 0
 
     if len(inputs) == 0:

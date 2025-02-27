@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import copy
 import dataclasses
+import warnings
 from typing import Optional, Sequence, Union
 
 import cuequivariance as cue
@@ -62,6 +63,12 @@ class EquivariantTensorProduct:
         operands: list[cue.Rep],
         symmetrize: bool = True,
     ):
+        warnings.warn(
+            "EquivariantTensorProduct is deprecated and will be removed in a future version. "
+            "Please use EquivariantPolynomial instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         operands = tuple(operands)
         if isinstance(d, stp.SegmentedTensorProduct):
             assert len(operands) == d.num_operands

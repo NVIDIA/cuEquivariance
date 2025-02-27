@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import logging
+import warnings
 
 import jax
 import jax.numpy as jnp
@@ -62,7 +63,12 @@ def tensor_product(
     Returns:
         list of jax.Array: The result of the tensor product.
     """
-
+    warnings.warn(
+        "tensor_product is deprecated and will be removed in a future version. "
+        "Please use cuex.segmented_polynomial instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     if name is None:
         name = "tensor_product"
 
