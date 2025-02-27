@@ -196,3 +196,10 @@ class EquivariantPolynomial:
             + [x for req, x in zip(requires_gradient, self.inputs) if req],
             self.polynomial.backward(requires_gradient, has_cotangent),
         )
+
+    def flops(self, batch_size: int = 1) -> int:
+        return self.polynomial.flops(batch_size)
+
+    def memory(self, batch_sizes: list[int]) -> int:
+        assert len(batch_sizes) == len(self.operands)
+        return sum(Z * rep.dim for Z, rep in zip(batch_sizes, self.operands))

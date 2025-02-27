@@ -152,6 +152,10 @@ class SegmentedPolynomial:
         return outputs
 
     @property
+    def num_operands(self) -> int:
+        return self.num_inputs + self.num_outputs
+
+    @property
     def buffer_sizes(self) -> list[int | None]:
         sizes = [None] * (self.num_inputs + self.num_outputs)
         for ope, stp in self.tensor_products:
@@ -316,6 +320,17 @@ class SegmentedPolynomial:
             + [True] * sum(requires_gradient),
             has_cotangent=has_cotangent,
         )
+
+    def flops(self, batch_size: int = 1) -> int:
+        n = 0
+        for ope, stp in self.tensor_products:
+            oid, _ = ope.output_operand_buffer(self.num_inputs)
+            n += stp.flop_cost(oid)
+        return batch_size * n
+
+    def memory(self, batch_sizes: list[int]) -> int:
+        assert len(batch_sizes) == self.num_operands
+        return sum(Z * size for Z, size in zip(batch_sizes, self.buffer_sizes))
 
     def buffer_segments(self, buffer: int) -> list[tuple[int, ...]]:
         segments = None
