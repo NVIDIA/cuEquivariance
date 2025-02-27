@@ -17,7 +17,7 @@ import cuequivariance as cue
 
 def transpose(
     irreps: cue.Irreps, source: cue.IrrepsLayout, target: cue.IrrepsLayout
-) -> cue.EquivariantTensorProduct:
+) -> cue.EquivariantPolynomial:
     """Transpose the irreps layout of a tensor."""
     d = cue.SegmentedTensorProduct(
         operands=[
@@ -31,6 +31,7 @@ def transpose(
     )
     for mul, ir in irreps:
         d.add_path(None, None, c=1, dims={"u": mul, "i": ir.dim})
-    return cue.EquivariantTensorProduct(
-        d, [cue.IrrepsAndLayout(irreps, source), cue.IrrepsAndLayout(irreps, target)]
+    return cue.EquivariantPolynomial(
+        [cue.IrrepsAndLayout(irreps, source), cue.IrrepsAndLayout(irreps, target)],
+        cue.SegmentedPolynomial.trivial(d),
     )

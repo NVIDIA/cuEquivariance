@@ -18,14 +18,12 @@ from typing import Optional
 import numpy as np
 
 import cuequivariance as cue
-import cuequivariance.segmented_tensor_product as stp
-from cuequivariance import descriptors
 from cuequivariance.misc.linalg import round_to_sqrt_rational, triu_array
 
 
 def symmetric_contraction(
     irreps_in: cue.Irreps, irreps_out: cue.Irreps, degrees: list[int]
-) -> tuple[cue.EquivariantTensorProduct, np.ndarray]:
+) -> tuple[cue.EquivariantPolynomial, np.ndarray]:
     r"""
     subscripts: ``weights[u],input[u],output[u]``
 
@@ -45,9 +43,11 @@ def symmetric_contraction(
         cuex.equivariant_tensor_product(e, w, cuex.randn(jax.random.key(1), e.inputs[1]))
     """
     assert min(degrees) > 0
-    e1 = cue.EquivariantTensorProduct.stack(
+
+    # poly1 replicates the behavior of the original MACE implementation
+    poly1 = cue.EquivariantPolynomial.stack(
         [
-            cue.EquivariantTensorProduct.stack(
+            cue.EquivariantPolynomial.stack(
                 [
                     _symmetric_contraction(irreps_in, irreps_out[i : i + 1], deg)
                     for deg in reversed(degrees)
@@ -58,7 +58,7 @@ def symmetric_contraction(
         ],
         [True, False, True],
     )
-    e2 = descriptors.symmetric_contraction(irreps_in, irreps_out, degrees)
+    poly2 = cue.descriptors.symmetric_contraction(irreps_in, irreps_out, degrees)
     a1, a2 = [
         np.concatenate(
             [
@@ -67,11 +67,11 @@ def symmetric_contraction(
                     1,
                     None,
                 )
-                for d in sorted(e.ds, key=lambda d: d.num_operands)
+                for _, d in pol.polynomial.tensor_products
             ],
             axis=1,
         )
-        for e in [e1, e2]
+        for pol in [poly1, poly2]
     ]
 
     # This nonzeros selection is just for lightening the inversion
@@ -83,7 +83,7 @@ def symmetric_contraction(
     projection = round_to_sqrt_rational(projection)
 
     np.testing.assert_allclose(a1, projection @ a2, atol=1e-7)
-    return e2, projection
+    return poly2, projection
 
 
 def _flatten(
@@ -103,7 +103,7 @@ def _flatten(
 
 
 def _stp_to_matrix(
-    d: stp.SegmentedTensorProduct,
+    d: cue.SegmentedTensorProduct,
 ) -> np.ndarray:
     m = np.zeros([ope.num_segments for ope in d.operands])
     for path in d.paths:
@@ -114,7 +114,7 @@ def _stp_to_matrix(
 # This function is an adaptation of https://github.com/ACEsuit/mace/blob/bd412319b11c5f56c37cec6c4cfae74b2a49ff43/mace/modules/symmetric_contraction.py
 def _symmetric_contraction(
     irreps_in: cue.Irreps, irreps_out: cue.Irreps, degree: int
-) -> cue.EquivariantTensorProduct:
+) -> cue.EquivariantPolynomial:
     mul = irreps_in.muls[0]
     assert all(mul == m for m in irreps_in.muls)
     assert all(mul == m for m in irreps_out.muls)
@@ -125,7 +125,7 @@ def _symmetric_contraction(
     output_operand = degree + 1
 
     abc = "abcdefgh"[:degree]
-    d = stp.SegmentedTensorProduct.from_subscripts(
+    d = cue.SegmentedTensorProduct.from_subscripts(
         f"u_{'_'.join(f'{a}' for a in abc)}_i+{abc}ui"
     )
 
@@ -145,13 +145,13 @@ def _symmetric_contraction(
 
     d = d.flatten_coefficient_modes()
     d = d.append_modes_to_all_operands("u", {"u": mul})
-    return cue.EquivariantTensorProduct(
-        [d],
+    return cue.EquivariantPolynomial(
         [
             cue.IrrepsAndLayout(irreps_in.new_scalars(d.operands[0].size), cue.ir_mul),
             cue.IrrepsAndLayout(mul * irreps_in, cue.ir_mul),
             cue.IrrepsAndLayout(mul * irreps_out, cue.ir_mul),
         ],
+        cue.SegmentedPolynomial(2, 1, [(cue.Operation([0] + [1] * degree + [2]), d)]),
     )
 
 

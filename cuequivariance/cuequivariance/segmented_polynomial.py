@@ -16,7 +16,10 @@ from __future__ import annotations
 
 import copy
 import dataclasses
+import itertools
 from typing import Callable, Sequence
+
+import numpy as np
 
 import cuequivariance as cue
 from cuequivariance.operation import IVARS, OVARS
@@ -38,10 +41,18 @@ class SegmentedPolynomial:
         object.__setattr__(self, "num_outputs", num_outputs)
         object.__setattr__(self, "tensor_products", sorted(tensor_products))
 
+    @classmethod
+    def trivial(cls, stp: cue.SegmentedTensorProduct):
+        return cls(
+            stp.num_operands - 1,
+            1,
+            [(cue.Operation(tuple(range(stp.num_operands))), stp)],
+        )
+
     def __hash__(self) -> int:
         return hash((self.num_inputs, self.num_outputs, tuple(self.tensor_products)))
 
-    def __eq__(self, value):
+    def __eq__(self, value) -> bool:
         assert isinstance(value, SegmentedPolynomial)
         return (
             self.num_inputs == value.num_inputs
@@ -49,7 +60,7 @@ class SegmentedPolynomial:
             and self.tensor_products == value.tensor_products
         )
 
-    def __lt__(self, value):
+    def __lt__(self, value) -> bool:
         assert isinstance(value, SegmentedPolynomial)
         return (
             self.num_inputs,
@@ -90,7 +101,6 @@ class SegmentedPolynomial:
             + " ".join(
                 buffer_txts[self.num_inputs : self.num_inputs + self.num_outputs]
             )
-            + " "
         )
         lines = [
             "│  " + ope.to_string(self.num_inputs) for ope, _ in self.tensor_products
@@ -122,6 +132,24 @@ class SegmentedPolynomial:
         lines = ["╭ " + header] + lines
 
         return "\n".join(lines)
+
+    def __call__(self, *inputs: np.ndarray) -> list[np.ndarray]:
+        inferred_shape = np.broadcast_shapes(*[x.shape[:-1] for x in inputs])
+        inferred_dtype = np.result_type(*[x.dtype for x in inputs])
+        outputs = [
+            np.zeros(inferred_shape + (size,), dtype=inferred_dtype)
+            for size in self.output_sizes
+        ]
+        for ope, stp in self.tensor_products:
+            oid, bid = ope.output_operand_buffer(self.num_inputs)
+            outputs[bid - self.num_inputs] += (
+                cue.segmented_tensor_product.compute_last_operand(
+                    stp.move_operand_last(oid),
+                    *[inputs[bid] for bid in ope.input_buffers(self.num_inputs)],
+                    dtype=inferred_dtype,
+                )
+            )
+        return outputs
 
     @property
     def buffer_sizes(self) -> list[int | None]:
@@ -159,33 +187,50 @@ class SegmentedPolynomial:
             self.num_inputs, self.num_outputs, new_tensor_products
         )
 
-    def jvp(self, has_tangent: list[bool]) -> SegmentedPolynomial:
-        new_tps = []
-        for ope, stp in self.tensor_products:
-            jvps = ope.jvp(has_tangent)
-            permutations: list[tuple[int, ...]] = stp.symmetries()
-            for multiplicator, ope in cue.Operation.group_by_operational_symmetries(
-                permutations, jvps
-            ):
-                new_tps.append((ope, multiplicator * stp))
+    def consolidate(self) -> SegmentedPolynomial:
+        groups = itertools.groupby(
+            self.tensor_products,
+            key=lambda x: (x[0], x[1].operands, x[1].coefficient_subscripts),
+        )
+        new_tensor_products = [
+            (
+                ope,
+                cue.SegmentedTensorProduct(
+                    operands=operands,
+                    coefficient_subscripts=coefficient_subscripts,
+                    paths=[path for _, stp in elements for path in stp.paths],
+                ).consolidate_paths(),
+            )
+            for (ope, operands, coefficient_subscripts), elements in groups
+        ]
         return SegmentedPolynomial(
-            self.num_inputs + sum(has_tangent), self.num_outputs, new_tps
+            self.num_inputs, self.num_outputs, new_tensor_products
         )
 
-    def transpose(
-        self,
-        is_undefined_primal: list[bool],
-        has_cotangent: list[bool],
-    ) -> SegmentedPolynomial:
-        new_tps = []
-        for ope, stp in self.tensor_products:
-            ope = ope.transpose(is_undefined_primal, has_cotangent)
-            if ope is not None:
-                new_tps.append((ope, stp))
+    def buffer_used(self) -> list[bool]:
+        return [
+            any(buffer in ope.buffers for ope, _ in self.tensor_products)
+            for buffer in range(self.num_inputs + self.num_outputs)
+        ]
+
+    def remove_unused_buffers(self) -> SegmentedPolynomial:
+        used = self.buffer_used()
+        new_index = []
+        i = 0
+        for u in used:
+            if u:
+                new_index.append(i)
+                i += 1
+            else:
+                new_index.append(None)
+
         return SegmentedPolynomial(
-            sum(map(lambda u: not u, is_undefined_primal)) + sum(has_cotangent),
-            sum(is_undefined_primal),
-            new_tps,
+            sum(used[: self.num_inputs]),
+            sum(used[self.num_inputs :]),
+            [
+                (cue.Operation([new_index[buffer] for buffer in ope.buffers]), stp)
+                for ope, stp in self.tensor_products
+            ],
         )
 
     @classmethod
@@ -211,6 +256,66 @@ class SegmentedPolynomial:
                             stp.insert_segments(oid, -1, p.buffer_segments(buffer))
                 tensor_products.append((ope, stp))
         return cls(num_inputs, num_outputs, tensor_products)
+
+    def squeeze_modes(self) -> SegmentedPolynomial:
+        return SegmentedPolynomial(
+            self.num_inputs,
+            self.num_outputs,
+            [(ope, stp.squeeze_modes()) for ope, stp in self.tensor_products],
+        )
+
+    def flatten_coefficient_modes(self) -> SegmentedPolynomial:
+        return SegmentedPolynomial(
+            self.num_inputs,
+            self.num_outputs,
+            [
+                (ope, stp.flatten_coefficient_modes())
+                for ope, stp in self.tensor_products
+            ],
+        )
+
+    def jvp(self, has_tangent: list[bool]) -> SegmentedPolynomial:
+        assert len(has_tangent) == self.num_inputs
+
+        new_tps = []
+        for ope, stp in self.tensor_products:
+            jvps = ope.jvp(has_tangent)
+            permutations: list[tuple[int, ...]] = stp.symmetries()
+            for multiplicator, ope in cue.Operation.group_by_operational_symmetries(
+                permutations, jvps
+            ):
+                new_tps.append((ope, multiplicator * stp))
+        return SegmentedPolynomial(
+            self.num_inputs + sum(has_tangent), self.num_outputs, new_tps
+        )
+
+    def transpose(
+        self,
+        is_undefined_primal: list[bool],
+        has_cotangent: list[bool],
+    ) -> SegmentedPolynomial:
+        assert len(is_undefined_primal) == self.num_inputs
+        assert len(has_cotangent) == self.num_outputs
+
+        new_tps = []
+        for ope, stp in self.tensor_products:
+            ope = ope.transpose(is_undefined_primal, has_cotangent)
+            if ope is not None:
+                new_tps.append((ope, stp))
+        return SegmentedPolynomial(
+            sum(map(lambda u: not u, is_undefined_primal)) + sum(has_cotangent),
+            sum(is_undefined_primal),
+            new_tps,
+        )
+
+    def backward(
+        self, requires_gradient: list[bool], has_cotangent: list[bool]
+    ) -> SegmentedPolynomial:
+        return self.jvp(requires_gradient).transpose(
+            is_undefined_primal=[False] * self.num_inputs
+            + [True] * sum(requires_gradient),
+            has_cotangent=has_cotangent,
+        )
 
     def buffer_segments(self, buffer: int) -> list[tuple[int, ...]]:
         segments = None

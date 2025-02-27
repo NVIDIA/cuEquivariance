@@ -326,35 +326,6 @@ class EquivariantTensorProduct:
     def backward(self, input: int) -> tuple[EquivariantTensorProduct, tuple[int, ...]]:
         """
         The backward pass of the equivariant tensor product.
-
-        Args:
-            input: The input with respect to which the backward pass is computed.
-
-        Returns:
-            A tuple containing the ETP representing the backward pass and the permutation of the operands between the original and the backward ETP.
-
-        Examples:
-            >>> e = cue.descriptors.fully_connected_tensor_product(
-            ...     cue.Irreps("SO3", "4x0+1x1"),
-            ...     cue.Irreps("SO3", "4x0+2x1"),
-            ...     cue.Irreps("SO3", "4x0+3x1")
-            ... )
-            >>> e
-            EquivariantTensorProduct(114x0 x 4x0+1 x 4x0+2x1 -> 4x0+3x1)
-            >>> e_bwd, i = e.backward(0)
-            >>> e_bwd
-            EquivariantTensorProduct(4x0+3x1 x 4x0+1 x 4x0+2x1 -> 114x0)
-            >>> i
-            (3, 1, 2, 0)
-
-            >>> e = cue.descriptors.spherical_harmonics(cue.SO3(1), [0, 1, 2, 3])
-            >>> e
-            EquivariantTensorProduct((1)^(0..3) -> 0+1+2+3)
-            >>> e_bwd, i = e.backward(0)
-            >>> e_bwd
-            EquivariantTensorProduct(0+1+2+3 x (1)^(0..2) -> 1)
-            >>> i
-            (1, 0, 0)
         """
         assert input < self.num_inputs
 

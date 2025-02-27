@@ -37,7 +37,10 @@ def spherical_harmonics(
 
     Examples:
         >>> spherical_harmonics(cue.SO3(1), [0, 1, 2])
-        EquivariantPolynomial((1)^(0..2) -> 0+1+2)
+        ╭ a=1 -> B=0+1+2
+        │  B ─────    sizes=9     num_segments=9     num_paths=1
+        │  a B ─── ,  sizes=3,9   num_segments=3,9   num_paths=3
+        ╰─ a a B ─ ,, sizes=3,3,9 num_segments=3,3,9 num_paths=8
     """
     if len(ls) != 1:
         return cue.EquivariantPolynomial.stack(

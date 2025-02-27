@@ -156,6 +156,23 @@ class EquivariantTensorProduct(torch.nn.Module):
         use_fallback: Optional[bool] = None,
     ):
         super().__init__()
+
+        # TODO: remove this when re-design
+        if isinstance(e, cue.EquivariantPolynomial):
+            assert e.num_outputs == 1
+            for ope, stp in e.tensor_products:
+                inputs = list(range(e.num_inputs))
+                output = e.num_inputs
+                expected = (
+                    inputs[: stp.num_operands - 1]
+                    + [inputs[-1]] * max(0, stp.num_operands - e.num_operands)
+                    + [output]
+                )
+                assert ope.buffers == expected
+            e = cue.EquivariantTensorProduct(
+                [stp for _, stp in e.tensor_products], e.inputs + e.outputs
+            )
+
         if not isinstance(layout_in, tuple):
             layout_in = (layout_in,) * e.num_inputs
         if len(layout_in) != e.num_inputs:

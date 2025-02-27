@@ -44,7 +44,10 @@ def symmetric_contraction(
         ...    16 * cue.Irreps("SO3", "0 + 1"),
         ...    [1, 2, 3]
         ... )
-        EquivariantPolynomial(32x0+80x0+176x0 x (16x0+16x1+16x2)^(1..3) -> 16x0+16x1)
+        ╭ a=32x0+80x0+176x0 b=16x0+16x1+16x2 -> C=16x0+16x1
+        │  a b C ───── u,u,u     sizes=288,144,64         num_segments=18,9,4     num_paths=4   u=16
+        │  a b b C ─── u,u,u,u   sizes=288,144,144,64     num_segments=18,9,9,4   num_paths=37  u=16
+        ╰─ a b b b C ─ u,u,u,u,u sizes=288,144,144,144,64 num_segments=18,9,9,9,4 num_paths=437 u=16
 
         Where ``32x0+80x0+176x0`` are the weights needed for each degree (32 for degree 1, 80 for degree 2, 176 for degree 3).
     """
