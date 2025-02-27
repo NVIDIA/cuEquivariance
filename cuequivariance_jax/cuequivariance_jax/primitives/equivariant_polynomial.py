@@ -51,7 +51,10 @@ def equivariant_polynomial(
 
         >>> e = cue.descriptors.spherical_harmonics(cue.SO3(1), [0, 1, 2])
         >>> e
-        EquivariantPolynomial((1)^(0..2) -> 0+1+2)
+        ╭ a=1 -> B=0+1+2
+        │  B ─────    sizes=9     num_segments=9     num_paths=1
+        │  a B ─── ,  sizes=3,9   num_segments=3,9   num_paths=3
+        ╰─ a a B ─ ,, sizes=3,3,9 num_segments=3,3,9 num_paths=8
 
         We need some input data.
 
@@ -62,7 +65,7 @@ def equivariant_polynomial(
 
         Now we can execute the equivariant tensor product.
 
-        >>> cuex.equivariant_tensor_product(e, x)
+        >>> cuex.equivariant_polynomial(e, [x])
         {0: 0+1+2}
         [1. ... ]
 
@@ -79,11 +82,11 @@ def equivariant_polynomial(
         ...         [0.0, 0.0, 1.0],
         ...         [1.0, 0.0, 0.0],
         ...    ]))
-        >>> cuex.equivariant_tensor_product(
+        >>> cuex.equivariant_polynomial(
         ...   e,
-        ...   x,
+        ...   [x],
+        ...   [jax.ShapeDtypeStruct((2, e.outputs[0].dim), jnp.float32)],
         ...   indices=[None, i_out],
-        ...   output_batch_shape=(2,),
         ... )
         {1: 0+1+2}
         [[ 1. ... ]
