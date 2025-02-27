@@ -26,7 +26,9 @@ def test_special_double_backward():
         32 * cue.Irreps("O3", "0e + 1o + 2e"), 32 * cue.Irreps("O3", "0e + 1o"), [1, 2]
     )
     rep_w, rep_x = e.inputs
-    h = cuex.equivariant_tensor_product(e)
+
+    def h(*inputs):
+        return cuex.equivariant_polynomial(e, inputs)
 
     h0 = lambda w, x: h(w, x).array.sum() ** 2  # noqa
     h1 = lambda w, x: jax.grad(h0, 1)(w, x).array.sum() ** 2  # noqa
@@ -56,7 +58,7 @@ def make_uniform1d_descriptors():
 
 
 @pytest.mark.parametrize("e", make_uniform1d_descriptors())
-def test_custom_kernel(e: cue.EquivariantTensorProduct):
+def test_custom_kernel(e: cue.EquivariantPolynomial):
     if jax.default_backend() != "gpu":
         pytest.skip("test_custom_kernel requires CUDA")
 
@@ -79,13 +81,14 @@ def test_custom_kernel(e: cue.EquivariantTensorProduct):
     output_batch_shape = (num_nodes,)
 
     def fwd(inputs, indices, impl):
-        return cuex.equivariant_tensor_product(
+        return cuex.equivariant_polynomial(
             e,
-            indices=indices,
-            output_batch_shape=output_batch_shape,
+            inputs,
+            jax.ShapeDtypeStruct(output_batch_shape + (e.outputs[0].dim,), jnp.float64),
+            indices,
             math_dtype=jnp.float64,
             impl=impl,
-        )(*inputs).array
+        ).array
 
     out0 = fwd(inputs, indices, impl="jax")
     out1 = fwd(inputs, indices, impl="cuda")

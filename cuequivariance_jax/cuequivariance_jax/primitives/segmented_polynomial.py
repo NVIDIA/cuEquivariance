@@ -78,7 +78,7 @@ def segmented_polynomial(
 
     assert len(inputs) == polynomial.num_inputs
     assert len(outputs_shape_dtype) == polynomial.num_outputs
-    buffers = inputs + outputs_shape_dtype
+    buffers = list(inputs) + list(outputs_shape_dtype)
 
     if indices is None:
         indices = [None] * len(buffers)
