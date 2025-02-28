@@ -27,6 +27,24 @@ from cuequivariance.operation import IVARS, OVARS
 
 @dataclasses.dataclass(init=False, frozen=True)
 class SegmentedPolynomial:
+    """A polynomial representation using segmented tensor products.
+
+    This class represents a polynomial using a collection of segmented tensor products, where each product
+    is associated with an operation that specifies how inputs are combined. The polynomial maps a set of
+    input tensors to output tensors through these tensor products.
+
+    Args:
+        num_inputs (int): Number of input tensors.
+        num_outputs (int): Number of output tensors.
+        tensor_products (list of tuple of Operation and SegmentedTensorProduct): List of operation and tensor product pairs
+            that define the polynomial transformation.
+
+    Example:
+        >>> # Create a polynomial with 2 inputs and 1 output
+        >>> poly = SegmentedPolynomial(2, 1, [(op1, stp1), (op2, stp2)])
+        >>> outputs = poly(input1, input2)  # Evaluate polynomial on inputs (numpy reference implementation)
+    """
+
     num_inputs: int
     num_outputs: int
     tensor_products: list[tuple[cue.Operation, cue.SegmentedTensorProduct]]
@@ -42,7 +60,7 @@ class SegmentedPolynomial:
         object.__setattr__(self, "tensor_products", sorted(tensor_products))
 
     @classmethod
-    def trivial(cls, stp: cue.SegmentedTensorProduct):
+    def eval_last_operand(cls, stp: cue.SegmentedTensorProduct):
         return cls(
             stp.num_operands - 1,
             1,
@@ -153,10 +171,12 @@ class SegmentedPolynomial:
 
     @property
     def num_operands(self) -> int:
+        """Number of operands in the polynomial."""
         return self.num_inputs + self.num_outputs
 
     @property
     def buffer_sizes(self) -> list[int | None]:
+        """Sizes of the buffers in the polynomial."""
         sizes = [None] * (self.num_inputs + self.num_outputs)
         for ope, stp in self.tensor_products:
             for buffer, operand in zip(ope.buffers, stp.operands):
@@ -170,10 +190,12 @@ class SegmentedPolynomial:
 
     @property
     def input_sizes(self) -> list[int | None]:
+        """Sizes of the input buffers in the polynomial."""
         return self.buffer_sizes[: self.num_inputs]
 
     @property
     def output_sizes(self) -> list[int | None]:
+        """Sizes of the output buffers in the polynomial."""
         return self.buffer_sizes[self.num_inputs :]
 
     def map_tensor_products(
@@ -192,6 +214,7 @@ class SegmentedPolynomial:
         )
 
     def fuse_stps(self) -> SegmentedPolynomial:
+        """Fuse segmented tensor products with identical operations and operands."""
         groups = itertools.groupby(
             self.tensor_products,
             key=lambda x: (x[0], x[1].operands, x[1].coefficient_subscripts),
@@ -212,6 +235,8 @@ class SegmentedPolynomial:
         )
 
     def consolidate(self) -> SegmentedPolynomial:
+        """Consolidate the segmented tensor products."""
+
         def f(ope: cue.Operation, stp: cue.SegmentedTensorProduct):
             stp = (
                 stp.consolidate_modes()
@@ -227,6 +252,7 @@ class SegmentedPolynomial:
         return self.fuse_stps().map_tensor_products(f)
 
     def used_buffers(self) -> list[int]:
+        """Buffers used in the polynomial. (List of integers)"""
         return sorted(
             set(
                 itertools.chain.from_iterable(
@@ -236,12 +262,14 @@ class SegmentedPolynomial:
         )
 
     def buffer_used(self) -> list[bool]:
+        """Buffers used in the polynomial. (List of boolean values)"""
         return [
             any(buffer in ope.buffers for ope, _ in self.tensor_products)
             for buffer in range(self.num_inputs + self.num_outputs)
         ]
 
     def remove_unused_buffers(self) -> SegmentedPolynomial:
+        """Remove unused buffers from the polynomial."""
         used = self.buffer_used()
         new_index = []
         i = 0
@@ -265,6 +293,7 @@ class SegmentedPolynomial:
     def stack(
         cls, polys: list[SegmentedPolynomial], stacked: list[bool]
     ) -> SegmentedPolynomial:
+        """Stack segmented polynomials together."""
         assert len(polys) > 0
         num_inputs = polys[0].num_inputs
         num_outputs = polys[0].num_outputs
@@ -286,6 +315,7 @@ class SegmentedPolynomial:
         return cls(num_inputs, num_outputs, tensor_products)
 
     def squeeze_modes(self) -> SegmentedPolynomial:
+        """Squeeze the modes of the segmented tensor products."""
         return SegmentedPolynomial(
             self.num_inputs,
             self.num_outputs,
@@ -293,6 +323,7 @@ class SegmentedPolynomial:
         )
 
     def flatten_coefficient_modes(self) -> SegmentedPolynomial:
+        """Flatten the coefficient modes of the segmented tensor products."""
         return SegmentedPolynomial(
             self.num_inputs,
             self.num_outputs,
@@ -303,6 +334,7 @@ class SegmentedPolynomial:
         )
 
     def jvp(self, has_tangent: list[bool]) -> SegmentedPolynomial:
+        """Compute the Jacobian-vector product of the polynomial."""
         assert len(has_tangent) == self.num_inputs
 
         new_tps = []
@@ -322,6 +354,7 @@ class SegmentedPolynomial:
         is_undefined_primal: list[bool],
         has_cotangent: list[bool],
     ) -> SegmentedPolynomial:
+        """Transpose the polynomial."""
         assert len(is_undefined_primal) == self.num_inputs
         assert len(has_cotangent) == self.num_outputs
 
@@ -339,6 +372,7 @@ class SegmentedPolynomial:
     def backward(
         self, requires_gradient: list[bool], has_cotangent: list[bool]
     ) -> SegmentedPolynomial:
+        """Compute the backward pass of the polynomial."""
         return self.jvp(requires_gradient).transpose(
             is_undefined_primal=[False] * self.num_inputs
             + [True] * sum(requires_gradient),
@@ -346,6 +380,7 @@ class SegmentedPolynomial:
         )
 
     def flops(self, batch_size: int = 1) -> int:
+        """Compute the number of floating point operations in the polynomial."""
         n = 0
         for ope, stp in self.tensor_products:
             oid, _ = ope.output_operand_buffer(self.num_inputs)
@@ -353,6 +388,7 @@ class SegmentedPolynomial:
         return batch_size * n
 
     def memory(self, batch_sizes: list[int]) -> int:
+        """Compute the memory usage of the polynomial."""
         assert len(batch_sizes) == self.num_operands
         return sum(Z * size for Z, size in zip(batch_sizes, self.buffer_sizes))
 
@@ -372,6 +408,8 @@ class SegmentedPolynomial:
         return segments
 
     def sort_indices_for_identical_operands(self) -> SegmentedPolynomial:
+        """Sort the indices of the segmented tensor products for identical operands."""
+
         def optimize_paths(ope: cue.Operation, stp: cue.SegmentedTensorProduct):
             for set_of_operands in ope.operands_with_identical_buffers():
                 stp = stp.sort_indices_for_identical_operands(set_of_operands)

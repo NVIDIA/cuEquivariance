@@ -41,7 +41,7 @@ Group Representations
 Equivariant Tensor Products
 ---------------------------
 
-These classes represent tensor products.
+These classes represent tensor products and polynomials.
 
 .. autosummary::
    :toctree: generated/
@@ -51,8 +51,9 @@ These classes represent tensor products.
    IrrepsLayout
    IrrepsAndLayout
    SegmentedTensorProduct
-   EquivariantTensorProduct
    Operation
+   SegmentedPolynomial
+   EquivariantPolynomial
 
 Descriptors
 -----------

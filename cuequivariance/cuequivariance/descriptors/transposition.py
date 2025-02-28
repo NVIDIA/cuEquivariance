@@ -33,5 +33,5 @@ def transpose(
         d.add_path(None, None, c=1, dims={"u": mul, "i": ir.dim})
     return cue.EquivariantPolynomial(
         [cue.IrrepsAndLayout(irreps, source), cue.IrrepsAndLayout(irreps, target)],
-        cue.SegmentedPolynomial.trivial(d),
+        cue.SegmentedPolynomial.eval_last_operand(d),
     )

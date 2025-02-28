@@ -201,10 +201,7 @@ def tp_list_list(
 
     def prepare():
         if not d.all_same_segment_shape():
-            raise ValueError(
-                "cuex.tensor_product: all operands must have the same segment shape\n"
-                + str(d)
-            )
+            raise ValueError("all operands must have the same segment shape\n" + str(d))
         reshaped_inputs = [
             jnp.reshape(
                 input, input.shape[:-1] + (ope.num_segments,) + ope.segment_shape
@@ -216,7 +213,7 @@ def tp_list_list(
         return reshaped_inputs, indices, coefficients
 
     if algorithm == "stacked":
-        logger.debug(f"cuex.tensor_product: {d} with stacked strategy")
+        logger.debug(f"{d} with stacked strategy")
 
         reshaped_inputs, indices, coefficients = prepare()
         return [
@@ -234,7 +231,7 @@ def tp_list_list(
         ]
 
     elif algorithm == "compact_stacked":
-        logger.debug(f"cuex.tensor_product: {d} with compact_stacked strategy")
+        logger.debug(f"{d} with compact_stacked strategy")
 
         reshaped_inputs, indices, coefficients = prepare()
         return [
@@ -256,7 +253,7 @@ def tp_list_list(
         ]
 
     elif algorithm == "indexed_vmap":
-        logger.debug(f"cuex.tensor_product: {d} with indexed_vmap strategy")
+        logger.debug(f"{d} with indexed_vmap strategy")
 
         reshaped_inputs, indices, coefficients = prepare()
         return (
@@ -279,7 +276,7 @@ def tp_list_list(
         )
 
     elif algorithm == "indexed_compact":
-        logger.debug(f"cuex.tensor_product: {d} with indexed_compact strategy")
+        logger.debug(f"{d} with indexed_compact strategy")
 
         reshaped_inputs, indices, coefficients = prepare()
         return (
@@ -303,7 +300,7 @@ def tp_list_list(
         )
 
     elif algorithm == "indexed_for_loop":
-        logger.debug(f"cuex.tensor_product: {d} with indexed_for_loop strategy")
+        logger.debug(f"{d} with indexed_for_loop strategy")
         reshaped_inputs, indices, coefficients = prepare()
 
         def body(pid: int, output: jax.Array) -> jax.Array:
@@ -330,7 +327,7 @@ def tp_list_list(
         )
 
     elif algorithm == "sliced":
-        logger.debug(f"cuex.tensor_product: {d} with sliced strategy")
+        logger.debug(f"{d} with sliced strategy")
 
         slices = [operand.segment_slices() for operand in d.operands]
         return [
@@ -356,7 +353,7 @@ def tp_list_list(
         ]
 
     elif algorithm == "no-op":
-        warnings.warn(f"cuex.tensor_product: {d} skipping computation!!!")
+        warnings.warn(f"{d} skipping computation!!!")
 
         dummy = sum([jnp.sum(input) for input in inputs])
 
@@ -369,4 +366,4 @@ def tp_list_list(
             for pid_start, pid_end in zip(pids[:-1], pids[1:])
         ]
 
-    raise NotImplementedError(f"cuex.tensor_product: unknown algorithm {algorithm}")
+    raise NotImplementedError(f"unknown algorithm {algorithm}")

@@ -40,7 +40,8 @@ def symmetric_contraction(
         w = jax.random.normal(jax.random.key(0), (p.shape[0], mul))
         w = jnp.einsum("au,ab->bu", w, p).flatten()
 
-        cuex.equivariant_tensor_product(e, w, cuex.randn(jax.random.key(1), e.inputs[1]))
+        x = cuex.randn(jax.random.key(1), e.inputs[1])
+        y = cuex.equivariant_polynomial(e, [w, x])
     """
     assert min(degrees) > 0
 

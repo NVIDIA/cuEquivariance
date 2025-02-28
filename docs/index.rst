@@ -40,13 +40,15 @@ The easiest way to install cuEquivariance is from `PyPi <https://pypi.org/>`_ us
    pip install cuequivariance  # Installs only the core non-ML components
 
    # CUDA kernels for different CUDA versions
+   pip install cuequivariance-ops-jax-cu12
    pip install cuequivariance-ops-torch-cu11
    pip install cuequivariance-ops-torch-cu12
 
 Requirements
 ------------
 
-``cuequivariance-ops-torch-*`` packages are only available for Linux x86_64 and require PyTorch 2.4.0 or later.
+ - ``cuequivariance-ops-torch-*`` packages are only available for Linux x86_64 and require PyTorch 2.4.0 or later.
+ - ``cuequivariance-ops-jax-cu12`` package is only available for Linux x86_64 and requires JAX 0.5.0 or later.
 
 Organization
 ------------
@@ -70,7 +72,7 @@ cuEquivariance is split into three packages:
    :align: center
 
 Most tensor products are defined using the :class:`cue.EquivariantTensorProduct <cuequivariance.EquivariantTensorProduct>` class, which encapsulates the :class:`cue.Irreps <cuequivariance.Irreps>` and :class:`cue.IrrepsLayout <cuequivariance.IrrepsLayout>` for each input and the output. It also includes one or more instances of :class:`cue.SegmentedTensorProduct <cuequivariance.SegmentedTensorProduct>`, which define the tensor product operations.
-This descriptor is then used to create a :class:`cuet.EquivariantTensorProduct <cuequivariance_torch.EquivariantTensorProduct>` module, which can be used in PyTorch models. Or used to execute the tensor product operations using :class:`cuex.equivariant_tensor_product <cuequivariance_jax.equivariant_tensor_product>` in JAX.
+This descriptor is then used to create a :class:`cuet.EquivariantTensorProduct <cuequivariance_torch.EquivariantTensorProduct>` module, which can be used in PyTorch models. Or used to execute the tensor product operations using :class:`cuex.equivariant_polynomial <cuequivariance_jax.equivariant_polynomial>` in JAX.
 
 Tutorials
 ---------

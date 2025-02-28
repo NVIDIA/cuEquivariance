@@ -24,8 +24,9 @@ from cuequivariance.misc.sympy_utils import sqrtQarray_to_sympy
 def spherical_harmonics(
     ir_vec: cue.Irrep, ls: list[int], layout: cue.IrrepsLayout = cue.ir_mul
 ) -> cue.EquivariantPolynomial:
-    """
-    subscripts: ``vector[],...,vector[],Yl[]``
+    """Polynomial descriptor for the spherical harmonics.
+
+    Subscripts: ``vector[],...,vector[],Yl[]``
 
     Args:
         ir_vec (Irrep): irrep of the input vector, for example ``cue.SO3(1)``.
@@ -35,7 +36,7 @@ def spherical_harmonics(
     Returns:
         :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: The descriptor.
 
-    Examples:
+    Example:
         >>> spherical_harmonics(cue.SO3(1), [0, 1, 2])
         ╭ a=1 -> B=0+1+2
         │  B ─────    sizes=9     num_segments=9     num_paths=1

@@ -21,24 +21,22 @@ def symmetric_contraction(
     irreps_out: cue.Irreps,
     degrees: list[int],
 ) -> cue.EquivariantPolynomial:
-    r"""
-    subscripts: ``weights[u],input[u],output[u]``
-
-    Construct the descriptor for a symmetric contraction.
+    """Construct the descriptor for a symmetric contraction.
 
     The symmetric contraction is a weighted sum of the input contracted with itself degree times.
+
+    Subscripts: ``weights[u],input[u],output[u]``
 
     Args:
         irreps_in (Irreps): The input irreps, the multiplicity are treated in parallel.
         irreps_out (Irreps): The output irreps.
-        degree (int): The degree of the symmetric contraction.
+        degrees (list[int]): List of degrees for the symmetric contractions.
 
     Returns:
-        :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`:
-            The descriptor of the symmetric contraction.
+        EquivariantPolynomial: The descriptor of the symmetric contraction.
             The operands are the weights, the input degree times and the output.
 
-    Examples:
+    Example:
         >>> cue.descriptors.symmetric_contraction(
         ...    16 * cue.Irreps("SO3", "0 + 1 + 2"),
         ...    16 * cue.Irreps("SO3", "0 + 1"),

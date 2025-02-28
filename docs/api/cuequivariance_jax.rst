@@ -44,8 +44,8 @@ Tensor Products
    :toctree: generated/
    :template: function_template.rst
 
-   equivariant_tensor_product
-   tensor_product
+   equivariant_polynomial
+   segmented_polynomial
 
 Extra Modules
 -------------

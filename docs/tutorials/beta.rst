@@ -42,7 +42,7 @@ The segmented tensor product with 3 or 4 operands with one mode can be executed 
         .squeeze_modes()
         .flatten_coefficient_modes()
     )
-    print(e.ds[0])
+    print(e)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     m = cuet.EquivariantTensorProduct(e, layout=cue.ir_mul, device=device)
@@ -63,7 +63,8 @@ Again for segmented tensor product with 3 or 4 operands with one mode, we can us
     )
 
     if device.type == "cuda":
-        m = TensorProductUniform4x1dIndexed(e.ds[0], device, torch.float32)
+        d = e.polynomial.tensor_products[0][1]
+        m = TensorProductUniform4x1dIndexed(d, device, torch.float32)
 
         x0 = torch.randn(16, e.inputs[0].dim, device=device)
         i0 = torch.randint(0, 16, (128,), device=device)

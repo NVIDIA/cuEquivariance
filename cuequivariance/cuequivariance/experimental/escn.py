@@ -110,7 +110,7 @@ def escn_tp(
             cue.IrrepsAndLayout(irreps_in, cue.ir_mul),
             cue.IrrepsAndLayout(irreps_out, cue.ir_mul),
         ],
-        cue.SegmentedPolynomial.trivial(d),
+        cue.SegmentedPolynomial.eval_last_operand(d),
     )
 
 
@@ -178,7 +178,7 @@ def escn_tp_compact(
 
     d = d.normalize_paths_for_operand(2)
     # TODO: return an EquivariantPolynomial using SphericalSignal
-    return cue.SegmentedPolynomial.trivial(d)
+    return cue.SegmentedPolynomial.eval_last_operand(d)
 
 
 class SphericalSignal(cue.Rep):

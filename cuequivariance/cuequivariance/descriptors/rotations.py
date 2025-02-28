@@ -47,7 +47,7 @@ def fixed_axis_angle_rotation(
             cue.IrrepsAndLayout(irreps, cue.ir_mul),
             cue.IrrepsAndLayout(irreps, cue.ir_mul),
         ],
-        cue.SegmentedPolynomial.trivial(d),
+        cue.SegmentedPolynomial.eval_last_operand(d),
     )
 
 
@@ -82,7 +82,7 @@ def yxy_rotation(
             cue.IrrepsAndLayout(irreps, cue.ir_mul),
             cue.IrrepsAndLayout(irreps, cue.ir_mul),
         ],
-        cue.SegmentedPolynomial.trivial(cbaio),
+        cue.SegmentedPolynomial.eval_last_operand(cbaio),
     )
 
 
@@ -105,7 +105,7 @@ def xy_rotation(
             cue.IrrepsAndLayout(irreps, cue.ir_mul),
             cue.IrrepsAndLayout(irreps, cue.ir_mul),
         ],
-        cue.SegmentedPolynomial.trivial(cbio),
+        cue.SegmentedPolynomial.eval_last_operand(cbio),
     )
 
 
@@ -128,7 +128,7 @@ def yx_rotation(
             cue.IrrepsAndLayout(irreps, cue.ir_mul),
             cue.IrrepsAndLayout(irreps, cue.ir_mul),
         ],
-        cue.SegmentedPolynomial.trivial(cbio),
+        cue.SegmentedPolynomial.eval_last_operand(cbio),
     )
 
 
@@ -197,7 +197,7 @@ def y_rotation(
             cue.IrrepsAndLayout(irreps, cue.ir_mul),
             cue.IrrepsAndLayout(irreps, cue.ir_mul),
         ],
-        cue.SegmentedPolynomial.trivial(d),
+        cue.SegmentedPolynomial.eval_last_operand(d),
     )
 
 
@@ -229,7 +229,7 @@ def x_rotation(
             cue.IrrepsAndLayout(irreps, cue.ir_mul),
             cue.IrrepsAndLayout(irreps, cue.ir_mul),
         ],
-        cue.SegmentedPolynomial.trivial(d),
+        cue.SegmentedPolynomial.eval_last_operand(d),
     )
 
 
@@ -249,5 +249,5 @@ def inversion(irreps: cue.Irreps) -> cue.EquivariantPolynomial:
             cue.IrrepsAndLayout(irreps, cue.ir_mul),
             cue.IrrepsAndLayout(irreps, cue.ir_mul),
         ],
-        cue.SegmentedPolynomial.trivial(d),
+        cue.SegmentedPolynomial.eval_last_operand(d),
     )
