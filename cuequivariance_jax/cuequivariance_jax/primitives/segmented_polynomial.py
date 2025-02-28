@@ -255,6 +255,61 @@ def map_indices(
     return new_indices, new_buffer_index
 
 
+def segmented_polynomial_dce(
+    *inputs_and_indices: jax.Array,
+    buffer_index: tuple[int, ...],
+    outputs_shape_dtype: tuple[jax.ShapeDtypeStruct, ...],
+    polynomial: cue.SegmentedPolynomial,
+    math_dtype: jnp.dtype,
+    name: str,
+    impl: str,
+) -> tuple[jax.Array, ...]:
+    def fn(inputs_and_indices: tuple[jax.Array, ...]) -> tuple[jax.Array, ...]:
+        outputs = segmented_polynomial_p.bind(
+            *inputs_and_indices,
+            buffer_index=buffer_index,
+            outputs_shape_dtype=outputs_shape_dtype,
+            polynomial=polynomial,
+            math_dtype=math_dtype,
+            name=name,
+            impl=impl,
+        )
+        assert isinstance(outputs, (tuple, list))
+        return tuple(outputs)
+
+    try:
+        from jax.experimental.custom_dce import custom_dce
+    except ImportError:
+        return fn(inputs_and_indices)
+    else:
+        fn_dce = custom_dce(fn)
+
+        @fn_dce.def_dce
+        def fn_dce_rule(
+            used_outputs: list[bool], inputs_and_indices
+        ) -> tuple[jax.Array | None, ...]:
+            assert not all(used_outputs)
+
+            num_inputs = len(buffer_index) - len(outputs_shape_dtype)
+            inputs, indices = (
+                inputs_and_indices[:num_inputs],
+                inputs_and_indices[num_inputs:],
+            )
+            return segmented_polynomial_prim(
+                inputs,
+                outputs_shape_dtype,
+                indices,
+                buffer_index,
+                polynomial.compute_only(used_outputs),
+                math_dtype,
+                name,
+                impl,
+                return_none_if_empty=True,
+            )
+
+        return fn_dce(inputs_and_indices)
+
+
 def segmented_polynomial_abstract_eval(
     *inputs_and_indices: jax.core.ShapedArray,
     buffer_index: tuple[int, ...],
