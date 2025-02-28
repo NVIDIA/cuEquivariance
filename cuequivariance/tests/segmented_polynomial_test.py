@@ -181,3 +181,50 @@ def test_flops_and_memory():
     # Test memory calculation
     memory = poly.memory([100, 100, 100])
     assert memory == 100 * (2 + 2 + 2)  # All operands have size 2
+
+
+def test_jvp():
+    """Test Jacobian-vector product computation."""
+    # Create a simple polynomial for testing: f(x,y) = x^T * y (dot product)
+    stp = cue.SegmentedTensorProduct.from_subscripts("i,j,k+ijk")
+    i0 = stp.add_segment(0, (3,))
+    i1 = stp.add_segment(1, (3,))
+    i2 = stp.add_segment(2, (1,))
+    stp.add_path(i0, i1, i2, c=np.eye(3).reshape(3, 3, 1))
+
+    op = cue.Operation((0, 1, 2))
+    poly = cue.SegmentedPolynomial(2, 1, [(op, stp)])
+
+    # Input values
+    x = np.array([1.0, 2.0, 3.0])
+    y = np.array([4.0, 5.0, 6.0])
+
+    # Tangent vectors (directions for differentiation)
+    x_tangent = np.array([0.1, 0.2, 0.3])
+    y_tangent = np.array([0.4, 0.5, 0.6])
+
+    # Create the JVP polynomial for both inputs having tangents
+    jvp_poly = poly.jvp([True, True])
+
+    # When both inputs have tangents, we need to concatenate inputs and tangents
+    # The JVP polynomial expects inputs followed by their respective tangents
+    jvp_result = jvp_poly(x, y, x_tangent, y_tangent)
+
+    # For the dot product function f(x,y) = x^T * y:
+    # The Jacobian w.r.t x is y^T, and the Jacobian w.r.t y is x^T
+    # So Jvp = y^T * x_tangent + x^T * y_tangent
+    expected_jvp = np.array([y.dot(x_tangent) + x.dot(y_tangent)])
+
+    assert np.allclose(jvp_result[0], expected_jvp)
+
+    # Test with only x having a tangent
+    jvp_x_only = poly.jvp([True, False])
+    x_only_result = jvp_x_only(x, y, x_tangent)
+    expected_x_only = np.array([y.dot(x_tangent)])
+    assert np.allclose(x_only_result[0], expected_x_only)
+
+    # Test with only y having a tangent
+    jvp_y_only = poly.jvp([False, True])
+    y_only_result = jvp_y_only(x, y, y_tangent)
+    expected_y_only = np.array([x.dot(y_tangent)])
+    assert np.allclose(y_only_result[0], expected_y_only)
