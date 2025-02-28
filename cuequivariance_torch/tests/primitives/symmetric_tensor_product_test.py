@@ -27,9 +27,10 @@ device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("
 
 
 def make_descriptors():
-    yield descriptors.symmetric_contraction(
+    [(_, d1), (_, d2), (_, d3)] = descriptors.symmetric_contraction(
         cue.Irreps("SO3", "0 + 1 + 2"), cue.Irreps("SO3", "0"), [1, 2, 3]
-    ).ds
+    ).polynomial.tensor_products
+    yield [d1, d2, d3]
 
     d1 = stp.SegmentedTensorProduct.from_subscripts(",,")
     d1.add_path(None, None, None, c=2.0)
