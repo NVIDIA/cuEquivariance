@@ -16,7 +16,6 @@ import logging
 from functools import partial
 
 import jax
-import jax.core
 import jax.extend
 import jax.lax
 import jax.numpy as jnp
@@ -532,6 +531,61 @@ def segmented_polynomial_batching(
     return outputs, (0,) * len(outputs)
 
 
+def segmented_polynomial_dce(
+    used_outputs: list[bool],
+    eqn: jax.extend.core.JaxprEqn,
+) -> tuple[list[bool], jax.extend.core.JaxprEqn | None]:
+    assert len(used_outputs) == len(eqn.outvars)
+
+    print(f"segmented_polynomial_dce: {used_outputs=}")
+
+    polynomial: cue.SegmentedPolynomial = eqn.params["polynomial"]
+    buffer_index = eqn.params["buffer_index"]
+    outputs_shape_dtype = eqn.params["outputs_shape_dtype"]
+
+    # If no outputs are used, we can eliminate the operation entirely
+    if not any(used_outputs) and not eqn.effects:
+        return [False] * len(eqn.invars), None
+
+    num_inputs = polynomial.num_inputs
+
+    # Compute a new polynomial that only computes the used outputs
+    polynomial = polynomial.compute_only(used_outputs)
+    used_inputs: list[bool] = polynomial.buffer_used()[:num_inputs]
+    used_buffers_id: list[int] = polynomial.used_buffers()
+    polynomial = polynomial.select_buffers(used_inputs + used_outputs)
+    assert polynomial.num_outputs == sum(used_outputs)
+
+    used_indices_id: list[int] = sorted(
+        {buffer_index[i] for i in used_buffers_id if buffer_index[i] >= 0}
+    )
+    used_indices: list[bool] = [
+        i in used_indices_id for i in range(len(eqn.invars) - num_inputs)
+    ]
+
+    new_eqn = jax.extend.core.JaxprEqn(
+        [v for v, used in zip(eqn.invars, used_inputs + used_indices) if used],
+        [v for v, used in zip(eqn.outvars, used_outputs) if used],
+        eqn.primitive,
+        dict(
+            eqn.params,
+            polynomial=polynomial,
+            buffer_index=tuple(
+                used_indices_id.index(buffer_index[i]) if buffer_index[i] >= 0 else -1
+                for i in used_buffers_id
+            ),
+            outputs_shape_dtype=tuple(
+                x for x, used in zip(outputs_shape_dtype, used_outputs) if used
+            ),
+        ),
+        eqn.effects,
+        eqn.source_info,
+        eqn.ctx,
+    )
+
+    return used_inputs + used_indices, new_eqn
+
+
 segmented_polynomial_p.def_abstract_eval(segmented_polynomial_abstract_eval)
 segmented_polynomial_p.def_impl(partial(xla.apply_primitive, segmented_polynomial_p))
 mlir.register_lowering(
@@ -553,66 +607,4 @@ mlir.register_lowering(
 ad.primitive_jvps[segmented_polynomial_p] = segmented_polynomial_jvp
 ad.primitive_transposes[segmented_polynomial_p] = segmented_polynomial_transpose
 batching.primitive_batchers[segmented_polynomial_p] = segmented_polynomial_batching
-
-
-def segmented_polynomial_dce(
-    used_outputs: list[bool],
-    eqn: jax.core.JaxprEqn,
-) -> tuple[list[bool], jax.core.JaxprEqn | None]:
-    assert len(used_outputs) == len(eqn.outvars)
-
-    print(f"segmented_polynomial_dce: {used_outputs=}")
-
-    polynomial: cue.SegmentedPolynomial = eqn.params["polynomial"]
-    buffer_index = eqn.params["buffer_index"]
-    outputs_shape_dtype = eqn.params["outputs_shape_dtype"]
-
-    # If no outputs are used, we can eliminate the operation entirely
-    if not any(used_outputs) and not eqn.effects:
-        return [False] * len(eqn.invars), None
-
-    num_inputs = polynomial.num_inputs
-
-    # Compute a new polynomial that only computes the used outputs
-    polynomial = polynomial.compute_only(used_outputs)
-    used_buffers: list[int] = polynomial.used_buffers()
-    polynomial = polynomial.remove_unused_buffers()
-    assert polynomial.num_outputs == sum(used_outputs)
-
-    used_indices = sorted(
-        {buffer_index[i] for i in used_buffers if buffer_index[i] >= 0}
-    )
-
-    new_eqn = jax.core.new_jaxpr_eqn(
-        [eqn.invars[i] for i in used_buffers[: polynomial.num_inputs]]
-        + [eqn.invars[num_inputs + i] for i in used_indices],
-        [eqn.outvars[i - num_inputs] for i in used_buffers[polynomial.num_inputs :]],
-        eqn.primitive,
-        dict(
-            eqn.params,
-            polynomial=polynomial,
-            buffer_index=tuple(
-                used_indices.index(buffer_index[i]) if buffer_index[i] >= 0 else -1
-                for i in used_buffers
-            ),
-            outputs_shape_dtype=tuple(
-                outputs_shape_dtype[i - num_inputs]
-                for i in used_buffers[polynomial.num_inputs :]
-            ),
-        ),
-        eqn.effects,
-        eqn.source_info,
-        eqn.ctx,
-    )
-
-    used_inputs_and_indices = [False] * len(eqn.invars)
-    for i in used_buffers[: polynomial.num_inputs]:
-        used_inputs_and_indices[i] = True
-    for i in used_indices:
-        used_inputs_and_indices[num_inputs + i] = True
-    print(f"segmented_polynomial_dce: {used_inputs_and_indices=}")
-
-    return used_inputs_and_indices, new_eqn
-
-
 partial_eval.dce_rules[segmented_polynomial_p] = segmented_polynomial_dce
