@@ -38,11 +38,6 @@ class SegmentedPolynomial:
         num_outputs (int): Number of output tensors.
         tensor_products (list of tuple of Operation and SegmentedTensorProduct): List of operation and tensor product pairs
             that define the polynomial transformation.
-
-    Example:
-        >>> # Create a polynomial with 2 inputs and 1 output
-        >>> poly = SegmentedPolynomial(2, 1, [(op1, stp1), (op2, stp2)])
-        >>> outputs = poly(input1, input2)  # Evaluate polynomial on inputs (numpy reference implementation)
     """
 
     num_inputs: int
