@@ -227,4 +227,4 @@ def test_high_degrees(use_fallback: bool, batch_size: int):
         for rep in e.inputs
     ]
     output = m(*inputs)
-    assert output.shape == (batch_size, e.output.dim)
+    assert output.shape == (batch_size, e.outputs[0].dim)
