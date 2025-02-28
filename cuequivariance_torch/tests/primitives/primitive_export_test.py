@@ -170,7 +170,8 @@ def test_script_uniform_tp_4(mode, tmp_path):
         cue.descriptors.channelwise_tensor_product(
             cue.Irreps("SO3", "32x1"), cue.Irreps("SO3", "1"), cue.Irreps("SO3", "32x1")
         )
-        .d.flatten_coefficient_modes()
+        .polynomial.tensor_products[0][1]
+        .flatten_coefficient_modes()
         .squeeze_modes("v")
     )
 
