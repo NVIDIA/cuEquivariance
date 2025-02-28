@@ -312,7 +312,7 @@ class SegmentedPolynomial:
                         for p in polys[index + 1 :]:
                             stp.insert_segments(oid, -1, p.buffer_segments(buffer))
                 tensor_products.append((ope, stp))
-        return cls(num_inputs, num_outputs, tensor_products)
+        return cls(num_inputs, num_outputs, tensor_products).consolidate()
 
     def squeeze_modes(self) -> SegmentedPolynomial:
         """Squeeze the modes of the segmented tensor products."""
