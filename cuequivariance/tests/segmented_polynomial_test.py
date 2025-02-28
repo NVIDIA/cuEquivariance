@@ -24,6 +24,15 @@ def make_simple_stp() -> cue.SegmentedTensorProduct:
     return d
 
 
+def make_simple_dot_product_stp() -> cue.SegmentedTensorProduct:
+    d = cue.SegmentedTensorProduct.from_subscripts("i,j,k+ijk")
+    i0 = d.add_segment(0, (3,))
+    i1 = d.add_segment(1, (3,))
+    i2 = d.add_segment(2, (1,))
+    d.add_path(i0, i1, i2, c=np.eye(3).reshape(3, 3, 1))
+    return d
+
+
 def test_init_segmented_polynomial():
     """Test initialization of SegmentedPolynomial."""
     stp = make_simple_stp()
@@ -186,11 +195,7 @@ def test_flops_and_memory():
 def test_jvp():
     """Test Jacobian-vector product computation."""
     # Create a simple polynomial for testing: f(x,y) = x^T * y (dot product)
-    stp = cue.SegmentedTensorProduct.from_subscripts("i,j,k+ijk")
-    i0 = stp.add_segment(0, (3,))
-    i1 = stp.add_segment(1, (3,))
-    i2 = stp.add_segment(2, (1,))
-    stp.add_path(i0, i1, i2, c=np.eye(3).reshape(3, 3, 1))
+    stp = make_simple_dot_product_stp()
 
     op = cue.Operation((0, 1, 2))
     poly = cue.SegmentedPolynomial(2, 1, [(op, stp)])
@@ -235,11 +240,7 @@ def test_transpose_linear():
     # Create a linear polynomial f(x, y) = Ax where A is a matrix
     # Here we use f(x, y) = x^T * y (dot product)
     # This is linear in both x and y
-    stp = cue.SegmentedTensorProduct.from_subscripts("i,j,k+ijk")
-    i0 = stp.add_segment(0, (3,))
-    i1 = stp.add_segment(1, (3,))
-    i2 = stp.add_segment(2, (1,))
-    stp.add_path(i0, i1, i2, c=np.eye(3).reshape(3, 3, 1))
+    stp = make_simple_dot_product_stp()
 
     op = cue.Operation((0, 1, 2))
     poly = cue.SegmentedPolynomial(2, 1, [(op, stp)])
@@ -291,3 +292,54 @@ def test_transpose_nonlinear():
     # (the same input buffer is used twice)
     with np.testing.assert_raises(ValueError):
         poly.transpose(is_undefined_primal=[True], has_cotangent=[True])
+
+
+def test_backward():
+    """Test the backward method for gradient computation."""
+    # Create a linear polynomial for testing: f(x,y) = x^T * y (dot product)
+    stp = make_simple_dot_product_stp()
+    op = cue.Operation((0, 1, 2))
+    poly = cue.SegmentedPolynomial(2, 1, [(op, stp)])
+
+    # Input values
+    x = np.array([1.0, 2.0, 3.0])
+    y = np.array([4.0, 5.0, 6.0])
+
+    # Cotangent for the output (upstream gradient)
+    cotangent = np.array([2.0])
+
+    # Test backward with respect to both x and y
+    backward_both = poly.backward(requires_gradient=[True, True], has_cotangent=[True])
+
+    # The backward polynomial computes gradients for all inputs that require gradients
+    # For f(x,y) = x^T * y:
+    # - gradient w.r.t x is y * cotangent
+    # - gradient w.r.t y is x * cotangent
+    grad_x, grad_y = backward_both(x, y, cotangent)
+    expected_grad_x = y * cotangent[0]
+    expected_grad_y = x * cotangent[0]
+
+    assert np.allclose(grad_x, expected_grad_x)
+    assert np.allclose(grad_y, expected_grad_y)
+
+    # Test backward with respect to only x
+    backward_x = poly.backward(requires_gradient=[True, False], has_cotangent=[True])
+
+    # Should only compute gradient for x
+    [grad_x_only] = backward_x(x, y, cotangent)
+    assert np.allclose(grad_x_only, expected_grad_x)
+
+    # Test backward with respect to only y
+    backward_y = poly.backward(requires_gradient=[False, True], has_cotangent=[True])
+
+    # Should only compute gradient for y
+    [grad_y_only] = backward_y(x, y, cotangent)
+    assert np.allclose(grad_y_only, expected_grad_y)
+
+    # Test with zero cotangent
+    zero_cotangent = np.array([0.0])
+    grad_x_zero, grad_y_zero = backward_both(x, y, zero_cotangent)
+
+    # With zero cotangent, gradients should be zero
+    assert np.allclose(grad_x_zero, np.zeros_like(x))
+    assert np.allclose(grad_y_zero, np.zeros_like(y))
