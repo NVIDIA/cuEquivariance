@@ -228,3 +228,66 @@ def test_jvp():
     y_only_result = jvp_y_only(x, y, y_tangent)
     expected_y_only = np.array([x.dot(y_tangent)])
     assert np.allclose(y_only_result[0], expected_y_only)
+
+
+def test_transpose_linear():
+    """Test transposing a linear polynomial."""
+    # Create a linear polynomial f(x, y) = Ax where A is a matrix
+    # Here we use f(x, y) = x^T * y (dot product)
+    # This is linear in both x and y
+    stp = cue.SegmentedTensorProduct.from_subscripts("i,j,k+ijk")
+    i0 = stp.add_segment(0, (3,))
+    i1 = stp.add_segment(1, (3,))
+    i2 = stp.add_segment(2, (1,))
+    stp.add_path(i0, i1, i2, c=np.eye(3).reshape(3, 3, 1))
+
+    op = cue.Operation((0, 1, 2))
+    poly = cue.SegmentedPolynomial(2, 1, [(op, stp)])
+
+    # Input values
+    x = np.array([1.0, 2.0, 3.0])
+    y = np.array([4.0, 5.0, 6.0])
+
+    # x dot y = 1*4 + 2*5 + 3*6 = 32
+
+    # Cotangent for the output
+    cotangent = np.array([2.0])
+
+    # Test transposing with respect to x (x is undefined primal)
+    # is_undefined_primal = [True, False] means x is undefined, y is defined
+    # has_cotangent = [True] means the output has a cotangent
+    transpose_x = poly.transpose(
+        is_undefined_primal=[True, False], has_cotangent=[True]
+    )
+
+    # The transpose polynomial should compute the gradient of the output w.r.t x
+    # For f(x, y) = x^T * y, the gradient w.r.t x is y
+    # So transpose_x(y, cotangent) should be y * cotangent
+    x_result = transpose_x(y, cotangent)
+    expected_x_result = y * cotangent[0]
+    assert np.allclose(x_result[0], expected_x_result)
+
+    # Test transposing with respect to y (y is undefined primal)
+    transpose_y = poly.transpose(
+        is_undefined_primal=[False, True], has_cotangent=[True]
+    )
+
+    # For f(x, y) = x^T * y, the gradient w.r.t y is x
+    # So transpose_y(x, cotangent) should be x * cotangent
+    y_result = transpose_y(x, cotangent)
+    expected_y_result = x * cotangent[0]
+    assert np.allclose(y_result[0], expected_y_result)
+
+
+def test_transpose_nonlinear():
+    """Test transposing a non-linear polynomial raises an error."""
+    # Create a non-linear polynomial
+    stp = make_simple_stp()
+    op = cue.Operation((0, 0, 1))  # Note: using the same buffer twice (x^2)
+    poly = cue.SegmentedPolynomial(1, 1, [(op, stp)])
+
+    # Try to transpose the non-linear polynomial
+    # This should raise a ValueError since there are multiple undefined primals
+    # (the same input buffer is used twice)
+    with np.testing.assert_raises(ValueError):
+        poly.transpose(is_undefined_primal=[True], has_cotangent=[True])
