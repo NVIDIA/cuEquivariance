@@ -44,33 +44,48 @@ def segmented_polynomial(
     name: str | None = None,
     impl: str = "auto",
 ) -> list[jax.Array]:
-    r"""Compute a segmented polynomial.
+    """Compute a segmented polynomial.
 
-    Features:
-      - Calls a CUDA kernel if:
-          - STPs have a single mode which is a multiple of 32 (e.g. a channelwise tensor product that has subscripts ``u,u,,u`` with u=128)
-          - math data type is float32 or float64
-          - in/out data type is a mix of float32, float64, float16 and bfloat16
-          - indices are int32
-      - Supports of infinite derivatives (JVP and tranpose rules maps to a single corresponding primitive)
-      - Limited support for batching (we cannot batch a buffer that has indices and if the batching is non trivial the performace will be bad)
-      - Automatic optimizations based on the symmetries of the STPs and on the repetition of the input buffers
-      - Automatic drop of unused buffers and indices
+    This function evaluates a segmented polynomial using either CUDA or JAX implementation.
+    The implementation choice is determined by the input characteristics and availability
+    of CUDA support.
 
     Args:
-        polynomial (cue.SegmentedPolynomial): The segmented polynomial to compute.
-        inputs (list of jax.Array): The input buffers.
-        outputs_shape_dtype (list of jax.ShapeDtypeStruct): The output shapes and dtypes.
-        indices (list of jax.Array or None, optional): The optional indices of the inputs and outputs.
-        math_dtype (jnp.dtype, optional): The data type for computational operations. Defaults to None.
-        name (str, optional): The name of the operation. Defaults to None.
-        impl (str, optional): The implementation to use. Defaults to "auto".
-            If "auto", it will use the CUDA implementation if available, otherwise it will use the JAX implementation.
-            If "cuda", it will use the CUDA implementation.
-            If "jax", it will use the JAX implementation.
+        polynomial: The segmented polynomial to compute.
+        inputs: List of input buffers as JAX arrays.
+        outputs_shape_dtype: List of output shapes and dtypes specifications.
+        indices: Optional list of indices for inputs and outputs. If None, no indexing
+            is applied. Defaults to None.
+        math_dtype: Data type for computational operations. If None, automatically
+            determined from input types, defaulting to float32 if no float64 inputs
+            are present. Defaults to None.
+        name: Optional name for the operation. Defaults to None.
+        impl: Implementation to use, one of ["auto", "cuda", "jax"]. If "auto",
+            uses CUDA when available, falling back to JAX otherwise. Defaults to "auto".
 
     Returns:
-        list of jax.Array: The result of the tensor product.
+        List of JAX arrays containing the computed tensor product results.
+
+    Features:
+        - CUDA kernel activation conditions:
+            - STPs have a single mode which is a multiple of 32 (e.g. channelwise
+              tensor product with subscripts ``u,u,,u`` where u=128)
+            - Math data type is float32 or float64
+            - Input/output data types can be float32, float64, float16, or bfloat16
+            - Indices must be int32
+        - Supports infinite derivatives through JVP and transpose rules
+        - Limited batching support:
+            - Cannot batch buffers with indices
+            - Non-trivial batching may impact performance
+        - Automatic optimizations:
+            - Based on STP symmetries
+            - Based on input buffer repetition patterns
+        - Automatic pruning of unused buffers and indices
+
+    Note:
+        The function automatically determines the best implementation based on the
+        input characteristics when impl="auto". For maximum performance with CUDA-capable
+        hardware, ensure inputs match the CUDA kernel activation conditions.
     """
 
     if name is None:

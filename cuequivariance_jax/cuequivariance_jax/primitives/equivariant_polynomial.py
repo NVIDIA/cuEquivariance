@@ -30,24 +30,28 @@ def equivariant_polynomial(
     math_dtype: jnp.dtype | None = None,
     name: str | None = None,
     impl: str = "auto",
-) -> tuple[cuex.RepArray, ...] | cuex.RepArray:
+) -> list[cuex.RepArray] | cuex.RepArray:
     """Compute an equivariant polynomial.
 
     Args:
-        poly (:class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`): The equivariant tensor product descriptor.
-        *inputs (RepArray or jax.Array): The input arrays.
-        indices (list of jax.Array or None, optional): The optional indices of the inputs and output.
-        output_batch_shape (tuple of int, optional): The batch shape of the output array.
-        output_dtype (jnp.dtype, optional): The data type for the output array. Defaults to None.
-        math_dtype (jnp.dtype, optional): The data type for computational operations. Defaults to None.
-        name (str, optional): The name of the operation. Defaults to None.
+        poly: The equivariant polynomial descriptor.
+        inputs: List of input :class:`cuex.RepArray <cuequivariance_jax.RepArray>`.
+        outputs_shape_dtype: Shape and dtype specifications for outputs. If None,
+            inferred from inputs when possible. When output indices are provided, this must be specified.
+        indices: Optional list of indices for inputs and outputs. Length must match
+            total number of operands (inputs + outputs). Use None for unindexed
+            operands. Defaults to None.
+        math_dtype: Data type for computational operations. If None, automatically
+            determined from input types. Defaults to None.
+        name: Optional name for the operation. Defaults to None.
+        impl: Implementation to use, one of ["auto", "cuda", "jax"]. If "auto",
+            uses CUDA when available, falling back to JAX otherwise. Defaults to "auto".
 
     Returns:
-        tuple of RepArray or RepArray: The output array(s).
+        Single :class:`cuex.RepArray <cuequivariance_jax.RepArray>` if one output, or list of :class:`cuex.RepArray <cuequivariance_jax.RepArray>` for multiple outputs.
 
     Examples:
-
-        Let's create a descriptor for the spherical harmonics of degree 0, 1, and 2.
+        Create and compute spherical harmonics of degree 0, 1, and 2:
 
         >>> e = cue.descriptors.spherical_harmonics(cue.SO3(1), [0, 1, 2])
         >>> e
@@ -56,38 +60,30 @@ def equivariant_polynomial(
         │  a B ─── ,  sizes=3,9   num_segments=3,9   num_paths=3
         ╰─ a a B ─ ,, sizes=3,3,9 num_segments=3,3,9 num_paths=8
 
-        We need some input data.
+        Basic usage with single input:
 
         >>> with cue.assume(cue.SO3, cue.ir_mul):
         ...    x = cuex.RepArray("1", jnp.array([0.0, 1.0, 0.0]))
-        >>> x
-        {0: 1} [0. 1. 0.]
-
-        Now we can execute the equivariant tensor product.
-
         >>> cuex.equivariant_polynomial(e, [x])
         {0: 0+1+2}
         [1. ... ]
 
-        The `indices` argument allows to specify a list of optional int32 arrays for each input and for the output (`None` means no index and `indices[-1]` is the output index). The indices are used to select the elements of the input arrays and to specify the output index.
-        In the following example, we will index the output. The input has a batch shape of (3,) and the output has a batch shape of (2,).
+        Using indices:
 
         >>> i_out = jnp.array([0, 1, 1], dtype=jnp.int32)
-
-        The `i_out` array is used to map the result to the output indices.
-
         >>> with cue.assume(cue.SO3, cue.ir_mul):
         ...    x = cuex.RepArray("1", jnp.array([
         ...         [0.0, 1.0, 0.0],
         ...         [0.0, 0.0, 1.0],
         ...         [1.0, 0.0, 0.0],
         ...    ]))
-        >>> cuex.equivariant_polynomial(
+        >>> result = cuex.equivariant_polynomial(
         ...   e,
         ...   [x],
         ...   [jax.ShapeDtypeStruct((2, e.outputs[0].dim), jnp.float32)],
         ...   indices=[None, i_out],
         ... )
+        >>> result
         {1: 0+1+2}
         [[ 1. ... ]
          [ 2. ... ]]
@@ -169,4 +165,4 @@ def equivariant_polynomial(
 
     if poly.num_outputs == 1:
         return outputs[0]
-    return tuple(outputs)
+    return outputs
