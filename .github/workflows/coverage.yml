@@ -37,7 +37,7 @@ jobs:
         # Run tests on target branch and capture exit code
         pytest --cov=cuequivariance cuequivariance > coverage.txt || {
           echo "Tests failed on target branch. Cannot compare coverage values."
-          echo "Coverage on PR branch: $coverage_pr"
+          cat coverage.txt
           exit 1
         }
         
