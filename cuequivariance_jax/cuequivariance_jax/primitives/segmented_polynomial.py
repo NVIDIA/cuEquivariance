@@ -20,7 +20,7 @@ import jax.core
 import jax.extend
 import jax.lax
 import jax.numpy as jnp
-from jax.interpreters import ad, batching, mlir, xla
+from jax.interpreters import ad, batching, mlir, partial_eval, xla
 
 import cuequivariance as cue
 from cuequivariance_jax.primitives.primitives_utils import reshape
@@ -253,61 +253,6 @@ def map_indices(
         else:
             new_buffer_index.append(-1)
     return new_indices, new_buffer_index
-
-
-def segmented_polynomial_dce(
-    *inputs_and_indices: jax.Array,
-    buffer_index: tuple[int, ...],
-    outputs_shape_dtype: tuple[jax.ShapeDtypeStruct, ...],
-    polynomial: cue.SegmentedPolynomial,
-    math_dtype: jnp.dtype,
-    name: str,
-    impl: str,
-) -> tuple[jax.Array, ...]:
-    def fn(inputs_and_indices: tuple[jax.Array, ...]) -> tuple[jax.Array, ...]:
-        outputs = segmented_polynomial_p.bind(
-            *inputs_and_indices,
-            buffer_index=buffer_index,
-            outputs_shape_dtype=outputs_shape_dtype,
-            polynomial=polynomial,
-            math_dtype=math_dtype,
-            name=name,
-            impl=impl,
-        )
-        assert isinstance(outputs, (tuple, list))
-        return tuple(outputs)
-
-    try:
-        from jax.experimental.custom_dce import custom_dce
-    except ImportError:
-        return fn(inputs_and_indices)
-    else:
-        fn_dce = custom_dce(fn)
-
-        @fn_dce.def_dce
-        def fn_dce_rule(
-            used_outputs: list[bool], inputs_and_indices
-        ) -> tuple[jax.Array | None, ...]:
-            assert not all(used_outputs)
-
-            num_inputs = len(buffer_index) - len(outputs_shape_dtype)
-            inputs, indices = (
-                inputs_and_indices[:num_inputs],
-                inputs_and_indices[num_inputs:],
-            )
-            return segmented_polynomial_prim(
-                inputs,
-                outputs_shape_dtype,
-                indices,
-                buffer_index,
-                polynomial.compute_only(used_outputs),
-                math_dtype,
-                name,
-                impl,
-                return_none_if_empty=True,
-            )
-
-        return fn_dce(inputs_and_indices)
 
 
 def segmented_polynomial_abstract_eval(
@@ -608,3 +553,95 @@ mlir.register_lowering(
 ad.primitive_jvps[segmented_polynomial_p] = segmented_polynomial_jvp
 ad.primitive_transposes[segmented_polynomial_p] = segmented_polynomial_transpose
 batching.primitive_batchers[segmented_polynomial_p] = segmented_polynomial_batching
+
+
+def segmented_polynomial_dce(
+    used_outputs: list[bool],
+    eqn: jax.core.JaxprEqn,
+) -> tuple[list[bool], jax.core.JaxprEqn | None]:
+    print(f"segmented_polynomial_dce: {used_outputs=}")
+    print(f"segmented_polynomial_dce: {eqn=}")
+    assert len(used_outputs) == len(eqn.outvars)
+
+    polynomial: cue.SegmentedPolynomial = eqn.params["polynomial"]
+    buffer_index = eqn.params["buffer_index"]
+    outputs_shape_dtype = eqn.params["outputs_shape_dtype"]
+
+    # If no outputs are used, we can eliminate the operation entirely
+    if not any(used_outputs) and not eqn.effects:
+        return [False] * len(eqn.invars), None
+
+    # Compute a new polynomial that only computes the used outputs
+    new_polynomial = polynomial.compute_only(used_outputs)
+
+    # Determine which buffers are used in the new polynomial
+    used_buffers = new_polynomial.used_buffers()
+
+    # Remove unused buffers from the polynomial, similar to segmented_polynomial_prim
+    new_polynomial = new_polynomial.remove_unused_buffers()
+
+    num_inputs = len(buffer_index) - len(outputs_shape_dtype)
+
+    # Determine which inputs are used
+    used_inputs = []
+    for i in range(len(eqn.invars)):
+        if i < num_inputs:
+            # This is an input buffer
+            used_inputs.append(i in used_buffers)
+        else:
+            # This is an index
+            # Check if any of the buffers using this index are needed
+            idx = i - num_inputs
+            used = any(
+                b < num_inputs and buffer_index[b] == idx and b in used_buffers
+                for b in range(len(buffer_index))
+            )
+            used_inputs.append(used)
+
+    # Create a new buffer_index list with only the used buffers and indices
+    new_buffer_index = []
+    used_indices_map = {}  # Maps old index positions to new ones
+    next_idx = 0
+
+    for i, idx in enumerate(buffer_index):
+        if (i < num_inputs and i in used_buffers) or (
+            i >= num_inputs and i - num_inputs + len(used_buffers) in used_buffers
+        ):
+            if idx >= 0:
+                if idx not in used_indices_map:
+                    used_indices_map[idx] = next_idx
+                    next_idx += 1
+                new_buffer_index.append(used_indices_map.get(idx, -1))
+            else:
+                new_buffer_index.append(-1)
+
+    # Filter the outputs_shape_dtype to only include used outputs
+    new_outputs_shape_dtype = tuple(
+        shape_dtype
+        for shape_dtype, is_used in zip(outputs_shape_dtype, used_outputs)
+        if is_used
+    )
+
+    # Create the new parameters
+    new_params = dict(
+        eqn.params,
+        polynomial=new_polynomial,
+        buffer_index=tuple(new_buffer_index),
+        outputs_shape_dtype=new_outputs_shape_dtype,
+    )
+
+    # Create a new equation with only the used inputs and outputs
+    new_eqn = jax.core.new_jaxpr_eqn(
+        [v for v, used in zip(eqn.invars, used_inputs) if used],
+        [v for v, used in zip(eqn.outvars, used_outputs) if used],
+        eqn.primitive,
+        new_params,
+        eqn.effects,
+        eqn.source_info,
+        eqn.ctx,
+    )
+
+    return used_inputs, new_eqn
+
+
+partial_eval.dce_rules[segmented_polynomial_p] = segmented_polynomial_dce
