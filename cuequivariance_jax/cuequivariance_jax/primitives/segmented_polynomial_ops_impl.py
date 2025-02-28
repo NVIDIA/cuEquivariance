@@ -117,7 +117,7 @@ def segmented_polynomial_ops_impl(
         for path in stp.paths:
             paths.append(Path(path.indices, path.coefficients.item()))
 
-    log("Using the uniform 1d kernel of cuequivariance_ops_jax 🚀")
+    log("Using the uniform 1d kernel of cuequivariance_ops_jax 🚀\n" + str(polynomial))
     outputs = tensor_product_uniform_1d_jit(
         buffers[: polynomial.num_inputs],
         buffers[polynomial.num_inputs :],
