@@ -118,9 +118,10 @@ def test_math_dtype(dtype: torch.dtype, math_dtype: torch.dtype, use_fallback: b
     if use_fallback is False and not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
 
-    ds = descriptors.symmetric_contraction(
+    e = descriptors.symmetric_contraction(
         cue.Irreps("SO3", "0 + 1 + 2"), cue.Irreps("SO3", "0"), [1, 2, 3]
-    ).ds
+    )
+    ds = [stp for _, stp in e.polynomial.tensor_products]
     m = cuet.IWeightedSymmetricTensorProduct(
         ds, math_dtype=math_dtype, device=device, use_fallback=use_fallback
     )
