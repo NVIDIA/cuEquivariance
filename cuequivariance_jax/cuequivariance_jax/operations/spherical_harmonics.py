@@ -40,7 +40,7 @@ def spherical_harmonics(
 
     Example:
         >>> import cuequivariance_jax as cuex
-        >>> vector = cuex.randn(jax.random.key(0), cue.Irreps(cue.SO3, "1o"))
+        >>> vector = cuex.randn(jax.random.key(0), cue.IrrepsAndLayout(cue.Irreps(cue.O3, "1o"), cue.mul_ir))
         >>> harmonics = spherical_harmonics([0, 1, 2], vector)
     """
     ls = list(ls)
