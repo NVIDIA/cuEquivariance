@@ -182,6 +182,32 @@ class SegmentedTensorProduct:
             (tuple(self.operands), tuple(self.paths), self.coefficient_subscripts)
         )
 
+    def __eq__(self, value: SegmentedTensorProduct) -> bool:
+        assert isinstance(value, SegmentedTensorProduct)
+        return (
+            self.operands == value.operands
+            and self.paths == value.paths
+            and self.coefficient_subscripts == value.coefficient_subscripts
+        )
+
+    def __lt__(self, value: SegmentedTensorProduct) -> bool:
+        assert isinstance(value, SegmentedTensorProduct)
+        return (
+            self.num_operands,
+            self.num_paths,
+            self.subscripts,
+            self.operands,
+            self.paths,
+            self.coefficient_subscripts,
+        ) < (
+            value.num_operands,
+            value.num_paths,
+            value.subscripts,
+            value.operands,
+            value.paths,
+            value.coefficient_subscripts,
+        )
+
     def __repr__(self) -> str:
         if max(len(operand) for operand in self.operands) == 1 and len(self.paths) == 1:
             operands = ",".join(
@@ -262,7 +288,7 @@ class SegmentedTensorProduct:
             ...     cue.Irreps("SO3", "4x0+4x1"),
             ...     cue.Irreps("SO3", "4x0+4x1"),
             ...     cue.Irreps("SO3", "4x0+4x1")
-            ... ).d
+            ... ).polynomial.tensor_products[0][1]
             >>> d = d.flatten_coefficient_modes()
             >>> print(d.to_text())
             uvw,u,v,w sizes=320,16,16,16 num_segments=5,4,4,4 num_paths=16 u=4 v=4 w=4
@@ -379,7 +405,7 @@ class SegmentedTensorProduct:
             ...     cue.Irreps("SO3", "4x0+4x1"),
             ...     cue.Irreps("SO3", "4x0+4x1"),
             ...     cue.Irreps("SO3", "4x0+4x1")
-            ... ).d
+            ... ).polynomial.tensor_products[0][1]
             >>> print(d.to_base64())
             eJytkstuwjAQRX/F8r...lTF2zlX91/fHyvj2Z4=
         """
@@ -403,7 +429,7 @@ class SegmentedTensorProduct:
             ...     cue.Irreps("SO3", "4x0+8x1"),
             ...     cue.Irreps("SO3", "3x0+3x1"),
             ...     cue.Irreps("SO3", "5x0+7x1")
-            ... ).d
+            ... ).polynomial.tensor_products[0][1]
             >>> d.get_dims("u")
             {8, 4}
             >>> d.get_dims("v")
