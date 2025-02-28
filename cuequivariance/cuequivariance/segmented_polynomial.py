@@ -263,24 +263,66 @@ class SegmentedPolynomial:
             for buffer in range(self.num_inputs + self.num_outputs)
         ]
 
-    def remove_unused_buffers(self) -> SegmentedPolynomial:
-        """Remove unused buffers from the polynomial."""
-        used = self.buffer_used()
+    def select_buffers(self, keep: list[bool]) -> SegmentedPolynomial:
+        """Select the buffers of the polynomial."""
+        assert len(keep) == self.num_operands
+
+        # Create a mapping from old buffer indices to new buffer indices
         new_index = []
         i = 0
-        for u in used:
+        for u in keep:
             if u:
                 new_index.append(i)
                 i += 1
             else:
                 new_index.append(None)
 
+        # Filter tensor products that write to buffers we want to keep
+        # and remap the buffer indices
+        new_tensor_products = []
+        for ope, stp in self.tensor_products:
+            # Check if the operation writes to a buffer we want to keep
+            bid = ope.output_buffer(self.num_inputs)
+            if keep[bid]:
+                # Check if all input buffers needed by this operation are kept
+                if not all(keep[buffer] for buffer in ope.buffers):
+                    raise ValueError(
+                        f"Operation {ope} writes to buffer {bid} which is kept, but requires input buffers that are being dropped"
+                    )
+
+                # Remap buffer indices
+                new_ope = cue.Operation([new_index[buffer] for buffer in ope.buffers])
+                new_tensor_products.append((new_ope, stp))
+
+        # Calculate new num_inputs and num_outputs
+        new_num_inputs = sum(keep[: self.num_inputs])
+        new_num_outputs = sum(keep[self.num_inputs :])
+
         return SegmentedPolynomial(
-            sum(used[: self.num_inputs]),
-            sum(used[self.num_inputs :]),
+            new_num_inputs,
+            new_num_outputs,
+            new_tensor_products,
+        )
+
+    def select_outputs(self, keep: list[bool]) -> SegmentedPolynomial:
+        """Select the outputs of the polynomial."""
+        assert len(keep) == self.num_outputs
+        return self.select_buffers([True] * self.num_inputs + keep)
+
+    def remove_unused_buffers(self) -> SegmentedPolynomial:
+        """Remove unused buffers from the polynomial."""
+        return self.select_buffers(self.buffer_used())
+
+    def compute_only(self, keep: list[bool]) -> SegmentedPolynomial:
+        """Compute only the selected outputs of the polynomial."""
+        assert len(keep) == self.num_outputs
+        return SegmentedPolynomial(
+            self.num_inputs,
+            self.num_outputs,  # on purpose, we keep all outputs
             [
-                (cue.Operation([new_index[buffer] for buffer in ope.buffers]), stp)
+                (ope, stp)
                 for ope, stp in self.tensor_products
+                if keep[ope.output_buffer(self.num_inputs) - self.num_inputs]
             ],
         )
 
