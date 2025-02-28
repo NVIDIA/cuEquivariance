@@ -197,7 +197,7 @@ def segmented_polynomial_prim(
     ]
 
     polynomial = polynomial.consolidate()
-    used_buffers = polynomial.used_buffers()
+    used_buffers: list[int] = polynomial.used_buffers()
     polynomial = polynomial.remove_unused_buffers()
 
     used_indices = sorted(
@@ -283,6 +283,7 @@ def segmented_polynomial_impl(
     inputs, indices = inputs_and_indices[:num_inputs], inputs_and_indices[num_inputs:]
     del inputs_and_indices
 
+    assert all(polynomial.buffer_used())
     polynomial = polynomial.sort_indices_for_identical_operands()
 
     outputs = None
