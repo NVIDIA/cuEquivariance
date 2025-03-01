@@ -537,8 +537,6 @@ def segmented_polynomial_dce(
 ) -> tuple[list[bool], jax.extend.core.JaxprEqn | None]:
     assert len(used_outputs) == len(eqn.outvars)
 
-    print(f"segmented_polynomial_dce: {used_outputs=}")
-
     polynomial: cue.SegmentedPolynomial = eqn.params["polynomial"]
     buffer_index = eqn.params["buffer_index"]
     outputs_shape_dtype = eqn.params["outputs_shape_dtype"]
