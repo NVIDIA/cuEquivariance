@@ -93,6 +93,14 @@ def segmented_polynomial(
 
     assert len(inputs) == polynomial.num_inputs
     assert len(outputs_shape_dtype) == polynomial.num_outputs
+
+    outputs_shape_dtype = [
+        jax.ShapeDtypeStruct(
+            x.shape if size is None else x.shape[:-1] + (size,), x.dtype
+        )
+        for x, size in zip(outputs_shape_dtype, polynomial.output_sizes)
+    ]
+
     buffers = list(inputs) + list(outputs_shape_dtype)
 
     if indices is None:
@@ -215,10 +223,6 @@ def segmented_polynomial_prim(
     """
     assert len(inputs) + len(outputs_shape_dtype) == len(buffer_index)
     assert max(buffer_index) < len(indices)
-
-    outputs_shape_dtype = [
-        jax.ShapeDtypeStruct(x.shape, x.dtype) for x in outputs_shape_dtype
-    ]
 
     # fuse STPs, consolidate modes, squeeze modes, remove empty segments, consolidate paths, sort paths
     polynomial = polynomial.consolidate()
