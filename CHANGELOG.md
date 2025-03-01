@@ -1,5 +1,7 @@
 ## Latest Changes
 
+## 0.3.0-rc1
+
 ### Breaking Changes
 - In `cuex.equivariant_tensor_product`, the arguments `dtype_math` and `dtype_output` are renamed `math_dtype` and `output_dtype` respectively. Adding consistency with the rest of the library.
 - In `cuex.equivariant_tensor_product`, the arguments `algorithm`, `precision`, `use_custom_primitive` and `use_custom_kernels` are removed. This is to avoid a proliferation of arguments that are not used in all the implementations. An argument `impl: str` is added instead to select the implementation.
@@ -16,6 +18,7 @@
 ### Added
 - JAX Bindings to the uniform 1d JIT kernel. This kernel handles any kind of non-homogeneous polynomials as long as the contraction pattern (subscripts) have only one index. It handles batched/shared/indexed input/output. The indexed input/output are handled by atomic operations.
 - Added `__mul__` to `cue.EquivariantTensorProduct` to allow rescaling the equivariant tensor product.
+- Added a uniform 1d kernel with scatter/gather fusion under `cuet.primitives.tensor_product.TensorProductUniform4x1dIndexed` and `cuet.primitives.tensor_product.TensorProductUniform3x1dIndexed`.
 
 
 ## 0.2.0 (2025-01-24)

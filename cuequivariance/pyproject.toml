@@ -42,4 +42,4 @@ classifiers = [
 
 [tool.hatch.version]
 path = "cuequivariance/VERSION"
-pattern = "(?P<version>\\d+\\.\\d+\\.\\d+)"
+pattern = "(?P<version>\\d+\\.\\d+\\.\\d+(?:[a-z]+\\d+)?)"
