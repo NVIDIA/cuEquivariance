@@ -16,6 +16,7 @@ import logging
 from functools import partial
 
 import jax
+import jax.core
 import jax.extend
 import jax.lax
 import jax.numpy as jnp
