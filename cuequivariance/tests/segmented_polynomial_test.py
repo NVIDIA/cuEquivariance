@@ -102,8 +102,7 @@ def test_buffer_properties():
     assert poly.input_sizes == [2, 2]
     assert poly.output_sizes == [2, 1]
 
-    assert poly.used_buffers() == [0, 1, 2, 3]
-    assert poly.buffer_used() == [True, True, True, True]
+    assert poly.used_buffers() == [True, True, True, True]
 
 
 def test_remove_unused_buffers():
@@ -115,14 +114,14 @@ def test_remove_unused_buffers():
     poly = cue.SegmentedPolynomial(3, 1, [(op, stp)])
 
     # Buffer 1 is not used
-    assert poly.buffer_used() == [True, False, True, True]
+    assert poly.used_buffers() == [True, False, True, True]
 
     # Remove unused buffer
     cleaned_poly = poly.remove_unused_buffers()
 
     assert cleaned_poly.num_inputs == 2
     assert cleaned_poly.num_outputs == 1
-    assert cleaned_poly.buffer_used() == [True, True, True]
+    assert cleaned_poly.used_buffers() == [True, True, True]
 
 
 def test_consolidate():
