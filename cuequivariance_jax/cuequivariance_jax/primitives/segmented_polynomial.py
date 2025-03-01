@@ -173,6 +173,30 @@ segmented_polynomial_p = jax.extend.core.Primitive("segmented_polynomial")
 segmented_polynomial_p.multiple_results = True
 
 
+def _dce_helper(
+    used_inputs: list[bool],
+    used_outputs: list[bool],
+    buffer_index: list[int],
+    num_indices: int,
+) -> tuple[list[bool], list[int]]:
+    used_indices_id: list[int] = sorted(
+        {
+            buffer_index[i]
+            for i, used in enumerate(used_inputs + used_outputs)
+            if used and buffer_index[i] >= 0
+        }
+    )
+    used_indices: list[bool] = [i in used_indices_id for i in range(num_indices)]
+
+    buffer_index = tuple(
+        used_indices_id.index(buffer_index[i]) if buffer_index[i] >= 0 else -1
+        for i, used in enumerate(used_inputs + used_outputs)
+        if used
+    )
+
+    return used_indices, buffer_index
+
+
 def segmented_polynomial_prim(
     inputs: list[jax.Array],  # input buffers
     outputs_shape_dtype: list[jax.ShapeDtypeStruct],  # output shapes and dtypes
@@ -196,40 +220,40 @@ def segmented_polynomial_prim(
         jax.ShapeDtypeStruct(x.shape, x.dtype) for x in outputs_shape_dtype
     ]
 
+    # fuse STPs, consolidate modes, squeeze modes, remove empty segments, consolidate paths, sort paths
     polynomial = polynomial.consolidate()
-    used_buffers: list[int] = polynomial.used_buffers()
-    polynomial = polynomial.remove_unused_buffers()
 
-    used_indices = sorted(
-        {buffer_index[i] for i in used_buffers if buffer_index[i] >= 0}
+    used_inputs, used_outputs = polynomial.used_inputs(), polynomial.used_outputs()
+
+    used_indices, buffer_index = _dce_helper(
+        used_inputs, used_outputs, buffer_index, len(indices)
     )
 
-    used_outputs = segmented_polynomial_p.bind(
-        *[inputs[i] for i in used_buffers[: polynomial.num_inputs]],
-        *[indices[i] for i in used_indices],
-        buffer_index=tuple(
-            used_indices.index(buffer_index[i]) if buffer_index[i] >= 0 else -1
-            for i in used_buffers
-        ),
+    new_outputs = segmented_polynomial_p.bind(
+        *[v for v, used in zip(inputs, used_inputs) if used],
+        *[v for v, used in zip(indices, used_indices) if used],
+        buffer_index=buffer_index,
         outputs_shape_dtype=tuple(
-            outputs_shape_dtype[i - len(inputs)]
-            for i in used_buffers[polynomial.num_inputs :]
+            x for x, used in zip(outputs_shape_dtype, used_outputs) if used
         ),
-        polynomial=polynomial,
+        polynomial=polynomial.select_buffers(used_inputs + used_outputs),
         math_dtype=jnp.dtype(math_dtype),
         name=str(name),
         impl=impl,
     )
 
     if return_none_if_empty:
-        outputs = [None] * len(outputs_shape_dtype)
+        old_outputs = [None] * len(outputs_shape_dtype)
     else:
-        outputs = [jnp.zeros(out.shape, out.dtype) for out in outputs_shape_dtype]
+        old_outputs = [jnp.zeros(out.shape, out.dtype) for out in outputs_shape_dtype]
 
-    for i, output in zip(used_buffers[polynomial.num_inputs :], used_outputs):
-        outputs[i - len(inputs)] = output
+    i_new = 0
+    for i_old, used in enumerate(used_outputs):
+        if used:
+            old_outputs[i_old] = new_outputs[i_new]
+            i_new += 1
 
-    return tuple(outputs)
+    return tuple(old_outputs)
 
 
 def map_indices(
@@ -283,7 +307,7 @@ def segmented_polynomial_impl(
     inputs, indices = inputs_and_indices[:num_inputs], inputs_and_indices[num_inputs:]
     del inputs_and_indices
 
-    assert all(polynomial.buffer_used())
+    assert all(polynomial.used_buffers())
     polynomial = polynomial.sort_indices_for_identical_operands()
 
     outputs = None
