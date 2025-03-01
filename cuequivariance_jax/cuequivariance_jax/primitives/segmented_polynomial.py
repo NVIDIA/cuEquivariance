@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -389,7 +389,9 @@ def segmented_polynomial_jvp(
         jvp_buffer_index,
         polynomial.jvp([not isinstance(t, ad.Zero) for t in tangents]),
         math_dtype,
-        name + "_jvp",
+        name
+        + "_jvp"
+        + "".join("0" if isinstance(t, ad.Zero) else "1" for t in tangents),
         impl=impl,
     )
 

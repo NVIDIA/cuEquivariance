@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,7 +25,10 @@ logger = logging.getLogger(__name__)
 
 
 def sanitize_string(s):
-    return re.sub(r"[^A-Za-z_]", "", s)
+    s = re.sub(r"[^A-Za-z0-9_]", "", s)
+    if s == "" or s[0].isdigit():
+        s = "_" + s
+    return s
 
 
 def segmented_polynomial_ops_impl(
