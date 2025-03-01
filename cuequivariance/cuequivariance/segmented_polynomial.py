@@ -246,22 +246,23 @@ class SegmentedPolynomial:
 
         return self.fuse_stps().map_tensor_products(f)
 
-    def used_buffers(self) -> list[int]:
-        """Buffers used in the polynomial. (List of integers)"""
-        return sorted(
-            set(
-                itertools.chain.from_iterable(
-                    ope.buffers for ope, _ in self.tensor_products
-                )
-            )
-        )
-
-    def buffer_used(self) -> list[bool]:
-        """Buffers used in the polynomial. (List of boolean values)"""
+    def used_inputs(self) -> list[bool]:
+        """Inputs used in the polynomial. (List of boolean values)"""
         return [
             any(buffer in ope.buffers for ope, _ in self.tensor_products)
-            for buffer in range(self.num_inputs + self.num_outputs)
+            for buffer in range(self.num_inputs)
         ]
+
+    def used_outputs(self) -> list[bool]:
+        """Outputs used in the polynomial. (List of boolean values)"""
+        return [
+            any(buffer in ope.buffers for ope, _ in self.tensor_products)
+            for buffer in range(self.num_inputs, self.num_inputs + self.num_outputs)
+        ]
+
+    def used_buffers(self) -> list[bool]:
+        """Buffers used in the polynomial. (List of boolean values)"""
+        return self.used_inputs() + self.used_outputs()
 
     def select_buffers(self, keep: list[bool]) -> SegmentedPolynomial:
         """Select the buffers of the polynomial."""
@@ -311,7 +312,7 @@ class SegmentedPolynomial:
 
     def remove_unused_buffers(self) -> SegmentedPolynomial:
         """Remove unused buffers from the polynomial."""
-        return self.select_buffers(self.buffer_used())
+        return self.select_buffers(self.used_buffers())
 
     def compute_only(self, keep: list[bool]) -> SegmentedPolynomial:
         """Compute only the selected outputs of the polynomial."""

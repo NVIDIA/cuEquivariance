@@ -130,28 +130,6 @@ class EquivariantPolynomial:
             self.polynomial.fuse_stps(),
         )
 
-    def buffer_used(self) -> list[bool]:
-        """Check which buffers are used in the polynomial.
-
-        Returns:
-            list[bool]: Boolean flags indicating which buffers are used.
-        """
-        return self.polynomial.buffer_used()
-
-    def remove_unused_buffers(self) -> EquivariantPolynomial:
-        """Remove unused buffers from the polynomial.
-
-        This method creates a new polynomial with unused buffers removed,
-        which can make operations more efficient.
-
-        Returns:
-            EquivariantPolynomial: A new polynomial with unused buffers removed.
-        """
-        return EquivariantPolynomial(
-            [rep for u, rep in zip(self.buffer_used(), self.operands) if u],
-            self.polynomial.remove_unused_buffers(),
-        )
-
     @classmethod
     def stack(
         cls, polys: list[EquivariantPolynomial], stacked: list[bool]
