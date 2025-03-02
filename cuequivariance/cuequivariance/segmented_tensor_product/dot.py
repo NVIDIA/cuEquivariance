@@ -65,9 +65,7 @@ def dot(
             x.coefficient_subscripts + y.coefficient_subscripts
         )
     )
-    d.operands = copy.deepcopy(
-        [x.operands[i] for i in x_keep] + [y.operands[i] for i in y_keep]
-    )
+    d.set_operands([x.operands[i] for i in x_keep] + [y.operands[i] for i in y_keep])
 
     formula = f"{x.coefficient_subscripts} , {y.coefficient_subscripts} -> {d.coefficient_subscripts}"
 

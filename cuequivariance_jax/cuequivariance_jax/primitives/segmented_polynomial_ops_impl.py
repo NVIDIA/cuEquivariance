@@ -124,7 +124,7 @@ def segmented_polynomial_ops_impl(
     outputs = tensor_product_uniform_1d_jit(
         buffers[: polynomial.num_inputs],
         buffers[polynomial.num_inputs :],
-        indices,
+        list(indices),
         buffer_index,
         operations=operations,
         paths=paths,
