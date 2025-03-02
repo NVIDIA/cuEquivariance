@@ -58,6 +58,8 @@ def spherical_harmonics(
             indices = poly_degrees_to_path_indices(degrees)
             d.add_path(*indices, i, c=coeff)
 
+    d = d.symmetrize_operands(range(ell))
+
     return cue.EquivariantPolynomial(
         [
             cue.IrrepsAndLayout(cue.Irreps(ir_vec), cue.ir_mul),

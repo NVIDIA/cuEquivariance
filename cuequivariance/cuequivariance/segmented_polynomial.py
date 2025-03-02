@@ -50,9 +50,18 @@ class SegmentedPolynomial:
         num_outputs: int,
         tensor_products: Sequence[tuple[cue.Operation, cue.SegmentedTensorProduct]],
     ):
+        _tensor_products = []
+        for ope, stp in tensor_products:
+            assert len(ope.buffers) == stp.num_operands
+            for set_of_operands in ope.operands_with_identical_buffers():
+                stp = stp.symmetrize_operands(set_of_operands)
+            stp = stp.sort_paths()
+
+            _tensor_products.append((ope, stp))
+
         object.__setattr__(self, "num_inputs", num_inputs)
         object.__setattr__(self, "num_outputs", num_outputs)
-        object.__setattr__(self, "tensor_products", sorted(tensor_products))
+        object.__setattr__(self, "tensor_products", sorted(_tensor_products))
 
     @classmethod
     def eval_last_operand(cls, stp: cue.SegmentedTensorProduct):
