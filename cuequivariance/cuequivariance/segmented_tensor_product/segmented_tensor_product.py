@@ -205,9 +205,7 @@ class SegmentedTensorProduct:
     ################################ Properties ################################
 
     def __hash__(self) -> int:
-        return hash(
-            (tuple(self.operands), tuple(self.paths), self.coefficient_subscripts)
-        )
+        return hash((self.operands, self.paths, self.coefficient_subscripts))
 
     def __eq__(self, value: SegmentedTensorProduct) -> bool:
         assert isinstance(value, SegmentedTensorProduct)
@@ -438,6 +436,7 @@ class SegmentedTensorProduct:
         """
         return base64.b64encode(self.to_bytes(extended)).decode("ascii")
 
+    @functools.lru_cache(maxsize=None)
     def get_dimensions_dict(self) -> dict[str, set[int]]:
         """Get the dimensions of the tensor product."""
         dims: dict[str, set[int]] = {ch: set() for ch in self.subscripts.modes()}
@@ -1346,6 +1345,18 @@ class SegmentedTensorProduct:
             return self
 
         permutations = list(itertools.permutations(range(len(operands))))
+
+        # optimization: skip if already symmetric
+        def make_global_perm(perm: tuple[int, ...]) -> tuple[int, ...]:
+            p = list(range(self.num_operands))
+            for i, j in enumerate(perm):
+                p[operands[i]] = operands[j]
+            return tuple(p)
+
+        symmetries: list[tuple[int, ...]] = self.symmetries()
+        if all(make_global_perm(perm) in symmetries for perm in permutations):
+            return self
+
         d = self.sort_indices_for_identical_operands(operands)
 
         paths = []
