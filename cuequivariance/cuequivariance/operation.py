@@ -14,6 +14,7 @@
 # limitations under the License.
 from __future__ import annotations
 
+import dataclasses
 import itertools
 from collections import defaultdict
 
@@ -21,6 +22,7 @@ IVARS = "abcdefghijklmnopqrstuvwxyz"
 OVARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
+@dataclasses.dataclass(init=False, frozen=True)
 class Operation:
     """Descriptor mapping input/output buffers to tensor product operands.
 
@@ -49,7 +51,7 @@ class Operation:
         assert len(buffers) > 0, buffers
         assert all(isinstance(b, int) for b in buffers), buffers
         assert all(i >= 0 for i in buffers), buffers
-        self.buffers = tuple(int(b) for b in buffers)
+        object.__setattr__(self, "buffers", tuple(int(b) for b in buffers))
 
     def __repr__(self):
         return f"Operation({self.buffers})"
@@ -70,7 +72,7 @@ class Operation:
 
     def __lt__(self, value):
         assert isinstance(value, Operation)
-        return self.buffers < value.buffers
+        return (len(self.buffers), self.buffers) < (len(value.buffers), value.buffers)
 
     def __hash__(self) -> int:
         return hash(self.buffers)

@@ -28,14 +28,20 @@ def spherical_harmonics(
 ) -> cuex.RepArray:
     """Compute the spherical harmonics of a vector.
 
+    The spherical harmonics are polynomials of an input vector. This function computes the polynomials of the specified degrees.
+
     Args:
-        ls (list of int): List of spherical harmonic degrees.
-        vector (RepArray): Input vector(s).
-        normalize (bool): Whether to normalize the vector before computing the spherical harmonics.
-        algorithm (str): Algorithm to use for the tensor product. See :class:`cuex.tensor_product <cuequivariance_jax.tensor_product>` for more information.
+        ls (list[int]): List of spherical harmonic degrees. Each degree must be non-negative.
+        vector (RepArray): Input vector. Must be a single vector (multiplicity 1) with 3 components.
+        normalize (bool, optional): Whether to normalize the vector before computing the spherical harmonics. Defaults to True.
 
     Returns:
-        RepArray: Spherical harmonics of the vector.
+        RepArray: The spherical harmonics of the vector, containing the polynomials of each specified degree.
+
+    Example:
+        >>> import cuequivariance_jax as cuex
+        >>> vector = cuex.randn(jax.random.key(0), cue.IrrepsAndLayout(cue.Irreps(cue.O3, "1o"), cue.mul_ir))
+        >>> harmonics = spherical_harmonics([0, 1, 2], vector)
     """
     ls = list(ls)
     assert vector.is_irreps_array()
@@ -49,9 +55,9 @@ def spherical_harmonics(
     if normalize:
         vector = _normalize(vector)
 
-    return cuex.equivariant_tensor_product(
+    return cuex.equivariant_polynomial(
         descriptors.spherical_harmonics(ir, ls, vector.layout),
-        vector,
+        [vector],
         name="spherical_harmonics",
     )
 

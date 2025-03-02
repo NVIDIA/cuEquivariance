@@ -75,6 +75,13 @@ class Path:
             self.coefficients, other.coefficients
         )
 
+    def __lt__(self, other: Path) -> bool:
+        k1 = (self.indices, self.coefficients.shape)
+        k2 = (other.indices, other.coefficients.shape)
+        if k1 != k2:
+            return k1 < k2
+        return tuple(self.coefficients.flatten()) < tuple(other.coefficients.flatten())
+
     def permute_operands(self, perm: tuple[int, ...]) -> Path:
         """
         Apply a permutation to the operands.

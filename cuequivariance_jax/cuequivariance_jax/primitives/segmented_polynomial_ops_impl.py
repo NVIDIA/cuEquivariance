@@ -31,12 +31,12 @@ def sanitize_string(s):
     return s
 
 
-def tensor_product_ops_impl(
+def segmented_polynomial_ops_impl(
     inputs: list[jax.Array],  # shape (batch_size, operand_size)
     outputs_shape_dtype: tuple[jax.ShapeDtypeStruct, ...],
     indices: list[jax.Array],
     buffer_index: list[int],
-    descriptors: frozenset[tuple[cue.Operation, cue.SegmentedTensorProduct]],
+    polynomial: cue.SegmentedPolynomial,
     math_dtype: jnp.dtype,
     name: str,
 ) -> tuple[list[jax.Array] | None, str]:
@@ -44,14 +44,15 @@ def tensor_product_ops_impl(
         logger.info(f"[{name}] {msg}")
         return None, name
 
-    num_inputs = len(buffer_index) - len(outputs_shape_dtype)
+    assert polynomial.num_inputs == len(buffer_index) - len(outputs_shape_dtype)
+    assert polynomial.num_outputs == len(outputs_shape_dtype)
 
     buffers = list(inputs) + list(outputs_shape_dtype)
     for b in buffers:
         assert b.ndim == 2, f"Buffer {b.shape} must be 2D"
 
     # Reshape buffers to 3D by using the STP informations
-    for ope, stp in descriptors:
+    for ope, stp in polynomial.tensor_products:
         if len(stp.subscripts.modes()) != 1:
             return log(f"Unsupported STP: {stp}")
         if not stp.all_same_segment_shape():
@@ -94,7 +95,9 @@ def tensor_product_ops_impl(
             batch_size = b.shape[0]
 
     # TODO: remove if the backend supports atomic operations for float16/bfloat16
-    for i, b in zip(buffer_index[num_inputs:], buffers[num_inputs:]):
+    for i, b in zip(
+        buffer_index[polynomial.num_inputs :], buffers[polynomial.num_inputs :]
+    ):
         if b.dtype.type not in {jnp.float32, jnp.float64}:
             if i >= 0 or b.shape[0] != batch_size:
                 return log(
@@ -112,16 +115,16 @@ def tensor_product_ops_impl(
 
     operations = []
     paths = []
-    for ope, stp in descriptors:
+    for ope, stp in polynomial.tensor_products:
         operations.append(Operation(ope.buffers, len(paths), stp.num_paths))
         for path in stp.paths:
             paths.append(Path(path.indices, path.coefficients.item()))
 
-    log("Using the uniform 1d kernel of cuequivariance_ops_jax 🚀")
+    log("Using the uniform 1d kernel of cuequivariance_ops_jax 🚀\n" + str(polynomial))
     outputs = tensor_product_uniform_1d_jit(
-        buffers[:num_inputs],
-        buffers[num_inputs:],
-        indices,
+        buffers[: polynomial.num_inputs],
+        buffers[polynomial.num_inputs :],
+        list(indices),
         buffer_index,
         operations=operations,
         paths=paths,

@@ -47,14 +47,13 @@ from cuequivariance.irreps_array import (
     reduced_antisymmetric_tensor_product_basis,
 )
 
-from cuequivariance.segmented_tensor_product import SegmentedTensorProduct
-from cuequivariance.equivariant_tensor_product import EquivariantTensorProduct
 from cuequivariance.operation import Operation
+from cuequivariance.segmented_tensor_product import SegmentedTensorProduct
+from cuequivariance.segmented_polynomial import SegmentedPolynomial
+from cuequivariance.equivariant_polynomial import EquivariantPolynomial
+from cuequivariance.equivariant_tensor_product import EquivariantTensorProduct
 
-from cuequivariance import (
-    segmented_tensor_product,
-    descriptors,
-)
+from cuequivariance import segmented_tensor_product, descriptors
 
 __all__ = [
     "Rep",
@@ -80,9 +79,11 @@ __all__ = [
     "reduced_tensor_product_basis",
     "reduced_symmetric_tensor_product_basis",
     "reduced_antisymmetric_tensor_product_basis",
-    "SegmentedTensorProduct",
-    "EquivariantTensorProduct",
     "Operation",
+    "SegmentedTensorProduct",
+    "SegmentedPolynomial",
+    "EquivariantPolynomial",
+    "EquivariantTensorProduct",
     "segmented_tensor_product",
     "descriptors",
 ]

@@ -59,7 +59,7 @@ class Linear(torch.nn.Module):
         math_dtype = math_dtype or dtype
 
         e = descriptors.linear(irreps_in, irreps_out)
-        assert e.d.subscripts == "uv,iu,iv"
+        assert e.polynomial.tensor_products[0][1].subscripts == "uv,iu,iv"
 
         self.irreps_in = irreps_in
         self.irreps_out = irreps_out

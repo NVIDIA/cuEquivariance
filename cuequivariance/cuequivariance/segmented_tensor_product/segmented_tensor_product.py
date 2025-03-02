@@ -39,7 +39,7 @@ from .dimensions_dict import format_dimensions_dict
 logger = logging.getLogger(__name__)
 
 
-@dataclasses.dataclass(init=False, frozen=False)
+@dataclasses.dataclass(init=False, frozen=True)
 class SegmentedTensorProduct:
     """
     Irreps-agnostic and dataflow-agnostic descriptor of a segmented tensor product
@@ -56,12 +56,13 @@ class SegmentedTensorProduct:
     .. rubric:: Methods
     """
 
-    operands: list[stp.Operand]
-    paths: list[stp.Path]
+    operands: tuple[stp.Operand, ...]
+    paths: tuple[stp.Path, ...]
     coefficient_subscripts: str
 
     ################################ Initializers ################################
 
+    # From here we can use object.__setattr__ to modify the attributes
     def __init__(
         self,
         *,
@@ -71,12 +72,38 @@ class SegmentedTensorProduct:
     ):
         if operands is None:
             operands = []
-        self.operands = operands
-
         if paths is None:
             paths = []
-        self.paths = paths
-        self.coefficient_subscripts = coefficient_subscripts
+
+        object.__setattr__(
+            self, "operands", tuple(copy.deepcopy(ope) for ope in operands)
+        )
+        object.__setattr__(self, "paths", tuple(copy.deepcopy(path) for path in paths))
+        object.__setattr__(self, "coefficient_subscripts", coefficient_subscripts)
+
+    def set_operands(self, operands: list[stp.Operand]):
+        object.__setattr__(
+            self, "operands", tuple(copy.deepcopy(ope) for ope in operands)
+        )
+
+    def set_operand(self, oid: int, operand: stp.Operand):
+        object.__setattr__(
+            self,
+            "operands",
+            self.operands[:oid] + (copy.deepcopy(operand),) + self.operands[oid + 1 :],
+        )
+
+    def set_paths(self, paths: list[stp.Path]):
+        object.__setattr__(self, "paths", tuple(copy.deepcopy(path) for path in paths))
+
+    def insert_path_(self, path_index: int, path: stp.Path):
+        object.__setattr__(
+            self,
+            "paths",
+            self.paths[:path_index] + (copy.deepcopy(path),) + self.paths[path_index:],
+        )
+
+    # until here. Below we use dataclasses.replace or the setters to modify the attributes
 
     def assert_valid(self):
         assert stp.Subscripts.is_valid(self.subscripts)
@@ -178,8 +205,32 @@ class SegmentedTensorProduct:
     ################################ Properties ################################
 
     def __hash__(self) -> int:
-        return hash(
-            (tuple(self.operands), tuple(self.paths), self.coefficient_subscripts)
+        return hash((self.operands, self.paths, self.coefficient_subscripts))
+
+    def __eq__(self, value: SegmentedTensorProduct) -> bool:
+        assert isinstance(value, SegmentedTensorProduct)
+        return (
+            self.operands == value.operands
+            and self.paths == value.paths
+            and self.coefficient_subscripts == value.coefficient_subscripts
+        )
+
+    def __lt__(self, value: SegmentedTensorProduct) -> bool:
+        assert isinstance(value, SegmentedTensorProduct)
+        return (
+            self.num_operands,
+            self.num_paths,
+            self.subscripts,
+            self.operands,
+            self.paths,
+            self.coefficient_subscripts,
+        ) < (
+            value.num_operands,
+            value.num_paths,
+            value.subscripts,
+            value.operands,
+            value.paths,
+            value.coefficient_subscripts,
         )
 
     def __repr__(self) -> str:
@@ -262,7 +313,7 @@ class SegmentedTensorProduct:
             ...     cue.Irreps("SO3", "4x0+4x1"),
             ...     cue.Irreps("SO3", "4x0+4x1"),
             ...     cue.Irreps("SO3", "4x0+4x1")
-            ... ).d
+            ... ).polynomial.tensor_products[0][1]
             >>> d = d.flatten_coefficient_modes()
             >>> print(d.to_text())
             uvw,u,v,w sizes=320,16,16,16 num_segments=5,4,4,4 num_paths=16 u=4 v=4 w=4
@@ -379,12 +430,13 @@ class SegmentedTensorProduct:
             ...     cue.Irreps("SO3", "4x0+4x1"),
             ...     cue.Irreps("SO3", "4x0+4x1"),
             ...     cue.Irreps("SO3", "4x0+4x1")
-            ... ).d
+            ... ).polynomial.tensor_products[0][1]
             >>> print(d.to_base64())
             eJytkstuwjAQRX/F8r...lTF2zlX91/fHyvj2Z4=
         """
         return base64.b64encode(self.to_bytes(extended)).decode("ascii")
 
+    @functools.lru_cache(maxsize=None)
     def get_dimensions_dict(self) -> dict[str, set[int]]:
         """Get the dimensions of the tensor product."""
         dims: dict[str, set[int]] = {ch: set() for ch in self.subscripts.modes()}
@@ -403,7 +455,7 @@ class SegmentedTensorProduct:
             ...     cue.Irreps("SO3", "4x0+8x1"),
             ...     cue.Irreps("SO3", "3x0+3x1"),
             ...     cue.Irreps("SO3", "5x0+7x1")
-            ... ).d
+            ... ).polynomial.tensor_products[0][1]
             >>> d.get_dims("u")
             {8, 4}
             >>> d.get_dims("v")
@@ -653,21 +705,19 @@ class SegmentedTensorProduct:
 
         dims = {m: next(iter(dd)) for m, dd in dims.items()}
 
-        self.paths.insert(
-            path_index,
-            stp.Path(
-                [
-                    (
-                        (s + self.operands[oid].num_segments)
-                        % self.operands[oid].num_segments
-                        if isinstance(s, int)
-                        else self.add_segment(oid, dims)
-                    )
-                    for oid, s in enumerate(segments)
-                ],
-                coefficients,
-            ),
+        path = stp.Path(
+            [
+                (
+                    (s + self.operands[oid].num_segments)
+                    % self.operands[oid].num_segments
+                    if isinstance(s, int)
+                    else self.add_segment(oid, dims)
+                )
+                for oid, s in enumerate(segments)
+            ],
+            coefficients,
         )
+        self.insert_path_(path_index, path)
         return path_index
 
     def add_path(
@@ -723,16 +773,18 @@ class SegmentedTensorProduct:
         sid = _canonicalize_index("sid", sid, self.operands[operand].num_segments + 1)
 
         self.operands[operand].insert_segment(sid, segment)
-        self.paths = [
-            stp.Path(
-                [
-                    s if s < sid or oid != operand else s + 1
-                    for oid, s in enumerate(path.indices)
-                ],
-                path.coefficients,
-            )
-            for path in self.paths
-        ]
+        self.set_paths(
+            [
+                stp.Path(
+                    [
+                        s if s < sid or oid != operand else s + 1
+                        for oid, s in enumerate(path.indices)
+                    ],
+                    path.coefficients,
+                )
+                for path in self.paths
+            ]
+        )
 
     def insert_segments(
         self,
@@ -755,21 +807,26 @@ class SegmentedTensorProduct:
                 f"expected segments subscripts {segments.subscripts} to match operand subscripts {o.subscripts}."
             )
 
-        self.operands[operand] = stp.Operand(
-            subscripts=o.subscripts,
-            segments=o.segments[:sid] + segments.segments + o.segments[sid:],
-            _dims={m: o.get_dims(m) | segments.get_dims(m) for m in o.subscripts},
+        self.set_operand(
+            operand,
+            stp.Operand(
+                subscripts=o.subscripts,
+                segments=o.segments[:sid] + segments.segments + o.segments[sid:],
+                _dims={m: o.get_dims(m) | segments.get_dims(m) for m in o.subscripts},
+            ),
         )
-        self.paths = [
-            stp.Path(
-                [
-                    s if s < sid or oid != operand else s + segments.num_segments
-                    for oid, s in enumerate(path.indices)
-                ],
-                path.coefficients,
-            )
-            for path in self.paths
-        ]
+        self.set_paths(
+            [
+                stp.Path(
+                    [
+                        s if s < sid or oid != operand else s + segments.num_segments
+                        for oid, s in enumerate(path.indices)
+                    ],
+                    path.coefficients,
+                )
+                for path in self.paths
+            ],
+        )
 
     def add_segment(
         self, operand: int, segment: Union[tuple[int, ...], dict[str, int]]
@@ -819,8 +876,9 @@ class SegmentedTensorProduct:
             for oid, operand in enumerate(self.operands):
                 d.add_segments(oid, operand.segments)
             for path in self.paths:
-                d.paths.append(
-                    stp.Path(indices=path.indices, coefficients=path.coefficients)
+                d.insert_path_(
+                    len(d.paths),
+                    stp.Path(indices=path.indices, coefficients=path.coefficients),
                 )
             return d
 
@@ -862,14 +920,15 @@ class SegmentedTensorProduct:
                 for m, d in zip(D.operands[oid].subscripts, D.operands[oid][sid]):
                     dims[m] = d
 
-            D.paths.append(
+            D.insert_path_(
+                len(D.paths),
                 stp.Path(
                     indices=path.indices,
                     coefficients=np.reshape(
                         path.coefficients,
                         tuple(dims[m] for m in D.coefficient_subscripts),
                     ),
-                )
+                ),
             )
 
         return D
@@ -925,13 +984,15 @@ class SegmentedTensorProduct:
                 )
         old, new = self.coefficient_subscripts, d.coefficient_subscripts
         perm = [old.index(ch) for ch in new]
-        for path in self.paths:
-            d.paths.append(
+        d.set_paths(
+            [
                 stp.Path(
                     indices=path.indices,
                     coefficients=np.transpose(path.coefficients, perm),
                 )
-            )
+                for path in self.paths
+            ]
+        )
         return d
 
     def append_modes_to_all_operands(
@@ -991,7 +1052,7 @@ class SegmentedTensorProduct:
     ) -> SegmentedTensorProduct:
         """Permute the segments of an operand."""
         operand = _canonicalize_index("operand", operand, self.num_operands)
-        new_operands = self.operands.copy()
+        new_operands = list(self.operands)
         new_operands[operand] = stp.Operand(
             segments=[self.operands[operand][i] for i in perm],
             subscripts=self.operands[operand].subscripts,
@@ -1073,7 +1134,8 @@ class SegmentedTensorProduct:
                 ],
             )
         for path in self.paths:
-            d.paths.append(
+            d.insert_path_(
+                len(d.paths),
                 stp.Path(
                     indices=path.indices,
                     coefficients=np.reshape(
@@ -1082,7 +1144,7 @@ class SegmentedTensorProduct:
                             path.coefficients.shape, self.coefficient_subscripts
                         ),
                     ),
-                )
+                ),
             )
         logger.debug(f"Squeezed {self} to {d}")
         return d
@@ -1283,6 +1345,18 @@ class SegmentedTensorProduct:
             return self
 
         permutations = list(itertools.permutations(range(len(operands))))
+
+        # optimization: skip if already symmetric
+        def make_global_perm(perm: tuple[int, ...]) -> tuple[int, ...]:
+            p = list(range(self.num_operands))
+            for i, j in enumerate(perm):
+                p[operands[i]] = operands[j]
+            return tuple(p)
+
+        symmetries: list[tuple[int, ...]] = self.symmetries()
+        if all(make_global_perm(perm) in symmetries for perm in permutations):
+            return self
+
         d = self.sort_indices_for_identical_operands(operands)
 
         paths = []
@@ -1318,14 +1392,16 @@ class SegmentedTensorProduct:
                     perm.append(sid)
             D = D.permute_segments(oid, perm)
 
-        D.paths = [
-            path
-            for path in D.paths
-            if not any(empty(D, oid, sid) for oid, sid in enumerate(path.indices))
-        ]
+        D.set_paths(
+            [
+                path
+                for path in D.paths
+                if not any(empty(D, oid, sid) for oid, sid in enumerate(path.indices))
+            ]
+        )
 
         for oid in range(D.num_operands):
-            D.operands[oid] = stp.Operand(
+            operand = stp.Operand(
                 subscripts=D.operands[oid].subscripts,
                 segments=[
                     segment
@@ -1337,6 +1413,7 @@ class SegmentedTensorProduct:
                     for m, dd in D.operands[oid]._dims.items()
                 },
             )
+            D.set_operand(oid, operand)
 
         return D
 
@@ -1599,9 +1676,11 @@ class SegmentedTensorProduct:
                 c = np.reshape(
                     c, c.shape[:i] + (c.shape[i] * c.shape[i + 1],) + c.shape[i + 2 :]
                 )
-                d1.paths.append(stp.Path(indices=path.indices, coefficients=c))
+                d1.insert_path_(
+                    len(d1.paths), stp.Path(indices=path.indices, coefficients=c)
+                )
         else:
-            d1.paths = copy.deepcopy(d0.paths)
+            d1.set_paths(d0.paths)
 
         return d1
 
@@ -1615,13 +1694,15 @@ class SegmentedTensorProduct:
             max_denominator (int): The maximum denominator, ``q < max_denominator``.
         """
         d = copy.deepcopy(self)
-        d.paths = [
-            stp.Path(
-                indices=path.indices,
-                coefficients=round_to_rational(path.coefficients, max_denominator),
-            )
-            for path in d.paths
-        ]
+        d.set_paths(
+            [
+                stp.Path(
+                    indices=path.indices,
+                    coefficients=round_to_rational(path.coefficients, max_denominator),
+                )
+                for path in d.paths
+            ]
+        )
         return d
 
     def round_coefficients_to_sqrt_rational(
@@ -1634,13 +1715,17 @@ class SegmentedTensorProduct:
             max_denominator (int): The maximum denominator, ``q < max_denominator``.
         """
         d = copy.deepcopy(self)
-        d.paths = [
-            stp.Path(
-                indices=path.indices,
-                coefficients=round_to_sqrt_rational(path.coefficients, max_denominator),
-            )
-            for path in d.paths
-        ]
+        d.set_paths(
+            [
+                stp.Path(
+                    indices=path.indices,
+                    coefficients=round_to_sqrt_rational(
+                        path.coefficients, max_denominator
+                    ),
+                )
+                for path in d.paths
+            ]
+        )
         return d
 
     def modify_coefficients(
@@ -1653,10 +1738,12 @@ class SegmentedTensorProduct:
             f (callable): The function to apply to the coefficients.
         """
         d = copy.deepcopy(self)
-        d.paths = [
-            stp.Path(indices=path.indices, coefficients=f(path.coefficients))
-            for path in d.paths
-        ]
+        d.set_paths(
+            [
+                stp.Path(indices=path.indices, coefficients=f(path.coefficients))
+                for path in d.paths
+            ]
+        )
         return d
 
     def __mul__(self, factor: float) -> SegmentedTensorProduct:
