@@ -312,7 +312,7 @@ def segmented_polynomial_impl(
     del inputs_and_indices
 
     assert all(polynomial.used_buffers())
-    polynomial = polynomial.sort_indices_for_identical_operands()
+    polynomial = polynomial.unsymmetrize_for_identical_operands()
 
     outputs = None
     kwargs = dict(

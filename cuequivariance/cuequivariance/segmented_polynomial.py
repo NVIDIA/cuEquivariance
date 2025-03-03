@@ -375,8 +375,11 @@ class SegmentedPolynomial:
         """Compute the Jacobian-vector product of the polynomial."""
         assert len(has_tangent) == self.num_inputs
 
+        # Symmetrizing the polynomial helps identify simplifications by group_by_operational_symmetries
+        sym_poly = self.symmetrize_for_identical_operands()
+
         new_tps = []
-        for ope, stp in self.tensor_products:
+        for ope, stp in sym_poly.tensor_products:
             jvps = ope.jvp(has_tangent)
             permutations: list[tuple[int, ...]] = stp.symmetries()
             for multiplicator, ope in cue.Operation.group_by_operational_symmetries(
