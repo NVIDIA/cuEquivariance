@@ -56,7 +56,7 @@ class SegmentedTensorProduct:
     .. rubric:: Methods
     """
 
-    operands: tuple[cue.SegmentedOperand, ...]
+    operands_and_subscripts: tuple[tuple[cue.SegmentedOperand, stp.Subscripts], ...]
     paths: tuple[stp.Path, ...]
     coefficient_subscripts: str
 
@@ -66,31 +66,36 @@ class SegmentedTensorProduct:
     def __init__(
         self,
         *,
-        operands: Optional[list[cue.SegmentedOperand]] = None,
+        operands_and_subscripts: Optional[
+            list[tuple[cue.SegmentedOperand, stp.Subscripts]]
+        ] = None,
         paths: Optional[list[stp.Path]] = None,
         coefficient_subscripts: str = "",
     ):
-        if operands is None:
-            operands = []
+        if operands_and_subscripts is None:
+            operands_and_subscripts = []
         if paths is None:
             paths = []
 
         object.__setattr__(
-            self, "operands", tuple(copy.deepcopy(ope) for ope in operands)
+            self,
+            "operands_and_subscripts",
+            tuple(
+                (copy.deepcopy(ope), stp.Subscripts(ss))
+                for ope, ss in operands_and_subscripts
+            ),
         )
         object.__setattr__(self, "paths", tuple(copy.deepcopy(path) for path in paths))
         object.__setattr__(self, "coefficient_subscripts", coefficient_subscripts)
 
-    def set_operands(self, operands: list[cue.SegmentedOperand]):
-        object.__setattr__(
-            self, "operands", tuple(copy.deepcopy(ope) for ope in operands)
-        )
-
     def set_operand(self, oid: int, operand: cue.SegmentedOperand):
+        assert oid < len(self.operands_and_subscripts)
         object.__setattr__(
             self,
-            "operands",
-            self.operands[:oid] + (copy.deepcopy(operand),) + self.operands[oid + 1 :],
+            "operands_and_subscripts",
+            self.operands_and_subscripts[:oid]
+            + ((copy.deepcopy(operand), self.operands_and_subscripts[oid][1]),)
+            + self.operands_and_subscripts[oid + 1 :],
         )
 
     def set_paths(self, paths: list[stp.Path]):
@@ -104,6 +109,10 @@ class SegmentedTensorProduct:
         )
 
     # until here. Below we use dataclasses.replace or the setters to modify the attributes
+
+    @property
+    def operands(self) -> tuple[cue.SegmentedOperand, ...]:
+        return tuple(ope for ope, _ in self.operands_and_subscripts)
 
     def assert_valid(self):
         assert stp.Subscripts.is_valid(self.subscripts)
@@ -155,11 +164,13 @@ class SegmentedTensorProduct:
         """
         subscripts = stp.Subscripts(subscripts)
         operands = [
-            cue.SegmentedOperand(subscripts=operand) for operand in subscripts.operands
+            cue.SegmentedOperand(ndim=len(operand)) for operand in subscripts.operands
         ]
 
         return cls(
-            operands=operands, paths=[], coefficient_subscripts=subscripts.coefficients
+            operands_and_subscripts=list(zip(operands, subscripts.operands)),
+            paths=[],
+            coefficient_subscripts=subscripts.coefficients,
         )
 
     @classmethod
@@ -172,7 +183,9 @@ class SegmentedTensorProduct:
             ,, sizes=2,3,4 num_segments=2,3,4 num_paths=0
         """
         return cls(
-            operands=[cue.SegmentedOperand.empty_segments(num) for num in num_segments],
+            operands_and_subscripts=[
+                (cue.SegmentedOperand.empty_segments(num), "") for num in num_segments
+            ],
             paths=[],
             coefficient_subscripts="",
         )
@@ -253,7 +266,7 @@ class SegmentedTensorProduct:
     @property
     def num_operands(self) -> int:
         """Number of operands."""
-        return len(self.operands)
+        return len(self.operands_and_subscripts)
 
     @property
     def num_paths(self) -> int:
@@ -264,7 +277,7 @@ class SegmentedTensorProduct:
     def subscripts(self) -> stp.Subscripts:
         """Subscripts of the tensor product."""
         return stp.Subscripts.from_operands(
-            [operand.subscripts for operand in self.operands],
+            [subscripts for _, subscripts in self.operands_and_subscripts],
             self.coefficient_subscripts,
         )
 
@@ -336,9 +349,9 @@ class SegmentedTensorProduct:
         """
         out = f"{self}"
         dims = self.get_dimensions_dict()
-        for oid, operand in enumerate(self.operands):
-            out += f"\noperand #{oid} subscripts={operand.subscripts}"
-            for i, ch in enumerate(operand.subscripts):
+        for oid, (operand, subscripts) in enumerate(self.operands_and_subscripts):
+            out += f"\noperand #{oid} subscripts={subscripts}"
+            for i, ch in enumerate(subscripts):
                 if len(dims[ch]) == 1:
                     out += f"\n  | {ch}: [{operand.segments[0][i]}] * {len(operand.segments)}"
                 else:
@@ -396,15 +409,17 @@ class SegmentedTensorProduct:
             "coefficient_subscripts": self.coefficient_subscripts,
             "operands": [
                 {
-                    "subscripts": ope.subscripts,
+                    "subscripts": ss,
                     "segments": ope.segments,
                     "size": ope.size,
                     "segment_offsets": [sl.start for sl in slices],
                     "segment_sizes": [sl.stop - sl.start for sl in slices],
                     "flops": self.flops(oid),
                 }
-                for oid, ope, slices in zip(
-                    range(self.num_operands), self.operands, segment_slices
+                for oid, (ope, ss), slices in zip(
+                    range(self.num_operands),
+                    self.operands_and_subscripts,
+                    segment_slices,
                 )
             ],
             "memory": self.memory([1] * self.num_operands),
@@ -439,9 +454,9 @@ class SegmentedTensorProduct:
     def get_dimensions_dict(self) -> dict[str, set[int]]:
         """Get the dimensions of the tensor product."""
         dims: dict[str, set[int]] = {ch: set() for ch in self.subscripts.modes()}
-        for operand in self.operands:
-            for m, dd in operand.get_dimensions_dict().items():
-                dims[m].update(dd)
+        for operand, subscripts in self.operands_and_subscripts:
+            for i, dd in operand.get_dimensions_dict().items():
+                dims[subscripts[i]].update(dd)
         # Note: no need to go through the coefficients since must be contracted with the operands
         return dims
 
@@ -475,7 +490,7 @@ class SegmentedTensorProduct:
             m: {d} for m, d in zip(self.coefficient_subscripts, path.coefficients.shape)
         }
         for oid, sid in enumerate(path.indices):
-            for m, d in zip(self.operands[oid].subscripts, self.operands[oid][sid]):
+            for m, d in zip(self.subscripts.operands[oid], self.operands[oid][sid]):
                 dims.setdefault(m, set()).add(d)
 
         if returns_sets:
@@ -583,9 +598,9 @@ class SegmentedTensorProduct:
         d = self.move_operand_last(operand)
         subscripts = (
             d.coefficient_subscripts
-            + "".join("," + operand.subscripts for operand in d.operands[:-1])
+            + "".join("," + ss for ss in d.subscripts.operands[:-1])
             + "->"
-            + d.operands[-1].subscripts
+            + d.subscripts.operands[-1]
         )
 
         @functools.lru_cache(maxsize=None)
@@ -651,7 +666,7 @@ class SegmentedTensorProduct:
             dims.setdefault(m, set()).add(d)
 
         for oid, s in enumerate(segments):
-            subscripts = self.operands[oid].subscripts
+            subscripts = self.subscripts.operands[oid]
             if isinstance(s, int):
                 if not (
                     -self.operands[oid].num_segments
@@ -745,64 +760,26 @@ class SegmentedTensorProduct:
         """
         return self.insert_path(len(self.paths), *segments, c=c, dims=dims)
 
-    def insert_segment(
-        self,
-        operand: int,
-        sid: int,
-        segment: Union[tuple[int, ...], dict[str, int]],
-    ):
-        """Insert a segment at a specific index."""
-        operand = _canonicalize_index("operand", operand, self.num_operands)
-        sid = _canonicalize_index("sid", sid, self.operands[operand].num_segments + 1)
-
-        self.operands[operand].insert_segment(sid, segment)
-        self.set_paths(
-            [
-                stp.Path(
-                    [
-                        s if s < sid or oid != operand else s + 1
-                        for oid, s in enumerate(path.indices)
-                    ],
-                    path.coefficients,
-                )
-                for path in self.paths
-            ]
-        )
-
-    def insert_segments(
-        self,
-        operand: int,
-        sid: int,
-        segments: Union[list[tuple[int, ...]], cue.SegmentedOperand],
-    ):
+    def insert_segments(self, operand: int, sid: int, segments: list[tuple[int, ...]]):
         """Insert segments at a specific index."""
         operand = _canonicalize_index("operand", operand, self.num_operands)
         sid = _canonicalize_index("sid", sid, self.operands[operand].num_segments + 1)
 
-        if not isinstance(segments, cue.SegmentedOperand):
-            segments = cue.SegmentedOperand(
-                subscripts=self.operands[operand].subscripts, segments=segments
-            )
-
         o = self.operands[operand]
-        if o.subscripts != segments.subscripts:
-            raise ValueError(
-                f"expected segments subscripts {segments.subscripts} to match operand subscripts {o.subscripts}."
-            )
-
+        n = cue.SegmentedOperand(ndim=o.ndim, segments=segments)
         self.set_operand(
             operand,
             cue.SegmentedOperand(
-                subscripts=o.subscripts,
-                segments=o.segments[:sid] + segments.segments + o.segments[sid:],
-                _dims={m: o.get_dims(m) | segments.get_dims(m) for m in o.subscripts},
+                ndim=o.ndim,
+                segments=o.segments[:sid] + n.segments + o.segments[sid:],
+                _dims={m: o.get_dims(m) | n.get_dims(m) for m in range(o.ndim)},
             ),
         )
         self.set_paths(
             [
                 stp.Path(
                     [
-                        s if s < sid or oid != operand else s + segments.num_segments
+                        s if s < sid or oid != operand else s + n.num_segments
                         for oid, s in enumerate(path.indices)
                     ],
                     path.coefficients,
@@ -815,6 +792,8 @@ class SegmentedTensorProduct:
         self, operand: int, segment: Union[tuple[int, ...], dict[str, int]]
     ) -> int:
         """Add a segment to the descriptor."""
+        if isinstance(segment, dict):
+            segment = tuple(segment[m] for m in self.subscripts.operands[operand])
         return self.operands[operand].add_segment(segment)
 
     def add_segments(
@@ -953,8 +932,8 @@ class SegmentedTensorProduct:
         d = SegmentedTensorProduct.from_subscripts(subscripts)
         for oid in range(self.num_operands):
             old, new = (
-                self.operands[oid].subscripts,
-                d.operands[oid].subscripts,
+                self.subscripts.operands[oid],
+                d.subscripts.operands[oid],
             )
             perm = [old.index(ch) if ch in old else ch for ch in new]
             for sid in range(self.operands[oid].num_segments):
@@ -1008,7 +987,7 @@ class SegmentedTensorProduct:
         assert set(perm) == set(range(self.num_operands))
         return dataclasses.replace(
             self,
-            operands=[self.operands[i] for i in perm],
+            operands_and_subscripts=[self.operands_and_subscripts[i] for i in perm],
             paths=[path.permute_operands(perm) for path in self.paths],
         )
 
@@ -1037,8 +1016,8 @@ class SegmentedTensorProduct:
         operand = _canonicalize_index("operand", operand, self.num_operands)
         new_operands = list(self.operands)
         new_operands[operand] = cue.SegmentedOperand(
+            ndim=self.operands[operand].ndim,
             segments=[self.operands[operand][i] for i in perm],
-            subscripts=self.operands[operand].subscripts,
         )
         new_paths = [
             stp.Path(
@@ -1050,7 +1029,11 @@ class SegmentedTensorProduct:
             )
             for path in self.paths
         ]
-        return dataclasses.replace(self, operands=new_operands, paths=new_paths)
+        return dataclasses.replace(
+            self,
+            operands_and_subscripts=list(zip(new_operands, self.subscripts.operands)),
+            paths=new_paths,
+        )
 
     def sort_paths(
         self, operands_ordering: Optional[Union[int, Sequence[int]]] = None
@@ -1112,7 +1095,7 @@ class SegmentedTensorProduct:
             d.add_segments(
                 oid,
                 [
-                    filter_shape(segment, operand.subscripts)
+                    filter_shape(segment, self.subscripts.operands[oid])
                     for segment in operand.segments
                 ],
             )
@@ -1240,7 +1223,7 @@ class SegmentedTensorProduct:
             #   ^^^^^^^-- (0, "uvw") (1, "iu") (2, "jv") (3, "kw") (4, "ijk")
             if i != operand  # e.g. discard (3, "kw")
             for u in subscripts  # u v w i u j v i j k
-            if u not in self.operands[operand].subscripts  # e.g. discard k and w
+            if u not in self.subscripts.operands[operand]  # e.g. discard k and w
         }  # e.g. {u, v, i, j}
 
         for path in self.paths:
@@ -1385,15 +1368,15 @@ class SegmentedTensorProduct:
 
         for oid in range(D.num_operands):
             operand = cue.SegmentedOperand(
-                subscripts=D.operands[oid].subscripts,
+                ndim=D.operands[oid].ndim,
                 segments=[
                     segment
                     for sid, segment in enumerate(D.operands[oid].segments)
                     if not empty(D, oid, sid)
                 ],
                 _dims={
-                    m: {d for d in dd if d > 0}
-                    for m, dd in D.operands[oid]._dims.items()
+                    i: {d for d in dd if d > 0}
+                    for i, dd in D.operands[oid]._dims.items()
                 },
             )
             D.set_operand(oid, operand)
@@ -1420,8 +1403,7 @@ class SegmentedTensorProduct:
         if force:
             extra = ""
             for m in modes:
-                for ope in self.operands:
-                    sm = ope.subscripts
+                for _, sm in self.operands_and_subscripts:
                     if m in sm:
                         extra += sm[: sm.index(m)]
             modes += extra
@@ -1431,16 +1413,16 @@ class SegmentedTensorProduct:
             return self
 
         pattern = re.compile(rf"^([{modes}]*)([^{modes}]*)$")
-        new_operands = []
+        new_operands_and_subscripts = []
         offsets_per_operand = []
         rm_shape_per_operand = []
         rm_modes_per_operand = []
-        for operand in self.operands:
-            ma = pattern.match(operand.subscripts)
+        for operand, subscripts in self.operands_and_subscripts:
+            ma = pattern.match(subscripts)
             if ma is None:
                 raise ValueError(
                     f"expected modes {modes} to be at the beginning of the segment subscripts."
-                    f" Got {operand.subscripts}."
+                    f" Got {subscripts}."
                 )
 
             rm_modes, new_subscripts = ma.groups()
@@ -1462,8 +1444,13 @@ class SegmentedTensorProduct:
             offsets_per_operand.append(offsets)
             rm_shape_per_operand.append(rm_shapes)
 
-            new_operands.append(
-                cue.SegmentedOperand(segments=new_segments, subscripts=new_subscripts)
+            new_operands_and_subscripts.append(
+                (
+                    cue.SegmentedOperand(
+                        ndim=len(new_subscripts), segments=new_segments
+                    ),
+                    new_subscripts,
+                )
             )
 
         def ravel_multi_index(indices: tuple[int, ...], shape: tuple[int, ...]) -> int:
@@ -1540,7 +1527,7 @@ class SegmentedTensorProduct:
                     )
         d = dataclasses.replace(
             self,
-            operands=new_operands,
+            operands_and_subscripts=new_operands_and_subscripts,
             paths=new_paths,
             coefficient_subscripts="".join(
                 ch for ch in self.coefficient_subscripts if ch not in modes
@@ -1574,11 +1561,11 @@ class SegmentedTensorProduct:
             # look for opportunities to consolidate
             for m in self.subscripts.modes():
                 neighbors: set[str] = set()
-                for operand in self.operands:
-                    if m in operand.subscripts:
-                        i = operand.subscripts.index(m)
-                        if i < len(operand.subscripts) - 1:
-                            neighbors.add(operand.subscripts[i + 1])
+                for _, subscripts in self.operands_and_subscripts:
+                    if m in subscripts:
+                        i = subscripts.index(m)
+                        if i < len(subscripts) - 1:
+                            neighbors.add(subscripts[i + 1])
                         else:
                             neighbors.add(".")
                 if len(neighbors) != 1:
@@ -1589,13 +1576,13 @@ class SegmentedTensorProduct:
                 # Zuvw_Ziu_Zjv_Zkw+ijk
 
                 ok = True
-                for operand in self.operands:
-                    if m in operand.subscripts:
-                        if n not in operand.subscripts:
+                for _, subscripts in self.operands_and_subscripts:
+                    if m in subscripts:
+                        if n not in subscripts:
                             ok = False
                             break
                     else:
-                        if n in operand.subscripts:
+                        if n in subscripts:
                             ok = False
                             break
 
@@ -1613,11 +1600,11 @@ class SegmentedTensorProduct:
 
             return self
 
-        for operand in self.operands:
-            if modes not in operand.subscripts:
-                if any(ch in operand.subscripts for ch in modes):
+        for _, subscripts in self.operands_and_subscripts:
+            if modes not in subscripts:
+                if any(ch in subscripts for ch in modes):
                     raise ValueError(
-                        f"expected {modes} to be contiguous in the subscripts {operand.subscripts}."
+                        f"expected {modes} to be contiguous in the subscripts {subscripts}."
                     )
 
         d = self
@@ -1642,10 +1629,10 @@ class SegmentedTensorProduct:
 
         d1 = SegmentedTensorProduct.from_subscripts(d0.subscripts.replace(m + n, m))
 
-        for oid, operand in enumerate(d0.operands):
+        for oid, (operand, subscripts) in enumerate(d0.operands_and_subscripts):
             for segment in operand:
-                if m in operand.subscripts:
-                    i = operand.subscripts.index(m)
+                if m in subscripts:
+                    i = subscripts.index(m)
                     segment = list(segment)
                     segment[i] *= segment[i + 1]
                     segment.pop(i + 1)

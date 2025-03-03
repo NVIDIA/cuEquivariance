@@ -164,6 +164,7 @@ def tp_list_list(
     d = d.sort_paths(-1)
     pids = d.compressed_path_segment(-1)
     ope_out = d.operands[-1]
+    ss_out = d.subscripts.operands[-1]
 
     def ein(
         coefficients: jax.Array, segments: list[jax.Array], mode: str = "normal"
@@ -181,14 +182,14 @@ def tp_list_list(
         term_out = (
             "".join(m for m, s in zip(batch_modes, out_batch_shape) if s > 1)
             + path_out
-            + ope_out.subscripts
+            + ss_out
         )
         terms = [path_in + d.coefficient_subscripts] + terms_in + [term_out]
         formula = ",".join(terms[:-1]) + "->" + terms[-1]
         segments = [x.astype(coefficients.dtype) for x in segments]
 
         segment = jnp.einsum(formula, coefficients, *segments, precision=precision)
-        segment_shape = segment.shape[segment.ndim - len(ope_out.subscripts) :]
+        segment_shape = segment.shape[segment.ndim - len(ss_out) :]
 
         if mode == "vectorized":
             num_paths = coefficients.shape[0]

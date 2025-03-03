@@ -14,6 +14,7 @@
 # limitations under the License.
 from __future__ import annotations
 
+import dataclasses
 import itertools
 from typing import Any, Sequence
 
@@ -49,7 +50,7 @@ def dot(
         The segmented tensor product resulting from the dot product.
     """
     for oidx, oidy in contraction:
-        if x.operands[oidx] != y.operands[oidy]:
+        if x.operands_and_subscripts[oidx] != y.operands_and_subscripts[oidy]:
             raise ValueError("Operands to contract must be the same.")
 
     x_keep = [
@@ -64,7 +65,11 @@ def dot(
             x.coefficient_subscripts + y.coefficient_subscripts
         )
     )
-    d.set_operands([x.operands[i] for i in x_keep] + [y.operands[i] for i in y_keep])
+    d = dataclasses.replace(
+        d,
+        operands_and_subscripts=[x.operands_and_subscripts[i] for i in x_keep]
+        + [y.operands_and_subscripts[i] for i in y_keep],
+    )
 
     formula = f"{x.coefficient_subscripts} , {y.coefficient_subscripts} -> {d.coefficient_subscripts}"
 
@@ -127,7 +132,7 @@ def trace(
     mapping = {
         chj: chi
         for i, j in contraction
-        for chi, chj in zip(d.operands[i].subscripts, d.operands[j].subscripts)
+        for chi, chj in zip(d.subscripts.operands[i], d.subscripts.operands[j])
     }
     f = lambda subscripts: "".join(mapping.get(ch, ch) for ch in subscripts)  # noqa
 
@@ -136,12 +141,8 @@ def trace(
 
     dout = cue.SegmentedTensorProduct(
         coefficient_subscripts=coefficients_subscripts_compressed,
-        operands=[
-            cue.SegmentedOperand(
-                subscripts=f(ope.subscripts),
-                segments=ope.segments,
-            )
-            for ope in (d.operands[i] for i in keep)
+        operands_and_subscripts=[
+            (ope, f(ss)) for ope, ss in (d.operands_and_subscripts[i] for i in keep)
         ],
     )
 

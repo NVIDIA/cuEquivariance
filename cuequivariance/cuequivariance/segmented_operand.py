@@ -16,29 +16,26 @@ from __future__ import annotations
 
 import dataclasses
 import math
-from typing import Optional, Sequence, Union
-
-from cuequivariance import segmented_tensor_product as stp
 
 from .segmented_tensor_product.dimensions_dict import format_dimensions_dict
 
 
 @dataclasses.dataclass(init=False, frozen=True)
 class SegmentedOperand:
-    """A tensor product operand. It is a list of segments and subscripts."""
+    """A segmented operand is a list of segment's shapes."""
 
-    subscripts: stp.Subscripts
+    ndim: int
     segments: tuple[tuple[int, ...]]
-    _dims: dict[str, set[int]]
+    _dims: dict[int, set[int]]
 
     def __init__(
         self,
         *,
-        subscripts: stp.Subscripts,
-        segments: Optional[list[tuple[int, ...]]] = None,
-        _dims: Optional[dict[str, set[int]]] = None,
+        ndim: int,
+        segments: list[tuple[int, ...]] | None = None,
+        _dims: dict[int, set[int]] | None = None,
     ):
-        object.__setattr__(self, "subscripts", stp.Subscripts(subscripts))
+        object.__setattr__(self, "ndim", ndim)
 
         if segments is None:
             segments = []
@@ -47,45 +44,37 @@ class SegmentedOperand:
         if _dims is None:
             _dims = dict()
             for segment in self.segments:
-                for m, d in zip(self.subscripts, segment):
-                    _dims.setdefault(m, set()).add(d)
+                for i, d in enumerate(segment):
+                    _dims.setdefault(i, set()).add(d)
         object.__setattr__(self, "_dims", _dims)
 
     @classmethod
     def empty_segments(cls, num_segments: int) -> SegmentedOperand:
-        """Create an operand with empty subscripts"""
-        return cls(subscripts="", segments=[()] * num_segments, _dims=dict())
+        """Create an operand with ndim=0"""
+        return cls(ndim=0, segments=[()] * num_segments, _dims=dict())
 
     def assert_valid(self):
         """Assert that the operand is valid."""
-        if not all(m.isalpha() and m.islower() for m in self.subscripts):
-            raise ValueError(f"subscripts {self.subscripts} is not valid.")
-
         for segment in self.segments:
+            if len(segment) != self.ndim:
+                raise ValueError(
+                    f"segment {segment} has {len(segment)} dimensions, expected {self.ndim}."
+                )
+
             if not all(isinstance(dim, int) and dim > 0 for dim in segment):
                 raise ValueError(f"segment {segment} is not valid.")
 
-            if len(segment) != len(self.subscripts):
-                raise ValueError(
-                    f"segment {segment} has {len(segment)} dimensions, expected {len(self.subscripts)} for subscripts {self.subscripts}."
-                )
-
-            for m, d in zip(self.subscripts, segment):
-                if d not in self.get_dims(m):
+            for i, d in enumerate(segment):
+                if d not in self.get_dims(i):
                     raise ValueError(
-                        f"dimension {d} not in {m} dimensions {self.get_dims(m)}."
+                        f"dimension {d} not in {i} dimensions {self.get_dims(i)}."
                     )
 
-    def insert_segment(
-        self, index: int, segment: Union[tuple[int, ...], dict[str, int]]
-    ):
+    def insert_segment(self, index: int, segment: tuple[int, ...]):
         """Insert a segment at a given index."""
-        if isinstance(segment, dict):
-            segment = tuple(segment[m] for m in self.subscripts)
-
-        if len(segment) != len(self.subscripts):
+        if len(segment) != self.ndim:
             raise ValueError(
-                f"segment has {len(segment)} dimensions, expected {len(self.subscripts)} for subscripts {self.subscripts}."
+                f"segment has {len(segment)} dimensions, expected {self.ndim}."
             )
 
         if index < 0:
@@ -103,28 +92,28 @@ class SegmentedOperand:
             self.segments[:index] + (segment,) + self.segments[index:],
         )
 
-        for m, d in zip(self.subscripts, segment):
-            self._dims.setdefault(m, set()).add(d)
+        for i, d in enumerate(segment):
+            self._dims.setdefault(i, set()).add(d)
 
-    def add_segment(self, segment: Union[tuple[int, ...], dict[str, int]]) -> int:
+    def add_segment(self, segment: tuple[int, ...]) -> int:
         """Add a segment to the operand."""
         self.insert_segment(len(self.segments), segment)
         return len(self.segments) - 1
 
     def __hash__(self) -> int:
-        return hash((self.segments, self.subscripts))
+        return hash((self.ndim, self.segments))
 
     def __eq__(self, other: SegmentedOperand) -> bool:
         assert isinstance(other, SegmentedOperand)
-        return self.subscripts == other.subscripts and self.segments == other.segments
+        return self.ndim == other.ndim and self.segments == other.segments
 
     def __lt__(self, other: SegmentedOperand) -> bool:
         assert isinstance(other, SegmentedOperand)
-        return (self.subscripts, self.segments) < (other.subscripts, other.segments)
+        return (self.ndim, self.segments) < (other.ndim, other.segments)
 
     def __repr__(self) -> str:
         dims = format_dimensions_dict(self.get_dimensions_dict())
-        return f"Operand(subscripts={self.subscripts} num_segments={self.num_segments} {dims})"
+        return f"Operand(ndim={self.ndim} num_segments={self.num_segments} {dims})"
 
     def __getitem__(self, index: int) -> tuple[int, ...]:
         return self.segments[index]
@@ -148,11 +137,6 @@ class SegmentedOperand:
 
         return sum(math.prod(segment) for segment in self.segments)
 
-    @property
-    def ndim(self) -> int:
-        """The number of segment dimensions."""
-        return len(self.subscripts)
-
     def segment_slices(self) -> list[slice]:
         """Return slice object for each segment."""
         offset = 0
@@ -162,39 +146,13 @@ class SegmentedOperand:
             offset += math.prod(segment)
         return slices
 
-    def get_dimensions_dict(self) -> dict[str, set[int]]:
+    def get_dimensions_dict(self) -> dict[int, set[int]]:
         """Return a dictionary of dimensions for each channel."""
         return self._dims.copy()
 
-    def get_dims(self, m: str) -> set[int]:
+    def get_dims(self, i: int) -> set[int]:
         """Return the dimensions for a given channel."""
-        return self._dims.get(m, set()).copy()
-
-    def transpose_modes(
-        self, subscripts: Union[str, Sequence[str], Sequence[int]]
-    ) -> SegmentedOperand:
-        """Transpose the channels of the operand."""
-        if not isinstance(subscripts, Sequence):
-            raise TypeError("channels must be a sequence.")
-
-        if isinstance(subscripts[0], str):
-            subscripts = "".join(subscripts)
-            subscripts = stp.Subscripts.complete_wildcards(subscripts, self.subscripts)
-            subscripts = [self.subscripts.index(m) for m in subscripts]
-
-        subscripts: list[int] = list(subscripts)
-
-        if len(subscripts) != len(self.subscripts):
-            raise ValueError(
-                f"channels has {len(subscripts)} dimensions, expected {len(self.subscripts)} for subscripts {self.subscripts}."
-            )
-
-        segments = [tuple(segment[i] for i in subscripts) for segment in self.segments]
-        return SegmentedOperand(
-            subscripts="".join(self.subscripts[i] for i in subscripts),
-            segments=segments,
-            _dims=self._dims,
-        )
+        return self._dims.get(i, set()).copy()
 
     def all_same_segment_shape(self) -> bool:
         """Check if all segments have the same shape. Returns False if there are no segments."""
@@ -215,10 +173,10 @@ class SegmentedOperand:
         return math.prod(self.segments[0])
 
     def __add__(self, other: SegmentedOperand) -> SegmentedOperand:
-        if self.subscripts != other.subscripts:
-            raise ValueError("subscripts do not match.")
+        if self.ndim != other.ndim:
+            raise ValueError("ndim do not match.")
         return SegmentedOperand(
-            subscripts=self.subscripts,
+            ndim=self.ndim,
             segments=self.segments + other.segments,
-            _dims={m: self.get_dims(m) | other.get_dims(m) for m in self.subscripts},
+            _dims={i: self.get_dims(i) | other.get_dims(i) for i in range(self.ndim)},
         )

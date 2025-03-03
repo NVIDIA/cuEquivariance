@@ -413,9 +413,9 @@ class EquivariantTensorProduct:
                 for oid in range(d.num_operands):
                     if stacked[ii[oid]]:
                         for e_ in reversed(es[:eid]):
-                            d.insert_segments(oid, 0, e_.stp_operand(ii[oid]))
+                            d.insert_segments(oid, 0, e_.stp_operand(ii[oid]).segments)
                         for e_ in es[eid + 1 :]:
-                            d.insert_segments(oid, -1, e_.stp_operand(ii[oid]))
+                            d.insert_segments(oid, -1, e_.stp_operand(ii[oid]).segments)
 
                 if d.num_operands not in new_ds:
                     new_ds[d.num_operands] = d

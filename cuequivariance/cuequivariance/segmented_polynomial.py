@@ -215,20 +215,32 @@ class SegmentedPolynomial:
 
     def fuse_stps(self) -> SegmentedPolynomial:
         """Fuse segmented tensor products with identical operations and operands."""
+        poly = self.map_tensor_products(
+            lambda ope, stp: (ope, stp.canonicalize_subscripts())
+        )
+
         groups = itertools.groupby(
-            self.tensor_products,
-            key=lambda x: (x[0], x[1].operands, x[1].coefficient_subscripts),
+            poly.tensor_products,
+            key=lambda x: (
+                x[0],
+                x[1].operands_and_subscripts,
+                x[1].coefficient_subscripts,
+            ),
         )
         new_tensor_products = tuple(
             (
                 ope,
                 cue.SegmentedTensorProduct(
-                    operands=operands,
+                    operands_and_subscripts=operands_and_subscripts,
                     coefficient_subscripts=coefficient_subscripts,
                     paths=[path for _, stp in elements for path in stp.paths],
                 ).consolidate_paths(),
             )
-            for (ope, operands, coefficient_subscripts), elements in groups
+            for (
+                ope,
+                operands_and_subscripts,
+                coefficient_subscripts,
+            ), elements in groups
         )
         return SegmentedPolynomial(
             self.num_inputs, self.num_outputs, new_tensor_products

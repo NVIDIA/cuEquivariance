@@ -20,9 +20,9 @@ def transpose(
 ) -> cue.EquivariantPolynomial:
     """Transpose the irreps layout of a tensor."""
     d = cue.SegmentedTensorProduct(
-        operands=[
-            cue.SegmentedOperand(subscripts="ui" if source == cue.mul_ir else "iu"),
-            cue.SegmentedOperand(subscripts="ui" if target == cue.mul_ir else "iu"),
+        operands_and_subscripts=[
+            (cue.SegmentedOperand(ndim=2), "ui" if source == cue.mul_ir else "iu"),
+            (cue.SegmentedOperand(ndim=2), "ui" if target == cue.mul_ir else "iu"),
         ]
     )
     for mul, ir in irreps:
