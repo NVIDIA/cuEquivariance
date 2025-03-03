@@ -65,7 +65,11 @@ def spherical_harmonics(
             cue.IrrepsAndLayout(cue.Irreps(ir_vec), cue.ir_mul),
             cue.IrrepsAndLayout(cue.Irreps(ir), cue.ir_mul),
         ],
-        cue.SegmentedPolynomial(1, 1, [(cue.Operation([0] * ell + [1]), d)]),
+        cue.SegmentedPolynomial(
+            [cue.SegmentedOperand(ndim=0, segments=[()] * 3)],
+            [cue.SegmentedOperand(ndim=0, segments=[()] * ir.dim)],
+            [(cue.Operation([0] * ell + [1]), d)],
+        ),
     )
 
 

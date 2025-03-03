@@ -95,10 +95,8 @@ def segmented_polynomial(
     assert len(outputs_shape_dtype) == polynomial.num_outputs
 
     outputs_shape_dtype = [
-        jax.ShapeDtypeStruct(
-            x.shape if size is None else x.shape[:-1] + (size,), x.dtype
-        )
-        for x, size in zip(outputs_shape_dtype, polynomial.output_sizes)
+        jax.ShapeDtypeStruct(x.shape[:-1] + (ope.size,), x.dtype)
+        for x, ope in zip(outputs_shape_dtype, polynomial.outputs)
     ]
 
     buffers = list(inputs) + list(outputs_shape_dtype)

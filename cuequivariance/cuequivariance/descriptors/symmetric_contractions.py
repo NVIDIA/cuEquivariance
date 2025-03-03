@@ -70,6 +70,8 @@ def symmetric_contraction(
     input_operands = range(1, degree + 1)
     output_operand = degree + 1
 
+    input_operand = cue.SegmentedOperand(ndim=1, segments=[(mul,)] * irreps_in.dim)
+
     if degree == 0:
         d = stp.SegmentedTensorProduct.from_subscripts("i_i")
         for _, ir in irreps_out:
@@ -103,11 +105,18 @@ def symmetric_contraction(
         d = d.flatten_coefficient_modes()
 
     d = d.append_modes_to_all_operands("u", {"u": mul})
+    for i in input_operands:
+        assert d.operands[i] == input_operand
+
     return cue.EquivariantPolynomial(
         [
             cue.IrrepsAndLayout(irreps_in.new_scalars(d.operands[0].size), cue.ir_mul),
             cue.IrrepsAndLayout(mul * irreps_in, cue.ir_mul),
             cue.IrrepsAndLayout(mul * irreps_out, cue.ir_mul),
         ],
-        cue.SegmentedPolynomial(2, 1, [(cue.Operation([0] + [1] * degree + [2]), d)]),
+        cue.SegmentedPolynomial(
+            [d.operands[0], input_operand],
+            [d.operands[-1]],
+            [(cue.Operation([0] + [1] * degree + [2]), d)],
+        ),
     )

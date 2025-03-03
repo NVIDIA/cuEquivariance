@@ -146,13 +146,19 @@ def _symmetric_contraction(
 
     d = d.flatten_coefficient_modes()
     d = d.append_modes_to_all_operands("u", {"u": mul})
+
+    assert d.num_operands >= 3
+    [w, x], y = d.operands[:2], d.operands[-1]
+
     return cue.EquivariantPolynomial(
         [
-            cue.IrrepsAndLayout(irreps_in.new_scalars(d.operands[0].size), cue.ir_mul),
+            cue.IrrepsAndLayout(irreps_in.new_scalars(w.size), cue.ir_mul),
             cue.IrrepsAndLayout(mul * irreps_in, cue.ir_mul),
             cue.IrrepsAndLayout(mul * irreps_out, cue.ir_mul),
         ],
-        cue.SegmentedPolynomial(2, 1, [(cue.Operation([0] + [1] * degree + [2]), d)]),
+        cue.SegmentedPolynomial(
+            [w, x], [y], [(cue.Operation([0] + [1] * degree + [2]), d)]
+        ),
     )
 
 

@@ -25,7 +25,9 @@ jax.config.update("jax_enable_x64", True)
 def test_one_operand():
     d = cue.SegmentedTensorProduct.empty_segments([1])
     [out] = cuex.segmented_polynomial(
-        cue.SegmentedPolynomial(0, 1, [(cue.Operation([0]), d)]),
+        cue.SegmentedPolynomial(
+            [], [cue.SegmentedOperand.empty_segments(1)], [(cue.Operation([0]), d)]
+        ),
         [],
         [jax.ShapeDtypeStruct((2, 1), jnp.float32)],
     )
@@ -33,7 +35,9 @@ def test_one_operand():
 
     d.add_path(0, c=123)
     [out] = cuex.segmented_polynomial(
-        cue.SegmentedPolynomial(0, 1, [(cue.Operation([0]), d)]),
+        cue.SegmentedPolynomial(
+            [], [cue.SegmentedOperand.empty_segments(1)], [(cue.Operation([0]), d)]
+        ),
         [],
         [jax.ShapeDtypeStruct((2, 1), jnp.float32)],
     )
@@ -96,8 +100,8 @@ def test_vmap():
     def f(x1, x2, i1):
         return cuex.segmented_polynomial(
             cue.SegmentedPolynomial(
-                2,
-                2,
+                d.operands[:2],
+                [d.operands[2], d.operands[2]],
                 [
                     (cue.Operation([0, 1, 2]), d),
                     (cue.Operation([0, 1, 3]), d),

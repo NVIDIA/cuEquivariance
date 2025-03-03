@@ -42,16 +42,15 @@ class EquivariantPolynomial:
         assert isinstance(polynomial, cue.SegmentedPolynomial)
         object.__setattr__(self, "operands", tuple(operands))
         object.__setattr__(self, "polynomial", polynomial)
-        if (
-            len(self.operands)
-            != self.polynomial.num_inputs + self.polynomial.num_outputs
-        ):
+        if len(self.operands) != self.polynomial.num_operands:
             raise ValueError(
                 f"Number of operands {len(self.operands)} must equal the number of inputs"
                 f" {self.polynomial.num_inputs} plus the number of outputs {self.polynomial.num_outputs}"
             )
-        for rep, size in zip(self.operands, self.polynomial.buffer_sizes):
-            assert size is None or size == rep.dim
+        for rep, ope in zip(self.operands, self.polynomial.operands):
+            assert ope.size == rep.dim, (
+                f"{ope} incompatible with {rep}. {ope.size=} != {rep.dim=}"
+            )
 
     def __hash__(self) -> int:
         return hash((self.operands, self.polynomial))

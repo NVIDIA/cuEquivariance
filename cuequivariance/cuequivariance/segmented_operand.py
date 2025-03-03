@@ -53,6 +53,24 @@ class SegmentedOperand:
         """Create an operand with ndim=0"""
         return cls(ndim=0, segments=[()] * num_segments, _dims=dict())
 
+    @classmethod
+    def stack(cls, operands: list[SegmentedOperand]) -> SegmentedOperand:
+        """Stack a list of operands together."""
+        assert len(operands) > 0
+        ndim = operands[0].ndim
+        assert all(ope.ndim == ndim for ope in operands)
+
+        _dims = dict()
+        for ope in operands:
+            for i, d in ope.get_dimensions_dict().items():
+                _dims.setdefault(i, set()).update(d)
+
+        return cls(
+            ndim=ndim,
+            segments=sum([list(ope.segments) for ope in operands], []),
+            _dims=_dims,
+        )
+
     def assert_valid(self):
         """Assert that the operand is valid."""
         for segment in self.segments:
@@ -113,7 +131,7 @@ class SegmentedOperand:
 
     def __repr__(self) -> str:
         dims = format_dimensions_dict(self.get_dimensions_dict())
-        return f"Operand(ndim={self.ndim} num_segments={self.num_segments} {dims})"
+        return f"Operand(ndim={self.ndim} num_segments={self.num_segments} dims={dims})"
 
     def __getitem__(self, index: int) -> tuple[int, ...]:
         return self.segments[index]

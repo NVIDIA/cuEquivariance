@@ -36,26 +36,23 @@ def make_simple_dot_product_stp() -> cue.SegmentedTensorProduct:
 def test_init_segmented_polynomial():
     """Test initialization of SegmentedPolynomial."""
     stp = make_simple_stp()
-    op = cue.Operation((0, 1, 2))
-    poly = cue.SegmentedPolynomial(2, 1, [(op, stp)])
+    poly = cue.SegmentedPolynomial.eval_last_operand(stp)
 
     assert poly.num_inputs == 2
     assert poly.num_outputs == 1
     assert poly.num_operands == 3
     assert len(poly.tensor_products) == 1
-    assert poly.tensor_products[0] == (op, stp)
+    assert poly.tensor_products[0] == (cue.Operation((0, 1, 2)), stp)
 
 
 def test_polynomial_equality():
     """Test equality comparison of polynomials."""
     stp1 = make_simple_stp()
     stp2 = make_simple_stp()
-    op1 = cue.Operation((0, 1, 2))
-    op2 = cue.Operation((0, 1, 2))
 
-    poly1 = cue.SegmentedPolynomial(2, 1, [(op1, stp1)])
-    poly2 = cue.SegmentedPolynomial(2, 1, [(op2, stp2)])
-    poly3 = cue.SegmentedPolynomial(2, 1, [(op2, 2 * stp2)])
+    poly1 = cue.SegmentedPolynomial.eval_last_operand(stp1)
+    poly2 = cue.SegmentedPolynomial.eval_last_operand(stp2)
+    poly3 = cue.SegmentedPolynomial.eval_last_operand(2 * stp2)
 
     assert poly1 == poly2
     assert poly1 != poly3
@@ -72,8 +69,7 @@ def test_call_function():
     i2 = stp.add_segment(2, (1,))
     stp.add_path(i0, i1, i2, c=np.eye(3).reshape(3, 3, 1))
 
-    op = cue.Operation((0, 1, 2))
-    poly = cue.SegmentedPolynomial(2, 1, [(op, stp)])
+    poly = cue.SegmentedPolynomial.eval_last_operand(stp)
 
     # Test evaluation
     a = np.array([1.0, 2.0, 3.0])
@@ -95,12 +91,20 @@ def test_buffer_properties():
     stp2.add_path(0, 0, c=1.0)
     op2 = cue.Operation((0, 3))
 
-    poly = cue.SegmentedPolynomial(2, 2, [(op1, stp1), (op2, stp2)])
+    poly = cue.SegmentedPolynomial(
+        [
+            cue.SegmentedOperand.empty_segments(2),
+            cue.SegmentedOperand.empty_segments(2),
+        ],
+        [
+            cue.SegmentedOperand.empty_segments(2),
+            cue.SegmentedOperand.empty_segments(1),
+        ],
+        [(op1, stp1), (op2, stp2)],
+    )
 
     # Test buffer properties
-    assert poly.buffer_sizes == [2, 2, 2, 1]
-    assert poly.input_sizes == [2, 2]
-    assert poly.output_sizes == [2, 1]
+    assert [ope.size for ope in poly.operands] == [2, 2, 2, 1]
 
     assert poly.used_buffers() == [True, True, True, True]
 
@@ -111,7 +115,15 @@ def test_remove_unused_buffers():
     # Use operation that doesn't use buffer 1
     op = cue.Operation((0, 2, 3))  # Note: buffer 1 is not used
 
-    poly = cue.SegmentedPolynomial(3, 1, [(op, stp)])
+    poly = cue.SegmentedPolynomial(
+        [
+            cue.SegmentedOperand.empty_segments(2),
+            cue.SegmentedOperand.empty_segments(2),  # unused
+            cue.SegmentedOperand.empty_segments(2),
+        ],
+        [cue.SegmentedOperand.empty_segments(2)],
+        [(op, stp)],
+    )
 
     # Buffer 1 is not used
     assert poly.used_buffers() == [True, False, True, True]
@@ -132,7 +144,14 @@ def test_consolidate():
     op = cue.Operation((0, 1, 2))
 
     # Create a polynomial with duplicate operations
-    poly = cue.SegmentedPolynomial(2, 1, [(op, stp1), (op, stp2)])
+    poly = cue.SegmentedPolynomial(
+        [
+            cue.SegmentedOperand.empty_segments(2),
+            cue.SegmentedOperand.empty_segments(2),
+        ],
+        [cue.SegmentedOperand.empty_segments(2)],
+        [(op, stp1), (op, stp2)],
+    )
 
     # Consolidate the polynomial
     consolidated = poly.consolidate()
@@ -151,11 +170,25 @@ def test_stack():
     # Create two simple polynomials using make_simple_stp
     stp = make_simple_stp()
     op1 = cue.Operation((0, 1, 2))
-    poly1 = cue.SegmentedPolynomial(2, 1, [(op1, stp)])
+    poly1 = cue.SegmentedPolynomial(
+        [
+            cue.SegmentedOperand.empty_segments(2),
+            cue.SegmentedOperand.empty_segments(2),
+        ],
+        [cue.SegmentedOperand.empty_segments(2)],
+        [(op1, stp)],
+    )
 
     stp2 = make_simple_stp()
     op2 = cue.Operation((0, 1, 2))
-    poly2 = cue.SegmentedPolynomial(2, 1, [(op2, stp2)])
+    poly2 = cue.SegmentedPolynomial(
+        [
+            cue.SegmentedOperand.empty_segments(2),
+            cue.SegmentedOperand.empty_segments(2),
+        ],
+        [cue.SegmentedOperand.empty_segments(2)],
+        [(op2, stp2)],
+    )
 
     # Stack the polynomials with the output being stacked
     stacked = cue.SegmentedPolynomial.stack([poly1, poly2], [False, False, True])
@@ -163,7 +196,7 @@ def test_stack():
     assert stacked.num_inputs == 2
     assert stacked.num_outputs == 1
 
-    assert stacked.buffer_sizes == [2, 2, 4]
+    assert [ope.size for ope in stacked.operands] == [2, 2, 4]
 
     [(_, stp)] = stacked.tensor_products
     assert stp.operands[0].num_segments == 2
@@ -180,8 +213,14 @@ def test_flops_and_memory():
     """Test computation of FLOPS and memory usage."""
     stp = make_simple_stp()
     op = cue.Operation((0, 1, 2))
-    poly = cue.SegmentedPolynomial(2, 1, [(op, stp)])
-
+    poly = cue.SegmentedPolynomial(
+        [
+            cue.SegmentedOperand.empty_segments(2),
+            cue.SegmentedOperand.empty_segments(2),
+        ],
+        [cue.SegmentedOperand.empty_segments(2)],
+        [(op, stp)],
+    )
     # Test FLOPS calculation
     flops = poly.flops(batch_size=100)
     assert flops > 0
@@ -195,9 +234,7 @@ def test_jvp():
     """Test Jacobian-vector product computation."""
     # Create a simple polynomial for testing: f(x,y) = x^T * y (dot product)
     stp = make_simple_dot_product_stp()
-
-    op = cue.Operation((0, 1, 2))
-    poly = cue.SegmentedPolynomial(2, 1, [(op, stp)])
+    poly = cue.SegmentedPolynomial.eval_last_operand(stp)
 
     # Input values
     x = np.array([1.0, 2.0, 3.0])
@@ -240,9 +277,7 @@ def test_transpose_linear():
     # Here we use f(x, y) = x^T * y (dot product)
     # This is linear in both x and y
     stp = make_simple_dot_product_stp()
-
-    op = cue.Operation((0, 1, 2))
-    poly = cue.SegmentedPolynomial(2, 1, [(op, stp)])
+    poly = cue.SegmentedPolynomial.eval_last_operand(stp)
 
     # Input values
     x = np.array([1.0, 2.0, 3.0])
@@ -284,7 +319,13 @@ def test_transpose_nonlinear():
     # Create a non-linear polynomial
     stp = make_simple_stp()
     op = cue.Operation((0, 0, 1))  # Note: using the same buffer twice (x^2)
-    poly = cue.SegmentedPolynomial(1, 1, [(op, stp)])
+    poly = cue.SegmentedPolynomial(
+        [
+            cue.SegmentedOperand.empty_segments(2),
+        ],
+        [cue.SegmentedOperand.empty_segments(2)],
+        [(op, stp)],
+    )
 
     # Try to transpose the non-linear polynomial
     # This should raise a ValueError since there are multiple undefined primals
@@ -297,8 +338,7 @@ def test_backward():
     """Test the backward method for gradient computation."""
     # Create a linear polynomial for testing: f(x,y) = x^T * y (dot product)
     stp = make_simple_dot_product_stp()
-    op = cue.Operation((0, 1, 2))
-    poly = cue.SegmentedPolynomial(2, 1, [(op, stp)])
+    poly = cue.SegmentedPolynomial.eval_last_operand(stp)
 
     # Input values
     x = np.array([1.0, 2.0, 3.0])
@@ -351,8 +391,11 @@ def test_symmetrize_identical_operands():
 
     # Create operation that uses the same input buffer twice
     op = cue.Operation((0, 0, 1))  # Use buffer 0 twice, write to buffer 1
-    poly = cue.SegmentedPolynomial(1, 1, [(op, stp)])
-
+    poly = cue.SegmentedPolynomial(
+        [cue.SegmentedOperand.empty_segments(2)],
+        [cue.SegmentedOperand.empty_segments(1)],
+        [(op, stp)],
+    )
     # Symmetrize the polynomial
     sym_poly = poly.symmetrize_for_identical_operands()
 
