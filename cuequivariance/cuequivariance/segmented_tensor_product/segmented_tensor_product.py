@@ -239,7 +239,7 @@ class SegmentedTensorProduct:
                 "[" + ",".join(map(str, operand.segments)) + "]"
                 for operand in self.operands
             )
-            return f"{self.subscripts} operands={operands} paths={self.paths}"
+            return f"{self.subscripts} operands={operands} paths={list(self.paths)}"
         sizes = ",".join(f"{operand.size}" for operand in self.operands)
         num_segments = ",".join(f"{len(operand)}" for operand in self.operands)
         output = f"{self.subscripts} sizes={sizes} num_segments={num_segments} num_paths={self.num_paths}"

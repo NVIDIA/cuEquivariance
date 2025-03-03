@@ -58,7 +58,7 @@ def equivariant_polynomial(
         ╭ a=1 -> B=0+1+2
         │  B ─────    sizes=9     num_segments=9     num_paths=1
         │  a B ─── ,  sizes=3,9   num_segments=3,9   num_paths=3
-        ╰─ a a B ─ ,, sizes=3,3,9 num_segments=3,3,9 num_paths=8
+        ╰─ a a B ─ ,, sizes=3,3,9 num_segments=3,3,9 num_paths=11
 
         Basic usage with single input:
 
