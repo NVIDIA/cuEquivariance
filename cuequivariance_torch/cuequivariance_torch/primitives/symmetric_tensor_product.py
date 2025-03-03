@@ -249,7 +249,7 @@ class CUDAKernel(torch.nn.Module):
                 [
                     m
                     for m in d.subscripts.modes()
-                    if not all(m in ope.subscripts for ope in d.operands)
+                    if not all(m in ss for ss in d.subscripts.operands)
                 ]
             )
             d = d.consolidate_modes()
@@ -264,7 +264,7 @@ class CUDAKernel(torch.nn.Module):
 
             m = d.subscripts.modes()[0]
 
-            if not all(ope.subscripts == m for ope in d.operands):
+            if not all(ss == m for ss in d.subscripts.operands):
                 raise NotImplementedError("Different subscripts are not supported.")
 
             d = d.split_mode(m, math.gcd(*d.get_dims(m)))

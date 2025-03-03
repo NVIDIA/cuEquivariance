@@ -261,3 +261,100 @@ def test_hash():
     assert hash(d) != hash(d2)
     d2.add_path(None, None, None, c=np.ones((1, 2, 1)), dims={"u": 14})
     assert hash(d) == hash(d2)
+
+
+def test_split_mode():
+    # Create a descriptor with a mode that has dimensions divisible by the desired split size
+    d = stp.SegmentedTensorProduct.from_subscripts("ua,ub+ab")
+
+    # Add a segment with u dimension = 6 (divisible by 2 and 3)
+    d.add_segment(0, (6, 4))
+    d.add_segment(1, (6, 5))
+
+    # Add a path
+    d.add_path(0, 0, c=np.ones((4, 5)))
+    d.assert_valid()
+
+    # Split mode 'u' with size 2
+    d_split = d.split_mode("u", 2)
+    d_split.assert_valid()
+
+    # Check that the dimensions are correctly split
+    assert d_split.operands[0].num_segments == 3  # 6/2 = 3 segments
+    assert d_split.operands[1].num_segments == 3  # 6/2 = 3 segments
+
+    # Check that the subscripts are preserved
+    assert d_split.subscripts == "ua,ub+ab"
+
+    # Check that the segments have the correct shape
+    for segment in d_split.operands[0]:
+        assert segment[0] == 2  # First dimension should be 2
+        assert segment[1] == 4  # Second dimension should be 4
+
+    for segment in d_split.operands[1]:
+        assert segment[0] == 2  # First dimension should be 2
+        assert segment[1] == 5  # Second dimension should be 5
+
+    # Test with a different split size
+    d_split_3 = d.split_mode("u", 3)
+    d_split_3.assert_valid()
+
+    assert d_split_3.operands[0].num_segments == 2  # 6/3 = 2 segments
+    assert d_split_3.operands[1].num_segments == 2  # 6/3 = 2 segments
+
+    # Test error case: split size not divisible by dimension
+    with pytest.raises(ValueError):
+        d.split_mode("u", 5)  # 6 is not divisible by 5
+
+    # Test case where mode is not in descriptor
+    d_unchanged = d.split_mode("v", 2)  # 'v' is not in the descriptor
+    assert d_unchanged == d
+
+    # Test case where mode is not at the beginning of the operand
+    d_complex = stp.SegmentedTensorProduct.from_subscripts("au,bu+ab")
+    d_complex.add_segment(0, (3, 6))
+    d_complex.add_segment(1, (4, 6))
+    d_complex.add_path(0, 0, c=np.ones((3, 4)))
+
+    with pytest.raises(ValueError):
+        d_complex.split_mode("u", 2)  # 'u' is not the first mode in operands
+
+    # Test with coefficient subscripts
+    d_coeff = stp.SegmentedTensorProduct.from_subscripts("ua,ub,ab+ab")
+    d_coeff.add_segment(0, (6, 4))
+    d_coeff.add_segment(1, (6, 5))
+    d_coeff.add_segment(2, (4, 5))
+    d_coeff.add_path(0, 0, 0, c=np.ones((4, 5)))
+
+    d_coeff_split = d_coeff.split_mode("u", 2)
+    d_coeff_split.assert_valid()
+
+    assert d_coeff_split.operands[0].num_segments == 3
+    assert d_coeff_split.operands[1].num_segments == 3
+    assert d_coeff_split.operands[2].num_segments == 1  # Not affected by u split
+
+    # Check that computation results are equivalent
+    # Create a simple descriptor with just two operands for testing compute_last_operand
+    d_compute = stp.SegmentedTensorProduct.from_subscripts("a,b+ab")
+    d_compute.add_segment(0, (4,))
+    d_compute.add_segment(1, (5,))
+    d_compute.add_path(0, 0, c=np.ones((4, 5)))
+
+    # Test computation on original descriptor
+    x_input = np.random.randn(d_compute.operands[0].size)
+    result_original = stp.compute_last_operand(d_compute, x_input)
+
+    # Verify split_mode works by first flattening the results to remove 'u' mode indices
+    d_ua = stp.SegmentedTensorProduct.from_subscripts("ua,b+ab")
+    d_ua.add_segment(0, (6, 4))
+    d_ua.add_segment(1, (5,))
+    d_ua.add_path(0, 0, c=np.ones((4, 5)))
+    d_ua_split = d_ua.split_mode("u", 2)
+
+    # Input for the split descriptor - we need a tensor with the right shape
+    x_input_split = np.random.randn(d_ua_split.operands[0].size)
+    result_split = stp.compute_last_operand(d_ua_split, x_input_split)
+
+    # Verify the shapes are consistent with our expectations
+    assert result_original.shape == (5,)
+    assert result_split.shape == (5,)

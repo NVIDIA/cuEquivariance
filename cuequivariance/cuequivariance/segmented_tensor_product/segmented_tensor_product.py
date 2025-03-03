@@ -1132,10 +1132,10 @@ class SegmentedTensorProduct:
         if mode not in self.subscripts:
             return self
 
-        for oid, operand in enumerate(self.operands):
-            if mode in operand.subscripts and not operand.subscripts.startswith(mode):
+        for oid, ss in enumerate(self.subscripts.operands):
+            if mode in ss and not ss.startswith(mode):
                 raise ValueError(
-                    f"mode {mode} is not the first mode in operand {oid} ({operand.subscripts})."
+                    f"mode {mode} is not the first mode in operand {oid} ({ss})."
                 )
 
         if not all(dim % size == 0 for dim in self.get_dims(mode)):
@@ -1159,14 +1159,14 @@ class SegmentedTensorProduct:
         d = SegmentedTensorProduct.from_subscripts(self.subscripts)
 
         offsets_per_operand = []
-        for oid, operand in enumerate(self.operands):
-            if mode not in operand.subscripts:
+        for oid, (operand, ss) in enumerate(self.operands_and_subscripts):
+            if mode not in ss:
                 for segment in operand:
                     d.add_segment(oid, segment)
                 offsets_per_operand.append(None)
                 continue
 
-            assert operand.subscripts.startswith(mode)
+            assert ss.startswith(mode)
 
             offsets = []
             for segment in operand:
@@ -1190,7 +1190,9 @@ class SegmentedTensorProduct:
                 coefficients = path.coefficients
                 if self.coefficient_subscripts.startswith(mode):
                     coefficients = np.split(coefficients, num_subdivisions, axis=0)[i]
-                d.paths.append(stp.Path(indices=indices, coefficients=coefficients))
+                d.insert_path_(
+                    len(d.paths), stp.Path(indices=indices, coefficients=coefficients)
+                )
 
         logger.debug(f"Split {mode} in {self}: got {d}")
         return d
