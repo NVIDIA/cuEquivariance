@@ -369,7 +369,7 @@ class EquivariantTensorProduct:
         e = EquivariantTensorProduct(ds, tuple(self.operands[i] for i in oids))
         return e, tuple(oids)
 
-    def stp_operand(self, oid: int) -> Optional[stp.Operand]:
+    def stp_operand(self, oid: int) -> Optional[cue.SegmentedOperand]:
         # output
         if oid == self.num_operands - 1:
             return self.ds[0].operands[-1]

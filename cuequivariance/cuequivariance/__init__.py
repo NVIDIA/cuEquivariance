@@ -48,6 +48,7 @@ from cuequivariance.irreps_array import (
 )
 
 from cuequivariance.operation import Operation
+from cuequivariance.segmented_operand import SegmentedOperand
 from cuequivariance.segmented_tensor_product import SegmentedTensorProduct
 from cuequivariance.segmented_polynomial import SegmentedPolynomial
 from cuequivariance.equivariant_polynomial import EquivariantPolynomial
@@ -80,6 +81,7 @@ __all__ = [
     "reduced_symmetric_tensor_product_basis",
     "reduced_antisymmetric_tensor_product_basis",
     "Operation",
+    "SegmentedOperand",
     "SegmentedTensorProduct",
     "SegmentedPolynomial",
     "EquivariantPolynomial",

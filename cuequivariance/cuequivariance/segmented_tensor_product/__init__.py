@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from .subscripts import Subscripts
-from .operand import Operand
 from .path import Path
 from .segmented_tensor_product import SegmentedTensorProduct
 from .dot import dot, trace
@@ -24,7 +23,6 @@ from .dispatch import dispatch
 
 __all__ = [
     "Subscripts",
-    "Operand",
     "Path",
     "SegmentedTensorProduct",
     "dot",

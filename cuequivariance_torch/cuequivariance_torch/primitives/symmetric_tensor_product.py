@@ -19,7 +19,7 @@ from typing import List, Optional
 import torch
 import torch.fx
 
-import cuequivariance.segmented_tensor_product as stp
+import cuequivariance as cue
 import cuequivariance_torch as cuet
 
 logger = logging.getLogger(__name__)
@@ -36,7 +36,7 @@ class SymmetricTensorProduct(torch.nn.Module):
 
     def __init__(
         self,
-        descriptors: list[stp.SegmentedTensorProduct],
+        descriptors: list[cue.SegmentedTensorProduct],
         *,
         device: Optional[torch.device] = None,
         math_dtype: Optional[torch.dtype] = None,
@@ -47,10 +47,13 @@ class SymmetricTensorProduct(torch.nn.Module):
         self.descriptors = descriptors
 
         descriptors = [
-            stp.SegmentedTensorProduct(
-                operands=(stp.Operand.empty_segments(1),) + d.operands,
+            cue.SegmentedTensorProduct(
+                operands=(cue.SegmentedOperand.empty_segments(1),) + d.operands,
                 paths=[
-                    stp.Path((0,) + path.indices, path.coefficients) for path in d.paths
+                    cue.segmented_tensor_product.Path(
+                        (0,) + path.indices, path.coefficients
+                    )
+                    for path in d.paths
                 ],
                 coefficient_subscripts=d.coefficient_subscripts,
             )
@@ -99,7 +102,7 @@ class IWeightedSymmetricTensorProduct(torch.nn.Module):
 
     Parameters
     ----------
-    descriptors : list[stp.SegmentedTensorProduct]
+    descriptors : list[cue.SegmentedTensorProduct]
         The list of SegmentedTensorProduct descriptors
     math_dtype : torch.dtype, optional
         The data type of the coefficients and calculations
@@ -107,7 +110,7 @@ class IWeightedSymmetricTensorProduct(torch.nn.Module):
 
     def __init__(
         self,
-        descriptors: list[stp.SegmentedTensorProduct],
+        descriptors: list[cue.SegmentedTensorProduct],
         *,
         device: Optional[torch.device] = None,
         math_dtype: Optional[torch.dtype] = None,
@@ -197,7 +200,7 @@ class IWeightedSymmetricTensorProduct(torch.nn.Module):
         return self.f(x0, i0, x1)
 
 
-def _check_descriptors(descriptors: list[stp.SegmentedTensorProduct]):
+def _check_descriptors(descriptors: list[cue.SegmentedTensorProduct]):
     if len(descriptors) == 0:
         raise ValueError("stps must contain at least one STP.")
 
@@ -218,7 +221,7 @@ def _check_descriptors(descriptors: list[stp.SegmentedTensorProduct]):
 class CUDAKernel(torch.nn.Module):
     def __init__(
         self,
-        ds: list[stp.SegmentedTensorProduct],
+        ds: list[cue.SegmentedTensorProduct],
         device: Optional[torch.device],
         math_dtype: torch.dtype,
     ):
@@ -239,7 +242,7 @@ class CUDAKernel(torch.nn.Module):
         if len({d.operands[-1].num_segments for d in ds}) != 1:
             raise ValueError("All STPs must have the same number of segments in x2.")
 
-        def f(d: stp.SegmentedTensorProduct) -> stp.SegmentedTensorProduct:
+        def f(d: cue.SegmentedTensorProduct) -> cue.SegmentedTensorProduct:
             d = d.move_operand(0, -2)
             d = d.flatten_coefficient_modes(force=True)
             d = d.flatten_modes(
@@ -336,7 +339,7 @@ class CUDAKernel(torch.nn.Module):
 class FallbackImpl(torch.nn.Module):
     def __init__(
         self,
-        stps: list[stp.SegmentedTensorProduct],
+        stps: list[cue.SegmentedTensorProduct],
         device: Optional[torch.device],
         math_dtype: Optional[torch.dtype],
     ):

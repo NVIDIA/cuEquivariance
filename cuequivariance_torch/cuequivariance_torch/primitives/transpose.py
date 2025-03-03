@@ -145,7 +145,7 @@ def _transpose_segments_fx(segments: list[tuple[int, int]]) -> torch.nn.Module:
     x = torch.fx.Proxy(graph.placeholder("input"), tracer)
     outputs = []
 
-    source = cue.segmented_tensor_product.Operand(subscripts="ij", segments=segments)
+    source = cue.SegmentedOperand(subscripts="ij", segments=segments)
     for sl, (u, v) in zip(source.segment_slices(), source.segments):
         outputs += [
             x[..., sl]

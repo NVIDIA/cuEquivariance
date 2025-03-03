@@ -86,7 +86,7 @@ def flatten(x: jax.Array, axis: int) -> jax.Array:
 
 
 def sum_cat_list_list(
-    operand: cue.segmented_tensor_product.Operand,
+    operand: cue.SegmentedOperand,
     list_list: list[list[jax.Array]] | jax.Array,
     batch_shape: tuple[int, ...],
     dtype: jnp.dtype,

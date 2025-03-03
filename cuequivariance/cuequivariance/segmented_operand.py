@@ -20,11 +20,11 @@ from typing import Optional, Sequence, Union
 
 from cuequivariance import segmented_tensor_product as stp
 
-from .dimensions_dict import format_dimensions_dict
+from .segmented_tensor_product.dimensions_dict import format_dimensions_dict
 
 
 @dataclasses.dataclass(init=False, frozen=True)
-class Operand:
+class SegmentedOperand:
     """A tensor product operand. It is a list of segments and subscripts."""
 
     _segments: list[tuple[int, ...]]
@@ -52,7 +52,7 @@ class Operand:
         object.__setattr__(self, "_dims", _dims)
 
     @classmethod
-    def empty_segments(cls, num_segments: int) -> Operand:
+    def empty_segments(cls, num_segments: int) -> SegmentedOperand:
         """Create an operand with empty subscripts"""
         return cls(subscripts="", segments=[()] * num_segments, _dims=dict())
 
@@ -102,10 +102,10 @@ class Operand:
     def __hash__(self) -> int:
         return hash((tuple(self.segments), self.subscripts))
 
-    def __eq__(self, other: Operand) -> bool:
+    def __eq__(self, other: SegmentedOperand) -> bool:
         return self.subscripts == other.subscripts and self.segments == other.segments
 
-    def __lt__(self, other: Operand) -> bool:
+    def __lt__(self, other: SegmentedOperand) -> bool:
         return (self.subscripts, self.segments) < (other.subscripts, other.segments)
 
     def __repr__(self) -> str:
@@ -169,7 +169,7 @@ class Operand:
 
     def transpose_modes(
         self, subscripts: Union[str, Sequence[str], Sequence[int]]
-    ) -> Operand:
+    ) -> SegmentedOperand:
         """Transpose the channels of the operand."""
         if not isinstance(subscripts, Sequence):
             raise TypeError("channels must be a sequence.")
@@ -187,7 +187,7 @@ class Operand:
             )
 
         segments = [tuple(segment[i] for i in subscripts) for segment in self.segments]
-        return Operand(
+        return SegmentedOperand(
             subscripts="".join(self.subscripts[i] for i in subscripts),
             segments=segments,
             _dims=self._dims,
@@ -211,10 +211,10 @@ class Operand:
             raise ValueError("Segments do not have the same shape.")
         return math.prod(self.segments[0])
 
-    def __add__(self, other: Operand) -> Operand:
+    def __add__(self, other: SegmentedOperand) -> SegmentedOperand:
         if self.subscripts != other.subscripts:
             raise ValueError("subscripts do not match.")
-        return Operand(
+        return SegmentedOperand(
             subscripts=self.subscripts,
             segments=self.segments + other.segments,
             _dims={m: self.get_dims(m) | other.get_dims(m) for m in self.subscripts},

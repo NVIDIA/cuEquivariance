@@ -21,12 +21,8 @@ def transpose(
     """Transpose the irreps layout of a tensor."""
     d = cue.SegmentedTensorProduct(
         operands=[
-            cue.segmented_tensor_product.Operand(
-                subscripts="ui" if source == cue.mul_ir else "iu"
-            ),
-            cue.segmented_tensor_product.Operand(
-                subscripts="ui" if target == cue.mul_ir else "iu"
-            ),
+            cue.SegmentedOperand(subscripts="ui" if source == cue.mul_ir else "iu"),
+            cue.SegmentedOperand(subscripts="ui" if target == cue.mul_ir else "iu"),
         ]
     )
     for mul, ir in irreps:

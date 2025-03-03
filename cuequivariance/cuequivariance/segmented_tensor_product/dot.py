@@ -19,7 +19,7 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from cuequivariance import segmented_tensor_product as stp
+import cuequivariance as cue
 
 
 def stable_unique(xs: Sequence[Any]) -> Sequence[Any]:
@@ -33,10 +33,10 @@ def stable_unique(xs: Sequence[Any]) -> Sequence[Any]:
 
 
 def dot(
-    x: stp.SegmentedTensorProduct,
-    y: stp.SegmentedTensorProduct,
+    x: cue.SegmentedTensorProduct,
+    y: cue.SegmentedTensorProduct,
     *contraction: tuple[int, int],
-) -> stp.SegmentedTensorProduct:
+) -> cue.SegmentedTensorProduct:
     """
     Compute the dot product of two segmented tensor products.
 
@@ -59,7 +59,7 @@ def dot(
         oid for oid in range(y.num_operands) if all(oid != j for _, j in contraction)
     ]
 
-    d = stp.SegmentedTensorProduct(
+    d = cue.SegmentedTensorProduct(
         coefficient_subscripts=stable_unique(
             x.coefficient_subscripts + y.coefficient_subscripts
         )
@@ -103,8 +103,8 @@ def dot(
 
 
 def trace(
-    d: stp.SegmentedTensorProduct, *contraction: tuple[int, int]
-) -> stp.SegmentedTensorProduct:
+    d: cue.SegmentedTensorProduct, *contraction: tuple[int, int]
+) -> cue.SegmentedTensorProduct:
     """
     Compute the trace of a segmented tensor product.
 
@@ -134,10 +134,10 @@ def trace(
     coefficients_subscripts_renamed = f(d.coefficient_subscripts)
     coefficients_subscripts_compressed = stable_unique(coefficients_subscripts_renamed)
 
-    dout = stp.SegmentedTensorProduct(
+    dout = cue.SegmentedTensorProduct(
         coefficient_subscripts=coefficients_subscripts_compressed,
         operands=[
-            stp.Operand(
+            cue.SegmentedOperand(
                 subscripts=f(ope.subscripts),
                 segments=ope.segments,
             )
