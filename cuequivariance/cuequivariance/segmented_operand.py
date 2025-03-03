@@ -27,8 +27,8 @@ from .segmented_tensor_product.dimensions_dict import format_dimensions_dict
 class SegmentedOperand:
     """A tensor product operand. It is a list of segments and subscripts."""
 
-    _segments: list[tuple[int, ...]]
     subscripts: stp.Subscripts
+    segments: tuple[tuple[int, ...]]
     _dims: dict[str, set[int]]
 
     def __init__(
@@ -42,7 +42,7 @@ class SegmentedOperand:
 
         if segments is None:
             segments = []
-        object.__setattr__(self, "_segments", segments)
+        object.__setattr__(self, "segments", tuple(segments))
 
         if _dims is None:
             _dims = dict()
@@ -88,8 +88,20 @@ class SegmentedOperand:
                 f"segment has {len(segment)} dimensions, expected {len(self.subscripts)} for subscripts {self.subscripts}."
             )
 
+        if index < 0:
+            index = len(self.segments) + index
+
+        if index < 0 or index > len(self.segments):
+            raise ValueError(
+                f"index {index} is out of bounds for segments {self.segments}."
+            )
+
         segment = tuple(int(d) for d in segment)
-        self._segments.insert(index, segment)
+        object.__setattr__(
+            self,
+            "segments",
+            self.segments[:index] + (segment,) + self.segments[index:],
+        )
 
         for m, d in zip(self.subscripts, segment):
             self._dims.setdefault(m, set()).add(d)
@@ -100,12 +112,14 @@ class SegmentedOperand:
         return len(self.segments) - 1
 
     def __hash__(self) -> int:
-        return hash((tuple(self.segments), self.subscripts))
+        return hash((self.segments, self.subscripts))
 
     def __eq__(self, other: SegmentedOperand) -> bool:
+        assert isinstance(other, SegmentedOperand)
         return self.subscripts == other.subscripts and self.segments == other.segments
 
     def __lt__(self, other: SegmentedOperand) -> bool:
+        assert isinstance(other, SegmentedOperand)
         return (self.subscripts, self.segments) < (other.subscripts, other.segments)
 
     def __repr__(self) -> str:
@@ -120,11 +134,6 @@ class SegmentedOperand:
 
     def __iter__(self):
         return iter(self.segments)
-
-    @property
-    def segments(self) -> tuple[tuple[int, ...], ...]:
-        """The segments of the operand."""
-        return tuple(self._segments)
 
     @property
     def num_segments(self) -> int:
@@ -160,12 +169,6 @@ class SegmentedOperand:
     def get_dims(self, m: str) -> set[int]:
         """Return the dimensions for a given channel."""
         return self._dims.get(m, set()).copy()
-
-    def get_segment_shape(
-        self, dims: dict[str, int], *, default: int = -1
-    ) -> tuple[int, ...]:
-        """Return the shape of a potential segment."""
-        return tuple(dims.get(ch, default) for ch in self.subscripts)
 
     def transpose_modes(
         self, subscripts: Union[str, Sequence[str], Sequence[int]]
