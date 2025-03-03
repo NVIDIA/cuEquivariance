@@ -342,3 +342,40 @@ def test_backward():
     # With zero cotangent, gradients should be zero
     assert np.allclose(grad_x_zero, np.zeros_like(x))
     assert np.allclose(grad_y_zero, np.zeros_like(y))
+
+
+def test_symmetrize_identical_operands():
+    """Test symmetrization and unsymmetrization of polynomials with identical operands."""
+    stp = cue.SegmentedTensorProduct.empty_segments([2, 2, 1])
+    stp.add_path(0, 1, 0, c=1.0)  # x0 * y1 path
+
+    # Create operation that uses the same input buffer twice
+    op = cue.Operation((0, 0, 1))  # Use buffer 0 twice, write to buffer 1
+    poly = cue.SegmentedPolynomial(1, 1, [(op, stp)])
+
+    # Symmetrize the polynomial
+    sym_poly = poly.symmetrize_for_identical_operands()
+
+    # Check that we get 0.5 x0*y1 + 0.5 x1*y0
+    # This means we should have two paths with coefficient 0.5
+    [(_, sym_stp)] = sym_poly.tensor_products
+    assert len(sym_stp.paths) == 2
+    # Check that we get 0.5 x0*y1 + 0.5 x1*y0
+    assert sym_stp.paths[0].coefficients == 0.5
+    assert sym_stp.paths[1].coefficients == 0.5
+    # Check that the paths have different indices (operands swapped)
+    assert sym_stp.paths[0].indices == (0, 1, 0)
+    assert sym_stp.paths[1].indices == (1, 0, 0)
+
+    # Test that unsymmetrize returns to original form
+    unsym_poly = sym_poly.unsymmetrize_for_identical_operands()
+    [(_, unsym_stp)] = unsym_poly.tensor_products
+    assert len(unsym_stp.paths) == 1
+    assert unsym_stp.paths[0].coefficients == 1.0
+    assert unsym_stp.paths[0].indices == (0, 1, 0)
+
+    # Test evaluation to verify the symmetrization works correctly
+    x = np.array([1.0, 2.0])
+    [result] = poly(x)  # Original polynomial
+    [sym_result] = sym_poly(x)  # Symmetrized polynomial
+    assert np.allclose(result, sym_result)  # Results should be identical

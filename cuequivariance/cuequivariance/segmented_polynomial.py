@@ -50,18 +50,9 @@ class SegmentedPolynomial:
         num_outputs: int,
         tensor_products: Sequence[tuple[cue.Operation, cue.SegmentedTensorProduct]],
     ):
-        _tensor_products = []
-        for ope, stp in tensor_products:
-            assert len(ope.buffers) == stp.num_operands
-            for set_of_operands in ope.operands_with_identical_buffers():
-                stp = stp.symmetrize_operands(set_of_operands)
-            stp = stp.sort_paths()
-
-            _tensor_products.append((ope, stp))
-
         object.__setattr__(self, "num_inputs", num_inputs)
         object.__setattr__(self, "num_outputs", num_outputs)
-        object.__setattr__(self, "tensor_products", sorted(_tensor_products))
+        object.__setattr__(self, "tensor_products", sorted(tensor_products))
 
     @classmethod
     def eval_last_operand(cls, stp: cue.SegmentedTensorProduct):
@@ -454,8 +445,27 @@ class SegmentedPolynomial:
             raise ValueError(f"Buffer {buffer} is not used")
         return segments
 
-    def sort_indices_for_identical_operands(self) -> SegmentedPolynomial:
-        """Sort the indices of the segmented tensor products for identical operands."""
+    def symmetrize_for_identical_operands(self) -> SegmentedPolynomial:
+        """Symmetrize the paths of the segmented tensor products for identical operands.
+
+        This operation increases the number of paths in the segmented tensor products.
+        """
+
+        symmetrized_tensor_products = []
+        for ope, stp in self.tensor_products:
+            for set_of_operands in ope.operands_with_identical_buffers():
+                stp = stp.symmetrize_operands(set_of_operands)
+            stp = stp.sort_paths()
+            symmetrized_tensor_products.append((ope, stp))
+        return SegmentedPolynomial(
+            self.num_inputs, self.num_outputs, symmetrized_tensor_products
+        )
+
+    def unsymmetrize_for_identical_operands(self) -> SegmentedPolynomial:
+        """Unsymmetrize the paths of the segmented tensor products for identical operands.
+
+        This operation decreases the number of paths in the segmented tensor products.
+        """
 
         def optimize_paths(ope: cue.Operation, stp: cue.SegmentedTensorProduct):
             for set_of_operands in ope.operands_with_identical_buffers():
