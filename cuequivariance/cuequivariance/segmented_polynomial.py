@@ -50,6 +50,11 @@ class SegmentedPolynomial:
         num_outputs: int,
         tensor_products: Sequence[tuple[cue.Operation, cue.SegmentedTensorProduct]],
     ):
+        for ope, stp in tensor_products:
+            assert isinstance(ope, cue.Operation)
+            assert isinstance(stp, cue.SegmentedTensorProduct)
+            assert len(ope.buffers) == stp.num_operands
+
         object.__setattr__(self, "num_inputs", num_inputs)
         object.__setattr__(self, "num_outputs", num_outputs)
         object.__setattr__(self, "tensor_products", sorted(tensor_products))
