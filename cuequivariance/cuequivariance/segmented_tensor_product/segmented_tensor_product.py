@@ -859,7 +859,7 @@ class SegmentedTensorProduct:
                 )
             mapping = mappings[0]
 
-        if not all(ch in mapping for ope in self.operands for ch in ope.subscripts):
+        if not all(ch in mapping for ss in self.subscripts.operands for ch in ss):
             raise ValueError(
                 f"expected all segment modes to be in the mapping {mapping}."
             )
@@ -872,14 +872,14 @@ class SegmentedTensorProduct:
         for oid in range(self.num_operands):
             for sid in range(self.operands[oid].num_segments):
                 dims = collections.defaultdict(lambda: 1)
-                for m, d in zip(self.operands[oid].subscripts, self.operands[oid][sid]):
+                for m, d in zip(self.subscripts.operands[oid], self.operands[oid][sid]):
                     dims[mapping[m]] = d
                 D.add_segment(oid, dims)
 
         for path in self.paths:
             dims: dict[str, int] = dict()
             for oid, sid in enumerate(path.indices):
-                for m, d in zip(D.operands[oid].subscripts, D.operands[oid][sid]):
+                for m, d in zip(D.subscripts.operands[oid], D.operands[oid][sid]):
                     dims[m] = d
 
             D.insert_path_(
