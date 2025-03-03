@@ -48,7 +48,7 @@ class SymmetricTensorProduct(torch.nn.Module):
 
         descriptors = [
             stp.SegmentedTensorProduct(
-                operands=[stp.Operand.empty_segments(1)] + d.operands,
+                operands=(stp.Operand.empty_segments(1),) + d.operands,
                 paths=[
                     stp.Path((0,) + path.indices, path.coefficients) for path in d.paths
                 ],
