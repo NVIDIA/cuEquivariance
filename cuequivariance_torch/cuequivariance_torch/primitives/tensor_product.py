@@ -223,9 +223,7 @@ def _tensor_product_fx(
             for i in range(num_inputs)
         ]
 
-        operand_subscripts = [
-            f"Z{operand.subscripts}" for operand in descriptor.operands
-        ]
+        operand_subscripts = [f"Z{ss}" for ss in descriptor.subscripts.operands]
 
         formula = (
             ",".join([descriptor.coefficient_subscripts] + operand_subscripts[:-1])
