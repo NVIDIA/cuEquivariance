@@ -42,7 +42,7 @@ class SegmentedPolynomial:
 
     num_inputs: int
     num_outputs: int
-    tensor_products: list[tuple[cue.Operation, cue.SegmentedTensorProduct]]
+    tensor_products: tuple[tuple[cue.Operation, cue.SegmentedTensorProduct], ...]
 
     def __init__(
         self,
@@ -57,18 +57,18 @@ class SegmentedPolynomial:
 
         object.__setattr__(self, "num_inputs", num_inputs)
         object.__setattr__(self, "num_outputs", num_outputs)
-        object.__setattr__(self, "tensor_products", sorted(tensor_products))
+        object.__setattr__(self, "tensor_products", tuple(sorted(tensor_products)))
 
     @classmethod
     def eval_last_operand(cls, stp: cue.SegmentedTensorProduct):
         return cls(
             stp.num_operands - 1,
             1,
-            [(cue.Operation(tuple(range(stp.num_operands))), stp)],
+            ((cue.Operation(tuple(range(stp.num_operands))), stp),),
         )
 
     def __hash__(self) -> int:
-        return hash((self.num_inputs, self.num_outputs, tuple(self.tensor_products)))
+        return hash((self.num_inputs, self.num_outputs, self.tensor_products))
 
     def __eq__(self, value) -> bool:
         assert isinstance(value, SegmentedPolynomial)
@@ -94,7 +94,7 @@ class SegmentedPolynomial:
         return SegmentedPolynomial(
             self.num_inputs,
             self.num_outputs,
-            [(ope, factor * stp) for ope, stp in self.tensor_products],
+            tuple((ope, factor * stp) for ope, stp in self.tensor_products),
         )
 
     def __rmul__(self, factor: float) -> SegmentedPolynomial:
@@ -206,9 +206,9 @@ class SegmentedPolynomial:
         ],
     ) -> SegmentedPolynomial:
         new_tensor_products = [f(ope, stp) for ope, stp in self.tensor_products]
-        new_tensor_products = [
+        new_tensor_products = tuple(
             ope_stp for ope_stp in new_tensor_products if ope_stp is not None
-        ]
+        )
         return SegmentedPolynomial(
             self.num_inputs, self.num_outputs, new_tensor_products
         )
@@ -219,7 +219,7 @@ class SegmentedPolynomial:
             self.tensor_products,
             key=lambda x: (x[0], x[1].operands, x[1].coefficient_subscripts),
         )
-        new_tensor_products = [
+        new_tensor_products = tuple(
             (
                 ope,
                 cue.SegmentedTensorProduct(
@@ -229,7 +229,7 @@ class SegmentedPolynomial:
                 ).consolidate_paths(),
             )
             for (ope, operands, coefficient_subscripts), elements in groups
-        ]
+        )
         return SegmentedPolynomial(
             self.num_inputs, self.num_outputs, new_tensor_products
         )
