@@ -260,7 +260,7 @@ def segmented_polynomial_prim(
     return tuple(old_outputs)
 
 
-def map_indices(
+def _remap_indices_and_buffer_index(
     old_indices: list[jax.Array], old_buffer_index: list[int], mapping: list[int]
 ) -> tuple[list[jax.Array], list[int]]:
     new_indices = []
@@ -374,7 +374,7 @@ def segmented_polynomial_jvp(
         impl=impl,
     )
 
-    jvp_indices, jvp_buffer_index = map_indices(
+    jvp_indices, jvp_buffer_index = _remap_indices_and_buffer_index(
         indices,
         buffer_index,
         [i for i, x in enumerate(primals)]
@@ -416,7 +416,7 @@ def segmented_polynomial_transpose(
     # The cotangents replace the outputs as inputs
     # The undefined primal inputs become outputs
 
-    tr_indices, tr_buffer_index = map_indices(
+    tr_indices, tr_buffer_index = _remap_indices_and_buffer_index(
         indices,
         buffer_index,
         [i for i, x in enumerate(inputs) if not ad.is_undefined_primal(x)]
