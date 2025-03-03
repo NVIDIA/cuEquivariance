@@ -346,8 +346,8 @@ class SegmentedTensorProduct:
                         + "]"
                     )
 
-        out += f"\nFlop cost: {' '.join(f'{oid}->{self.flop_cost(oid)}' for oid in range(self.num_operands))}"
-        out += f"\nMemory cost: {self.memory_cost('global')}"
+        out += f"\nFlop cost: {' '.join(f'{oid}->{self.flops(oid)}' for oid in range(self.num_operands))}"
+        out += f"\nMemory cost: {self.memory()}"
 
         if len(self.paths) > 0:
             out += "\nPath indices: " + ", ".join(
@@ -399,16 +399,13 @@ class SegmentedTensorProduct:
                     "size": ope.size,
                     "segment_offsets": [sl.start for sl in slices],
                     "segment_sizes": [sl.stop - sl.start for sl in slices],
-                    "flop_cost": self.flop_cost(oid),
+                    "flops": self.flops(oid),
                 }
                 for oid, ope, slices in zip(
                     range(self.num_operands), self.operands, segment_slices
                 )
             ],
-            "memory_cost": {
-                algorithm: self.memory_cost(algorithm)
-                for algorithm in ["sequential", "global"]
-            },
+            "memory": self.memory(),
             "paths": paths,
         }
         return extended_dict
@@ -567,12 +564,15 @@ class SegmentedTensorProduct:
         """Check if all coefficients are equal to one."""
         return np.all(self.stacked_coefficients == 1)
 
-    def flop_cost(self, operand: int, algorithm: str = "optimal") -> int:
+    def flops(
+        self, operand: int, batch_size: int = 1, algorithm: str = "optimal"
+    ) -> int:
         """
         Compute the number of flops needed to compute the specified operand.
 
         Args:
             operand (int): The operand for which to compute the flop cost.
+            batch_size (int, optional): The batch size for the computation. Defaults to 1.
             algorithm (str, optional): The algorithm to use to compute the cost. Can be 'optimal' or 'naive'.
 
         Returns:
@@ -606,31 +606,12 @@ class SegmentedTensorProduct:
             dims = d.get_path_dimensions_dict(path)
             coeff_shape = tuple(dims[ch] for ch in d.coefficient_subscripts)
             cost += compute_cost((coeff_shape,) + shapes)
-        return cost
+        return cost * batch_size
 
-    def memory_cost(self, algorithm: str = "sequential") -> int:
-        """
-        Compute the number of memory accesses needed to compute the specified operand.
-
-        Args:
-            operand (int):  The operand for which to compute the memory cost.
-            algorithm (str, optional):  The algorithm to use to compute the cost. Can be 'sequential' or 'global'.
-
-        Returns:
-            int: The number of memory accesses needed to compute the specified operand.
-        """
-        if algorithm == "sequential":
-            return sum(
-                sum(
-                    math.prod(self.get_segment_shape(oid, path))
-                    for oid in range(self.num_operands)
-                )
-                for path in self.paths
-            )
-        elif algorithm == "global":
-            return sum(operand.size for operand in self.operands)
-        else:
-            raise ValueError(f"unknown algorithm {algorithm}.")
+    def memory(self, batch_sizes: list[int]) -> int:
+        """Compute the memory usage of the tensor product."""
+        assert len(batch_sizes) == self.num_operands
+        return sum(Z * size for Z, size in zip(batch_sizes, self.operands))
 
     ################################ Modifiers ################################
 

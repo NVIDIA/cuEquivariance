@@ -1,5 +1,10 @@
 ## Latest Changes
 
+### Breaking Changes
+- Rename `SegmentedTensorProduct.flop_cost` in `flops`
+- Rename `SegmentedTensorProduct.memory_cost` in `memory`
+
+
 ## 0.3.0-rc1
 
 ### Breaking Changes

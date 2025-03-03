@@ -425,7 +425,7 @@ class SegmentedPolynomial:
         n = 0
         for ope, stp in self.tensor_products:
             oid, _ = ope.output_operand_buffer(self.num_inputs)
-            n += stp.flop_cost(oid)
+            n += stp.flops(oid)
         return batch_size * n
 
     def memory(self, batch_sizes: list[int]) -> int:

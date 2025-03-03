@@ -316,7 +316,7 @@ class EquivariantTensorProduct:
 
     def flop_cost(self, batch_size: int) -> int:
         """Compute the number of flops of the tensor product."""
-        return sum(d.flop_cost(-1) for d in self.ds) * batch_size
+        return sum(d.flops(-1) for d in self.ds) * batch_size
 
     def memory_cost(
         self, batch_sizes: tuple[int, ...], itemsize: Union[int, tuple[int, ...]]
