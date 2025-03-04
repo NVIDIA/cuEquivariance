@@ -16,7 +16,7 @@ import pytest
 import torch
 
 import cuequivariance as cue
-import cuequivariance.segmented_tensor_product as stp
+import cuequivariance.segmented_polynomials as stp
 import cuequivariance_torch as cuet
 from cuequivariance import descriptors
 from cuequivariance_torch._tests.utils import (

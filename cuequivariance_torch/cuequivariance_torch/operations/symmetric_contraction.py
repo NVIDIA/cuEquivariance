@@ -18,7 +18,7 @@ import torch
 
 import cuequivariance as cue
 import cuequivariance_torch as cuet
-from cuequivariance.experimental.mace.symmetric_contractions import (
+from cuequivariance.group_theory.experimental.mace.symmetric_contractions import (
     symmetric_contraction,
 )
 from cuequivariance.group_theory.irreps_array.misc_ui import (
