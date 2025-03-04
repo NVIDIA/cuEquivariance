@@ -103,8 +103,17 @@ def test_elementwise_tensor_product():
     irreps2 = cue.Irreps("O3", "8x0e + 7x1o + 4x0e")
     irreps3 = cue.Irreps("O3", "0e + 1o + 1e")
     poly = cue.descriptors.elementwise_tensor_product(irreps1, irreps2, irreps3)
-    # Check that squeezing then flattening equals flattening then squeezing
     assert (
         poly.squeeze_modes().flatten_coefficient_modes()
         == poly.flatten_coefficient_modes().squeeze_modes()
     )
+    assert poly.num_inputs == 2
+    assert poly.num_outputs == 1
+
+
+def test_symmetric_contraction():
+    irreps_in = 16 * cue.Irreps("SO3", "0 + 1 + 2")
+    irreps_out = 16 * cue.Irreps("SO3", "0 + 1")
+    poly = cue.descriptors.symmetric_contraction(irreps_in, irreps_out, [0, 1, 2, 3])
+    assert poly.num_inputs == 2
+    assert poly.num_outputs == 1
