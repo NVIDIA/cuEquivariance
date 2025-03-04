@@ -22,7 +22,7 @@ from typing import Callable, Sequence
 import numpy as np
 
 import cuequivariance as cue
-from cuequivariance.operation import IVARS, OVARS
+from cuequivariance.segmented_polynomials.operation import IVARS, OVARS
 
 
 @dataclasses.dataclass(init=False, frozen=True)

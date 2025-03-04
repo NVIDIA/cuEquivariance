@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,20 +12,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import importlib.resources
 
-__version__ = (
-    importlib.resources.files(__package__).joinpath("VERSION").read_text().strip()
-)
-
-from .segmented_polynomials import (
-    Operation,
-    SegmentedOperand,
-    SegmentedTensorProduct,
-    SegmentedPolynomial,
-)
-
-from .group_theory import (
+from .representations import (
     Rep,
     Irrep,
     clebsch_gordan,
@@ -34,6 +22,9 @@ from .group_theory import (
     SU2,
     SO3,
     O3,
+)
+
+from .irreps_array import (
     get_irrep_scope,
     MulIrrep,
     Irreps,
@@ -51,14 +42,11 @@ from .group_theory import (
     reduced_antisymmetric_tensor_product_basis,
 )
 
-from cuequivariance import segmented_polynomials, group_theory
+from .equivariant_polynomial import EquivariantPolynomial
+from .equivariant_tensor_product import EquivariantTensorProduct
+
 
 __all__ = [
-    "__version__",
-    "Operation",
-    "SegmentedOperand",
-    "SegmentedTensorProduct",
-    "SegmentedPolynomial",
     "Rep",
     "Irrep",
     "clebsch_gordan",
@@ -82,6 +70,6 @@ __all__ = [
     "reduced_tensor_product_basis",
     "reduced_symmetric_tensor_product_basis",
     "reduced_antisymmetric_tensor_product_basis",
-    "segmented_polynomials",
-    "group_theory",
+    "EquivariantPolynomial",
+    "EquivariantTensorProduct",
 ]
