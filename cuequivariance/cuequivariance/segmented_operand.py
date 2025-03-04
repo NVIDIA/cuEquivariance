@@ -46,6 +46,8 @@ class SegmentedOperand:
             for segment in self.segments:
                 for i, d in enumerate(segment):
                     _dims.setdefault(i, set()).add(d)
+        else:
+            _dims = _dims.copy()
         object.__setattr__(self, "_dims", _dims)
 
     @classmethod
@@ -69,6 +71,14 @@ class SegmentedOperand:
             ndim=ndim,
             segments=sum([list(ope.segments) for ope in operands], []),
             _dims=_dims,
+        )
+
+    def copy(self) -> SegmentedOperand:
+        """Copy the operand."""
+        return SegmentedOperand(
+            ndim=self.ndim,
+            segments=self.segments,
+            _dims=self._dims,
         )
 
     def assert_valid(self):

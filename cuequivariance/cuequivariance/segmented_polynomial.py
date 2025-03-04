@@ -262,7 +262,6 @@ class SegmentedPolynomial:
                 .squeeze_modes()
                 .remove_empty_segments()
                 .consolidate_paths()
-                .sort_paths()
             )
             if stp.num_paths == 0:
                 return None

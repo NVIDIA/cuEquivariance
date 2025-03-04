@@ -39,7 +39,8 @@ class Path:
     def __init__(self, indices, coefficients):
         super().__setattr__("indices", tuple(int(i) for i in indices))
         super().__setattr__(
-            "coefficients", np.asarray(coefficients, dtype=np.float64, order="C").copy()
+            "coefficients",
+            np.asarray(coefficients, dtype=np.float64, order="C", copy=True),
         )
 
     def assert_valid(self):

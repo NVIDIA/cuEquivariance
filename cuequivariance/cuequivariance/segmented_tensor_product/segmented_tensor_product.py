@@ -33,6 +33,10 @@ import opt_einsum
 import cuequivariance as cue  # noqa: F401
 from cuequivariance import segmented_tensor_product as stp
 from cuequivariance.misc.linalg import round_to_rational, round_to_sqrt_rational
+from cuequivariance.misc.permutations import (
+    generate_permutations_from,
+    inverse_permutation,
+)
 
 from .dimensions_dict import format_dimensions_dict
 
@@ -66,10 +70,9 @@ class SegmentedTensorProduct:
     def __init__(
         self,
         *,
-        operands_and_subscripts: Optional[
-            list[tuple[cue.SegmentedOperand, stp.Subscripts]]
-        ] = None,
-        paths: Optional[list[stp.Path]] = None,
+        operands_and_subscripts: Sequence[tuple[cue.SegmentedOperand, stp.Subscripts]]
+        | None = None,
+        paths: Sequence[stp.Path] | None = None,
         coefficient_subscripts: str = "",
     ):
         if operands_and_subscripts is None:
@@ -81,11 +84,10 @@ class SegmentedTensorProduct:
             self,
             "operands_and_subscripts",
             tuple(
-                (copy.deepcopy(ope), stp.Subscripts(ss))
-                for ope, ss in operands_and_subscripts
+                (ope.copy(), stp.Subscripts(ss)) for ope, ss in operands_and_subscripts
             ),
         )
-        object.__setattr__(self, "paths", tuple(copy.deepcopy(path) for path in paths))
+        object.__setattr__(self, "paths", tuple(paths))
         object.__setattr__(self, "coefficient_subscripts", coefficient_subscripts)
 
     def set_operand(self, oid: int, operand: cue.SegmentedOperand):
@@ -450,7 +452,7 @@ class SegmentedTensorProduct:
         """
         return base64.b64encode(self.to_bytes(extended)).decode("ascii")
 
-    @functools.lru_cache(maxsize=None)
+    @functools.cache
     def get_dimensions_dict(self) -> dict[str, set[int]]:
         """Get the dimensions of the tensor product."""
         dims: dict[str, set[int]] = {ch: set() for ch in self.subscripts.modes()}
@@ -560,22 +562,34 @@ class SegmentedTensorProduct:
 
         return np.append(0, np.bincount(i, minlength=n).cumsum())
 
-    @functools.lru_cache(maxsize=None)
+    def operands_with_identical_segments(self) -> frozenset[frozenset[int]]:
+        """Groups of operands sharing the same segments."""
+        operand_to_oid = collections.defaultdict(list)
+        for oid, ope in enumerate(self.operands):
+            operand_to_oid[ope].append(oid)
+        return frozenset(map(frozenset, operand_to_oid.values()))
+
+    @functools.cache
     def symmetries(self) -> list[tuple[int, ...]]:
         """List of permutations that leave the tensor product invariant."""
 
-        def functionally_equivalent(
-            d1: SegmentedTensorProduct, d2: SegmentedTensorProduct
-        ) -> bool:
-            d1 = d1.consolidate_paths().sort_paths()
-            d2 = d2.consolidate_paths().sort_paths()
-            return d1 == d2
+        d = self.consolidate_paths()
 
-        ps = []
-        for p in itertools.permutations(range(self.num_operands)):
-            if functionally_equivalent(self, self.permute_operands(p)):
-                ps.append(p)
-        return ps
+        ps = set()
+        for group in self.operands_with_identical_segments():
+            group = sorted(group)
+            for p in itertools.permutations(range(len(group))):
+                p = tuple(
+                    group[p[group.index(i)]] if i in group else i
+                    for i in range(self.num_operands)
+                )
+                if p in ps:
+                    continue
+                if d == d.permute_operands(p).consolidate_paths():
+                    ps.add(p)
+                    ps.add(inverse_permutation(p))
+                    ps = generate_permutations_from(ps)
+        return sorted(ps)
 
     def coefficients_equal_one(self) -> bool:
         """Check if all coefficients are equal to one."""
@@ -603,7 +617,7 @@ class SegmentedTensorProduct:
             + d.subscripts.operands[-1]
         )
 
-        @functools.lru_cache(maxsize=None)
+        @functools.cache
         def compute_cost(segment_shapes: tuple[tuple[int, ...], ...]) -> int:
             _, info = opt_einsum.contract_path(
                 subscripts, *segment_shapes, optimize="optimal", shapes=True
@@ -984,7 +998,7 @@ class SegmentedTensorProduct:
 
     def permute_operands(self, perm: tuple[int, ...]) -> SegmentedTensorProduct:
         """Permute the operands of the descriptor."""
-        assert set(perm) == set(range(self.num_operands))
+        # assert set(perm) == set(range(self.num_operands))  # removed for performance
         return dataclasses.replace(
             self,
             operands_and_subscripts=[self.operands_and_subscripts[i] for i in perm],
@@ -1258,11 +1272,10 @@ class SegmentedTensorProduct:
         """Fuse paths with the same indices."""
         paths = dict()
         for path in self.paths:
-            indices = tuple(path.indices)
-            if indices in paths:
-                paths[indices] += path.coefficients
+            if path.indices in paths:
+                paths[path.indices] += path.coefficients
             else:
-                paths[indices] = path.coefficients
+                paths[path.indices] = path.coefficients
 
         return dataclasses.replace(
             self,
@@ -1272,9 +1285,23 @@ class SegmentedTensorProduct:
             ],
         )
 
+    @functools.cache
     def consolidate_paths(self) -> SegmentedTensorProduct:
         """Consolidate the paths by merging duplicates and removing zeros."""
-        return self.fuse_paths_with_same_indices().remove_zero_paths()
+        # equivalent to self.fuse_paths_with_same_indices().remove_zero_paths().sort_paths()
+        paths = dict()
+        for path in self.paths:
+            if path.indices in paths:
+                paths[path.indices] += path.coefficients
+            else:
+                paths[path.indices] = path.coefficients
+        paths = [
+            stp.Path(indices=indices, coefficients=coefficients)
+            for indices, coefficients in paths.items()
+            if not np.all(coefficients == 0)
+        ]
+        paths = sorted(paths, key=lambda path: path.indices)
+        return dataclasses.replace(self, paths=paths)
 
     def sort_indices_for_identical_operands(
         self, operands: Sequence[int]
