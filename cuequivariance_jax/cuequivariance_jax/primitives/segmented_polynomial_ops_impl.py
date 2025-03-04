@@ -71,6 +71,7 @@ def segmented_polynomial_ops_impl(
             return log(f"Unsupported buffer type: {b.dtype}")
 
     for i in indices:
+        # TODO: this restriction will be removed by MR109
         if i.dtype.type != jnp.int32:
             return log(f"Unsupported index type: {i.dtype}")
 
@@ -80,6 +81,7 @@ def segmented_polynomial_ops_impl(
     if len({b.shape[2] for b in buffers}.union({1})) != 2:
         return log(f"Buffer shapes not compatible {[b.shape for b in buffers]}")
 
+    # TODO: this restriction will be removed by MR109
     if max(b.shape[2] for b in buffers) % 32 != 0:
         return log(f"Extend must be a multiple of 32, got {[b.shape for b in buffers]}")
 
@@ -94,7 +96,7 @@ def segmented_polynomial_ops_impl(
         elif b.shape[0] != 1:
             batch_size = b.shape[0]
 
-    # TODO: remove if the backend supports atomic operations for float16/bfloat16
+    # TODO: this restriction will be removed by MR109
     for i, b in zip(
         buffer_index[polynomial.num_inputs :], buffers[polynomial.num_inputs :]
     ):
@@ -110,8 +112,8 @@ def segmented_polynomial_ops_impl(
             Path,
             tensor_product_uniform_1d_jit,
         )
-    except ImportError:
-        return log("cuequivariance_ops_jax is not installed")
+    except ImportError as e:
+        return log(f"cuequivariance_ops_jax is not installed: {e}")
 
     operations = []
     paths = []
