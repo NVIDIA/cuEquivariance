@@ -15,6 +15,7 @@
 from functools import wraps
 from typing import Optional, Type, Union
 
+import cuequivariance as cue  # noqa: F401
 import cuequivariance.group_theory.irreps_array as irreps_array
 from cuequivariance.group_theory import Irrep
 from cuequivariance.group_theory.irreps_array.context_irrep_class import (
