@@ -21,7 +21,7 @@ from typing import Iterator
 
 import numpy as np
 
-from cuequivariance.representation import SO3, Irrep
+from cuequivariance.group_theory.representations import SO3, Irrep
 
 
 # This class is an adaptation of https://github.com/lie-nn/lie-nn/blob/70adebce44e3197ee17f780585c6570d836fc2fe/lie_nn/_src/irreps/o3_real.py

@@ -31,9 +31,9 @@ import numpy as np
 import opt_einsum
 
 import cuequivariance as cue  # noqa: F401
-from cuequivariance import segmented_tensor_product as stp
-from cuequivariance.misc.linalg import round_to_rational, round_to_sqrt_rational
-from cuequivariance.misc.permutations import (
+import cuequivariance.segmented_polynomials as stp
+from cuequivariance.etc.linalg import round_to_rational, round_to_sqrt_rational
+from cuequivariance.etc.permutations import (
     generate_permutations_from,
     inverse_permutation,
 )

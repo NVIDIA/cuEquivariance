@@ -23,7 +23,7 @@ def test_compute_last_operand_1():
 
     x0 = np.random.randn(d.operands[0].size)
     x1 = np.random.randn(d.operands[1].size)
-    x2 = cue.segmented_tensor_product.compute_last_operand(d, x0, x1)
+    x2 = cue.segmented_polynomials.compute_last_operand(d, x0, x1)
 
     x2_ = (x0.reshape(2, 3) @ x1.reshape(3, 4)).reshape(-1)
     np.testing.assert_allclose(x2_, x2)
@@ -35,7 +35,7 @@ def test_compute_last_operand_2():
 
     x0 = np.random.randn(10, d.operands[0].size)
     x1 = np.random.randn(10, d.operands[1].size)
-    x2 = cue.segmented_tensor_product.compute_last_operand(d, x0, x1)
+    x2 = cue.segmented_polynomials.compute_last_operand(d, x0, x1)
 
     x2_ = (x0.reshape(10, 2, 3) @ x1.reshape(10, 3, 4)).reshape(10, -1)
     np.testing.assert_allclose(x2_, x2)
@@ -47,7 +47,7 @@ def test_compute_last_operand_3():
 
     x0 = np.random.randn(1, d.operands[0].size, 5)
     x1 = np.random.randn(10, d.operands[1].size, 1)
-    x2 = cue.segmented_tensor_product.compute_last_operand(
+    x2 = cue.segmented_polynomials.compute_last_operand(
         d, x0, x1, segment_axes=[1, 1, 1]
     )
 
@@ -64,7 +64,7 @@ def test_compute_last_operand_4():
 
     x0 = np.random.randn(d.operands[0].size)
     x1 = np.random.randn(d.operands[1].size)
-    x2 = cue.segmented_tensor_product.compute_last_operand(d, x0, x1)
+    x2 = cue.segmented_polynomials.compute_last_operand(d, x0, x1)
 
     x2_ = np.einsum(
         "ijk,iuv,jvw->kuw", c, x0.reshape(2, 2, 3), x1.reshape(3, 3, 4)
@@ -86,7 +86,7 @@ def test_primitive_compute_last_operand():
 
     d = d.to_dict(True)
 
-    x2 = cue.segmented_tensor_product.primitive_compute_last_operand(
+    x2 = cue.segmented_polynomials.primitive_compute_last_operand(
         [ope["subscripts"] for ope in d["operands"]],
         d["coefficient_subscripts"],
         [ope["segments"] for ope in d["operands"]],

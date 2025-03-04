@@ -15,11 +15,12 @@
 from typing import Type, Union
 
 import cuequivariance as cue
+from cuequivariance.group_theory.representations import Irrep
 
-_irrep_class: Union[None, str, Type[cue.Irrep]] = None
+_irrep_class: Union[None, str, Type[Irrep]] = None
 
 
-def get_irrep_scope(raising: bool = True) -> Type[cue.Irrep]:
+def get_irrep_scope(raising: bool = True) -> Type[Irrep]:
     if raising and _irrep_class is None:
         raise ValueError(
             "No irrep class set in the context. Please specify the irrep class explicitly or use ``with cue.assume(irrep):``."

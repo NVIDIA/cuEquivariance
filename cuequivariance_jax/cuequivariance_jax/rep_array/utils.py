@@ -20,7 +20,7 @@ import numpy as np  # noqa: F401
 
 import cuequivariance as cue
 import cuequivariance_jax as cuex
-from cuequivariance.irreps_array.misc_ui import assert_same_group
+from cuequivariance.group_theory.irreps_array.misc_ui import assert_same_group
 
 
 def concatenate(arrays: list[cuex.RepArray]) -> cuex.RepArray:

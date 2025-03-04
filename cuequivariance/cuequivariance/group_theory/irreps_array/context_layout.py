@@ -14,7 +14,7 @@
 # limitations under the License.
 from typing import Union
 
-from cuequivariance.irreps_array import IrrepsLayout
+from cuequivariance.group_theory.irreps_array import IrrepsLayout
 
 _layout: Union[None, IrrepsLayout] = None
 

@@ -14,7 +14,7 @@
 # limitations under the License.
 import pytest
 
-import cuequivariance.segmented_tensor_product as stp
+import cuequivariance.segmented_polynomials as stp
 
 
 def test_subscripts():

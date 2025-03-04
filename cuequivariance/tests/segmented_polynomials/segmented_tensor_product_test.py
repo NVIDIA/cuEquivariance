@@ -143,12 +143,12 @@ def test_flatten():
 
     x0 = np.random.randn(d.operands[0].size)
     x1 = np.random.randn(d.operands[1].size)
-    x2 = cue.segmented_tensor_product.compute_last_operand(d, x0, x1)
+    x2 = cue.segmented_polynomials.compute_last_operand(d, x0, x1)
 
     for channels in ["i", "j", "ij", "ui", "iju", "uvij"]:
         np.testing.assert_allclose(
             x2,
-            cue.segmented_tensor_product.compute_last_operand(
+            cue.segmented_polynomials.compute_last_operand(
                 d.flatten_modes(channels), x0, x1
             ),
         )
@@ -352,9 +352,7 @@ def test_split_mode():
 
     # Test computation on original descriptor
     x_input = np.random.randn(d_compute.operands[0].size)
-    result_original = cue.segmented_tensor_product.compute_last_operand(
-        d_compute, x_input
-    )
+    result_original = cue.segmented_polynomials.compute_last_operand(d_compute, x_input)
 
     # Verify split_mode works by first flattening the results to remove 'u' mode indices
     d_ua = cue.SegmentedTensorProduct.from_subscripts("ua,b+ab")
@@ -365,7 +363,7 @@ def test_split_mode():
 
     # Input for the split descriptor - we need a tensor with the right shape
     x_input_split = np.random.randn(d_ua_split.operands[0].size)
-    result_split = cue.segmented_tensor_product.compute_last_operand(
+    result_split = cue.segmented_polynomials.compute_last_operand(
         d_ua_split, x_input_split
     )
 
@@ -445,14 +443,14 @@ def test_add_or_rename_modes():
     d_id.assert_valid()
     assert d_id.subscripts == "i,j+ij"
     x_input = np.random.randn(d.operands[0].size)
-    res0 = cue.segmented_tensor_product.compute_last_operand(d, x_input)
-    res_id = cue.segmented_tensor_product.compute_last_operand(d_id, x_input)
+    res0 = cue.segmented_polynomials.compute_last_operand(d, x_input)
+    res_id = cue.segmented_polynomials.compute_last_operand(d_id, x_input)
     np.testing.assert_allclose(res0, res_id)
     d_ren = d.add_or_rename_modes("a,b+ab")
     d_ren.assert_valid()
     assert d_ren.subscripts == "a,b+ab"
     np.testing.assert_allclose(
-        res0, cue.segmented_tensor_product.compute_last_operand(d_ren, x_input)
+        res0, cue.segmented_polynomials.compute_last_operand(d_ren, x_input)
     )
     with pytest.raises(ValueError):
         d.add_or_rename_modes("i+ij")
@@ -460,7 +458,7 @@ def test_add_or_rename_modes():
     d_sup.assert_valid()
     assert d_sup.subscripts == "bi,bj+ij"
     np.testing.assert_allclose(
-        res0, cue.segmented_tensor_product.compute_last_operand(d_sup, x_input)
+        res0, cue.segmented_polynomials.compute_last_operand(d_sup, x_input)
     )
 
 

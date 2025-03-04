@@ -18,7 +18,7 @@ from typing import Optional
 import numpy as np
 
 import cuequivariance as cue
-from cuequivariance.misc.linalg import round_to_sqrt_rational, triu_array
+from cuequivariance.etc.linalg import round_to_sqrt_rational, triu_array
 
 
 def symmetric_contraction(

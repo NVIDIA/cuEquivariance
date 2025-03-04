@@ -19,10 +19,11 @@ from dataclasses import dataclass, field
 import numpy as np
 
 import cuequivariance as cue
+from cuequivariance.group_theory.representations import Rep
 
 
 @dataclass(init=False, frozen=True)
-class IrrepsAndLayout(cue.Rep):
+class IrrepsAndLayout(Rep):
     r"""
     A group representation (:class:`Rep`) made from the combination of :class:`Irreps` and :class:`IrrepsLayout` into a single object.
 

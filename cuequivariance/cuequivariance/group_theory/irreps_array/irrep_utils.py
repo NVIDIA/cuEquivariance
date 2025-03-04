@@ -15,21 +15,21 @@
 from typing import Iterable, Type, Union
 
 import cuequivariance as cue
-from cuequivariance import irreps_array
+from cuequivariance.group_theory import Irrep, irreps_array
 
 
 def into_list_of_irrep(
-    irrep_class: Type[cue.Irrep],
+    irrep_class: Type[Irrep],
     input: Union[
         str,
-        cue.Irrep,
+        Irrep,
         irreps_array.MulIrrep,
-        Iterable[Union[str, cue.Irrep, irreps_array.MulIrrep]],
+        Iterable[Union[str, Irrep, irreps_array.MulIrrep]],
     ],
-) -> list[cue.Irrep]:
+) -> list[Irrep]:
     if isinstance(input, str):
         return [rep for _, rep in cue.Irreps(irrep_class, input)]
-    if isinstance(input, cue.Irrep):
+    if isinstance(input, Irrep):
         return [input]
     if isinstance(input, irreps_array.MulIrrep):
         return [input.ir]
@@ -41,7 +41,7 @@ def into_list_of_irrep(
 
     output = []
     for rep in input:
-        if isinstance(rep, cue.Irrep):
+        if isinstance(rep, Irrep):
             output.append(rep)
         elif isinstance(rep, irreps_array.MulIrrep):
             output.append(rep.ir)

@@ -21,7 +21,10 @@ import cuequivariance_torch as cuet
 from cuequivariance.experimental.mace.symmetric_contractions import (
     symmetric_contraction,
 )
-from cuequivariance.irreps_array.misc_ui import assert_same_group, default_irreps
+from cuequivariance.group_theory.irreps_array.misc_ui import (
+    assert_same_group,
+    default_irreps,
+)
 
 
 class SymmetricContraction(torch.nn.Module):

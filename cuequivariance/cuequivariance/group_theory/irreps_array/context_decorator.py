@@ -15,13 +15,13 @@
 from functools import wraps
 from typing import Optional, Type, Union
 
-import cuequivariance as cue
-import cuequivariance.irreps_array as irreps_array
-from cuequivariance.irreps_array.context_irrep_class import (
+import cuequivariance.group_theory.irreps_array as irreps_array
+from cuequivariance.group_theory import Irrep
+from cuequivariance.group_theory.irreps_array.context_irrep_class import (
     pop_irrep_scope,
     push_irrep_scope,
 )
-from cuequivariance.irreps_array.context_layout import (
+from cuequivariance.group_theory.irreps_array.context_layout import (
     pop_layout_scope,
     push_layout_scope,
 )
@@ -51,7 +51,7 @@ class assume:
 
     def __init__(
         self,
-        irrep_class: Optional[Union[str, Type[cue.Irrep]]] = None,
+        irrep_class: Optional[Union[str, Type[Irrep]]] = None,
         layout: Optional[irreps_array.IrrepsLayout] = None,
     ):
         if isinstance(irrep_class, irreps_array.IrrepsLayout) and layout is None:

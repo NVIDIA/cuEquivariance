@@ -20,7 +20,7 @@ from typing import Callable, List, Optional, Sequence, Tuple, Union
 import numpy as np
 
 import cuequivariance as cue
-from cuequivariance.irreps_array.irrep_utils import into_list_of_irrep
+from cuequivariance.group_theory.irreps_array.irrep_utils import into_list_of_irrep
 
 
 # This class is inspired by https://github.com/e3nn/e3nn-jax/blob/245e17eb23deaccad9f2c9cfd40fe40515e3c074/e3nn_jax/_src/irreps_array.py

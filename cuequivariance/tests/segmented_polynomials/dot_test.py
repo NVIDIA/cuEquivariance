@@ -15,8 +15,8 @@
 import numpy as np
 
 import cuequivariance as cue
-import cuequivariance.segmented_tensor_product as stp
-from cuequivariance import descriptors
+import cuequivariance.segmented_polynomials as stp
+from cuequivariance.group_theory import descriptors
 
 
 def test_dot1():

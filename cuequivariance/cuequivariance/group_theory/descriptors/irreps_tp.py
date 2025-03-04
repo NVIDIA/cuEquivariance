@@ -16,8 +16,8 @@ import itertools
 from typing import Optional, Sequence
 
 import cuequivariance as cue
-from cuequivariance import segmented_tensor_product as stp
-from cuequivariance.irreps_array.irrep_utils import into_list_of_irrep
+from cuequivariance import segmented_polynomials as stp
+from cuequivariance.group_theory.irreps_array.irrep_utils import into_list_of_irrep
 
 
 def fully_connected_tensor_product(

@@ -20,7 +20,7 @@ import warnings
 from typing import Optional, Sequence, Union
 
 import cuequivariance as cue
-from cuequivariance import segmented_tensor_product as stp
+from cuequivariance import segmented_polynomials as stp
 
 
 @dataclasses.dataclass(init=False, frozen=True)

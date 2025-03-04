@@ -14,7 +14,7 @@
 # limitations under the License.
 import numpy as np
 
-from cuequivariance.misc import linalg
+from cuequivariance.etc import linalg
 
 
 def test_as_approx_integer_ratio():

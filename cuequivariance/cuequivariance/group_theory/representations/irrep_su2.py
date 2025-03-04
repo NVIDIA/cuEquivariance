@@ -22,7 +22,7 @@ from typing import Iterator
 
 import numpy as np
 
-from cuequivariance.representation import Irrep
+from cuequivariance.group_theory.representations import Irrep
 
 
 # This class is an adaptation of https://github.com/lie-nn/lie-nn/blob/70adebce44e3197ee17f780585c6570d836fc2fe/lie_nn/_src/irreps/su2.py

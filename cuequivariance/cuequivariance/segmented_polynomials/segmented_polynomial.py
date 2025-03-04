@@ -182,7 +182,7 @@ class SegmentedPolynomial:
         for ope, stp in self.tensor_products:
             oid, bid = ope.output_operand_buffer(self.num_inputs)
             outputs[bid - self.num_inputs] += (
-                cue.segmented_tensor_product.compute_last_operand(
+                cue.segmented_polynomials.compute_last_operand(
                     stp.move_operand_last(oid),
                     *[inputs[bid] for bid in ope.input_buffers(self.num_inputs)],
                     dtype=inferred_dtype,

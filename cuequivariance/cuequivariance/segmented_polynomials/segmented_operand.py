@@ -17,7 +17,7 @@ from __future__ import annotations
 import dataclasses
 import math
 
-from .segmented_tensor_product.dimensions_dict import format_dimensions_dict
+from cuequivariance.segmented_polynomials.dimensions_dict import format_dimensions_dict
 
 
 @dataclasses.dataclass(init=False, frozen=True)

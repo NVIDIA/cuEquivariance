@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import cuequivariance as cue
-from cuequivariance.experimental.mace import symmetric_contraction
+from cuequivariance.group_theory.experimental.mace import symmetric_contraction
 
 
 def test_symmetric_contraction():

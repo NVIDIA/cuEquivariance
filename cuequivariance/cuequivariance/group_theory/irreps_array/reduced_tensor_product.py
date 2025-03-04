@@ -21,9 +21,7 @@ from typing import FrozenSet, Iterator, List, Optional, Sequence, Tuple, Union
 import numpy as np
 
 import cuequivariance as cue
-from cuequivariance import irreps_array
-from cuequivariance.irreps_array.irrep_utils import into_list_of_irrep
-from cuequivariance.misc.linalg import (
+from cuequivariance.etc.linalg import (
     basis_intersection,
     perm_compose,
     perm_inverse,
@@ -31,6 +29,8 @@ from cuequivariance.misc.linalg import (
     round_to_sqrt_rational,
     sparsify_matrix,
 )
+from cuequivariance.group_theory import Irrep, irreps_array
+from cuequivariance.group_theory.irreps_array.irrep_utils import into_list_of_irrep
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ def reduced_tensor_product_basis(
     *,
     layout: irreps_array.IrrepsLayout = irreps_array.mul_ir,
     epsilon: float = 1e-5,
-    keep_ir: Optional[Union[irreps_array.Irreps, List[cue.Irrep]]] = None,
+    keep_ir: Optional[Union[irreps_array.Irreps, List[Irrep]]] = None,
     _use_optimized_implementation: bool = True,
     **irreps_dict,
 ) -> irreps_array.NumpyIrrepsArray:
@@ -150,7 +150,7 @@ def reduced_symmetric_tensor_product_basis(
     *,
     layout: irreps_array.IrrepsLayout = irreps_array.mul_ir,
     epsilon: float = 1e-5,
-    keep_ir: Optional[Union[irreps_array.Irreps, List[cue.Irrep]]] = None,
+    keep_ir: Optional[Union[irreps_array.Irreps, List[Irrep]]] = None,
     _use_optimized_implementation: bool = True,
 ) -> irreps_array.NumpyIrrepsArray:
     r"""Reduce a symmetric tensor product, usually called for a single irrep.
@@ -197,7 +197,7 @@ def reduced_antisymmetric_tensor_product_basis(
     *,
     layout: irreps_array.IrrepsLayout = irreps_array.mul_ir,
     epsilon: float = 1e-5,
-    keep_ir: Optional[Union[irreps_array.Irreps, List[cue.Irrep]]] = None,
+    keep_ir: Optional[Union[irreps_array.Irreps, List[Irrep]]] = None,
     _use_optimized_implementation: bool = True,
 ) -> irreps_array.NumpyIrrepsArray:
     r"""Reduce an antisymmetric tensor product.
@@ -240,7 +240,7 @@ def reduced_antisymmetric_tensor_product_basis(
 def _entrypoint(
     irreps_tuple: Tuple[irreps_array.Irreps, ...],
     perm_repr: FrozenSet[Tuple[int, Tuple[int, ...]]],
-    keep_ir: Optional[FrozenSet[cue.Irrep]],
+    keep_ir: Optional[FrozenSet[Irrep]],
     layout: irreps_array.IrrepsLayout,
     epsilon: float,
     _use_optimized_implementation: bool,
@@ -276,7 +276,7 @@ def _entrypoint(
 def _main_cached_recursive(
     irreps_tuple: Tuple[irreps_array.Irreps, ...],
     perm_repr: FrozenSet[Tuple[int, Tuple[int, ...]]],
-    keep_ir: Optional[FrozenSet[cue.Irrep]],
+    keep_ir: Optional[FrozenSet[Irrep]],
     epsilon: float,
     _use_optimized_implementation: bool,
 ) -> irreps_array.NumpyIrrepsArray:
@@ -469,7 +469,7 @@ def _optimized_reduced_symmetric_tensor_product_basis(
     degree: int,
     *,
     epsilon: float,
-    keep_ir: Optional[List[cue.Irrep]] = None,
+    keep_ir: Optional[List[Irrep]] = None,
 ):
     r"""Reduce a symmetric tensor product.
 
@@ -682,7 +682,7 @@ _cache_reduce_basis_product = {}
 def reduce_basis_product(
     basis1: irreps_array.NumpyIrrepsArray,
     basis2: irreps_array.NumpyIrrepsArray,
-    keep_ir: Optional[List[cue.Irrep]] = None,
+    keep_ir: Optional[List[Irrep]] = None,
 ) -> irreps_array.NumpyIrrepsArray:
     """Reduce the product of two basis."""
     basis1 = basis1.regroup()
@@ -692,7 +692,7 @@ def reduce_basis_product(
     layout = basis1.layout
 
     if keep_ir is not None:
-        assert all(isinstance(ir, cue.Irrep) for ir in keep_ir)
+        assert all(isinstance(ir, Irrep) for ir in keep_ir)
         keep_ir = frozenset(keep_ir)
 
     assert basis1.array.dtype == np.float64
@@ -710,7 +710,7 @@ def reduce_basis_product(
     if cache_key in _cache_reduce_basis_product:
         return _cache_reduce_basis_product[cache_key]
 
-    new_irreps: List[Tuple[int, cue.Irrep]] = []
+    new_irreps: List[Tuple[int, Irrep]] = []
     new_list = []
 
     for (mul1, ir1), x1 in zip(basis1.irreps, basis1.segments):
@@ -764,7 +764,7 @@ def constrain_rotation_basis_by_permutation_basis(
         (permutation_basis.shape[0], prod(permutation_basis.shape[1:])),
     )  # (free, dim)
 
-    new_irreps: List[Tuple[int, cue.Irrep]] = []
+    new_irreps: List[Tuple[int, Irrep]] = []
     new_list: List[np.ndarray] = []
 
     for ir in sorted({ir for mul, ir in rotation_basis.irreps}):

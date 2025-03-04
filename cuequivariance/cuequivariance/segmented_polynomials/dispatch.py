@@ -16,7 +16,7 @@ import itertools
 import math
 from typing import Generator, Tuple
 
-import cuequivariance.segmented_tensor_product as stp  # we cannot import cuequivariance as cue because of circular import
+import cuequivariance.segmented_polynomials as stp  # we cannot import cuequivariance as cue because of circular import
 
 
 def dispatch(
