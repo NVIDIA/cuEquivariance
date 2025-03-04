@@ -96,3 +96,15 @@ def test_y_rotation(ell: int):
     y2 = A @ B @ C @ x
 
     np.testing.assert_allclose(y1, y2)
+
+
+def test_elementwise_tensor_product():
+    irreps1 = cue.Irreps("O3", "8x0e + 7x1o + 4x2e")
+    irreps2 = cue.Irreps("O3", "8x0e + 7x1o + 4x0e")
+    irreps3 = cue.Irreps("O3", "0e + 1o + 1e")
+    poly = cue.descriptors.elementwise_tensor_product(irreps1, irreps2, irreps3)
+    # Check that squeezing then flattening equals flattening then squeezing
+    assert (
+        poly.squeeze_modes().flatten_coefficient_modes()
+        == poly.flatten_coefficient_modes().squeeze_modes()
+    )
