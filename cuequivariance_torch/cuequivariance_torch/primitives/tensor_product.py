@@ -21,7 +21,7 @@ from typing import List, Optional, OrderedDict, Tuple
 import torch
 import torch.fx
 
-from cuequivariance import segmented_tensor_product as stp
+from cuequivariance import segmented_polynomials as stp
 
 logger = logging.getLogger(__name__)
 
