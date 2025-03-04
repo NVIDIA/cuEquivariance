@@ -20,12 +20,12 @@ from cuequivariance import descriptors
 
 
 def test_dot1():
-    d1 = stp.SegmentedTensorProduct.from_subscripts("iab_jb_ak+ijk")
+    d1 = cue.SegmentedTensorProduct.from_subscripts("iab_jb_ak+ijk")
     d1.add_path(None, None, None, c=np.random.randn(2, 2, 2), dims={"a": 2, "b": 3})
     d1.add_path(None, None, None, c=np.random.randn(2, 3, 2), dims={"a": 4, "b": 3})
     d1.add_path(0, 1, 0, c=np.random.randn(2, 3, 2))
 
-    d2 = stp.SegmentedTensorProduct.from_subscripts("jb_b_+j")
+    d2 = cue.SegmentedTensorProduct.from_subscripts("jb_b_+j")
     d2.add_path(None, None, None, c=np.random.randn(2), dims={"b": 3})
     d2.add_path(None, 0, None, c=np.random.randn(3))
 

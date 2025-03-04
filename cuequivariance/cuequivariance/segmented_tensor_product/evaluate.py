@@ -19,11 +19,11 @@ from typing import Optional, Union
 
 import numpy as np
 
-import cuequivariance.segmented_tensor_product as stp
+import cuequivariance as cue
 
 
 def compute_last_operand(
-    descriptor: stp.SegmentedTensorProduct,
+    descriptor: cue.SegmentedTensorProduct,
     *inputs: np.ndarray,
     segment_axes: Union[int, list[int]] = -1,
     dtype: Optional[np.dtype] = None,
