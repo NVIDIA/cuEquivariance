@@ -15,11 +15,11 @@
 import numpy as np
 import pytest
 
-import cuequivariance.segmented_tensor_product as stp
+import cuequivariance as cue
 
 
 def test_user_friendly():
-    d = stp.SegmentedTensorProduct.from_subscripts("ia_jb_kab+ijk")
+    d = cue.SegmentedTensorProduct.from_subscripts("ia_jb_kab+ijk")
     assert (
         str(d)
         == "ia,jb,kab+ijk sizes=0,0,0 num_segments=0,0,0 num_paths=0 a= b= i= j= k="
@@ -58,7 +58,7 @@ def test_user_friendly():
 
 
 def test_squeeze():
-    d = stp.SegmentedTensorProduct.from_subscripts("i_j+ij")
+    d = cue.SegmentedTensorProduct.from_subscripts("i_j+ij")
     d.add_segment(0, (1,))
     d.add_segment(1, (20,))
     d.add_path(0, 0, c=np.ones((1, 20)))
@@ -66,7 +66,7 @@ def test_squeeze():
 
     assert d.squeeze_modes().subscripts == ",j+j"
 
-    d = stp.SegmentedTensorProduct.from_subscripts("i_j+ij")
+    d = cue.SegmentedTensorProduct.from_subscripts("i_j+ij")
     d.add_segment(0, (1,))
     d.add_segment(0, (2,))
     d.add_segment(1, (20,))
@@ -81,7 +81,7 @@ def test_squeeze():
 
 
 def test_normalize_paths_for_operand():
-    d = stp.SegmentedTensorProduct.from_subscripts("i_j+ij")
+    d = cue.SegmentedTensorProduct.from_subscripts("i_j+ij")
 
     d.add_segments(0, 2 * [(2,)])
     d.add_segments(1, 2 * [(3,)])
@@ -105,7 +105,7 @@ def test_normalize_paths_for_operand():
 
 
 def make_example_descriptor():
-    d = stp.SegmentedTensorProduct.from_subscripts("uv_iu_jv+ij")
+    d = cue.SegmentedTensorProduct.from_subscripts("uv_iu_jv+ij")
     d.add_path(
         None,
         None,
@@ -137,11 +137,14 @@ def test_flatten():
 
     x0 = np.random.randn(d.operands[0].size)
     x1 = np.random.randn(d.operands[1].size)
-    x2 = stp.compute_last_operand(d, x0, x1)
+    x2 = cue.segmented_tensor_product.compute_last_operand(d, x0, x1)
 
     for channels in ["i", "j", "ij", "ui", "iju", "uvij"]:
         np.testing.assert_allclose(
-            x2, stp.compute_last_operand(d.flatten_modes(channels), x0, x1)
+            x2,
+            cue.segmented_tensor_product.compute_last_operand(
+                d.flatten_modes(channels), x0, x1
+            ),
         )
 
 
@@ -161,7 +164,7 @@ def test_flatten_coefficients():
 
 
 def test_consolidate():
-    d = stp.SegmentedTensorProduct.from_subscripts("ab_ab")
+    d = cue.SegmentedTensorProduct.from_subscripts("ab_ab")
     d.add_segment(0, (2, 3))
     d.add_segment(1, (2, 3))
     d.add_path(0, 0, c=1.0)
@@ -169,7 +172,7 @@ def test_consolidate():
 
     assert d.consolidate_modes().subscripts == "a,a"
 
-    d = stp.SegmentedTensorProduct.from_subscripts("ab_ab_a")
+    d = cue.SegmentedTensorProduct.from_subscripts("ab_ab_a")
     d.add_segment(0, (2, 3))
     d.add_segment(1, (2, 3))
     d.add_segment(2, (2,))
@@ -178,7 +181,7 @@ def test_consolidate():
 
     assert d.consolidate_modes() == d
 
-    d = stp.SegmentedTensorProduct.from_subscripts("ab_iab+abi")
+    d = cue.SegmentedTensorProduct.from_subscripts("ab_iab+abi")
     d.add_segment(0, (2, 3))
     d.add_segment(1, (4, 2, 3))
     d.add_path(0, 0, c=np.ones((2, 3, 4)))
@@ -186,7 +189,7 @@ def test_consolidate():
 
     assert d.consolidate_modes().subscripts == "a,ia+ai"
 
-    d = stp.SegmentedTensorProduct.from_subscripts("ab,iab+abi")
+    d = cue.SegmentedTensorProduct.from_subscripts("ab,iab+abi")
     d.add_segment(0, (2, 3))
     d.add_segment(1, (4, 2, 3))
     d.add_path(0, 0, c=np.ones((2, 3, 4)))
@@ -195,7 +198,7 @@ def test_consolidate():
 
 
 def test_stacked_coefficients():
-    d = stp.SegmentedTensorProduct.from_subscripts("ab_ab+ab")
+    d = cue.SegmentedTensorProduct.from_subscripts("ab_ab+ab")
     d.add_segment(0, (2, 3))
     d.add_segment(1, (2, 3))
     np.testing.assert_allclose(d.stacked_coefficients, np.ones((0, 2, 3)))
@@ -210,7 +213,7 @@ def test_stacked_coefficients():
 
 @pytest.mark.parametrize("extended", [False, True])
 def test_data_transfer(extended: bool):
-    d = stp.SegmentedTensorProduct.from_subscripts("ui,uj,uk+ijk")
+    d = cue.SegmentedTensorProduct.from_subscripts("ui,uj,uk+ijk")
     d.add_path(None, None, None, c=np.ones((3, 3, 3)), dims={"u": 12})
     d.add_path(None, None, None, c=np.ones((1, 2, 1)), dims={"u": 14})
     d.assert_valid()
@@ -220,14 +223,14 @@ def test_data_transfer(extended: bool):
     bin = d.to_bytes(extended)
     b64 = d.to_base64(extended)
 
-    assert d == stp.SegmentedTensorProduct.from_dict(dict)
-    assert d == stp.SegmentedTensorProduct.from_json(json)
-    assert d == stp.SegmentedTensorProduct.from_bytes(bin)
-    assert d == stp.SegmentedTensorProduct.from_base64(b64)
+    assert d == cue.SegmentedTensorProduct.from_dict(dict)
+    assert d == cue.SegmentedTensorProduct.from_json(json)
+    assert d == cue.SegmentedTensorProduct.from_bytes(bin)
+    assert d == cue.SegmentedTensorProduct.from_base64(b64)
 
 
 def test_to_text():
-    d = stp.SegmentedTensorProduct.from_subscripts("iu,ju,ku+ijk")
+    d = cue.SegmentedTensorProduct.from_subscripts("iu,ju,ku+ijk")
     d.add_path(None, None, None, c=np.ones((3, 3, 3)), dims={"u": 12})
     d.add_path(None, None, None, c=np.ones((1, 2, 1)), dims={"u": 14})
     d = d.flatten_modes("ijk")
@@ -250,12 +253,12 @@ Path coefficients: [1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 1.0 
 
 
 def test_hash():
-    d = stp.SegmentedTensorProduct.from_subscripts("ui,uj,uk+ijk")
+    d = cue.SegmentedTensorProduct.from_subscripts("ui,uj,uk+ijk")
     d.add_path(None, None, None, c=np.ones((3, 3, 3)), dims={"u": 12})
     d.add_path(None, None, None, c=np.ones((1, 2, 1)), dims={"u": 14})
     assert hash(d) == hash(d)
 
-    d2 = stp.SegmentedTensorProduct.from_subscripts("ui,uj,uk+ijk")
+    d2 = cue.SegmentedTensorProduct.from_subscripts("ui,uj,uk+ijk")
     assert hash(d) != hash(d2)
     d2.add_path(None, None, None, c=np.ones((3, 3, 3)), dims={"u": 12})
     assert hash(d) != hash(d2)
@@ -265,7 +268,7 @@ def test_hash():
 
 def test_split_mode():
     # Create a descriptor with a mode that has dimensions divisible by the desired split size
-    d = stp.SegmentedTensorProduct.from_subscripts("ua,ub+ab")
+    d = cue.SegmentedTensorProduct.from_subscripts("ua,ub+ab")
 
     # Add a segment with u dimension = 6 (divisible by 2 and 3)
     d.add_segment(0, (6, 4))
@@ -311,7 +314,7 @@ def test_split_mode():
     assert d_unchanged == d
 
     # Test case where mode is not at the beginning of the operand
-    d_complex = stp.SegmentedTensorProduct.from_subscripts("au,bu+ab")
+    d_complex = cue.SegmentedTensorProduct.from_subscripts("au,bu+ab")
     d_complex.add_segment(0, (3, 6))
     d_complex.add_segment(1, (4, 6))
     d_complex.add_path(0, 0, c=np.ones((3, 4)))
@@ -320,7 +323,7 @@ def test_split_mode():
         d_complex.split_mode("u", 2)  # 'u' is not the first mode in operands
 
     # Test with coefficient subscripts
-    d_coeff = stp.SegmentedTensorProduct.from_subscripts("ua,ub,ab+ab")
+    d_coeff = cue.SegmentedTensorProduct.from_subscripts("ua,ub,ab+ab")
     d_coeff.add_segment(0, (6, 4))
     d_coeff.add_segment(1, (6, 5))
     d_coeff.add_segment(2, (4, 5))
@@ -335,17 +338,19 @@ def test_split_mode():
 
     # Check that computation results are equivalent
     # Create a simple descriptor with just two operands for testing compute_last_operand
-    d_compute = stp.SegmentedTensorProduct.from_subscripts("a,b+ab")
+    d_compute = cue.SegmentedTensorProduct.from_subscripts("a,b+ab")
     d_compute.add_segment(0, (4,))
     d_compute.add_segment(1, (5,))
     d_compute.add_path(0, 0, c=np.ones((4, 5)))
 
     # Test computation on original descriptor
     x_input = np.random.randn(d_compute.operands[0].size)
-    result_original = stp.compute_last_operand(d_compute, x_input)
+    result_original = cue.segmented_tensor_product.compute_last_operand(
+        d_compute, x_input
+    )
 
     # Verify split_mode works by first flattening the results to remove 'u' mode indices
-    d_ua = stp.SegmentedTensorProduct.from_subscripts("ua,b+ab")
+    d_ua = cue.SegmentedTensorProduct.from_subscripts("ua,b+ab")
     d_ua.add_segment(0, (6, 4))
     d_ua.add_segment(1, (5,))
     d_ua.add_path(0, 0, c=np.ones((4, 5)))
@@ -353,8 +358,71 @@ def test_split_mode():
 
     # Input for the split descriptor - we need a tensor with the right shape
     x_input_split = np.random.randn(d_ua_split.operands[0].size)
-    result_split = stp.compute_last_operand(d_ua_split, x_input_split)
+    result_split = cue.segmented_tensor_product.compute_last_operand(
+        d_ua_split, x_input_split
+    )
 
     # Verify the shapes are consistent with our expectations
     assert result_original.shape == (5,)
     assert result_split.shape == (5,)
+
+
+def test_add_or_transpose_modes():
+    # Test 1: Simple mode transposition
+    d = cue.SegmentedTensorProduct.from_subscripts("ia,ja+ij")
+    d.add_segment(0, (3, 4))
+    d.add_segment(1, (5, 4))
+    d.add_path(0, 0, c=np.ones((3, 5)))
+    d.assert_valid()
+
+    # Transpose modes in first operand
+    d_trans = d.add_or_transpose_modes("ai,ja+ij")
+    d_trans.assert_valid()
+    assert d_trans.subscripts == "ai,ja+ij"
+    assert d_trans.operands[0][0] == (4, 3) and d_trans.operands[1][0] == (5, 4)
+    np.testing.assert_allclose(d_trans.paths[0].coefficients, d.paths[0].coefficients)
+
+    # Test 2: Adding new modes
+    d = cue.SegmentedTensorProduct.from_subscripts("i,j+ij")
+    d.add_segment(0, (3,))
+    d.add_segment(1, (4,))
+    d.add_path(0, 0, c=np.ones((3, 4)))
+    d.assert_valid()
+
+    # Add new modes with specified dimensions
+    d_new = d.add_or_transpose_modes("ia,ja+ij", dims={"a": 5})
+    d_new.assert_valid()
+    assert d_new.subscripts == "ia,ja+ij"
+    assert d_new.operands[0][0] == (3, 5) and d_new.operands[1][0] == (4, 5)
+
+    # Test 3 & 4: Error cases
+    with pytest.raises(ValueError):
+        d.add_or_transpose_modes("ia,ja+ij")  # Missing dims for a
+    with pytest.raises(ValueError):
+        d.add_or_transpose_modes("i,j+i")  # Removing j from coefficients
+
+    # Test 5: Transposing coefficient modes
+    d = cue.SegmentedTensorProduct.from_subscripts("i,j+ij")
+    d.add_segment(0, (3,))
+    d.add_segment(1, (4,))
+    d.add_path(0, 0, c=np.ones((3, 4)))
+    d.assert_valid()
+
+    # Transpose coefficient modes
+    d_coeff = d.add_or_transpose_modes("i,j+ji")
+    d_coeff.assert_valid()
+    assert d_coeff.subscripts == "i,j+ji"
+    np.testing.assert_allclose(d_coeff.paths[0].coefficients, d.paths[0].coefficients.T)
+
+    # Test 6: Adding batch dimensions
+    d = cue.SegmentedTensorProduct.from_subscripts("ui,uj+ij")
+    d.add_segment(0, (5, 3))
+    d.add_segment(1, (5, 4))
+    d.add_path(0, 0, c=np.ones((3, 4)))
+    d.assert_valid()
+
+    # Add batch dimension to both operands
+    d_batch = d.add_or_transpose_modes("bui,buj+ij", dims={"b": 8})
+    d_batch.assert_valid()
+    assert d_batch.subscripts == "bui,buj+ij"
+    assert d_batch.operands[0][0] == (8, 5, 3) and d_batch.operands[1][0] == (8, 5, 4)
