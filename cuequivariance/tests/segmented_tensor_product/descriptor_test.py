@@ -462,3 +462,13 @@ def test_add_or_rename_modes():
     np.testing.assert_allclose(
         res0, cue.segmented_tensor_product.compute_last_operand(d_sup, x_input)
     )
+
+
+def test_consolidate_with_optional_argument():
+    d = cue.SegmentedTensorProduct.from_subscripts("ab_ab")
+    d.add_segment(0, (2, 3))
+    d.add_segment(1, (2, 3))
+    d.add_path(0, 0, c=1.0)
+    d.assert_valid()
+    d_consol = d.consolidate_modes("ab")
+    assert d_consol.subscripts == "a,a"
