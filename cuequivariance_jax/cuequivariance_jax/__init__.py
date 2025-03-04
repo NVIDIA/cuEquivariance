@@ -19,7 +19,7 @@ __version__ = (
 )
 
 
-from .rep_array.jax_rep_array import RepArray, from_segments, IrrepsArray
+from .rep_array.jax_rep_array import RepArray, from_segments
 from .rep_array.vmap import vmap
 from .rep_array.utils import concatenate, randn, as_irreps_array, clebsch_gordan
 
@@ -39,7 +39,6 @@ from cuequivariance_jax import flax_linen
 __all__ = [
     "RepArray",
     "from_segments",
-    "IrrepsArray",
     "vmap",
     "concatenate",
     "randn",

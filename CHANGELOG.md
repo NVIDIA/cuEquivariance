@@ -3,7 +3,7 @@
 ### Breaking Changes
 - Rename `SegmentedTensorProduct.flop_cost` in `flops`
 - Rename `SegmentedTensorProduct.memory_cost` in `memory`
-
+- Removed `IrrepsArray` in favor of `RepArray`
 
 ## 0.3.0-rc1
 

@@ -603,8 +603,6 @@ def decode_rep_array(static, data) -> RepArray:
 
 jax.tree_util.register_pytree_node(RepArray, encode_rep_array, decode_rep_array)
 
-IrrepsArray = RepArray  # TODO: do we deprecate IrrepsArray?
-
 
 def from_segments(
     irreps: cue.Irreps | str,
