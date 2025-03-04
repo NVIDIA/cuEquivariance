@@ -51,7 +51,7 @@ class SymmetricTensorProduct(torch.nn.Module):
                 operands_and_subscripts=[(cue.SegmentedOperand.empty_segments(1), "")]
                 + list(d.operands_and_subscripts),
                 paths=[
-                    cue.segmented_tensor_product.Path(
+                    cue.segmented_polynomials.Path(
                         (0,) + path.indices, path.coefficients
                     )
                     for path in d.paths

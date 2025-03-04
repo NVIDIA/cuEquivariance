@@ -525,7 +525,7 @@ class FusedTensorProductOp3(torch.nn.Module):
         import cuequivariance_ops_torch as ops
 
         self._f = ops.FusedTensorProductOp3(
-            operand_segment_modes=[ope.subscripts for ope in descriptor.operands],
+            operand_segment_modes=descriptor.subscripts.operands,
             operand_segment_offsets=[
                 [s.start for s in ope.segment_slices()] for ope in descriptor.operands
             ],
