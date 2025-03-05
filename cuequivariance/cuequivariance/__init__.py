@@ -53,8 +53,9 @@ from .group_theory import (
     EquivariantTensorProduct,  # deprecated
 )
 
-from cuequivariance.group_theory import descriptors
-from cuequivariance import segmented_polynomials, group_theory
+from cuequivariance import segmented_polynomials as segmented_polynomials
+from cuequivariance import group_theory as group_theory
+from cuequivariance.group_theory import descriptors as descriptors
 
 __all__ = [
     "__version__",
@@ -87,7 +88,7 @@ __all__ = [
     "reduced_antisymmetric_tensor_product_basis",
     "EquivariantPolynomial",
     "EquivariantTensorProduct",
-    "descriptors",
     "segmented_polynomials",
     "group_theory",
+    "descriptors",
 ]
