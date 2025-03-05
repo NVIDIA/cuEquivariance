@@ -19,7 +19,8 @@ import jax
 import jax.numpy as jnp
 
 import cuequivariance as cue
-from cuequivariance_jax.primitives.primitives_utils import reshape
+
+from .utils import reshape
 
 logger = logging.getLogger(__name__)
 

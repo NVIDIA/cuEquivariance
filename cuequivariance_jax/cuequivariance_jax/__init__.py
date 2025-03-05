@@ -23,16 +23,16 @@ from .rep_array.jax_rep_array import RepArray, from_segments
 from .rep_array.vmap import vmap
 from .rep_array.utils import concatenate, randn, as_irreps_array, clebsch_gordan
 
-from .primitives.segmented_polynomial import segmented_polynomial
-from .primitives.equivariant_polynomial import equivariant_polynomial
+from .segmented_polynomials.segmented_polynomial import segmented_polynomial
+from .equivariant_polynomial import equivariant_polynomial
 
-from .operations.activation import (
+from .activation import (
     normalspace,
     normalize_function,
     function_parity,
     scalar_activation,
 )
-from .operations.spherical_harmonics import spherical_harmonics, normalize, norm
+from .spherical_harmonics import spherical_harmonics, normalize, norm
 
 from cuequivariance_jax import flax_linen
 
