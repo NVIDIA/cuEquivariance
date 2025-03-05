@@ -4,11 +4,13 @@
 
 The main changes are:
 1. [JAX] New JIT Uniform 1d kernel with JAX bindings
-    a. Computes any polynomial based on 1d uniform STPs
-    b. Supports arbitrary derivatives
-    c. Provides optional fused scatter/gather for the inputs and outputs
+   1. Computes any polynomial based on 1d uniform STPs
+   2. Supports arbitrary derivatives
+   3. Provides optional fused scatter/gather for the inputs and outputs
+   4. 🎉 We observed a ~3x speedup for MACE with cuEquivariance-JAX v0.3.0 compared to cuEquivariance-Torch v0.2.0 🎉
 2. [Torch] Adds torch.compile support
-3. [Torch] Implements scatter/gather fusion through a beta API for Uniform 1d (see tutorial in the documentation)
+3. [Torch] Beta limited Torch bindings to the new JIT Uniform 1d kernel (see tutorial in the documentation)
+4. [Torch] Implements scatter/gather fusion through a beta API for Uniform 1d (see tutorial in the documentation)
 
 ### Breaking Changes
 - In `cuex.equivariant_tensor_product`, the arguments `dtype_math` and `dtype_output` are renamed to `math_dtype` and `output_dtype` respectively. This change adds consistency with the rest of the library.
