@@ -23,10 +23,13 @@ import jax.numpy as jnp
 from jax.interpreters import ad, batching, mlir, partial_eval, xla
 
 import cuequivariance as cue
-
-from .segmented_polynomial_ops_impl import segmented_polynomial_ops_impl
-from .segmented_polynomial_vanilla_impl import segmented_polynomial_vanilla_impl
-from .utils import reshape
+from cuequivariance_jax.segmented_polynomials.segmented_polynomial_ops_impl import (
+    segmented_polynomial_ops_impl,
+)
+from cuequivariance_jax.segmented_polynomials.segmented_polynomial_vanilla_impl import (
+    segmented_polynomial_vanilla_impl,
+)
+from cuequivariance_jax.segmented_polynomials.utils import reshape
 
 logger = logging.getLogger(__name__)
 

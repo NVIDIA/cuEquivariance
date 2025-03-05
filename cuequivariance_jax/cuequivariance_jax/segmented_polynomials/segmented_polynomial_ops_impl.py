@@ -19,8 +19,7 @@ import jax
 import jax.numpy as jnp
 
 import cuequivariance as cue
-
-from .utils import reshape
+from cuequivariance_jax.segmented_polynomials.utils import reshape
 
 logger = logging.getLogger(__name__)
 
