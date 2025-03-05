@@ -61,15 +61,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # include:
-        #   - runner: "ubuntu-latest"
-        #     python-version: "3.10"
-        #   - runner: "self-hosted"
-        #     python-version: "3.12"
-        python-version: ["3.10", "3.12"]
+        include:
+          - runner: "ubuntu-latest"
+            python-version: "3.10"
+          - runner: "self-hosted"
+            python-version: "3.12"
 
-    # runs-on: ${{ matrix.runner }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
 
     steps:
     - uses: actions/checkout@v4
@@ -82,8 +80,8 @@ jobs:
         python -m pip install --upgrade pip
         python -m pip install --upgrade uv
         python -m uv pip install pytest torch e3nn
-        python -m uv pip install ./cuequivariance
-        python -m uv pip install ./cuequivariance_torch
+        python -m uv pip install ./cuequivariance --force-reinstall
+        python -m uv pip install ./cuequivariance_torch --force-reinstall
     - name: Test with pytest
       run: |
         pytest --doctest-modules -x cuequivariance_torch
