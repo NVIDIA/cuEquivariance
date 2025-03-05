@@ -91,7 +91,25 @@ _normalize = normalize
 
 
 def norm(array: cuex.RepArray, *, squared: bool = False) -> cuex.RepArray:
-    """Norm of `RepArray`."""
+    """Compute the norm of a `RepArray`.
+
+    This function calculates the norm for each element in the irreps array by summing
+    the squared magnitudes of the elements along the irrep dimension. By default,
+    the function returns the square root of this sum (the regular norm), but it can
+    also return the squared norm if requested.
+
+    When the squared norm is zero, the function handles this special case:
+    - If squared=True, it returns 0.0
+    - If squared=False, it safely computes the square root and returns 0.0
+
+    Args:
+        array: The equivariant array (RepArray) whose norm should be calculated
+        squared: If True, returns the squared norm; if False (default), returns the regular norm
+
+    Returns:
+        A new RepArray with trivial irreps where each element represents the norm
+        (or squared norm) of the corresponding element in the input array
+    """
     assert array.is_irreps_array()
 
     match array.layout:

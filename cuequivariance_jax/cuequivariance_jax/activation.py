@@ -74,6 +74,10 @@ def normalize_function(phi: ActFn) -> ActFn:
 
 
 def function_parity(phi: ActFn) -> int:
+    r"""Determine the parity of a function.
+
+    For example, sin is odd, cos is even, and exp is neither.
+    """
     with jax.ensure_compile_time_eval():
         x = jnp.linspace(0.0, 10.0, 256)
 
