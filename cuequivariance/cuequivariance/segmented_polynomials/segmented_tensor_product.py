@@ -222,12 +222,14 @@ class SegmentedTensorProduct:
     ################################ Properties ################################
 
     def __hash__(self) -> int:
-        return hash((self.operands, self.paths, self.coefficient_subscripts))
+        return hash(
+            (self.operands_and_subscripts, self.paths, self.coefficient_subscripts)
+        )
 
     def __eq__(self, value: SegmentedTensorProduct) -> bool:
         assert isinstance(value, SegmentedTensorProduct)
         return (
-            self.operands == value.operands
+            self.operands_and_subscripts == value.operands_and_subscripts
             and self.paths == value.paths
             and self.coefficient_subscripts == value.coefficient_subscripts
         )
