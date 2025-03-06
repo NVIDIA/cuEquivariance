@@ -16,7 +16,10 @@
 import torch
 
 import cuequivariance as cue
-from cuequivariance.irreps_array.misc_ui import default_irreps, default_layout
+from cuequivariance.group_theory.irreps_array.misc_ui import (
+    default_irreps,
+    default_layout,
+)
 
 
 # This implementation is an adaptation of https://github.com/e3nn/e3nn/blob/ef93f876c9985b3816aefb2982b3cf4325df6ba4/e3nn/nn/_batchnorm.py

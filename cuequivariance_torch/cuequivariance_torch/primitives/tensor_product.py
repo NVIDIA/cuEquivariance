@@ -21,7 +21,7 @@ from typing import List, Optional, OrderedDict, Tuple
 import torch
 import torch.fx
 
-from cuequivariance import segmented_tensor_product as stp
+from cuequivariance import segmented_polynomials as stp
 
 logger = logging.getLogger(__name__)
 
@@ -223,9 +223,7 @@ def _tensor_product_fx(
             for i in range(num_inputs)
         ]
 
-        operand_subscripts = [
-            f"Z{operand.subscripts}" for operand in descriptor.operands
-        ]
+        operand_subscripts = [f"Z{ss}" for ss in descriptor.subscripts.operands]
 
         formula = (
             ",".join([descriptor.coefficient_subscripts] + operand_subscripts[:-1])
@@ -527,7 +525,7 @@ class FusedTensorProductOp3(torch.nn.Module):
         import cuequivariance_ops_torch as ops
 
         self._f = ops.FusedTensorProductOp3(
-            operand_segment_modes=[ope.subscripts for ope in descriptor.operands],
+            operand_segment_modes=descriptor.subscripts.operands,
             operand_segment_offsets=[
                 [s.start for s in ope.segment_slices()] for ope in descriptor.operands
             ],
@@ -582,7 +580,7 @@ class FusedTensorProductOp4(torch.nn.Module):
         import cuequivariance_ops_torch as ops
 
         self._f = ops.FusedTensorProductOp4(
-            operand_segment_modes=[ope.subscripts for ope in descriptor.operands],
+            operand_segment_modes=descriptor.subscripts.operands,
             operand_segment_offsets=[
                 [s.start for s in ope.segment_slices()] for ope in descriptor.operands
             ],

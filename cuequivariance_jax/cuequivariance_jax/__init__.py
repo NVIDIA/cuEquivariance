@@ -19,34 +19,33 @@ __version__ = (
 )
 
 
-from .rep_array.jax_rep_array import RepArray, from_segments, IrrepsArray
+from .rep_array.rep_array_ import RepArray, from_segments
 from .rep_array.vmap import vmap
-from .rep_array.utils import concatenate, randn, as_irreps_array, clebsch_gordan
+from .rep_array.rep_array_utils import concatenate, randn, as_irreps_array, clebsch_gordan
 
-from .primitives.tensor_product import tensor_product
-from .primitives.equivariant_tensor_product import equivariant_tensor_product
+from .segmented_polynomials.segmented_polynomial import segmented_polynomial
+from .equivariant_polynomial import equivariant_polynomial
 
-from .operations.activation import (
+from .activation import (
     normalspace,
     normalize_function,
     function_parity,
     scalar_activation,
 )
-from .operations.spherical_harmonics import spherical_harmonics, normalize, norm
+from .spherical_harmonics import spherical_harmonics, normalize, norm
 
 from cuequivariance_jax import flax_linen
 
 __all__ = [
     "RepArray",
     "from_segments",
-    "IrrepsArray",
     "vmap",
     "concatenate",
     "randn",
     "as_irreps_array",
     "clebsch_gordan",
-    "tensor_product",
-    "equivariant_tensor_product",
+    "segmented_polynomial",
+    "equivariant_polynomial",
     "normalspace",
     "normalize_function",
     "function_parity",

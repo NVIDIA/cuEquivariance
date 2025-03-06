@@ -19,7 +19,7 @@ import torch
 import cuequivariance as cue
 import cuequivariance_torch as cuet
 from cuequivariance import descriptors
-from cuequivariance.irreps_array.misc_ui import default_irreps
+from cuequivariance.group_theory.irreps_array.misc_ui import default_irreps
 
 
 class Rotation(torch.nn.Module):
