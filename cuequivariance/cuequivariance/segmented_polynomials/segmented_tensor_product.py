@@ -60,35 +60,37 @@ class SegmentedTensorProduct:
     .. rubric:: Methods
     """
 
-    operands_and_subscripts: tuple[tuple[cue.SegmentedOperand, stp.Subscripts], ...]
-    paths: tuple[stp.Path, ...]
+    operands_and_subscripts: tuple[tuple[cue.SegmentedOperand, str], ...]
     coefficient_subscripts: str
+    paths: tuple[stp.Path, ...]
 
     ################################ Initializers ################################
 
     # From here we can use object.__setattr__ to modify the attributes
     def __init__(
         self,
-        *,
-        operands_and_subscripts: Sequence[tuple[cue.SegmentedOperand, stp.Subscripts]]
+        operands_and_subscripts: Sequence[tuple[cue.SegmentedOperand | None, str]]
         | None = None,
-        paths: Sequence[stp.Path] | None = None,
         coefficient_subscripts: str = "",
+        *,
+        paths: Sequence[stp.Path] | None = None,
     ):
         if operands_and_subscripts is None:
             operands_and_subscripts = []
         if paths is None:
             paths = []
 
-        object.__setattr__(
-            self,
-            "operands_and_subscripts",
-            tuple(
-                (ope.copy(), stp.Subscripts(ss)) for ope, ss in operands_and_subscripts
-            ),
+        operands_and_subscripts = tuple(
+            (
+                ope.copy() if ope is not None else cue.SegmentedOperand(ndim=len(ss)),
+                str(ss),
+            )
+            for ope, ss in operands_and_subscripts
         )
-        object.__setattr__(self, "paths", tuple(paths))
+
+        object.__setattr__(self, "operands_and_subscripts", operands_and_subscripts)
         object.__setattr__(self, "coefficient_subscripts", coefficient_subscripts)
+        object.__setattr__(self, "paths", tuple(paths))
 
     def set_operand(self, oid: int, operand: cue.SegmentedOperand):
         assert oid < len(self.operands_and_subscripts)
@@ -96,7 +98,7 @@ class SegmentedTensorProduct:
             self,
             "operands_and_subscripts",
             self.operands_and_subscripts[:oid]
-            + ((copy.deepcopy(operand), self.operands_and_subscripts[oid][1]),)
+            + ((operand.copy(), self.operands_and_subscripts[oid][1]),)
             + self.operands_and_subscripts[oid + 1 :],
         )
 

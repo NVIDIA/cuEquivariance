@@ -30,16 +30,19 @@ class SegmentedOperand:
 
     def __init__(
         self,
-        *,
-        ndim: int,
         segments: list[tuple[int, ...]] | None = None,
+        *,
+        ndim: int | None = None,
         _dims: dict[int, set[int]] | None = None,
     ):
-        object.__setattr__(self, "ndim", ndim)
-
         if segments is None:
             segments = []
         object.__setattr__(self, "segments", tuple(segments))
+
+        if ndim is None:
+            assert len(self.segments) > 0
+            ndim = len(self.segments[0])
+        object.__setattr__(self, "ndim", ndim)
 
         if _dims is None:
             _dims = dict()

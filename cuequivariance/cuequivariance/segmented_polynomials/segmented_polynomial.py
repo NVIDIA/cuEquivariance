@@ -50,7 +50,9 @@ class SegmentedPolynomial:
         outputs: tuple[cue.SegmentedOperand, ...],
         tensor_products: Sequence[tuple[cue.Operation, cue.SegmentedTensorProduct]],
     ):
-        buffers = list(inputs) + list(outputs)
+        inputs = tuple(inputs)
+        outputs = tuple(outputs)
+        buffers = inputs + outputs
 
         for ope, stp in tensor_products:
             assert isinstance(ope, cue.Operation)
@@ -59,8 +61,8 @@ class SegmentedPolynomial:
             for buffer_id, operand in zip(ope.buffers, stp.operands):
                 assert operand == buffers[buffer_id]
 
-        object.__setattr__(self, "inputs", tuple(inputs))
-        object.__setattr__(self, "outputs", tuple(outputs))
+        object.__setattr__(self, "inputs", inputs)
+        object.__setattr__(self, "outputs", outputs)
         object.__setattr__(self, "tensor_products", tuple(sorted(tensor_products)))
 
     @classmethod
