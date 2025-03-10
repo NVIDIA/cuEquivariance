@@ -58,6 +58,8 @@ jobs:
         python -m uv pip uninstall cuequivariance cuequivariance_jax cuequivariance_torch
         python -m uv pip install ./cuequivariance --force-reinstall
         python -m uv pip install ./cuequivariance_jax --force-reinstall
+        python -c "import cuequivariance; print('cue', cuequivariance.__version__)"
+        python -c "import cuequivariance_jax; print('cuex', cuequivariance_jax.__version__)"
     - name: Test with pytest
       run: |
         pytest --doctest-modules -x cuequivariance_jax
@@ -88,6 +90,8 @@ jobs:
         python -m uv pip uninstall cuequivariance cuequivariance_jax cuequivariance_torch
         python -m uv pip install ./cuequivariance --force-reinstall
         python -m uv pip install ./cuequivariance_torch --force-reinstall
+        python -c "import cuequivariance; print('cue', cuequivariance.__version__)"
+        python -c "import cuequivariance_torch; print('cuet', cuequivariance_torch.__version__)"
     - name: Test with pytest
       run: |
         pytest --doctest-modules -x cuequivariance_torch
