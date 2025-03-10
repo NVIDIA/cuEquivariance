@@ -184,7 +184,9 @@ class SegmentedPolynomial:
                     ope.to_letters(self.num_inputs), stp.subscripts.operands
                 )
             ]
-            return "·".join(items[:-1]) + "➜" + items[-1]
+            out = items[-1]
+            items = items[:-1] + [f"[{stp.coefficient_subscripts}]"]
+            return "·".join(items) + "➜" + out
 
         lines = ["│  " + f(ope, stp) for ope, stp in self.tensor_products]
         if len(lines) > 0:

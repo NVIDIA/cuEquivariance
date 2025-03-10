@@ -48,7 +48,7 @@ def fully_connected_tensor_product(
         ...    16 * cue.Irreps("SO3", "0 + 1 + 2"),
         ... )
         ╭ a=61440x0 b=16x0+16x1+16x2 c=16x0+16x1+16x2 -> D=16x0+16x1+16x2
-        ╰─ a b c D ─ uvw,iu,jv,kw+ijk sizes=61440,144,144,144 num_segments=15,3,3,3 num_paths=15 i={1, 3, 5} j={1, 3, 5} k={1, 3, 5} u=16 v=16 w=16
+        ╰─ a[uvw]·b[iu]·c[jv]·[ijk]➜D[kw] ─ num_paths=15 i={1, 3, 5} j={1, 3, 5} k={1, 3, 5} u=16 v=16 w=16
 
         Where ``61440x0`` are the 61440 weights needed to mix all the inputs with all the outputs.
     """
