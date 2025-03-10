@@ -47,7 +47,9 @@ class Operation:
 
     buffers: tuple[int, ...]
 
-    def __init__(self, buffers: tuple[int, ...]):
+    def __init__(self, buffers: tuple[int, ...] | Operation):
+        if isinstance(buffers, Operation):
+            buffers = buffers.buffers
         assert len(buffers) > 0, buffers
         assert all(isinstance(b, int) for b in buffers), buffers
         assert all(i >= 0 for i in buffers), buffers

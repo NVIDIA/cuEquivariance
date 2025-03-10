@@ -46,24 +46,30 @@ class SegmentedPolynomial:
 
     def __init__(
         self,
-        inputs: tuple[cue.SegmentedOperand, ...],
-        outputs: tuple[cue.SegmentedOperand, ...],
-        tensor_products: Sequence[tuple[cue.Operation, cue.SegmentedTensorProduct]],
+        inputs: Sequence[cue.SegmentedOperand],
+        outputs: Sequence[cue.SegmentedOperand],
+        tensor_products: Sequence[
+            tuple[cue.Operation | Sequence[int], cue.SegmentedTensorProduct]
+        ],
     ):
         inputs = tuple(inputs)
         outputs = tuple(outputs)
         buffers = inputs + outputs
 
+        _tensor_products = []
         for ope, stp in tensor_products:
+            ope = cue.Operation(ope)
             assert isinstance(ope, cue.Operation)
             assert isinstance(stp, cue.SegmentedTensorProduct)
             assert len(ope.buffers) == stp.num_operands
             for buffer_id, operand in zip(ope.buffers, stp.operands):
                 assert operand == buffers[buffer_id]
+            _tensor_products.append((ope, stp))
+        _tensor_products = sorted(_tensor_products)
 
         object.__setattr__(self, "inputs", inputs)
         object.__setattr__(self, "outputs", outputs)
-        object.__setattr__(self, "tensor_products", tuple(sorted(tensor_products)))
+        object.__setattr__(self, "tensor_products", tuple(_tensor_products))
 
     @classmethod
     def eval_last_operand(cls, stp: cue.SegmentedTensorProduct):
@@ -76,19 +82,40 @@ class SegmentedPolynomial:
     @classmethod
     def from_default_buffers(
         cls,
-        inputs: tuple[cue.SegmentedOperand, ...],
-        outputs: tuple[cue.SegmentedOperand, ...],
-        tensor_products: Sequence[tuple[cue.Operation, cue.SegmentedTensorProduct]],
+        inputs: Sequence[cue.SegmentedOperand | None],
+        outputs: Sequence[cue.SegmentedOperand | None],
+        tensor_products: Sequence[
+            tuple[cue.Operation | Sequence[int], cue.SegmentedTensorProduct]
+        ],
     ):
         buffers = list(inputs) + list(outputs)
         for ope, stp in tensor_products:
-            assert isinstance(ope, cue.Operation)
+            ope = cue.Operation(ope)
             assert isinstance(stp, cue.SegmentedTensorProduct)
             assert len(ope.buffers) == stp.num_operands
             for buffer_id, operand in zip(ope.buffers, stp.operands):
                 buffers[buffer_id] = operand
 
         return cls(buffers[: len(inputs)], buffers[len(inputs) :], tensor_products)
+
+    @classmethod
+    def from_stps(
+        cls,
+        inputs: Sequence[cue.SegmentedOperand | None],
+        outputs: Sequence[cue.SegmentedOperand | None],
+        tensor_products: Sequence[
+            tuple[cue.Operation | Sequence[int], cue.SegmentedTensorProduct]
+        ],
+    ) -> SegmentedPolynomial:
+        """Stack segmented tensor products together."""
+        inputs, outputs = list(inputs), list(outputs)
+        return cls.stack(
+            [
+                cls.from_default_buffers(inputs, outputs, [(ope, stp)])
+                for ope, stp in tensor_products
+            ],
+            [ope is None for ope in inputs + outputs],
+        )
 
     def __hash__(self) -> int:
         return hash((self.inputs, self.outputs, self.tensor_products))
@@ -364,7 +391,14 @@ class SegmentedPolynomial:
         for bid in range(num_inputs + num_outputs):
             if stacked[bid]:
                 operands.append(
-                    cue.SegmentedOperand.stack([pol.operands[bid] for pol in polys])
+                    cue.SegmentedOperand.stack(
+                        [
+                            pol.operands[bid]
+                            for pol in polys
+                            if pol.operands[bid]
+                            is not None  # special case for .from_stps
+                        ]
+                    )
                 )
             else:
                 ope = polys[0].operands[bid]
