@@ -201,6 +201,7 @@ class SegmentedPolynomial:
         ]
         lines = ["╭ " + header] + lines
 
+        lines = [line.rstrip() for line in lines]
         return "\n".join(lines)
 
     def __call__(self, *inputs: np.ndarray) -> list[np.ndarray]:
