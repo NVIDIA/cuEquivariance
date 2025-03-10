@@ -56,8 +56,8 @@ jobs:
         python -m pip install --upgrade uv
         python -m uv pip install pytest "jax[cuda12]"
         python -m uv pip uninstall cuequivariance cuequivariance_jax cuequivariance_torch
-        python -m uv pip install ./cuequivariance 
-        python -m uv pip install ./cuequivariance_jax 
+        python -m uv pip install ./cuequivariance_jax
+        python -m uv pip install ./cuequivariance
     - name: Test with pytest
       run: |
         pytest --doctest-modules -x cuequivariance_jax
@@ -86,8 +86,8 @@ jobs:
         python -m pip install --upgrade uv
         python -m uv pip install pytest torch e3nn
         python -m uv pip uninstall cuequivariance cuequivariance_jax cuequivariance_torch
-        python -m uv pip install ./cuequivariance 
         python -m uv pip install ./cuequivariance_torch 
+        python -m uv pip install ./cuequivariance 
     - name: Test with pytest
       run: |
         pytest --doctest-modules -x cuequivariance_torch
