@@ -24,6 +24,8 @@ import numpy as np
 import cuequivariance as cue
 from cuequivariance.segmented_polynomials.operation import IVARS, OVARS
 
+from .dimensions_dict import format_dimensions_dict
+
 
 @dataclasses.dataclass(init=False, frozen=True)
 class SegmentedPolynomial:
@@ -54,7 +56,7 @@ class SegmentedPolynomial:
     ):
         inputs = tuple(inputs)
         outputs = tuple(outputs)
-        buffers = inputs + outputs
+        operands = inputs + outputs
 
         _tensor_products = []
         for ope, stp in tensor_products:
@@ -63,8 +65,12 @@ class SegmentedPolynomial:
             assert isinstance(stp, cue.SegmentedTensorProduct)
             assert len(ope.buffers) == stp.num_operands
             for buffer_id, operand in zip(ope.buffers, stp.operands):
-                assert operand == buffers[buffer_id]
-            _tensor_products.append((ope, stp))
+                assert operand == operands[buffer_id]
+
+            out_oid, _ = ope.output_operand_buffer(len(inputs))
+            _tensor_products.append(
+                (ope.move_operand_last(out_oid), stp.move_operand_last(out_oid))
+            )
         _tensor_products = sorted(_tensor_products)
 
         object.__setattr__(self, "inputs", inputs)
@@ -170,33 +176,29 @@ class SegmentedPolynomial:
                 buffer_txts[self.num_inputs : self.num_inputs + self.num_outputs]
             )
         )
-        lines = [
-            "│  " + ope.to_string(self.num_inputs) for ope, _ in self.tensor_products
-        ]
+
+        def f(ope: cue.Operation, stp: cue.SegmentedTensorProduct) -> str:
+            items = [
+                f"{buffer}[{ss}]"
+                for buffer, ss in zip(
+                    ope.to_letters(self.num_inputs), stp.subscripts.operands
+                )
+            ]
+            return "·".join(items[:-1]) + "➜" + items[-1]
+
+        lines = ["│  " + f(ope, stp) for ope, stp in self.tensor_products]
         if len(lines) > 0:
             lines[-1] = "╰─" + lines[-1][2:]
-        n = max(len(line) for line in lines)
 
+        n = max(len(line) for line in lines)
         lines = [
-            line + " " + "─" * (n - len(line)) + "─ " + str(stp)
+            line
+            + " "
+            + "─" * (n - len(line))
+            + "─ "
+            + f"num_paths={stp.num_paths} {format_dimensions_dict(stp.get_dimensions_dict())}"
             for line, (_, stp) in zip(lines, self.tensor_products)
         ]
-
-        modes = sorted(
-            {mode for _, stp in self.tensor_products for mode in stp.subscripts.modes()}
-        )
-        if len(modes) > 1:
-            modes = []
-        for a in ["sizes=", "num_segments=", "num_paths="] + [f"{m}=" for m in modes]:
-            if not all(line.count(a) == 1 for line in lines):
-                continue
-
-            splits = [line.split(a) for line in lines]
-            n = max(len(before) for before, _ in splits)
-            lines = [
-                before + " " * (n - len(before)) + a + after for before, after in splits
-            ]
-
         lines = ["╭ " + header] + lines
 
         return "\n".join(lines)

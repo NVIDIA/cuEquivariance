@@ -58,8 +58,8 @@ class Operation:
     def __repr__(self):
         return f"Operation({self.buffers})"
 
-    def to_string(self, num_inputs: int) -> str:
-        return " ".join(IVARS[b] if b < num_inputs else OVARS[b] for b in self.buffers)
+    def to_letters(self, num_inputs: int) -> list[str]:
+        return [IVARS[b] if b < num_inputs else OVARS[b] for b in self.buffers]
 
     @staticmethod
     def list_to_string(
@@ -69,7 +69,7 @@ class Operation:
         o = ", ".join(OVARS[num_inputs : num_inputs + num_outputs])
         s = f"({i}) -> ({o})"
         for op in operations:
-            s += "\n  " + op.to_string(num_inputs)
+            s += "\n  " + " ".join(op.to_letters(num_inputs))
         return s
 
     def __lt__(self, value):
@@ -85,6 +85,12 @@ class Operation:
 
     def permute_operands(self, permutation: tuple[int, ...]) -> Operation:
         return Operation(tuple(self.buffers[p] for p in permutation))
+
+    def move_operand_last(self, operand: int) -> Operation:
+        buffers = list(self.buffers)
+        b = buffers.pop(operand)
+        buffers.append(b)
+        return Operation(tuple(buffers))
 
     def input_operands_buffers(self, num_inputs: int) -> list[tuple[int, int]]:
         return [(op, i) for op, i in enumerate(self.buffers) if i < num_inputs]
