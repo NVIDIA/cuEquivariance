@@ -158,7 +158,14 @@ class SegmentedPolynomial:
         return self.__mul__(factor)
 
     def __repr__(self):
-        return self.to_string([f"[{ope.size}]" for ope in self.operands])
+        buffer_names = []
+        for ope in self.operands:
+            if ope.all_same_segment_shape():
+                shape = ",".join(str(d) for d in ope.segment_shape)
+                buffer_names.append(f"[{ope.size}:{ope.num_segments}⨯({shape})]")
+            else:
+                buffer_names.append(f"[{ope.size}]")
+        return self.to_string(buffer_names)
 
     def to_string(self, buffer_names: list[str] | None = None) -> str:
         buffer_txts = (
