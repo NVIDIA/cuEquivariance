@@ -27,7 +27,7 @@ jobs:
         python -m pip install --upgrade pip
         python -m pip install --upgrade uv
         python -m uv pip install pytest
-        python -m uv pip install ./cuequivariance 
+        python -m uv pip install -e ./cuequivariance 
     - name: Test with pytest
       run: |
         pytest --doctest-modules -x cuequivariance
@@ -56,8 +56,8 @@ jobs:
         python -m pip install --upgrade uv
         python -m uv pip install pytest "jax[cuda12]"
         python -m uv pip uninstall cuequivariance cuequivariance_jax cuequivariance_torch
-        python -m uv pip install ./cuequivariance 
-        python -m uv pip install --no-deps ./cuequivariance_jax 
+        python -m uv pip install -e ./cuequivariance 
+        python -m uv pip install --no-deps -e ./cuequivariance_jax 
         python -c "import cuequivariance; print('cue', cuequivariance.__version__)"
         python -c "import cuequivariance_jax; print('cuex', cuequivariance_jax.__version__)"
     - name: Test with pytest
@@ -88,8 +88,8 @@ jobs:
         python -m pip install --upgrade uv
         python -m uv pip install pytest torch e3nn
         python -m uv pip uninstall cuequivariance cuequivariance_jax cuequivariance_torch
-        python -m uv pip install ./cuequivariance 
-        python -m uv pip install --no-deps ./cuequivariance_torch 
+        python -m uv pip install -e ./cuequivariance 
+        python -m uv pip install --no-deps -e ./cuequivariance_torch 
         python -c "import cuequivariance; print('cue', cuequivariance.__version__)"
         python -c "import cuequivariance_torch; print('cuet', cuequivariance_torch.__version__)"
     - name: Test with pytest
