@@ -59,19 +59,20 @@ class SegmentedPolynomial:
         operands = inputs + outputs
 
         _tensor_products = []
-        for ope, stp in tensor_products:
-            ope = cue.Operation(ope)
-            assert isinstance(ope, cue.Operation)
+        for opt, stp in tensor_products:
+            opt = cue.Operation(opt)
+            assert isinstance(opt, cue.Operation)
             assert isinstance(stp, cue.SegmentedTensorProduct)
-            assert len(ope.buffers) == stp.num_operands
-            for buffer_id, operand in zip(ope.buffers, stp.operands):
+            assert len(opt.buffers) == stp.num_operands
+            for buffer_id, operand in zip(opt.buffers, stp.operands):
                 assert operand == operands[buffer_id]
 
-            out_oid, _ = ope.output_operand_buffer(len(inputs))
+            out_oid, bid = opt.output_operand_buffer(len(inputs))
             _tensor_products.append(
-                (ope.move_operand_last(out_oid), stp.move_operand_last(out_oid))
+                (bid, opt.move_operand_last(out_oid), stp.move_operand_last(out_oid))
             )
         _tensor_products = sorted(_tensor_products)
+        _tensor_products = [(opt, stp) for _, opt, stp in _tensor_products]
 
         object.__setattr__(self, "inputs", inputs)
         object.__setattr__(self, "outputs", outputs)
@@ -185,7 +186,7 @@ class SegmentedPolynomial:
                 )
             ]
             out = items[-1]
-            items = items[:-1] + [f"[{stp.coefficient_subscripts}]"]
+            items = [f"[{stp.coefficient_subscripts}]"] + items[:-1]
             return "·".join(items) + "➜" + out
 
         lines = ["│  " + f(ope, stp) for ope, stp in self.tensor_products]

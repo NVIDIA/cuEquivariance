@@ -69,7 +69,7 @@ def segmented_polynomial(
     Features:
         - CUDA kernel activation conditions:
             - STPs have a single mode which is a multiple of 32 (e.g. channelwise
-              tensor product with subscripts ``u,u,,u`` where u=128)
+                tensor product with subscripts ``u,u,,u`` where u=128)
             - Math data type is float32 or float64
             - Input/output data types can be float32, float64, float16, or bfloat16
             - Indices must be int32

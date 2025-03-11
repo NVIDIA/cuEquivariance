@@ -40,8 +40,8 @@ def spherical_harmonics(
         >>> spherical_harmonics(cue.SO3(1), [0, 1, 2])
         ╭ a=1 -> B=0+1+2
         │  []➜B[] ───────── num_paths=1
-        │  a[]·[]➜B[] ───── num_paths=3
-        ╰─ a[]·a[]·[]➜B[] ─ num_paths=11
+        │  []·a[]➜B[] ───── num_paths=3
+        ╰─ []·a[]·a[]➜B[] ─ num_paths=11
     """
     if len(ls) != 1:
         return cue.EquivariantPolynomial.stack(

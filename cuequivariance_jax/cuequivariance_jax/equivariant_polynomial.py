@@ -57,8 +57,8 @@ def equivariant_polynomial(
         >>> e
         ╭ a=1 -> B=0+1+2
         │  []➜B[] ───────── num_paths=1
-        │  a[]·[]➜B[] ───── num_paths=3
-        ╰─ a[]·a[]·[]➜B[] ─ num_paths=11
+        │  []·a[]➜B[] ───── num_paths=3
+        ╰─ []·a[]·a[]➜B[] ─ num_paths=11
 
         Basic usage with single input:
 
