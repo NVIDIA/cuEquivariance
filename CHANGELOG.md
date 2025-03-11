@@ -4,6 +4,13 @@
 - Rename `SegmentedTensorProduct.flop_cost` in `flops`
 - Rename `SegmentedTensorProduct.memory_cost` in `memory`
 - Removed `IrrepsArray` in favor of `RepArray`
+- Change folder structure of cuequivariance and cuequivariance-jax. Now the main subfolders are `segmented_polynomials` and `group_theory`
+- Deprecate `cue.EquivariantTensorProduct` in favor of `cue.EquivariantPolynomial`
+- The descriptors return `cue.EquivariantPolynomial` instead of `cue.EquivariantTensorProduct`
+
+# Added
+- Class `cue.SegmentedOperand`, `cue.SegmentedPolynomial`
+- Class `cue.EquivariantPolynomial` that contains a `cue.SegmentedPolynomial` and the `cue.Rep` of its inputs and outputs
 
 
 ## 0.3.0 (2025-03-05)
