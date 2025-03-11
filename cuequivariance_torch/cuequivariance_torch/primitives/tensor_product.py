@@ -21,7 +21,7 @@ from typing import List, Optional, OrderedDict, Tuple
 import torch
 import torch.fx
 
-from cuequivariance import segmented_polynomials as stp
+import cuequivariance as cue
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ class TensorProduct(torch.nn.Module):
 
     def __init__(
         self,
-        descriptor: stp.SegmentedTensorProduct,
+        descriptor: cue.SegmentedTensorProduct,
         *,
         device: Optional[torch.device] = None,
         math_dtype: Optional[torch.dtype] = None,
@@ -198,7 +198,7 @@ def disable_type_conv(t):
 
 
 def _tensor_product_fx(
-    descriptor: stp.SegmentedTensorProduct,
+    descriptor: cue.SegmentedTensorProduct,
     device: Optional[torch.device],
     math_dtype: torch.dtype,
     optimize_einsums: bool,
@@ -313,7 +313,7 @@ def _tensor_product_fx(
     elif num_inputs == 0:
 
         class _no_input(torch.nn.Module):
-            def __init__(self, descriptor: stp.SegmentedTensorProduct):
+            def __init__(self, descriptor: cue.SegmentedTensorProduct):
                 super().__init__()
 
                 for pid, path in enumerate(descriptor.paths):
@@ -408,7 +408,7 @@ CALL_DISPATCHERS = [
 
 
 class _Wrapper(torch.nn.Module):
-    def __init__(self, module: torch.nn.Module, descriptor: stp.SegmentedTensorProduct):
+    def __init__(self, module: torch.nn.Module, descriptor: cue.SegmentedTensorProduct):
         super().__init__()
         self.module = CALL_DISPATCHERS[descriptor.num_operands - 1](module)
         self.descriptor = descriptor
@@ -418,7 +418,7 @@ class _Wrapper(torch.nn.Module):
 
 
 def _tensor_product_cuda(
-    descriptor: stp.SegmentedTensorProduct,
+    descriptor: cue.SegmentedTensorProduct,
     device: Optional[torch.device],
     math_dtype: torch.dtype,
 ) -> torch.nn.Module:
@@ -463,7 +463,7 @@ def _tensor_product_cuda(
                     return TensorProductUniform4x1d(d, device, math_dtype)
 
     supported_targets = [
-        stp.Subscripts(subscripts)
+        cue.segmented_polynomials.Subscripts(subscripts)
         for subscripts in [
             "u__uw_w",
             "_v_vw_w",
@@ -481,7 +481,9 @@ def _tensor_product_cuda(
 
     try:
         descriptor, perm = next(
-            stp.dispatch(descriptor, supported_targets, "permute_all_but_last")
+            cue.segmented_polynomials.dispatch(
+                descriptor, supported_targets, "permute_all_but_last"
+            )
         )
     except StopIteration:
         raise NotImplementedError(
@@ -505,7 +507,7 @@ def _permutation_module(permutation: Tuple[int, ...]):
 class FusedTensorProductOp3(torch.nn.Module):
     def __init__(
         self,
-        descriptor: stp.SegmentedTensorProduct,
+        descriptor: cue.SegmentedTensorProduct,
         perm: Tuple[int, int],
         device: Optional[torch.device],
         math_dtype: torch.dtype,
@@ -560,7 +562,7 @@ class FusedTensorProductOp3(torch.nn.Module):
 class FusedTensorProductOp4(torch.nn.Module):
     def __init__(
         self,
-        descriptor: stp.SegmentedTensorProduct,
+        descriptor: cue.SegmentedTensorProduct,
         perm: Tuple[int, int, int],
         device: Optional[torch.device],
         math_dtype: torch.dtype,
@@ -618,7 +620,7 @@ class FusedTensorProductOp4(torch.nn.Module):
 class TensorProductUniform1d(torch.nn.Module):
     def __init__(
         self,
-        descriptor: stp.SegmentedTensorProduct,
+        descriptor: cue.SegmentedTensorProduct,
         device: Optional[torch.device],
         math_dtype: torch.dtype,
     ):
@@ -692,7 +694,7 @@ class TensorProductUniform4x1d(TensorProductUniform1d):
 class TensorProductUniform3x1dIndexed(torch.nn.Module):
     def __init__(
         self,
-        descriptor: stp.SegmentedTensorProduct,
+        descriptor: cue.SegmentedTensorProduct,
         device: Optional[torch.device],
         math_dtype: torch.dtype,
     ):
@@ -749,7 +751,7 @@ class TensorProductUniform3x1dIndexed(torch.nn.Module):
 class TensorProductUniform4x1dIndexed(torch.nn.Module):
     def __init__(
         self,
-        descriptor: stp.SegmentedTensorProduct,
+        descriptor: cue.SegmentedTensorProduct,
         device: Optional[torch.device],
         math_dtype: torch.dtype,
     ):

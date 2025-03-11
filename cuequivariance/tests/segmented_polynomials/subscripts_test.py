@@ -14,23 +14,23 @@
 # limitations under the License.
 import pytest
 
-import cuequivariance.segmented_polynomials as stp
+import cuequivariance.segmented_polynomials as sp
 
 
 def test_subscripts():
     with pytest.raises(ValueError):
-        stp.Subscripts("#$%@")
+        sp.Subscripts("#$%@")
 
     with pytest.raises(ValueError):
-        stp.Subscripts("Zu")  # uppercase not supported anymore
+        sp.Subscripts("Zu")  # uppercase not supported anymore
 
     with pytest.raises(ValueError):
-        stp.Subscripts("uZ")  # uppercase after lowercase
+        sp.Subscripts("uZ")  # uppercase after lowercase
 
     with pytest.raises(ValueError):
-        stp.Subscripts("uZ+ij+kl")  # multiple + signs
+        sp.Subscripts("uZ+ij+kl")  # multiple + signs
 
-    subscripts = stp.Subscripts("ui,vj,uvk+ijk")
+    subscripts = sp.Subscripts("ui,vj,uvk+ijk")
     assert subscripts.canonicalize() == "ui,vj,uvk+ijk"
 
     assert subscripts.coefficients == "ijk"
@@ -45,5 +45,5 @@ def test_subscripts():
 
 
 def test_canonicalize():
-    assert stp.Subscripts("ui").canonicalize() == "uv"
-    assert stp.Subscripts("ab,ad+bd").canonicalize() == "ui,uj+ij"
+    assert sp.Subscripts("ui").canonicalize() == "uv"
+    assert sp.Subscripts("ab,ad+bd").canonicalize() == "ui,uj+ij"

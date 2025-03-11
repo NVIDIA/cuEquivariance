@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import cuequivariance as cue
-from cuequivariance import segmented_polynomials as stp
 
 
 def symmetric_contraction(
@@ -73,7 +72,7 @@ def symmetric_contraction(
     input_operand = cue.SegmentedOperand(ndim=1, segments=[(mul,)] * irreps_in.dim)
 
     if degree == 0:
-        d = stp.SegmentedTensorProduct.from_subscripts("i_i")
+        d = cue.SegmentedTensorProduct.from_subscripts("i_i")
         for _, ir in irreps_out:
             if not ir.is_scalar():
                 d.add_segment(output_operand, {"i": ir.dim})
@@ -83,7 +82,7 @@ def symmetric_contraction(
 
     else:
         abc = "abcdefgh"[:degree]
-        d = stp.SegmentedTensorProduct.from_subscripts(
+        d = cue.SegmentedTensorProduct.from_subscripts(
             f"w_{'_'.join(f'{a}' for a in abc)}_i+{abc}iw"
         )
 

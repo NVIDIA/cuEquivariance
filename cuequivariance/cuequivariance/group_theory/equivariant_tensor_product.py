@@ -20,7 +20,6 @@ import warnings
 from typing import Optional, Sequence, Union
 
 import cuequivariance as cue
-from cuequivariance import segmented_polynomials as stp
 
 
 @dataclasses.dataclass(init=False, frozen=True)
@@ -55,11 +54,11 @@ class EquivariantTensorProduct:
     """
 
     operands: tuple[cue.Rep, ...]
-    ds: list[stp.SegmentedTensorProduct]
+    ds: list[cue.SegmentedTensorProduct]
 
     def __init__(
         self,
-        d: Union[stp.SegmentedTensorProduct, Sequence[stp.SegmentedTensorProduct]],
+        d: Union[cue.SegmentedTensorProduct, Sequence[cue.SegmentedTensorProduct]],
         operands: list[cue.Rep],
         symmetrize: bool = True,
     ):
@@ -70,7 +69,7 @@ class EquivariantTensorProduct:
             stacklevel=2,
         )
         operands = tuple(operands)
-        if isinstance(d, stp.SegmentedTensorProduct):
+        if isinstance(d, cue.SegmentedTensorProduct):
             assert len(operands) == d.num_operands
             for oid in range(d.num_operands):
                 assert operands[oid].dim == d.operands[oid].size
@@ -129,7 +128,7 @@ class EquivariantTensorProduct:
         return self.__mul__(factor)
 
     @property
-    def d(self) -> stp.SegmentedTensorProduct:
+    def d(self) -> cue.SegmentedTensorProduct:
         assert len(self.ds) == 1
         return self.ds[0]
 
@@ -269,7 +268,7 @@ class EquivariantTensorProduct:
         del layout
         layouts = [cue.IrrepsLayout.as_layout(layout) for layout in layouts]
 
-        def f(d: stp.SegmentedTensorProduct) -> stp.SegmentedTensorProduct:
+        def f(d: cue.SegmentedTensorProduct) -> cue.SegmentedTensorProduct:
             ii = self.map_operands(d.num_operands)
             assert len(ii) == d.num_operands
 
@@ -303,7 +302,9 @@ class EquivariantTensorProduct:
                     continue
                 raise NotImplementedError
             return d.add_or_transpose_modes(
-                stp.Subscripts.from_operands(new_subscripts, d.coefficient_subscripts)
+                cue.segmented_polynomials.Subscripts.from_operands(
+                    new_subscripts, d.coefficient_subscripts
+                )
             )
 
         return EquivariantTensorProduct(
@@ -405,7 +406,7 @@ class EquivariantTensorProduct:
                 assert all(e.operands[oid] == ope for e in es)
                 new_operands.append(ope)
 
-        new_ds: dict[int, stp.SegmentedTensorProduct] = {}
+        new_ds: dict[int, cue.SegmentedTensorProduct] = {}
         for eid, e in enumerate(es):
             for d in e.ds:
                 d = copy.deepcopy(d)

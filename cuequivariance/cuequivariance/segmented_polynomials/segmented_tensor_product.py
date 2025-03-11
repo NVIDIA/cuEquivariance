@@ -31,12 +31,12 @@ import numpy as np
 import opt_einsum
 
 import cuequivariance as cue  # noqa: F401
-import cuequivariance.segmented_polynomials as stp
 from cuequivariance.etc.linalg import round_to_rational, round_to_sqrt_rational
 from cuequivariance.etc.permutations import (
     generate_permutations_from,
     inverse_permutation,
 )
+from cuequivariance.segmented_polynomials import Path, Subscripts
 
 from .dimensions_dict import format_dimensions_dict
 
@@ -62,7 +62,7 @@ class SegmentedTensorProduct:
 
     operands_and_subscripts: tuple[tuple[cue.SegmentedOperand, str], ...]
     coefficient_subscripts: str
-    paths: tuple[stp.Path, ...]
+    paths: tuple[Path, ...]
 
     ################################ Initializers ################################
 
@@ -73,7 +73,7 @@ class SegmentedTensorProduct:
         | None = None,
         coefficient_subscripts: str = "",
         *,
-        paths: Sequence[stp.Path] | None = None,
+        paths: Sequence[Path] | None = None,
     ):
         if operands_and_subscripts is None:
             operands_and_subscripts = []
@@ -102,10 +102,10 @@ class SegmentedTensorProduct:
             + self.operands_and_subscripts[oid + 1 :],
         )
 
-    def set_paths(self, paths: list[stp.Path]):
+    def set_paths(self, paths: list[Path]):
         object.__setattr__(self, "paths", tuple(copy.deepcopy(path) for path in paths))
 
-    def insert_path_(self, path_index: int, path: stp.Path):
+    def insert_path_(self, path_index: int, path: Path):
         object.__setattr__(
             self,
             "paths",
@@ -119,7 +119,7 @@ class SegmentedTensorProduct:
         return tuple(ope for ope, _ in self.operands_and_subscripts)
 
     def assert_valid(self):
-        assert stp.Subscripts.is_valid(self.subscripts)
+        assert Subscripts.is_valid(self.subscripts)
 
         for m in self.subscripts.modes():
             if self.subscripts.count(m) == 1:
@@ -152,7 +152,7 @@ class SegmentedTensorProduct:
                 )
 
     @classmethod
-    def from_subscripts(cls, subscripts: stp.Subscripts) -> SegmentedTensorProduct:
+    def from_subscripts(cls, subscripts: Subscripts) -> SegmentedTensorProduct:
         r"""
         Create a descriptor from a subscripts string.
 
@@ -166,7 +166,7 @@ class SegmentedTensorProduct:
             >>> print(d)
             uv,ui,vj+ij operands=[(2, 3)],[(2, 5)],[(3, 4)] paths=[op0[0]*op1[0]*op2[0]*c c.shape=(5, 4) c.nnz=20]
         """
-        subscripts = stp.Subscripts(subscripts)
+        subscripts = Subscripts(subscripts)
         operands = [
             cue.SegmentedOperand(ndim=len(operand)) for operand in subscripts.operands
         ]
@@ -280,9 +280,9 @@ class SegmentedTensorProduct:
         return len(self.paths)
 
     @property
-    def subscripts(self) -> stp.Subscripts:
+    def subscripts(self) -> Subscripts:
         """Subscripts of the tensor product."""
-        return stp.Subscripts.from_operands(
+        return Subscripts.from_operands(
             [subscripts for _, subscripts in self.operands_and_subscripts],
             self.coefficient_subscripts,
         )
@@ -486,7 +486,7 @@ class SegmentedTensorProduct:
         return self.get_dimensions_dict().get(m, set())
 
     def get_path_dimensions_dict(
-        self, path: Union[int, stp.Path], *, returns_sets: bool = False
+        self, path: Union[int, Path], *, returns_sets: bool = False
     ) -> dict[str, Union[int, set[int]]]:
         """Get the dimensions of a specific path."""
         if isinstance(path, int):
@@ -505,7 +505,7 @@ class SegmentedTensorProduct:
         return {m: next(iter(dd)) for m, dd in dims.items()}
 
     def get_path_dim(
-        self, path: Union[int, stp.Path], m: str, *, returns_set=False
+        self, path: Union[int, Path], m: str, *, returns_set=False
     ) -> Union[int, set[int]]:
         """Get the dimension of a specific mode in a specific path."""
         if isinstance(path, int):
@@ -514,14 +514,14 @@ class SegmentedTensorProduct:
             m, set() if returns_set else 0
         )
 
-    def segment_slice(self, operand: int, path: Union[int, stp.Path]) -> slice:
+    def segment_slice(self, operand: int, path: Union[int, Path]) -> slice:
         """Get the slice of the segment in the given operand selected by the given path."""
         if isinstance(path, int):
             path = self.paths[path]
         return self.operands[operand].segment_slices()[path.indices[operand]]
 
     def get_segment_shape(
-        self, operand: int, path: Union[int, stp.Path]
+        self, operand: int, path: Union[int, Path]
     ) -> tuple[int, ...]:
         """Get the shape of the segment in the given operand selected by the given path."""
         if isinstance(path, int):
@@ -721,7 +721,7 @@ class SegmentedTensorProduct:
 
         dims = {m: next(iter(dd)) for m, dd in dims.items()}
 
-        path = stp.Path(
+        path = Path(
             [
                 (
                     (s + self.operands[oid].num_segments)
@@ -795,7 +795,7 @@ class SegmentedTensorProduct:
         )
         self.set_paths(
             [
-                stp.Path(
+                Path(
                     [
                         s if s < sid or oid != operand else s + n.num_segments
                         for oid, s in enumerate(path.indices)
@@ -832,7 +832,7 @@ class SegmentedTensorProduct:
 
         This is useful to identify equivalent descriptors.
         """
-        subscripts = stp.Subscripts.canonicalize(self.subscripts)
+        subscripts = Subscripts.canonicalize(self.subscripts)
         return self.add_or_rename_modes(subscripts)
 
     def add_or_rename_modes(
@@ -849,7 +849,7 @@ class SegmentedTensorProduct:
         Returns:
             SegmentedTensorProduct: The new descriptor with the renamed modes.
         """
-        subscripts = stp.Subscripts(subscripts)
+        subscripts = Subscripts(subscripts)
 
         if subscripts.is_equivalent(self.subscripts):
             d = SegmentedTensorProduct.from_subscripts(subscripts)
@@ -858,7 +858,7 @@ class SegmentedTensorProduct:
             for path in self.paths:
                 d.insert_path_(
                     len(d.paths),
-                    stp.Path(indices=path.indices, coefficients=path.coefficients),
+                    Path(indices=path.indices, coefficients=path.coefficients),
                 )
             return d
 
@@ -902,7 +902,7 @@ class SegmentedTensorProduct:
 
             D.insert_path_(
                 len(D.paths),
-                stp.Path(
+                Path(
                     indices=path.indices,
                     coefficients=np.reshape(
                         path.coefficients,
@@ -926,7 +926,7 @@ class SegmentedTensorProduct:
         Returns:
             SegmentedTensorProduct: The new descriptor with the transposed modes.
         """
-        subscripts = stp.Subscripts.complete_wildcards(subscripts, self.subscripts)
+        subscripts = Subscripts.complete_wildcards(subscripts, self.subscripts)
 
         if dims is None:
             dims = dict()
@@ -966,7 +966,7 @@ class SegmentedTensorProduct:
         perm = [old.index(ch) for ch in new]
         d.set_paths(
             [
-                stp.Path(
+                Path(
                     indices=path.indices,
                     coefficients=np.transpose(path.coefficients, perm),
                 )
@@ -994,7 +994,7 @@ class SegmentedTensorProduct:
             )
         if not all(ch in dims for ch in modes):
             raise ValueError(f"expected dimensions for all new modes {modes}.")
-        subscripts = stp.Subscripts.from_operands(
+        subscripts = Subscripts.from_operands(
             [ope + modes for ope in self.subscripts.operands],
             coefficients=self.subscripts.coefficients,
         )
@@ -1038,7 +1038,7 @@ class SegmentedTensorProduct:
             segments=[self.operands[operand][i] for i in perm],
         )
         new_paths = [
-            stp.Path(
+            Path(
                 indices=tuple(
                     sid if oid != operand else perm.index(sid)
                     for oid, sid in enumerate(path.indices)
@@ -1120,7 +1120,7 @@ class SegmentedTensorProduct:
         for path in self.paths:
             d.insert_path_(
                 len(d.paths),
-                stp.Path(
+                Path(
                     indices=path.indices,
                     coefficients=np.reshape(
                         path.coefficients,
@@ -1165,7 +1165,7 @@ class SegmentedTensorProduct:
         ):
             return (
                 self.add_or_transpose_modes(
-                    stp.Subscripts.from_operands(
+                    Subscripts.from_operands(
                         self.subscripts.operands,
                         mode + self.coefficient_subscripts.replace(mode, ""),
                     )
@@ -1209,7 +1209,7 @@ class SegmentedTensorProduct:
                 if self.coefficient_subscripts.startswith(mode):
                     coefficients = np.split(coefficients, num_subdivisions, axis=0)[i]
                 d.insert_path_(
-                    len(d.paths), stp.Path(indices=indices, coefficients=coefficients)
+                    len(d.paths), Path(indices=indices, coefficients=coefficients)
                 )
 
         logger.debug(f"Split {mode} in {self}: got {d}")
@@ -1259,7 +1259,7 @@ class SegmentedTensorProduct:
                 c = path.coefficients / np.sqrt(total_variance)
             else:
                 c = 0.0 * path.coefficients
-            new_paths.append(stp.Path(indices=path.indices, coefficients=c))
+            new_paths.append(Path(indices=path.indices, coefficients=c))
 
         d = dataclasses.replace(self, paths=new_paths)
         logger.debug(f"Normalized paths for operand {operand} in {self}: got {d}")
@@ -1284,7 +1284,7 @@ class SegmentedTensorProduct:
         return dataclasses.replace(
             self,
             paths=[
-                stp.Path(indices=indices, coefficients=coefficients)
+                Path(indices=indices, coefficients=coefficients)
                 for indices, coefficients in paths.items()
             ],
         )
@@ -1300,7 +1300,7 @@ class SegmentedTensorProduct:
             else:
                 paths[path.indices] = path.coefficients
         paths = [
-            stp.Path(indices=indices, coefficients=coefficients)
+            Path(indices=indices, coefficients=coefficients)
             for indices, coefficients in paths.items()
             if not np.all(coefficients == 0)
         ]
@@ -1329,7 +1329,7 @@ class SegmentedTensorProduct:
         return dataclasses.replace(
             self,
             paths=[
-                stp.Path(
+                Path(
                     indices=f(path.indices),
                     coefficients=path.coefficients,
                 )
@@ -1367,7 +1367,7 @@ class SegmentedTensorProduct:
                 for i, oid in enumerate(operands):
                     new_indices[oid] = indices[operands[perm[i]]]
                 paths.append(
-                    stp.Path(
+                    Path(
                         indices=new_indices,
                         coefficients=path.coefficients / len(permutations),
                     )
@@ -1496,8 +1496,8 @@ class SegmentedTensorProduct:
             old_indices: tuple[int, ...],  # old segment indices (one per operand)
             sub_indices: dict[str, int],
             coefficients: np.ndarray,
-        ) -> stp.Path:
-            return stp.Path(
+        ) -> Path:
+            return Path(
                 [
                     offsets[sid]
                     + ravel_multi_index(
@@ -1680,7 +1680,7 @@ class SegmentedTensorProduct:
                     c, c.shape[:i] + (c.shape[i] * c.shape[i + 1],) + c.shape[i + 2 :]
                 )
                 d1.insert_path_(
-                    len(d1.paths), stp.Path(indices=path.indices, coefficients=c)
+                    len(d1.paths), Path(indices=path.indices, coefficients=c)
                 )
         else:
             d1.set_paths(d0.paths)
@@ -1699,7 +1699,7 @@ class SegmentedTensorProduct:
         d = copy.deepcopy(self)
         d.set_paths(
             [
-                stp.Path(
+                Path(
                     indices=path.indices,
                     coefficients=round_to_rational(path.coefficients, max_denominator),
                 )
@@ -1720,7 +1720,7 @@ class SegmentedTensorProduct:
         d = copy.deepcopy(self)
         d.set_paths(
             [
-                stp.Path(
+                Path(
                     indices=path.indices,
                     coefficients=round_to_sqrt_rational(
                         path.coefficients, max_denominator
@@ -1743,7 +1743,7 @@ class SegmentedTensorProduct:
         d = copy.deepcopy(self)
         d.set_paths(
             [
-                stp.Path(indices=path.indices, coefficients=f(path.coefficients))
+                Path(indices=path.indices, coefficients=f(path.coefficients))
                 for path in d.paths
             ]
         )

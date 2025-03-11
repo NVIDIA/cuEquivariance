@@ -17,7 +17,6 @@ from typing import Optional
 import numpy as np
 
 import cuequivariance as cue
-from cuequivariance import segmented_polynomials as stp
 
 
 def fixed_axis_angle_rotation(
@@ -30,7 +29,7 @@ def fixed_axis_angle_rotation(
     """
     assert irreps.irrep_class in [cue.SO3, cue.O3]
 
-    d = stp.SegmentedTensorProduct.from_subscripts("iu_ju+ij")
+    d = cue.SegmentedTensorProduct.from_subscripts("iu_ju+ij")
 
     for mul, ir in irreps:
         # Note the transpose
@@ -72,7 +71,9 @@ def yxy_rotation(
     # gamma, beta, input, A
     cbio = xy_rotation(irreps, lmax).polynomial.tensor_products[0][1]
     aio = y_rotation(irreps, lmax).polynomial.tensor_products[0][1]  # alpha, A, output
-    cbiao = stp.dot(cbio, aio, (3, 1))  # gamma, beta, input, alpha, output
+    cbiao = cue.segmented_polynomials.dot(
+        cbio, aio, (3, 1)
+    )  # gamma, beta, input, alpha, output
     cbaio = cbiao.move_operand(2, 3)  # gamma, beta, alpha, input, output
     return cue.EquivariantPolynomial(
         [
@@ -96,7 +97,7 @@ def xy_rotation(
     """
     cio = y_rotation(irreps, lmax).polynomial.tensor_products[0][1]  # gamma, input, A
     bio = x_rotation(irreps, lmax).polynomial.tensor_products[0][1]  # beta, A, output
-    cibo = stp.dot(cio, bio, (2, 1))  # gamma, input, beta, output
+    cibo = cue.segmented_polynomials.dot(cio, bio, (2, 1))  # gamma, input, beta, output
     cbio = cibo.move_operand(1, 2)  # gamma, beta, input, output
     return cue.EquivariantPolynomial(
         [
@@ -119,7 +120,7 @@ def yx_rotation(
     """
     cio = x_rotation(irreps, lmax).d
     bio = y_rotation(irreps, lmax).d
-    cibo = stp.dot(cio, bio, (2, 1))
+    cibo = cue.segmented_polynomials.dot(cio, bio, (2, 1))
     cbio = cibo.move_operand(1, 2)
     return cue.EquivariantPolynomial(
         [
@@ -151,7 +152,7 @@ def y_rotation(
     if lmax is None:
         lmax = max(ir.l for _, ir in irreps)
 
-    d = stp.SegmentedTensorProduct.from_subscripts("i_ju_ku+ijk")
+    d = cue.SegmentedTensorProduct.from_subscripts("i_ju_ku+ijk")
     phc = d.add_segment(
         0, (lmax,)
     )  # cos(th * lmax), cos(th * (lmax - 1)), ..., cos(th)
@@ -221,7 +222,9 @@ def x_rotation(
     dz90 = fixed_axis_angle_rotation(
         irreps, np.array([0.0, 0.0, 1.0]), np.pi / 2.0
     ).polynomial.tensor_products[0][1]
-    d = stp.dot(stp.dot(dy, dz90, (1, 1)), dz90, (1, 1))
+    d = cue.segmented_polynomials.dot(
+        cue.segmented_polynomials.dot(dy, dz90, (1, 1)), dz90, (1, 1)
+    )
 
     return cue.EquivariantPolynomial(
         [
@@ -237,7 +240,7 @@ def inversion(irreps: cue.Irreps) -> cue.EquivariantPolynomial:
     """
     subsrcipts: ``input[u],output[u]``
     """
-    d = stp.SegmentedTensorProduct.from_subscripts("iu_ju+ji")
+    d = cue.SegmentedTensorProduct.from_subscripts("iu_ju+ji")
     for mul, ir in irreps:
         assert len(ir.H) == 1
         H = ir.H[0]

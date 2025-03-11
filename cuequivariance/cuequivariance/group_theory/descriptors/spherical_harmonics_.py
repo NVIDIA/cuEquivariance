@@ -14,10 +14,9 @@
 # limitations under the License.
 from functools import cache
 
-import sympy as sp
+import sympy
 
 import cuequivariance as cue
-from cuequivariance import segmented_polynomials as stp
 from cuequivariance.etc.sympy_utils import sqrtQarray_to_sympy
 
 
@@ -52,9 +51,11 @@ def spherical_harmonics(
     ir, formula = sympy_spherical_harmonics(ir_vec, ell)
 
     assert ir_vec.dim == 3
-    d = stp.SegmentedTensorProduct.empty_segments([3] * ell + [ir.dim])
+    d = cue.SegmentedTensorProduct.empty_segments([3] * ell + [ir.dim])
     for i in range(ir.dim):
-        for degrees, coeff in sp.Poly(formula[i], sp.symbols("x:3")).as_dict().items():
+        for degrees, coeff in (
+            sympy.Poly(formula[i], sympy.symbols("x:3")).as_dict().items()
+        ):
             indices = poly_degrees_to_path_indices(degrees)
             d.add_path(*indices, i, c=coeff)
 
@@ -66,8 +67,8 @@ def spherical_harmonics(
             cue.IrrepsAndLayout(cue.Irreps(ir), cue.ir_mul),
         ],
         cue.SegmentedPolynomial(
-            [cue.SegmentedOperand(ndim=0, segments=[()] * 3)],
-            [cue.SegmentedOperand(ndim=0, segments=[()] * ir.dim)],
+            [cue.SegmentedOperand([()] * 3)],
+            [cue.SegmentedOperand([()] * ir.dim)],
             [(cue.Operation([0] * ell + [1]), d)],
         ),
     )
@@ -83,14 +84,14 @@ def poly_degrees_to_path_indices(degrees: tuple[int, ...]) -> tuple[int, ...]:
 @cache
 def sympy_spherical_harmonics(
     ir_vec: cue.Irrep, ell: int
-) -> tuple[cue.Irrep, sp.Array]:
+) -> tuple[cue.Irrep, sympy.Array]:
     if ell == 0:
-        return ir_vec.trivial(), sp.Array([1])
+        return ir_vec.trivial(), sympy.Array([1])
 
     if ell == 1:
         assert ir_vec.dim == 3
-        x = sp.symbols("x:3")
-        return ir_vec, sp.sqrt(3) * sp.Array([x[0], x[1], x[2]])
+        x = sympy.symbols("x:3")
+        return ir_vec, sympy.sqrt(3) * sympy.Array([x[0], x[1], x[2]])
 
     l2 = ell // 2
     l1 = ell - l2
@@ -98,11 +99,11 @@ def sympy_spherical_harmonics(
     ir2, yl2 = sympy_spherical_harmonics(ir_vec, l2)
     ir = sorted(cue.selection_rule_product(ir1, ir2))[-1]
 
-    def sh_var(ir: cue.Irrep, ell: int) -> list[sp.Symbol]:
-        return [sp.symbols(f"sh{ell}_{m}") for m in range(ir.dim)]
+    def sh_var(ir: cue.Irrep, ell: int) -> list[sympy.Symbol]:
+        return [sympy.symbols(f"sh{ell}_{m}") for m in range(ir.dim)]
 
     cg = sqrtQarray_to_sympy(ir_vec.clebsch_gordan(ir1, ir2, ir).squeeze(0))
-    yl = sp.Array(
+    yl = sympy.Array(
         [
             sum(
                 sh_var(ir1, l1)[i] * sh_var(ir2, l2)[j] * cg[i, j, k]
@@ -116,7 +117,7 @@ def sympy_spherical_harmonics(
     y = yl.subs(zip(sh_var(ir1, l1), yl1)).subs(zip(sh_var(ir2, l2), yl2))
 
     cst = y.subs({"x0": 0, "x1": 1, "x2": 0})
-    norm = sp.sqrt(sum(cst.applyfunc(lambda x: x**2)))
+    norm = sympy.sqrt(sum(cst.applyfunc(lambda x: x**2)))
 
-    y = sp.sqrt(sp.Integer(ir.dim)) * y / norm
-    return ir, sp.simplify(y)
+    y = sympy.sqrt(sympy.Integer(ir.dim)) * y / norm
+    return ir, sympy.simplify(y)

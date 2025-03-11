@@ -16,7 +16,6 @@ import itertools
 from typing import Optional, Sequence
 
 import cuequivariance as cue
-from cuequivariance import segmented_polynomials as stp
 from cuequivariance.group_theory.irreps_array.irrep_utils import into_list_of_irrep
 
 
@@ -54,7 +53,7 @@ def fully_connected_tensor_product(
     """
     G = irreps1.irrep_class
 
-    d = stp.SegmentedTensorProduct.from_subscripts("uvw,iu,jv,kw+ijk")
+    d = cue.SegmentedTensorProduct.from_subscripts("uvw,iu,jv,kw+ijk")
 
     for mul, ir in irreps1:
         d.add_segment(1, (ir.dim, mul))
@@ -110,7 +109,7 @@ def full_tensor_product(
     if irreps3_filter is not None:
         irreps3_filter = into_list_of_irrep(G, irreps3_filter)
 
-    d = stp.SegmentedTensorProduct.from_subscripts("iu,jv,kuv+ijk")
+    d = cue.SegmentedTensorProduct.from_subscripts("iu,jv,kuv+ijk")
 
     for mul, ir in irreps1:
         d.add_segment(0, (ir.dim, mul))
@@ -174,7 +173,7 @@ def channelwise_tensor_product(
     if irreps3_filter is not None:
         irreps3_filter = into_list_of_irrep(G, irreps3_filter)
 
-    d = stp.SegmentedTensorProduct.from_subscripts("uv,iu,jv,kuv+ijk")
+    d = cue.SegmentedTensorProduct.from_subscripts("uv,iu,jv,kuv+ijk")
 
     for mul, ir in irreps1:
         d.add_segment(1, (ir.dim, mul))
@@ -269,7 +268,7 @@ def elementwise_tensor_product(
 
     irreps1_cut, irreps2_cut = _align_two_irreps(irreps1, irreps2, cue.ir_mul)
 
-    d = stp.SegmentedTensorProduct.from_subscripts("iu,ju,ku+ijk")
+    d = cue.SegmentedTensorProduct.from_subscripts("iu,ju,ku+ijk")
 
     irreps3 = []
     for (mul, ir1), (_, ir2) in zip(irreps1_cut, irreps2_cut):
@@ -310,7 +309,7 @@ def linear(irreps_in: cue.Irreps, irreps_out: cue.Irreps) -> cue.EquivariantPoly
     Returns:
         :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: Descriptor of the linear transformation.
     """
-    d = stp.SegmentedTensorProduct.from_subscripts("uv_iu_iv")
+    d = cue.SegmentedTensorProduct.from_subscripts("uv_iu_iv")
     for mul, ir in irreps_in:
         d.add_segment(1, (ir.dim, mul))
     for mul, ir in irreps_out:

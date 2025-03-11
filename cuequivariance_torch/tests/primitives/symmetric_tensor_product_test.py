@@ -16,7 +16,6 @@ import pytest
 import torch
 
 import cuequivariance as cue
-import cuequivariance.segmented_polynomials as stp
 import cuequivariance_torch as cuet
 from cuequivariance import descriptors
 from cuequivariance_torch._tests.utils import (
@@ -32,10 +31,10 @@ def make_descriptors():
     ).polynomial.tensor_products
     yield [d1, d2, d3]
 
-    d1 = stp.SegmentedTensorProduct.from_subscripts(",,")
+    d1 = cue.SegmentedTensorProduct.from_subscripts(",,")
     d1.add_path(None, None, None, c=2.0)
 
-    d3 = stp.SegmentedTensorProduct.from_subscripts(",,,,")
+    d3 = cue.SegmentedTensorProduct.from_subscripts(",,,,")
     d3.add_path(None, None, None, None, None, c=3.0)
 
     yield [d1, d3]
@@ -60,7 +59,7 @@ if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:
 @pytest.mark.parametrize("ds", make_descriptors())
 @pytest.mark.parametrize("dtype, math_dtype, tol", settings1)
 def test_primitive_indexed_symmetric_tensor_product_cuda_vs_fx(
-    ds: list[stp.SegmentedTensorProduct], dtype, math_dtype, tol: float, batch_size: int
+    ds: list[cue.SegmentedTensorProduct], dtype, math_dtype, tol: float, batch_size: int
 ):
     use_fallback = not torch.cuda.is_available()
 
@@ -153,7 +152,7 @@ export_modes = ["compile", "script", "jit"]
 @pytest.mark.parametrize("mode", export_modes)
 @pytest.mark.parametrize("use_fallback", [True, False])
 def test_export(
-    ds: list[stp.SegmentedTensorProduct],
+    ds: list[cue.SegmentedTensorProduct],
     mode: str,
     use_fallback: bool,
     tmp_path,

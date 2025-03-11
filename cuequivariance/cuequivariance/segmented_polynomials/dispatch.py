@@ -16,14 +16,15 @@ import itertools
 import math
 from typing import Generator, Tuple
 
-import cuequivariance.segmented_polynomials as stp  # we cannot import cuequivariance as cue because of circular import
+# we cannot import cuequivariance as cue because of circular import
+from cuequivariance.segmented_polynomials import SegmentedTensorProduct, Subscripts
 
 
 def dispatch(
-    descriptor: stp.SegmentedTensorProduct,
-    targets: list[stp.Subscripts],
+    descriptor: SegmentedTensorProduct,
+    targets: list[Subscripts],
     permutation_mode: str,
-) -> Generator[Tuple[stp.SegmentedTensorProduct, Tuple[int, ...]], None, None]:
+) -> Generator[Tuple[SegmentedTensorProduct, Tuple[int, ...]], None, None]:
     """Dispatch a descriptor to a target subscripts.
 
     Args:
@@ -41,7 +42,7 @@ def dispatch(
         and dispatch the flattened descriptor to the target subscripts. The function will yield all the
         possible dispatches found.
     """
-    targets = [stp.Subscripts(subscripts) for subscripts in targets]
+    targets = [Subscripts(subscripts) for subscripts in targets]
     targets = [
         subscripts
         for subscripts in targets

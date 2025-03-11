@@ -15,7 +15,7 @@
 import numpy as np
 
 import cuequivariance as cue
-import cuequivariance.segmented_polynomials as stp
+import cuequivariance.segmented_polynomials as sp
 from cuequivariance.group_theory import descriptors
 
 
@@ -29,16 +29,16 @@ def test_dot1():
     d2.add_path(None, None, None, c=np.random.randn(2), dims={"b": 3})
     d2.add_path(None, 0, None, c=np.random.randn(3))
 
-    d3 = stp.dot(d1, d2, (1, 0))
+    d3 = sp.dot(d1, d2, (1, 0))
     assert d3.subscripts == "iab,ak,b,+ijk"
 
     x0, x2 = np.random.randn(d1.operands[0].size), np.random.randn(d1.operands[2].size)
     y1 = np.random.randn(d2.operands[1].size)
 
-    tmp = stp.compute_last_operand(d1.move_operand_last(1), x0, x2)
-    z0 = stp.compute_last_operand(d2, tmp, y1)
+    tmp = sp.compute_last_operand(d1.move_operand_last(1), x0, x2)
+    z0 = sp.compute_last_operand(d2, tmp, y1)
 
-    z1 = stp.compute_last_operand(d3, x0, x2, y1)
+    z1 = sp.compute_last_operand(d3, x0, x2, y1)
 
     np.testing.assert_allclose(z0, z1)
 
@@ -63,16 +63,16 @@ def make_examples():
 def test_dot2():
     dx, dy = make_examples()
 
-    dxy = stp.dot(dx, dy, (3, 1))
+    dxy = sp.dot(dx, dy, (3, 1))
     assert dxy.subscripts == "uvw,iu,jv,w,l,mw+ijklm"
 
     x0, x1, x2 = [np.random.randn(dx.operands[i].size) for i in range(3)]
     y0, y2 = [np.random.randn(dy.operands[i].size) for i in [0, 2]]
 
-    tmp = stp.compute_last_operand(dx, x0, x1, x2)
-    A = stp.compute_last_operand(dy, y0, tmp, y2)
+    tmp = sp.compute_last_operand(dx, x0, x1, x2)
+    A = sp.compute_last_operand(dy, y0, tmp, y2)
 
-    B = stp.compute_last_operand(dxy, x0, x1, x2, y0, y2)
+    B = sp.compute_last_operand(dxy, x0, x1, x2, y0, y2)
 
     np.testing.assert_allclose(A, B)
 
@@ -80,13 +80,13 @@ def test_dot2():
 def test_trace():
     dx, dy = make_examples()
 
-    d1 = stp.dot(dx, dy, (3, 1))
+    d1 = sp.dot(dx, dy, (3, 1))
     d1 = d1.canonicalize_subscripts()
     d1 = d1.sort_paths()
 
     assert dy.subscripts == "w,kw,l,mw+klm"
     dy = dy.add_or_rename_modes("a_xa_y_za+xyz")
-    d2 = stp.trace(stp.dot(dx, dy), (3, 4 + 1))
+    d2 = sp.trace(sp.dot(dx, dy), (3, 4 + 1))
     d2 = d2.canonicalize_subscripts()
     d2 = d2.sort_paths()
 
