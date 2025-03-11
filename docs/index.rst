@@ -39,14 +39,16 @@ The easiest way to install cuEquivariance is from `PyPi <https://pypi.org/>`_ us
    pip install cuequivariance-torch
    pip install cuequivariance  # Installs only the core non-ML components
 
-   # CUDA kernels for different CUDA versions
+   # CUDA kernels
    pip install cuequivariance-ops-torch-cu11
    pip install cuequivariance-ops-torch-cu12
+   pip install cuequivariance-ops-jax-cu12
 
 Requirements
 ------------
 
-``cuequivariance-ops-torch-*`` packages are only available for Linux x86_64 and require PyTorch 2.4.0 or later.
+ - ``cuequivariance-ops-torch-*`` packages are available for Linux x86_64/aarch64 and require PyTorch 2.4.0 or later.
+ - ``cuequivariance-ops-jax-cu12`` package is only available for Linux x86_64 and requires JAX 0.5.0 or later.
 
 Organization
 ------------
