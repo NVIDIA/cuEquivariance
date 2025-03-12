@@ -158,13 +158,26 @@ class SegmentedPolynomial:
         return self.__mul__(factor)
 
     def __repr__(self):
+        def sfmt(shape: tuple[int, ...]) -> str:
+            return "(" + ",".join(str(d) for d in shape) + ")"
+
         buffer_names = []
         for ope in self.operands:
             if ope.all_same_segment_shape():
-                shape = ",".join(str(d) for d in ope.segment_shape)
-                buffer_names.append(f"[{ope.size}:{ope.num_segments}⨯({shape})]")
+                buffer_names.append(
+                    f"[{ope.size}:{ope.num_segments}⨯{sfmt(ope.segment_shape)}]"
+                )
             else:
-                buffer_names.append(f"[{ope.size}]")
+                txts = []
+                n = 20
+                for s in ope.segments:
+                    txts.append(sfmt(s))
+                    if len("+".join(txts)) > n:
+                        txts.pop()
+                        break
+                if len(txts) < len(ope.segments):
+                    txts.append("...")
+                buffer_names.append(f"[{ope.size}:{'+'.join(txts)}]")
         return self.to_string(buffer_names)
 
     def to_string(self, buffer_names: list[str] | None = None) -> str:
@@ -180,9 +193,7 @@ class SegmentedPolynomial:
         header = (
             " ".join(buffer_txts[: self.num_inputs])
             + " -> "
-            + " ".join(
-                buffer_txts[self.num_inputs : self.num_inputs + self.num_outputs]
-            )
+            + " ".join(buffer_txts[self.num_inputs :])
         )
 
         def f(ope: cue.Operation, stp: cue.SegmentedTensorProduct) -> str:
