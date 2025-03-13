@@ -16,7 +16,7 @@ pip install cuequivariance-jax
 pip install cuequivariance-torch
 pip install cuequivariance  # Installs only the core non-ML components
 
-# CUDA kernels for different CUDA versions
+# CUDA kernels
 pip install cuequivariance-ops-jax-cu12
 pip install cuequivariance-ops-torch-cu12  # or cu11
 ```
