@@ -61,6 +61,17 @@ def segmented_polynomial_ops_impl(
         assert b.ndim == num_batch_axes + 1, (
             f"Buffer {b.shape} must have {num_batch_axes} batch axes"
         )
+    for i in indices:
+        assert i.ndim == num_batch_axes, (
+            f"Index {i.shape} must have {num_batch_axes} batch axes"
+        )
+
+    # Special case where num_batch_axes == 0
+    if num_batch_axes == 0:
+        num_batch_axes = 1
+        buffers = [reshape(b, (1, *b.shape)) for b in buffers]
+        indices = [reshape(i, (1, *i.shape)) for i in indices]
+        buffer_index = np.full((buffer_index.shape[0], 1), -1, np.int32)
 
     # Reshape buffers to 3D by using the STP informations
     for ope, stp in polynomial.tensor_products:
@@ -125,6 +136,4 @@ def segmented_polynomial_ops_impl(
         math_dtype=math_dtype,
         name=sanitize_string(name),
     )
-    return [
-        jnp.reshape(x, x.shape[:-2] + (x.shape[-2] * x.shape[-1],)) for x in outputs
-    ], ""
+    return [jnp.reshape(x, y.shape) for x, y in zip(outputs, outputs_shape_dtype)], ""

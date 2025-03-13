@@ -20,9 +20,11 @@ import jax.core
 import jax.extend
 import jax.lax
 import jax.numpy as jnp
+import numpy as np  # noqa: F401
 from jax.interpreters import ad, batching, mlir, partial_eval, xla
 
 import cuequivariance as cue
+import cuequivariance_jax as cuex  # noqa: F401
 from cuequivariance_jax.segmented_polynomials.segmented_polynomial_ops_impl import (
     segmented_polynomial_ops_impl,
 )
@@ -86,6 +88,25 @@ def segmented_polynomial(
         The function automatically determines the best implementation based on the
         input characteristics when impl="auto". For maximum performance with CUDA-capable
         hardware, ensure inputs match the CUDA kernel activation conditions.
+
+    Example:
+        >>> poly: cue.SegmentedPolynomial = cue.descriptors.channelwise_tensor_product(
+        ...     cue.Irreps(cue.O3, "32x0e + 32x1o + 32x1e + 32x2o"),
+        ...     cue.Irreps(cue.O3, "0e + 1o + 1e"),
+        ...     cue.Irreps(cue.O3, "32x0e + 32x1o + 32x1e"),
+        ... ).polynomial.flatten_coefficient_modes().squeeze_modes()
+        >>> a = np.random.randn(1, 50, poly.inputs[0].size)
+        >>> b = np.random.randn(10, 50, poly.inputs[1].size)
+        >>> c = np.random.randn(100, 1, poly.inputs[2].size)
+        >>> i = np.random.randint(0, 10, (100, 50))
+        >>> D = jax.ShapeDtypeStruct(shape=(11, 12, poly.outputs[0].size), dtype=np.float32)
+        >>> j1 = np.random.randint(0, 11, (100, 50))
+        >>> j2 = np.random.randint(0, 12, (100, 1))
+        >>> [D] = cuex.segmented_polynomial(
+        ...     poly, [a, b, c], [D], [None, np.s_[i, :], None, np.s_[j1, j2]]
+        ... )
+        >>> D.shape
+        (11, 12, 1056)
     """
 
     if name is None:
@@ -254,7 +275,7 @@ def segmented_polynomial_prim(
     - Maps the outputs back to the original output buffers
     """
     assert len(inputs) + len(outputs_shape_dtype) == len(buffer_index)
-    assert max(max(bi) for bi in buffer_index) < len(indices)
+    assert max(max(bi, default=-1) for bi in buffer_index) < len(indices)
 
     # fuse STPs, consolidate modes, squeeze modes, remove empty segments, consolidate paths, sort paths
     polynomial = polynomial.consolidate()
