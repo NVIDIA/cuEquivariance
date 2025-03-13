@@ -71,7 +71,10 @@ def segmented_polynomial_ops_impl(
 
         for i, operand in zip(ope.buffers, stp.operands):
             b = buffers[i]
-            shape = b.shape[:-1] + (operand.num_segments, operand.segment_size)
+            shape = b.shape[:num_batch_axes] + (
+                operand.num_segments,
+                operand.segment_size,
+            )
             if b.ndim == num_batch_axes + 1:
                 b = buffers[i] = reshape(b, shape)
             if b.shape != shape:
