@@ -36,22 +36,26 @@ def segmented_polynomial_ops_impl(
     inputs: list[jax.Array],  # shape (*batch_sizes, operand_size)
     outputs_shape_dtype: tuple[jax.ShapeDtypeStruct, ...],
     indices: list[jax.Array],
-    buffer_index: list[list[int]],
+    buffer_index: tuple[tuple[int, ...], ...],
     polynomial: cue.SegmentedPolynomial,
     math_dtype: jnp.dtype,
     name: str,
 ) -> tuple[list[jax.Array] | None, str]:
     def log(msg: str):
-        logger.info(f"[{name}] {msg}")
-        return None, name
+        msg = f"[{name}] {msg}"
+        logger.info(msg)
+        return None, msg
 
     buffer_index = np.array(buffer_index)
-    assert polynomial.num_inputs + len(outputs_shape_dtype) + len(indices) == len(
-        buffer_index
-    )
+    num_batch_axes = buffer_index.shape[1]
+    assert polynomial.num_inputs + len(outputs_shape_dtype) == buffer_index.shape[0]
     assert polynomial.num_outputs == len(outputs_shape_dtype)
 
-    num_batch_axes = buffer_index.shape[1]
+    # We don't use the feature that indices can index themselves
+    buffer_index = np.concatenate(
+        [buffer_index, np.full((len(indices), num_batch_axes), -1, np.int32)]
+    )
+
     buffers = list(inputs) + list(outputs_shape_dtype)
     for b in buffers:
         assert b.ndim == num_batch_axes + 1, (
@@ -73,6 +77,9 @@ def segmented_polynomial_ops_impl(
             if b.shape != shape:
                 return log(f"Shape mismatch: {b.shape} != {shape} for {i} {stp} {ope}")
 
+    if not all(b.ndim == num_batch_axes + 2 for b in buffers):
+        return log("All buffers must be used")
+
     for b in buffers:
         if b.dtype.type not in {jnp.float32, jnp.float64, jnp.float16, jnp.bfloat16}:
             return log(f"Unsupported buffer type: {b.dtype}")
@@ -80,9 +87,6 @@ def segmented_polynomial_ops_impl(
     for i in indices:
         if i.dtype.type not in {jnp.int32, jnp.int64}:
             return log(f"Unsupported index type: {i.dtype}")
-
-    if not all(b.ndim == 3 for b in buffers):
-        return log("All buffers must be used")
 
     if len({b.shape[-1] for b in buffers}.union({1})) != 2:
         return log(f"Buffer shapes not compatible {[b.shape for b in buffers]}")
