@@ -20,46 +20,76 @@ import warnings
 import jax
 import jax.lax
 import jax.numpy as jnp
+import numpy as np
 
 import cuequivariance as cue
 
 logger = logging.getLogger(__name__)
 
 
+def _batch_size(sizes: list[int]) -> int:
+    batch_size = 1
+    for size in sizes:
+        if size != 1:
+            assert batch_size in {1, size}
+            batch_size = size
+    return batch_size
+
+
 def segmented_polynomial_vanilla_impl(
-    inputs: list[jax.Array],  # shape (batch_size, operand_size)
+    inputs: list[jax.Array],  # shape (*batch_sizes, operand_size)
     outputs_shape_dtype: tuple[jax.ShapeDtypeStruct, ...],
     indices: list[jax.Array],
-    buffer_index: list[int],
+    buffer_index: tuple[tuple[int, ...], ...],
     polynomial: cue.SegmentedPolynomial,
     math_dtype: jnp.dtype,
     name: str,
-) -> tuple[jax.Array, ...]:  # output buffers
+) -> list[jax.Array]:  # output buffers
     num_inputs = len(buffer_index) - len(outputs_shape_dtype)
     outputs = [jnp.zeros(out.shape, out.dtype) for out in outputs_shape_dtype]
 
+    io_buffers = list(inputs) + list(outputs_shape_dtype)
+    buffer_index = np.array(buffer_index, dtype=np.int32)
+    num_batch_axes = buffer_index.shape[1]
+    batch_sizes = [
+        _batch_size(
+            [x.shape[i] for x, idx in zip(io_buffers, buffer_index[:, i]) if idx < 0],
+        )
+        for i in range(num_batch_axes)
+    ]
+
+    def iota(shape, axis):
+        i = jnp.arange(shape[axis])
+        i = jnp.reshape(i, (1,) * (len(shape) - 1) + (-1,))
+        i = jnp.moveaxis(i, -1, axis)
+        return i
+
+    def indexing(b: int) -> tuple[slice, ...]:
+        bi = buffer_index[b]
+        shape = io_buffers[b].shape[:num_batch_axes]
+        return tuple(
+            iota(shape, axis) if i < 0 else indices[i] for axis, i in enumerate(bi)
+        )
+
     def scatter(i: int) -> jax.Array:
-        buffer = inputs[i]
-        if buffer_index[i] >= 0:
-            idx = indices[buffer_index[i]]
-            return buffer[idx]
-        return buffer
+        return inputs[i][indexing(i)]
 
     def gather(i: int, x: jax.Array) -> jax.Array:
         buffer = outputs[i - num_inputs]
-        if buffer_index[i] >= 0:
-            idx = indices[buffer_index[i]]
-            return buffer.at[idx].add(x)
-        return buffer + x
+        return buffer.at[indexing(i)].add(x)
 
     for operation, d in polynomial.tensor_products:
         ope_out, b_out = operation.output_operand_buffer(num_inputs)
 
         out = outputs_shape_dtype[b_out - num_inputs]
-        if buffer_index[b_out] >= 0:
-            out = jax.ShapeDtypeStruct(
-                indices[buffer_index[b_out]].shape + out.shape[1:], out.dtype
+        out = jax.ShapeDtypeStruct(
+            tuple(
+                b if i >= 0 else s
+                for i, b, s in zip(buffer_index[b_out], batch_sizes, out.shape)
             )
+            + out.shape[-1:],
+            out.dtype,
+        )
 
         output_segments: list[list[jax.Array]] = tp_list_list(
             *[scatter(i) for i in operation.input_buffers(num_inputs)],

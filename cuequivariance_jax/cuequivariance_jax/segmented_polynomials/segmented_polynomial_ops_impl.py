@@ -17,6 +17,7 @@ import re
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 import cuequivariance as cue
 from cuequivariance_jax.segmented_polynomials.utils import reshape
@@ -32,24 +33,45 @@ def sanitize_string(s):
 
 
 def segmented_polynomial_ops_impl(
-    inputs: list[jax.Array],  # shape (batch_size, operand_size)
+    inputs: list[jax.Array],  # shape (*batch_sizes, operand_size)
     outputs_shape_dtype: tuple[jax.ShapeDtypeStruct, ...],
     indices: list[jax.Array],
-    buffer_index: list[int],
+    buffer_index: tuple[tuple[int, ...], ...],
     polynomial: cue.SegmentedPolynomial,
     math_dtype: jnp.dtype,
     name: str,
 ) -> tuple[list[jax.Array] | None, str]:
     def log(msg: str):
-        logger.info(f"[{name}] {msg}")
-        return None, name
+        msg = f"[{name}] {msg}"
+        logger.info(msg)
+        return None, msg
 
-    assert polynomial.num_inputs == len(buffer_index) - len(outputs_shape_dtype)
+    buffer_index = np.array(buffer_index)
+    num_batch_axes = buffer_index.shape[1]
+    assert polynomial.num_inputs + len(outputs_shape_dtype) == buffer_index.shape[0]
     assert polynomial.num_outputs == len(outputs_shape_dtype)
+
+    # We don't use the feature that indices can index themselves
+    buffer_index = np.concatenate(
+        [buffer_index, np.full((len(indices), num_batch_axes), -1, np.int32)]
+    )
 
     buffers = list(inputs) + list(outputs_shape_dtype)
     for b in buffers:
-        assert b.ndim == 2, f"Buffer {b.shape} must be 2D"
+        assert b.ndim == num_batch_axes + 1, (
+            f"Buffer {b.shape} must have {num_batch_axes} batch axes"
+        )
+    for i in indices:
+        assert i.ndim == num_batch_axes, (
+            f"Index {i.shape} must have {num_batch_axes} batch axes"
+        )
+
+    # Special case where num_batch_axes == 0
+    if num_batch_axes == 0:
+        num_batch_axes = 1
+        buffers = [reshape(b, (1, *b.shape)) for b in buffers]
+        indices = [reshape(i, (1, *i.shape)) for i in indices]
+        buffer_index = np.full((buffer_index.shape[0], 1), -1, np.int32)
 
     # Reshape buffers to 3D by using the STP informations
     for ope, stp in polynomial.tensor_products:
@@ -60,51 +82,32 @@ def segmented_polynomial_ops_impl(
 
         for i, operand in zip(ope.buffers, stp.operands):
             b = buffers[i]
-            shape = (b.shape[0], operand.num_segments, operand.segment_size)
-            if b.ndim == 2:
+            shape = b.shape[:num_batch_axes] + (
+                operand.num_segments,
+                operand.segment_size,
+            )
+            if b.ndim == num_batch_axes + 1:
                 b = buffers[i] = reshape(b, shape)
             if b.shape != shape:
                 return log(f"Shape mismatch: {b.shape} != {shape} for {i} {stp} {ope}")
+
+    if not all(b.ndim == num_batch_axes + 2 for b in buffers):
+        return log("All buffers must be used")
 
     for b in buffers:
         if b.dtype.type not in {jnp.float32, jnp.float64, jnp.float16, jnp.bfloat16}:
             return log(f"Unsupported buffer type: {b.dtype}")
 
     for i in indices:
-        # TODO: this restriction will be removed by MR109
-        if i.dtype.type != jnp.int32:
+        if i.dtype.type not in {jnp.int32, jnp.int64}:
             return log(f"Unsupported index type: {i.dtype}")
 
-    if not all(b.ndim == 3 for b in buffers):
-        return log("All buffers must be used")
-
-    if len({b.shape[2] for b in buffers}.union({1})) != 2:
+    if len({b.shape[-1] for b in buffers}.union({1})) != 2:
         return log(f"Buffer shapes not compatible {[b.shape for b in buffers]}")
-
-    # TODO: this restriction will be removed by MR109
-    if max(b.shape[2] for b in buffers) % 32 != 0:
-        return log(f"Extend must be a multiple of 32, got {[b.shape for b in buffers]}")
 
     math_dtype = jnp.dtype(math_dtype)
     if math_dtype.type not in {jnp.float32, jnp.float64}:
         return log(f"Unsupported math_dtype: {math_dtype}")
-
-    batch_size = 1
-    for i, b in zip(buffer_index, buffers):
-        if i >= 0:
-            batch_size = indices[i].shape[0]
-        elif b.shape[0] != 1:
-            batch_size = b.shape[0]
-
-    # TODO: this restriction will be removed by MR109
-    for i, b in zip(
-        buffer_index[polynomial.num_inputs :], buffers[polynomial.num_inputs :]
-    ):
-        if b.dtype.type not in {jnp.float32, jnp.float64}:
-            if i >= 0 or b.shape[0] != batch_size:
-                return log(
-                    f"Output buffer {b.shape} of type {b.dtype} and buffer index {i} is not supported"
-                )
 
     try:
         from cuequivariance_ops_jax import (
@@ -133,4 +136,4 @@ def segmented_polynomial_ops_impl(
         math_dtype=math_dtype,
         name=sanitize_string(name),
     )
-    return [jnp.reshape(x, (x.shape[0], x.shape[1] * x.shape[2])) for x in outputs], ""
+    return [jnp.reshape(x, y.shape) for x, y in zip(outputs, outputs_shape_dtype)], ""

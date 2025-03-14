@@ -12,6 +12,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from typing import Any
+
 import jax
 import jax.numpy as jnp
 
@@ -23,3 +25,18 @@ def reshape(
         return jnp.reshape(x, shape)
     else:
         return jax.ShapeDtypeStruct(shape, x.dtype)
+
+
+def sanitize_multi_index(indices, ndim: int) -> tuple[Any, ...]:
+    if not isinstance(indices, tuple):
+        return (indices,)
+
+    if Ellipsis in indices:
+        assert indices.count(Ellipsis) == 1, "Only one ellipsis allowed"
+        i = indices.index(Ellipsis)
+        indices = (
+            indices[:i] + (slice(None),) * (ndim - len(indices) + 1) + indices[i + 1 :]
+        )
+
+    indices = indices + (slice(None),) * (ndim - len(indices))
+    return tuple(indices)
