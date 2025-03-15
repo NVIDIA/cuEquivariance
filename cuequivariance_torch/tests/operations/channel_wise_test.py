@@ -69,7 +69,9 @@ def test_channel_wise_fwd(
 
     out1 = m1(x1, x2)
 
-    d = descriptors.channelwise_tensor_product(irreps1, irreps2, irreps3).d
+    d = descriptors.channelwise_tensor_product(
+        irreps1, irreps2, irreps3
+    ).polynomial.tensor_products[0][1]
     d = d.squeeze_modes("v")
     assert d.subscripts == "u,iu,j,ku+ijk"
     if layout == cue.mul_ir:

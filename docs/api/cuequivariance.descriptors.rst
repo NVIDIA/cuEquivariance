@@ -13,8 +13,8 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 
-.. module:: cuequivariance.descriptors
-.. currentmodule:: cuequivariance.descriptors
+.. module:: cuequivariance.group_theory.descriptors
+.. currentmodule:: cuequivariance.group_theory.descriptors
 
 Descriptors
 ===========

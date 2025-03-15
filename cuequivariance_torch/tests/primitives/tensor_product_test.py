@@ -31,23 +31,27 @@ def make_descriptors():
         cue.Irreps("O3", "4x0e + 4x1o"),
         cue.Irreps("O3", "6x0e + 6x1o"),
         cue.Irreps("O3", "5x0e + 5x1o + 5x2e + 5x1e"),
-    ).d
+    ).polynomial.tensor_products[0][1]
 
-    yield descriptors.spherical_harmonics(cue.SO3(1), [2]).d
-    yield descriptors.spherical_harmonics(cue.SO3(1), [3]).d
+    yield descriptors.spherical_harmonics(cue.SO3(1), [2]).polynomial.tensor_products[
+        0
+    ][1]
+    yield descriptors.spherical_harmonics(cue.SO3(1), [3]).polynomial.tensor_products[
+        0
+    ][1]
 
     d = descriptors.channelwise_tensor_product(
         cue.Irreps("SU2", "3x1/2 + 4x1"),
         cue.Irreps("SU2", "1/2 + 1 + 3/2"),
         cue.Irreps("SU2", "1/2 + 1"),
-    ).d
+    ).polynomial.tensor_products[0][1]
     yield d
 
     d = descriptors.channelwise_tensor_product(
         cue.Irreps("SO3", "32x1 + 32x2"),
         cue.Irreps("SO3", "0 + 1"),
         cue.Irreps("SO3", "0 + 1"),
-    ).d
+    ).polynomial.tensor_products[0][1]
     yield d
 
     for subscripts in [

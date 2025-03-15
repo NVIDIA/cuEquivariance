@@ -20,7 +20,7 @@ import torch
 
 import cuequivariance as cue
 import cuequivariance_torch as cuet
-from cuequivariance.experimental.e3nn import O3_e3nn
+from cuequivariance.group_theory.experimental.e3nn import O3_e3nn
 from cuequivariance_torch._tests.utils import (
     module_with_mode,
 )

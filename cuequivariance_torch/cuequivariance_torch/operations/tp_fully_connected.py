@@ -19,7 +19,10 @@ import torch
 import cuequivariance as cue
 import cuequivariance_torch as cuet
 from cuequivariance import descriptors
-from cuequivariance.irreps_array.misc_ui import assert_same_group, default_irreps
+from cuequivariance.group_theory.irreps_array.misc_ui import (
+    assert_same_group,
+    default_irreps,
+)
 
 
 class FullyConnectedTensorProduct(torch.nn.Module):
@@ -70,13 +73,13 @@ class FullyConnectedTensorProduct(torch.nn.Module):
         e = descriptors.fully_connected_tensor_product(
             irreps_in1, irreps_in2, irreps_out
         )
-        assert e.d.subscripts == "uvw,iu,jv,kw+ijk"
+        assert e.polynomial.tensor_products[0][1].subscripts == "uvw,iu,jv,kw+ijk"
 
         self.irreps_in1 = irreps_in1
         self.irreps_in2 = irreps_in2
         self.irreps_out = irreps_out
 
-        self.weight_numel = e.d.operands[0].size
+        self.weight_numel = e.polynomial.tensor_products[0][1].operands[0].size
 
         self.shared_weights = shared_weights
         self.internal_weights = (

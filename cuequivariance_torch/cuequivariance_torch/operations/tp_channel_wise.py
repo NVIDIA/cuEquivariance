@@ -19,7 +19,10 @@ import torch
 import cuequivariance as cue
 import cuequivariance_torch as cuet
 from cuequivariance import descriptors
-from cuequivariance.irreps_array.misc_ui import assert_same_group, default_irreps
+from cuequivariance.group_theory.irreps_array.misc_ui import (
+    assert_same_group,
+    default_irreps,
+)
 
 
 class ChannelWiseTensorProduct(torch.nn.Module):
@@ -68,7 +71,10 @@ class ChannelWiseTensorProduct(torch.nn.Module):
         e = descriptors.channelwise_tensor_product(
             irreps_in1, irreps_in2, filter_irreps_out
         )
-        descriptor, irreps_out = e.d, e.operands[-1].irreps
+        descriptor, irreps_out = (
+            e.polynomial.tensor_products[0][1],
+            e.operands[-1].irreps,
+        )
         assert descriptor.subscripts == "uv,iu,jv,kuv+ijk"
 
         self.irreps_in1 = irreps_in1

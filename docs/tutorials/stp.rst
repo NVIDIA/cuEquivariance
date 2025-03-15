@@ -175,15 +175,15 @@ Now we are verifying that the output is well normalized.
 
 
 
-In JAX, we can use the :func:`cuex.tensor_product <cuequivariance_jax.tensor_product>` function.
+In JAX, we can use the :func:`cuex.segmented_polynomial <cuequivariance_jax.segmented_polynomial>` function.
 
 .. jupyter-execute::
 
    w = jax.random.normal(jax.random.key(0), (d.operands[0].size,))
    x1 = jax.random.normal(jax.random.key(1), (3000, irreps1.dim))
 
-   [x2] = cuex.tensor_product(
-      [(cue.Operation([0, 1, 2]), d)],
+   [x2] = cuex.segmented_polynomial(
+      cue.SegmentedPolynomial.eval_last_operand(d),
       [w, x1],
       [jax.ShapeDtypeStruct((3000, irreps2.dim), jnp.float32)],
    )
