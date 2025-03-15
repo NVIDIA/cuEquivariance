@@ -68,7 +68,7 @@ def symmetric_contraction(
                     1,
                     None,
                 )
-                for _, d in pol.polynomial.tensor_products
+                for _, d in pol.polynomial.operations
             ],
             axis=1,
         )

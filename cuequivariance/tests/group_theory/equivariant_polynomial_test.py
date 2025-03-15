@@ -118,9 +118,9 @@ def test_symmetric_contraction():
     assert poly.num_inputs == 2
     assert poly.num_outputs == 1
 
-    [_, _, _, (_, d)] = poly.polynomial.tensor_products
+    [_, _, _, (_, d)] = poly.polynomial.operations
     assert d.num_paths == 437
 
     poly = poly.polynomial.unsymmetrize_for_identical_operands()
-    [_, _, _, (_, d)] = poly.tensor_products
+    [_, _, _, (_, d)] = poly.operations
     assert d.num_paths == 105

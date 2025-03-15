@@ -52,7 +52,7 @@ def segmented_polynomial_vanilla_impl(
             return buffer.at[idx].add(x)
         return buffer + x
 
-    for operation, d in polynomial.tensor_products:
+    for operation, d in polynomial.operations:
         ope_out, b_out = operation.output_operand_buffer(num_inputs)
 
         out = outputs_shape_dtype[b_out - num_inputs]

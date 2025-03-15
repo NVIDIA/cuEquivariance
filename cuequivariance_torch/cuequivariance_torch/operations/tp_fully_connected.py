@@ -73,13 +73,13 @@ class FullyConnectedTensorProduct(torch.nn.Module):
         e = descriptors.fully_connected_tensor_product(
             irreps_in1, irreps_in2, irreps_out
         )
-        assert e.polynomial.tensor_products[0][1].subscripts == "uvw,iu,jv,kw+ijk"
+        assert e.polynomial.operations[0][1].subscripts == "uvw,iu,jv,kw+ijk"
 
         self.irreps_in1 = irreps_in1
         self.irreps_in2 = irreps_in2
         self.irreps_out = irreps_out
 
-        self.weight_numel = e.polynomial.tensor_products[0][1].operands[0].size
+        self.weight_numel = e.polynomial.operations[0][1].operands[0].size
 
         self.shared_weights = shared_weights
         self.internal_weights = (

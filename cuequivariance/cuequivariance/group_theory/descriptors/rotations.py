@@ -69,8 +69,8 @@ def yxy_rotation(
     where l is the maximum L in the input and output irreps.
     """
     # gamma, beta, input, A
-    cbio = xy_rotation(irreps, lmax).polynomial.tensor_products[0][1]
-    aio = y_rotation(irreps, lmax).polynomial.tensor_products[0][1]  # alpha, A, output
+    cbio = xy_rotation(irreps, lmax).polynomial.operations[0][1]
+    aio = y_rotation(irreps, lmax).polynomial.operations[0][1]  # alpha, A, output
     cbiao = cue.segmented_polynomials.dot(
         cbio, aio, (3, 1)
     )  # gamma, beta, input, alpha, output
@@ -95,8 +95,8 @@ def xy_rotation(
 
     Rotation around the y-axis followed by rotation around the x-axis
     """
-    cio = y_rotation(irreps, lmax).polynomial.tensor_products[0][1]  # gamma, input, A
-    bio = x_rotation(irreps, lmax).polynomial.tensor_products[0][1]  # beta, A, output
+    cio = y_rotation(irreps, lmax).polynomial.operations[0][1]  # gamma, input, A
+    bio = x_rotation(irreps, lmax).polynomial.operations[0][1]  # beta, A, output
     cibo = cue.segmented_polynomials.dot(cio, bio, (2, 1))  # gamma, input, beta, output
     cbio = cibo.move_operand(1, 2)  # gamma, beta, input, output
     return cue.EquivariantPolynomial(
@@ -218,10 +218,10 @@ def x_rotation(
     """
     assert irreps.irrep_class in [cue.SO3, cue.O3]
 
-    dy = y_rotation(irreps, lmax).polynomial.tensor_products[0][1]
+    dy = y_rotation(irreps, lmax).polynomial.operations[0][1]
     dz90 = fixed_axis_angle_rotation(
         irreps, np.array([0.0, 0.0, 1.0]), np.pi / 2.0
-    ).polynomial.tensor_products[0][1]
+    ).polynomial.operations[0][1]
     d = cue.segmented_polynomials.dot(
         cue.segmented_polynomials.dot(dy, dz90, (1, 1)), dz90, (1, 1)
     )

@@ -41,8 +41,8 @@ def test_init_segmented_polynomial():
     assert poly.num_inputs == 2
     assert poly.num_outputs == 1
     assert poly.num_operands == 3
-    assert len(poly.tensor_products) == 1
-    assert poly.tensor_products[0] == (cue.Operation((0, 1, 2)), stp)
+    assert len(poly.operations) == 1
+    assert poly.operations[0] == (cue.Operation((0, 1, 2)), stp)
 
 
 def test_polynomial_equality():
@@ -157,12 +157,12 @@ def test_consolidate():
     consolidated = poly.consolidate()
 
     # Should have fused the two tensor products
-    assert len(consolidated.tensor_products) == 1
+    assert len(consolidated.operations) == 1
     # Coefficients should have been combined for each path
-    assert len(consolidated.tensor_products[0][1].paths) == 2
+    assert len(consolidated.operations[0][1].paths) == 2
     # The coefficients should have been added
-    assert consolidated.tensor_products[0][1].paths[0].coefficients == 2.0
-    assert consolidated.tensor_products[0][1].paths[1].coefficients == -4.0
+    assert consolidated.operations[0][1].paths[0].coefficients == 2.0
+    assert consolidated.operations[0][1].paths[1].coefficients == -4.0
 
 
 def test_stack():
@@ -198,7 +198,7 @@ def test_stack():
 
     assert [ope.size for ope in stacked.operands] == [2, 2, 4]
 
-    [(_, stp)] = stacked.tensor_products
+    [(_, stp)] = stacked.operations
     assert stp.operands[0].num_segments == 2
     assert stp.operands[1].num_segments == 2
     assert stp.operands[2].num_segments == 4
@@ -401,7 +401,7 @@ def test_symmetrize_identical_operands():
 
     # Check that we get 0.5 x0*y1 + 0.5 x1*y0
     # This means we should have two paths with coefficient 0.5
-    [(_, sym_stp)] = sym_poly.tensor_products
+    [(_, sym_stp)] = sym_poly.operations
     assert len(sym_stp.paths) == 2
     # Check that we get 0.5 x0*y1 + 0.5 x1*y0
     assert sym_stp.paths[0].coefficients == 0.5
@@ -412,7 +412,7 @@ def test_symmetrize_identical_operands():
 
     # Test that unsymmetrize returns to original form
     unsym_poly = sym_poly.unsymmetrize_for_identical_operands()
-    [(_, unsym_stp)] = unsym_poly.tensor_products
+    [(_, unsym_stp)] = unsym_poly.operations
     assert len(unsym_stp.paths) == 1
     assert unsym_stp.paths[0].coefficients == 1.0
     assert unsym_stp.paths[0].indices == (0, 1, 0)

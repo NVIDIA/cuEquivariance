@@ -72,7 +72,7 @@ def test_fully_connected(
 
     d = descriptors.fully_connected_tensor_product(
         irreps1, irreps2, irreps3
-    ).polynomial.tensor_products[0][1]
+    ).polynomial.operations[0][1]
     if layout == cue.mul_ir:
         d = d.add_or_transpose_modes("uvw,ui,vj,wk+ijk")
     m2 = cuet.TensorProduct(d, math_dtype=torch.float64, use_fallback=True).to(device)

@@ -95,7 +95,7 @@ def test_vmap():
     e = cue.descriptors.full_tensor_product(
         cue.Irreps("SO3", "1"), cue.Irreps("SO3", "1"), cue.Irreps("SO3", "1")
     )
-    d = e.polynomial.tensor_products[0][1]
+    d = e.polynomial.operations[0][1]
 
     def f(x1, x2, i1):
         return cuex.segmented_polynomial(

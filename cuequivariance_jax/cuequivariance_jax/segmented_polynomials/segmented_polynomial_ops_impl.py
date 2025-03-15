@@ -52,7 +52,7 @@ def segmented_polynomial_ops_impl(
         assert b.ndim == 2, f"Buffer {b.shape} must be 2D"
 
     # Reshape buffers to 3D by using the STP informations
-    for ope, stp in polynomial.tensor_products:
+    for ope, stp in polynomial.operations:
         if len(stp.subscripts.modes()) != 1:
             return log(f"Unsupported STP: {stp}")
         if not stp.all_same_segment_shape():
@@ -117,7 +117,7 @@ def segmented_polynomial_ops_impl(
 
     operations = []
     paths = []
-    for ope, stp in polynomial.tensor_products:
+    for ope, stp in polynomial.operations:
         operations.append(Operation(ope.buffers, len(paths), stp.num_paths))
         for path in stp.paths:
             paths.append(Path(path.indices, path.coefficients.item()))
