@@ -1337,7 +1337,9 @@ class SegmentedTensorProduct:
             ],
         ).consolidate_paths()
 
-    def symmetrize_operands(self, operands: Sequence[int]) -> SegmentedTensorProduct:
+    def symmetrize_operands(
+        self, operands: Sequence[int], force: bool = False
+    ) -> SegmentedTensorProduct:
         """Symmetrize the specified operands permuting the indices."""
         operands = sorted(set(operands))
         if len(operands) < 2:
@@ -1345,16 +1347,17 @@ class SegmentedTensorProduct:
 
         permutations = list(itertools.permutations(range(len(operands))))
 
-        # optimization: skip if already symmetric
         def make_global_perm(perm: tuple[int, ...]) -> tuple[int, ...]:
             p = list(range(self.num_operands))
             for i, j in enumerate(perm):
                 p[operands[i]] = operands[j]
             return tuple(p)
 
-        symmetries: list[tuple[int, ...]] = self.symmetries()
-        if all(make_global_perm(perm) in symmetries for perm in permutations):
-            return self
+        if not force:
+            # check if the tensor product is already symmetric
+            symmetries: list[tuple[int, ...]] = self.symmetries()
+            if all(make_global_perm(perm) in symmetries for perm in permutations):
+                return self
 
         d = self.sort_indices_for_identical_operands(operands)
 
