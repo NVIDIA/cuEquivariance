@@ -160,7 +160,7 @@ class EquivariantTensorProduct(torch.nn.Module):
         # TODO: remove this when re-design
         if isinstance(e, cue.EquivariantPolynomial):
             assert e.num_outputs == 1
-            for ope, stp in e.polynomial.tensor_products:
+            for ope, stp in e.polynomial.operations:
                 inputs = list(range(e.num_inputs))
                 output = e.num_inputs
                 expected = tuple(
@@ -170,7 +170,7 @@ class EquivariantTensorProduct(torch.nn.Module):
                 )
                 assert ope.buffers == expected, f"{ope.buffers} != {expected}"
             e = cue.EquivariantTensorProduct(
-                [stp for _, stp in e.polynomial.tensor_products], e.inputs + e.outputs
+                [stp for _, stp in e.polynomial.operations], e.inputs + e.outputs
             )
 
         if not isinstance(layout_in, tuple):

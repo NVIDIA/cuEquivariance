@@ -42,7 +42,7 @@ def test_script_symmetric_contraction(mode, tmp_path):
     e = cue.descriptors.symmetric_contraction(
         32 * cue.Irreps("SO3", "0 + 1"), 32 * cue.Irreps("SO3", "0 + 1"), [1, 2, 3]
     )
-    ds = [stp for _, stp in e.polynomial.tensor_products]
+    ds = [stp for _, stp in e.polynomial.operations]
 
     batch = 12
     x0 = torch.randn(3, ds[0].operands[0].size, device=device, dtype=torch.float32)
@@ -66,7 +66,7 @@ def test_script_fused_tp_3(mode, tmp_path):
         cue.descriptors.full_tensor_product(
             cue.Irreps("SO3", "32x1"), cue.Irreps("SO3", "1")
         )
-        .polynomial.tensor_products[0][1]
+        .polynomial.operations[0][1]
         .flatten_coefficient_modes()
         .squeeze_modes("v")
     )
@@ -99,7 +99,7 @@ def test_script_fused_tp_4(mode, tmp_path):
         cue.descriptors.fully_connected_tensor_product(
             cue.Irreps("SO3", "32x1"), cue.Irreps("SO3", "1"), cue.Irreps("SO3", "32x1")
         )
-        .polynomial.tensor_products[0][1]
+        .polynomial.operations[0][1]
         .flatten_coefficient_modes()
         .squeeze_modes("v")
         .permute_operands([1, 2, 0, 3])
@@ -136,7 +136,7 @@ def test_script_uniform_tp_3(mode, tmp_path):
         cue.descriptors.full_tensor_product(
             cue.Irreps("SO3", "32x1"), cue.Irreps("SO3", "1")
         )
-        .polynomial.tensor_products[0][1]
+        .polynomial.operations[0][1]
         .flatten_coefficient_modes()
         .squeeze_modes("v")
     )
@@ -170,7 +170,7 @@ def test_script_uniform_tp_4(mode, tmp_path):
         cue.descriptors.channelwise_tensor_product(
             cue.Irreps("SO3", "32x1"), cue.Irreps("SO3", "1"), cue.Irreps("SO3", "32x1")
         )
-        .polynomial.tensor_products[0][1]
+        .polynomial.operations[0][1]
         .flatten_coefficient_modes()
         .squeeze_modes("v")
     )

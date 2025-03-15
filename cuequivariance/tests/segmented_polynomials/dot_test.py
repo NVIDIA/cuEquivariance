@@ -49,11 +49,11 @@ def make_examples():
         cue.Irreps("SO3", "4x0 + 3x1"),
         cue.Irreps("SO3", "3x0 + 5x1"),
         irreps_middle,
-    ).polynomial.tensor_products[0][1]
+    ).polynomial.operations[0][1]
     assert dx.subscripts == "uvw,iu,jv,kw+ijk"
     dy = descriptors.channelwise_tensor_product(
         irreps_middle, cue.Irreps("SO3", "0 + 1 + 2"), cue.Irreps("SO3", "0 + 1")
-    ).polynomial.tensor_products[0][1]
+    ).polynomial.operations[0][1]
     dy = dy.squeeze_modes("v")
     assert dy.subscripts == "u,iu,j,ku+ijk"
     dy = dy.add_or_rename_modes("w_kw_l_mw+klm")

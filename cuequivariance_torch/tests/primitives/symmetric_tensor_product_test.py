@@ -28,7 +28,7 @@ device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("
 def make_descriptors():
     [(_, d1), (_, d2), (_, d3)] = descriptors.symmetric_contraction(
         cue.Irreps("SO3", "0 + 1 + 2"), cue.Irreps("SO3", "0"), [1, 2, 3]
-    ).polynomial.tensor_products
+    ).polynomial.operations
     yield [d1, d2, d3]
 
     d1 = cue.SegmentedTensorProduct.from_subscripts(",,")
@@ -120,7 +120,7 @@ def test_math_dtype(dtype: torch.dtype, math_dtype: torch.dtype, use_fallback: b
     e = descriptors.symmetric_contraction(
         cue.Irreps("SO3", "0 + 1 + 2"), cue.Irreps("SO3", "0"), [1, 2, 3]
     )
-    ds = [stp for _, stp in e.polynomial.tensor_products]
+    ds = [stp for _, stp in e.polynomial.operations]
     m = cuet.IWeightedSymmetricTensorProduct(
         ds, math_dtype=math_dtype, device=device, use_fallback=use_fallback
     )

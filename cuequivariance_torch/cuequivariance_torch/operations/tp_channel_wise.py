@@ -72,7 +72,7 @@ class ChannelWiseTensorProduct(torch.nn.Module):
             irreps_in1, irreps_in2, filter_irreps_out
         )
         descriptor, irreps_out = (
-            e.polynomial.tensor_products[0][1],
+            e.polynomial.operations[0][1],
             e.operands[-1].irreps,
         )
         assert descriptor.subscripts == "uv,iu,jv,kuv+ijk"

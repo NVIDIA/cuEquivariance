@@ -74,7 +74,7 @@ def segmented_polynomial_ops_impl(
         buffer_index = np.full((buffer_index.shape[0], 1), -1, np.int32)
 
     # Reshape buffers to 3D by using the STP informations
-    for ope, stp in polynomial.tensor_products:
+    for ope, stp in polynomial.operations:
         if len(stp.subscripts.modes()) != 1:
             return log(f"Unsupported STP: {stp}")
         if not stp.all_same_segment_shape():
@@ -120,7 +120,7 @@ def segmented_polynomial_ops_impl(
 
     operations = []
     paths = []
-    for ope, stp in polynomial.tensor_products:
+    for ope, stp in polynomial.operations:
         operations.append(Operation(ope.buffers, len(paths), stp.num_paths))
         for path in stp.paths:
             paths.append(Path(path.indices, path.coefficients.item()))
