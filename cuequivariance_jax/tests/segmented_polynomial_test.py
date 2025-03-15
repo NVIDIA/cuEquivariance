@@ -12,9 +12,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import importlib
+
 import jax
 import jax.numpy as jnp
 import numpy as np
+import pytest
 
 import cuequivariance as cue
 import cuequivariance_jax as cuex
@@ -76,26 +79,24 @@ def test_multiple_operand_shape_bug():
     assert jax.jacobian(h)(jnp.array([1.0, 0.0, 0.0])).shape == (5, 3)
 
 
-# def test_broadcasting():
-#     e = cue.descriptors.full_tensor_product(
-#         cue.Irreps("SO3", "1"), cue.Irreps("SO3", "1"), cue.Irreps("SO3", "1")
-#     )
+def test_broadcasting():
+    poly = cue.descriptors.full_tensor_product(
+        cue.Irreps("SO3", "1"), cue.Irreps("SO3", "1"), cue.Irreps("SO3", "1")
+    ).polynomial
 
-#     x = jnp.ones((2, 1, 3))
-#     y = jnp.ones((1, 2, 3))
-#     [out] = cuex.tensor_product(
-#         [(cue.Operation([0, 1, 2]), e.ds[0])],
-#         [x, y],
-#         [jax.ShapeDtypeStruct((2, 2, 3), jnp.float32)],
-#     )
-#     assert out.shape == (2, 2, 3)
+    x = jnp.ones((2, 1, 3))
+    y = jnp.ones((1, 2, 3))
+    [out] = cuex.segmented_polynomial(
+        poly, [x, y], [jax.ShapeDtypeStruct((2, 2, 3), jnp.float32)]
+    )
+    assert out.shape == (2, 2, 3)
 
 
 def test_vmap():
     e = cue.descriptors.full_tensor_product(
         cue.Irreps("SO3", "1"), cue.Irreps("SO3", "1"), cue.Irreps("SO3", "1")
     )
-    d = e.polynomial.tensor_products[0][1]
+    ((_, d),) = e.polynomial.operations
 
     def f(x1, x2, i1):
         return cuex.segmented_polynomial(
@@ -123,8 +124,68 @@ def test_vmap():
     i1 = jnp.array([0, 2])
     assert g(f(x1, x2, i1)) == [(2, 3), (1, 3)]
 
+    bx1 = jnp.ones((4, 3, 3))
     bx2 = jnp.ones((4, 2, 3))
     bi1 = jnp.array([[0, 2], [1, 2], [0, 0], [1, 1]])
     assert g(jax.vmap(f, (None, 0, None))(x1, bx2, i1)) == [(4, 2, 3), (4, 1, 3)]
     assert g(jax.vmap(f, (None, None, 0))(x1, x2, bi1)) == [(4, 2, 3), (4, 1, 3)]
     assert g(jax.vmap(f, (None, 0, 0))(x1, bx2, bi1)) == [(4, 2, 3), (4, 1, 3)]
+    assert g(jax.vmap(f, (0, 0, 0))(bx1, bx2, bi1)) == [(4, 2, 3), (4, 1, 3)]
+    assert g(jax.vmap(f, (0, None, None))(bx1, x2, i1)) == [(4, 2, 3), (4, 1, 3)]
+
+
+@pytest.mark.skipif(
+    not importlib.util.find_spec("cuequivariance_ops_jax"),
+    reason="cuequivariance_ops_jax is not installed",
+)
+@pytest.mark.parametrize("dtype", [jnp.bfloat16, jnp.float16, jnp.float32, jnp.float64])
+def test_jax_vs_cuda(dtype):
+    poly = (
+        cue.descriptors.channelwise_tensor_product(
+            32 * cue.Irreps("SO3", "0 + 1 + 2"),
+            cue.Irreps("SO3", "0 + 1 + 2"),
+            cue.Irreps("SO3", "0 + 1 + 2"),
+        )
+        .polynomial.flatten_coefficient_modes()
+        .squeeze_modes()
+    )
+    operands = [
+        jax.random.normal(jax.random.key(i), (10, 10, ope.size), dtype=dtype)
+        for i, ope in enumerate(poly.operands)
+    ]
+    indices = [
+        jnp.s_[jax.random.randint(jax.random.key(100), (10, 10), 0, 10), :],
+        jnp.s_[:, jax.random.randint(jax.random.key(101), (1, 10), 0, 10)],
+        None,
+        jnp.s_[
+            jax.random.randint(jax.random.key(102), (10, 1), 0, 10),
+            jax.random.randint(jax.random.key(103), (10, 10), 0, 10),
+        ],
+    ]
+
+    [jax_out] = cuex.segmented_polynomial(
+        poly,
+        operands[: poly.num_inputs],
+        operands[poly.num_inputs :],
+        indices,
+        impl="jax",
+    )
+    [cud_out] = cuex.segmented_polynomial(
+        poly,
+        operands[: poly.num_inputs],
+        operands[poly.num_inputs :],
+        indices,
+        impl="cuda",
+    )
+    assert jax_out.shape == cud_out.shape
+    assert jax_out.dtype == cud_out.dtype
+    np.testing.assert_allclose(
+        jax_out,
+        cud_out,
+        atol={
+            jnp.bfloat16: 1,
+            jnp.float16: 1e-1,
+            jnp.float32: 1e-4,
+            jnp.float64: 1e-8,
+        }[dtype],
+    )
