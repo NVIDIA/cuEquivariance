@@ -385,13 +385,16 @@ def segmented_polynomial_impl(
 
     assert impl in ("auto", "cuda", "jax")
 
-    if platform == "cuda" and impl in ("auto", "cuda"):
-        outputs, msg = segmented_polynomial_ops_impl(**kwargs)
+    outputs = None
+    if platform == "cuda":
+        if impl in ("auto", "cuda"):
+            outputs = segmented_polynomial_ops_impl(**kwargs)
+            if impl == "cuda" and not outputs.is_ok():
+                raise RuntimeError(f"Failed to use CUDA implementation: {outputs.msg}")
+            outputs = outputs.unwrap_or(None)
     else:
-        msg = f"{platform=}, {impl=}"
-
-    if impl == "cuda" and outputs is None:
-        raise RuntimeError(f"Failed to use CUDA implementation: {msg}")
+        if impl == "cuda":
+            raise RuntimeError(f"{impl=} but platform is {platform}")
 
     if outputs is None:
         outputs = segmented_polynomial_vanilla_impl(**kwargs)
