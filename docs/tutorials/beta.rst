@@ -63,7 +63,7 @@ Again for segmented tensor product with 3 or 4 operands with one mode, we can us
     )
 
     if device.type == "cuda":
-        d = e.polynomial.tensor_products[0][1]
+        ((_, d),) = e.polynomial.operations
         m = TensorProductUniform4x1dIndexed(d, device, torch.float32)
 
         x0 = torch.randn(16, e.inputs[0].dim, device=device)

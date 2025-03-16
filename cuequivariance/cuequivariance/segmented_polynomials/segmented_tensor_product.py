@@ -330,11 +330,11 @@ class SegmentedTensorProduct:
             coefficient_formatter (callable, optional): A function to format the coefficients.
 
         Examples:
-            >>> d = cue.descriptors.fully_connected_tensor_product(
+            >>> ((_, d),) = cue.descriptors.fully_connected_tensor_product(
             ...     cue.Irreps("SO3", "4x0+4x1"),
             ...     cue.Irreps("SO3", "4x0+4x1"),
             ...     cue.Irreps("SO3", "4x0+4x1")
-            ... ).polynomial.tensor_products[0][1]
+            ... ).polynomial.operations
             >>> d = d.flatten_coefficient_modes()
             >>> print(d.to_text())
             uvw,u,v,w sizes=320,16,16,16 num_segments=5,4,4,4 num_paths=16 u=4 v=4 w=4
@@ -450,7 +450,7 @@ class SegmentedTensorProduct:
             ...     cue.Irreps("SO3", "4x0+4x1"),
             ...     cue.Irreps("SO3", "4x0+4x1"),
             ...     cue.Irreps("SO3", "4x0+4x1")
-            ... ).polynomial.tensor_products[0][1]
+            ... ).polynomial.operations[0][1]
             >>> print(d.to_base64())
             eJytkstuwjAQRX/F8r...lTF2zlX91/fHyvj2Z4=
         """
@@ -475,7 +475,7 @@ class SegmentedTensorProduct:
             ...     cue.Irreps("SO3", "4x0+8x1"),
             ...     cue.Irreps("SO3", "3x0+3x1"),
             ...     cue.Irreps("SO3", "5x0+7x1")
-            ... ).polynomial.tensor_products[0][1]
+            ... ).polynomial.operations[0][1]
             >>> d.get_dims("u")
             {8, 4}
             >>> d.get_dims("v")
@@ -1337,7 +1337,9 @@ class SegmentedTensorProduct:
             ],
         ).consolidate_paths()
 
-    def symmetrize_operands(self, operands: Sequence[int]) -> SegmentedTensorProduct:
+    def symmetrize_operands(
+        self, operands: Sequence[int], force: bool = False
+    ) -> SegmentedTensorProduct:
         """Symmetrize the specified operands permuting the indices."""
         operands = sorted(set(operands))
         if len(operands) < 2:
@@ -1345,16 +1347,17 @@ class SegmentedTensorProduct:
 
         permutations = list(itertools.permutations(range(len(operands))))
 
-        # optimization: skip if already symmetric
         def make_global_perm(perm: tuple[int, ...]) -> tuple[int, ...]:
             p = list(range(self.num_operands))
             for i, j in enumerate(perm):
                 p[operands[i]] = operands[j]
             return tuple(p)
 
-        symmetries: list[tuple[int, ...]] = self.symmetries()
-        if all(make_global_perm(perm) in symmetries for perm in permutations):
-            return self
+        if not force:
+            # check if the tensor product is already symmetric
+            symmetries: list[tuple[int, ...]] = self.symmetries()
+            if all(make_global_perm(perm) in symmetries for perm in permutations):
+                return self
 
         d = self.sort_indices_for_identical_operands(operands)
 
