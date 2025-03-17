@@ -1293,6 +1293,12 @@ class SegmentedTensorProduct:
     def consolidate_paths(self) -> SegmentedTensorProduct:
         """Consolidate the paths by merging duplicates and removing zeros."""
         # equivalent to self.fuse_paths_with_same_indices().remove_zero_paths().sort_paths()
+
+        # TODO: use numpy when possible
+        # if self.coefficients_are_stackable:
+        #     indices = self.indices  # (num_paths, num_operands)
+        #     coefficients = self.stacked_coefficients  # (num_paths, *coefficient_shape)
+
         paths = dict()
         for path in self.paths:
             if path.indices in paths:

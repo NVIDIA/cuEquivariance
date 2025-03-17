@@ -124,10 +124,15 @@ class EquivariantPolynomial:
         Returns:
             EquivariantPolynomial: A new polynomial with fused tensor products.
         """
-        return EquivariantPolynomial(
-            self.operands,
-            self.polynomial.fuse_stps(),
-        )
+        return EquivariantPolynomial(self.operands, self.polynomial.fuse_stps())
+
+    def consolidate(self) -> EquivariantPolynomial:
+        """Consolidate the segmented tensor products.
+
+        Returns:
+            EquivariantPolynomial: A new polynomial with consolidated tensor products.
+        """
+        return EquivariantPolynomial(self.operands, self.polynomial.consolidate())
 
     @classmethod
     def stack(
@@ -174,11 +179,10 @@ class EquivariantPolynomial:
                         )
                 operands.append(ope)
 
-        poly = cls(
+        return cls(
             operands,
             cue.SegmentedPolynomial.stack([pol.polynomial for pol in polys], stacked),
         )
-        return poly.fuse_stps()
 
     def squeeze_modes(self) -> EquivariantPolynomial:
         """Squeeze the modes of the segmented tensor products.
