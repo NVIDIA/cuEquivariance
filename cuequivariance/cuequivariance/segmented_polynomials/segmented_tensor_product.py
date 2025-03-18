@@ -103,13 +103,13 @@ class SegmentedTensorProduct:
         )
 
     def set_paths(self, paths: list[Path]):
-        object.__setattr__(self, "paths", tuple(copy.deepcopy(path) for path in paths))
+        # no need to deepcopy, because Path is immutable
+        object.__setattr__(self, "paths", tuple(paths))
 
     def insert_path_(self, path_index: int, path: Path):
+        # no need to deepcopy, because Path is immutable
         object.__setattr__(
-            self,
-            "paths",
-            self.paths[:path_index] + (copy.deepcopy(path),) + self.paths[path_index:],
+            self, "paths", self.paths[:path_index] + (path,) + self.paths[path_index:]
         )
 
     # until here. Below we use dataclasses.replace or the setters to modify the attributes
@@ -852,15 +852,11 @@ class SegmentedTensorProduct:
         subscripts = Subscripts(subscripts)
 
         if subscripts.is_equivalent(self.subscripts):
-            d = SegmentedTensorProduct.from_subscripts(subscripts)
-            for oid, operand in enumerate(self.operands):
-                d.add_segments(oid, operand.segments)
-            for path in self.paths:
-                d.insert_path_(
-                    len(d.paths),
-                    Path(indices=path.indices, coefficients=path.coefficients),
-                )
-            return d
+            return SegmentedTensorProduct(
+                [(ope, ss) for ope, ss in zip(self.operands, subscripts.operands)],
+                subscripts.coefficients,
+                paths=self.paths,
+            )
 
         # Non trivial setting: the new subscripts might be a superset of the old subscripts
         # In this case, we need to properly map de mode dimensions and put 1s where needed
@@ -1099,6 +1095,9 @@ class SegmentedTensorProduct:
                     f"modes {modes} are not present in the dimensions that can be squeezed."
                 )
             to_remove = to_remove & modes
+
+        if not to_remove:
+            return self
 
         d = SegmentedTensorProduct.from_subscripts(
             "".join(ch for ch in self.subscripts if ch not in to_remove)
@@ -1387,6 +1386,9 @@ class SegmentedTensorProduct:
 
     def remove_empty_segments(self) -> SegmentedTensorProduct:
         """Remove empty segments."""
+
+        if all(d > 0 for dd in self.get_dimensions_dict().values() for d in dd):
+            return self
 
         def empty(D, oid, sid):
             return any(dim == 0 for dim in D.operands[oid][sid])
