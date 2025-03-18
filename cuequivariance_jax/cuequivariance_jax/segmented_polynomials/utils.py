@@ -40,3 +40,33 @@ def sanitize_multi_index(indices, ndim: int) -> tuple[Any, ...]:
 
     indices = indices + (slice(None),) * (ndim - len(indices))
     return tuple(indices)
+
+
+def batch_size(sizes: list[int]) -> int:
+    batch_size = 1
+    for size in sizes:
+        if size != 1:
+            assert batch_size in {1, size}
+            batch_size = size
+    return batch_size
+
+
+def iota(shape, axis):
+    i = jnp.arange(shape[axis])
+    i = jnp.reshape(i, (1,) * (len(shape) - 1) + (-1,))
+    i = jnp.moveaxis(i, -1, axis)
+    return i
+
+
+def indexing(
+    bi: list[int], shape: tuple[int, ...], indices: list[jax.Array]
+) -> tuple[slice, ...]:
+    num_batch_axes = len(bi)
+    shape = shape[:num_batch_axes]
+
+    if all(i < 0 for i in bi):
+        return tuple(slice(None) for _ in range(num_batch_axes))
+
+    return tuple(
+        iota(shape, axis) if i < 0 else indices[i] for axis, i in enumerate(bi)
+    )

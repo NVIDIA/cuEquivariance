@@ -23,38 +23,9 @@ import jax.numpy as jnp
 import numpy as np
 
 import cuequivariance as cue
+from cuequivariance_jax.segmented_polynomials.utils import batch_size, indexing
 
 logger = logging.getLogger(__name__)
-
-
-def _batch_size(sizes: list[int]) -> int:
-    batch_size = 1
-    for size in sizes:
-        if size != 1:
-            assert batch_size in {1, size}
-            batch_size = size
-    return batch_size
-
-
-def _iota(shape, axis):
-    i = jnp.arange(shape[axis])
-    i = jnp.reshape(i, (1,) * (len(shape) - 1) + (-1,))
-    i = jnp.moveaxis(i, -1, axis)
-    return i
-
-
-def _indexing(
-    bi: list[int], shape: tuple[int, ...], indices: list[jax.Array]
-) -> tuple[slice, ...]:
-    num_batch_axes = len(bi)
-    shape = shape[:num_batch_axes]
-
-    if all(i < 0 for i in bi):
-        return tuple(slice(None) for _ in range(num_batch_axes))
-
-    return tuple(
-        _iota(shape, axis) if i < 0 else indices[i] for axis, i in enumerate(bi)
-    )
 
 
 def segmented_polynomial_vanilla_impl(
@@ -74,18 +45,18 @@ def segmented_polynomial_vanilla_impl(
     buffer_index = np.array(buffer_index, dtype=np.int32)
     num_batch_axes = buffer_index.shape[1]
     batch_sizes = [
-        _batch_size(
+        batch_size(
             [x.shape[i] for x, idx in zip(io_buffers, buffer_index[:, i]) if idx < 0],
         )
         for i in range(num_batch_axes)
     ]
 
     def scatter(i: int) -> jax.Array:
-        idx = _indexing(buffer_index[i], io_buffers[i].shape, indices)
+        idx = indexing(buffer_index[i], io_buffers[i].shape, indices)
         return inputs[i][idx]
 
     def gather(i: int, x: jax.Array) -> jax.Array:
-        idx = _indexing(buffer_index[i], io_buffers[i].shape, indices)
+        idx = indexing(buffer_index[i], io_buffers[i].shape, indices)
         return io_buffers[i].at[idx].add(x)
 
     for operation, d in polynomial.operations:

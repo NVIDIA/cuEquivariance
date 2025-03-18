@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import logging
+import math
+import os
 from functools import partial
 
 import jax
@@ -31,7 +33,11 @@ from cuequivariance_jax.segmented_polynomials.segmented_polynomial_ops_impl impo
 from cuequivariance_jax.segmented_polynomials.segmented_polynomial_vanilla_impl import (
     segmented_polynomial_vanilla_impl,
 )
-from cuequivariance_jax.segmented_polynomials.utils import reshape, sanitize_multi_index
+from cuequivariance_jax.segmented_polynomials.utils import (
+    batch_size,
+    reshape,
+    sanitize_multi_index,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -385,6 +391,19 @@ def segmented_polynomial_impl(
         math_dtype=math_dtype,
         name=name,
     )
+
+    if os.environ.get("CUE_PRINT_STATS"):
+        bi = np.array(buffer_index, dtype=np.int32)
+        io = list(inputs) + list(outputs_shape_dtype)
+        batch_sizes = [
+            batch_size([x.shape[i] for x, idx in zip(io, bi[:, i]) if idx < 0])
+            for i in range(bi.shape[1])
+        ]
+        fl = polynomial.flop(math.prod(batch_sizes))
+        mem = sum(x.size * x.dtype.itemsize for x in io + list(indices))
+        print(
+            f"{name}: {fl / 1e9:.2f} GFLOP, {mem / 1e9:.2f} GB, arithmetic intensity: {fl / mem:.2f} FLOP/byte"
+        )
 
     assert impl in ("auto", "cuda", "jax")
 
