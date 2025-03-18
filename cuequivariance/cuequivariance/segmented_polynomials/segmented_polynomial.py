@@ -516,12 +516,12 @@ class SegmentedPolynomial:
             has_cotangent=has_cotangent,
         )
 
-    def flops(self, batch_size: int = 1) -> int:
+    def flop(self, batch_size: int = 1) -> int:
         """Compute the number of floating point operations in the polynomial."""
         n = 0
         for ope, stp in self.operations:
             oid, _ = ope.output_operand_buffer(self.num_inputs)
-            n += stp.flops(oid)
+            n += stp.flop(oid)
         return batch_size * n
 
     def memory(self, batch_sizes: list[int]) -> int:

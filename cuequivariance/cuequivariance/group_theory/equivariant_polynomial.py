@@ -124,10 +124,15 @@ class EquivariantPolynomial:
         Returns:
             EquivariantPolynomial: A new polynomial with fused tensor products.
         """
-        return EquivariantPolynomial(
-            self.operands,
-            self.polynomial.fuse_stps(),
-        )
+        return EquivariantPolynomial(self.operands, self.polynomial.fuse_stps())
+
+    def consolidate(self) -> EquivariantPolynomial:
+        """Consolidate the segmented tensor products.
+
+        Returns:
+            EquivariantPolynomial: A new polynomial with consolidated tensor products.
+        """
+        return EquivariantPolynomial(self.operands, self.polynomial.consolidate())
 
     @classmethod
     def stack(
@@ -174,11 +179,10 @@ class EquivariantPolynomial:
                         )
                 operands.append(ope)
 
-        poly = cls(
+        return cls(
             operands,
             cue.SegmentedPolynomial.stack([pol.polynomial for pol in polys], stacked),
         )
-        return poly.fuse_stps()
 
     def squeeze_modes(self) -> EquivariantPolynomial:
         """Squeeze the modes of the segmented tensor products.
@@ -282,7 +286,7 @@ class EquivariantPolynomial:
             self.polynomial.backward(requires_gradient, has_cotangent),
         )
 
-    def flops(self, batch_size: int = 1) -> int:
+    def flop(self, batch_size: int = 1) -> int:
         """Compute the number of floating point operations in the polynomial.
 
         Args:
@@ -291,7 +295,7 @@ class EquivariantPolynomial:
         Returns:
             int: The estimated number of floating-point operations.
         """
-        return self.polynomial.flops(batch_size)
+        return self.polynomial.flop(batch_size)
 
     def memory(self, batch_sizes: list[int]) -> int:
         """Compute the memory usage of the polynomial.

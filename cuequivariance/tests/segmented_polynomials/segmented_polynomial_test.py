@@ -222,7 +222,7 @@ def test_flops_and_memory():
         [(op, stp)],
     )
     # Test FLOPS calculation
-    flops = poly.flops(batch_size=100)
+    flops = poly.flop(batch_size=100)
     assert flops > 0
 
     # Test memory calculation
