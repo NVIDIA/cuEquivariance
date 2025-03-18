@@ -286,7 +286,7 @@ class EquivariantPolynomial:
             self.polynomial.backward(requires_gradient, has_cotangent),
         )
 
-    def flops(self, batch_size: int = 1) -> int:
+    def flop(self, batch_size: int = 1) -> int:
         """Compute the number of floating point operations in the polynomial.
 
         Args:
@@ -295,7 +295,7 @@ class EquivariantPolynomial:
         Returns:
             int: The estimated number of floating-point operations.
         """
-        return self.polynomial.flops(batch_size)
+        return self.polynomial.flop(batch_size)
 
     def memory(self, batch_sizes: list[int]) -> int:
         """Compute the memory usage of the polynomial.

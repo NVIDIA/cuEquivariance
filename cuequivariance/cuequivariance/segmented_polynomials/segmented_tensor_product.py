@@ -367,7 +367,7 @@ class SegmentedTensorProduct:
                         + "]"
                     )
 
-        out += f"\nFlop cost: {' '.join(f'{oid}->{self.flops(oid)}' for oid in range(self.num_operands))}"
+        out += f"\nFlop cost: {' '.join(f'{oid}->{self.flop(oid)}' for oid in range(self.num_operands))}"
         out += f"\nMemory cost: {self.memory([1] * self.num_operands)}"
 
         if len(self.paths) > 0:
@@ -420,7 +420,7 @@ class SegmentedTensorProduct:
                     "size": ope.size,
                     "segment_offsets": [sl.start for sl in slices],
                     "segment_sizes": [sl.stop - sl.start for sl in slices],
-                    "flops": self.flops(oid),
+                    "flops": self.flop(oid),
                 }
                 for oid, (ope, ss), slices in zip(
                     range(self.num_operands),
@@ -599,7 +599,7 @@ class SegmentedTensorProduct:
         """Check if all coefficients are equal to one."""
         return np.all(self.stacked_coefficients == 1)
 
-    def flops(
+    def flop(
         self, operand: int, batch_size: int = 1, algorithm: str = "optimal"
     ) -> int:
         """

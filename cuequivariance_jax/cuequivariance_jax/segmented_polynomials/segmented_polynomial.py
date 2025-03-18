@@ -115,10 +115,13 @@ def segmented_polynomial(
     assert len(inputs) == polynomial.num_inputs
     assert len(outputs_shape_dtype) == polynomial.num_outputs
 
-    assert all(
-        x.ndim > 0 and x.shape[-1] == ope.size
-        for x, ope in zip(inputs, polynomial.inputs)
-    )
+    for i, x, ope in zip(range(polynomial.num_inputs), inputs, polynomial.inputs):
+        if x.ndim == 0:
+            raise ValueError(f"Input {i} has no dimensions")
+        if x.shape[-1] != ope.size:
+            raise ValueError(
+                f"Input {i} has shape {x.shape} but expected shape {ope.size} for polynomial:\n{polynomial}"
+            )
 
     # Sanitize the inputs, outputs and indices
     inputs = [jnp.asarray(x) for x in inputs]
