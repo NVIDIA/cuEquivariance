@@ -526,7 +526,7 @@ def segmented_polynomial_transpose(
             [not isinstance(x, ad.Zero) for x in cotangents],
         ),
         math_dtype,
-        name + "_transpose",
+        name + "_T",
         impl=impl,
         return_none_if_empty=True,
     )
