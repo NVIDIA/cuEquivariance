@@ -17,7 +17,6 @@ from functools import cache
 import cuequivariance as cue
 
 
-@cache
 def symmetric_contraction(
     irreps_in: cue.Irreps,
     irreps_out: cue.Irreps,
@@ -42,7 +41,7 @@ def symmetric_contraction(
         >>> cue.descriptors.symmetric_contraction(
         ...    16 * cue.Irreps("SO3", "0 + 1 + 2"),
         ...    16 * cue.Irreps("SO3", "0 + 1"),
-        ...    [1, 2, 3]
+        ...    (1, 2, 3)
         ... )
         ╭ a=32x0+80x0+176x0 b=16x0+16x1+16x2 -> C=16x0+16x1
         │  []·a[u]·b[u]➜C[u] ─────────── num_paths=4 u=16
@@ -51,6 +50,15 @@ def symmetric_contraction(
 
         Where ``32x0+80x0+176x0`` are the weights needed for each degree (32 for degree 1, 80 for degree 2, 176 for degree 3).
     """
+    return symmetric_contraction_cached(irreps_in, irreps_out, tuple(degrees))
+
+
+@cache
+def symmetric_contraction_cached(
+    irreps_in: cue.Irreps,
+    irreps_out: cue.Irreps,
+    degrees: tuple[int, ...],
+) -> cue.EquivariantPolynomial:
     degrees = list(degrees)
     if len(degrees) != 1:
         return cue.EquivariantPolynomial.stack(
