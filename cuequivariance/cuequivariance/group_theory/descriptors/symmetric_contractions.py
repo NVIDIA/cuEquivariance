@@ -12,13 +12,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from functools import cache
+
 import cuequivariance as cue
 
 
+@cache
 def symmetric_contraction(
     irreps_in: cue.Irreps,
     irreps_out: cue.Irreps,
-    degrees: list[int],
+    degrees: tuple[int, ...],
 ) -> cue.EquivariantPolynomial:
     """Construct the descriptor for a symmetric contraction.
 
@@ -29,7 +32,7 @@ def symmetric_contraction(
     Args:
         irreps_in (Irreps): The input irreps, the multiplicity are treated in parallel.
         irreps_out (Irreps): The output irreps.
-        degrees (list[int]): List of degrees for the symmetric contractions.
+        degrees (tuple[int, ...]): List of degrees for the symmetric contractions.
 
     Returns:
         EquivariantPolynomial: The descriptor of the symmetric contraction.
@@ -52,7 +55,7 @@ def symmetric_contraction(
     if len(degrees) != 1:
         return cue.EquivariantPolynomial.stack(
             [
-                symmetric_contraction(irreps_in, irreps_out, [degree])
+                symmetric_contraction(irreps_in, irreps_out, (degree,))
                 for degree in degrees
             ],
             [True, False, False],

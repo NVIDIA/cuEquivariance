@@ -21,8 +21,9 @@ import cuequivariance as cue
 from cuequivariance.etc.linalg import round_to_sqrt_rational, triu_array
 
 
+@cache
 def symmetric_contraction(
-    irreps_in: cue.Irreps, irreps_out: cue.Irreps, degrees: list[int]
+    irreps_in: cue.Irreps, irreps_out: cue.Irreps, degrees: tuple[int, ...]
 ) -> tuple[cue.EquivariantPolynomial, np.ndarray]:
     r"""
     subscripts: ``weights[u],input[u],output[u]``
