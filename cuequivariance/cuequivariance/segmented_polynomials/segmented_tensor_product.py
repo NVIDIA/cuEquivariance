@@ -1331,13 +1331,19 @@ class SegmentedTensorProduct:
 
         assert len({self.operands[oid].num_segments for oid in operands}) == 1
 
+        non_trivial = any(
+            m in self.coefficient_subscripts
+            for i in operands
+            for m in self.subscripts.operands[i]
+        )
+        if non_trivial:
+            raise NotImplementedError(
+                "missing code to handle sorting non scalar coefficients. Try to flatten the coefficients first."
+            )
+
         def f(path: Path) -> Path:
             ii = path.indices
             aa = sorted([ii[oid] for oid in operands])
-            if len(set(aa)) < len(aa) and path.coefficients.ndim > 0:
-                raise NotImplementedError(
-                    "missing code to handle sorting non scalar coefficients."
-                )
             return Path(
                 indices=[
                     aa[operands.index(oid)] if oid in operands else ii[oid]
@@ -1357,6 +1363,16 @@ class SegmentedTensorProduct:
         operands = sorted(set(operands))
         if len(operands) < 2:
             return self
+
+        non_trivial = any(
+            m in self.coefficient_subscripts
+            for i in operands
+            for m in self.subscripts.operands[i]
+        )
+        if non_trivial:
+            raise NotImplementedError(
+                "missing code to handle symmetrizing non scalar coefficients. Try to flatten the coefficients first."
+            )
 
         permutations = list(itertools.permutations(range(len(operands))))
 

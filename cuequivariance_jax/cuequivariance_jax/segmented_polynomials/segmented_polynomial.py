@@ -379,7 +379,10 @@ def segmented_polynomial_impl(
     del inputs_and_indices
 
     assert all(polynomial.used_buffers())
-    polynomial = polynomial.unsymmetrize_for_identical_operands()
+    try:  # TODO: remove this try-except block
+        polynomial = polynomial.unsymmetrize_for_identical_operands()
+    except NotImplementedError:
+        pass
 
     outputs = None
     kwargs = dict(
