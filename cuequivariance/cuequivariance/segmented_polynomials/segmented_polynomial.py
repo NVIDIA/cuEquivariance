@@ -461,6 +461,14 @@ class SegmentedPolynomial:
             [(ope, stp.flatten_coefficient_modes()) for ope, stp in self.operations],
         )
 
+    def flatten_modes(self, modes: list[str]) -> SegmentedPolynomial:
+        """Flatten the specified modes of the segmented tensor products."""
+        return SegmentedPolynomial.from_default_buffers(
+            self.inputs,
+            self.outputs,
+            [(ope, stp.flatten_modes(modes)) for ope, stp in self.operations],
+        )
+
     def jvp(self, has_tangent: list[bool]) -> SegmentedPolynomial:
         """Compute the Jacobian-vector product of the polynomial."""
         assert len(has_tangent) == self.num_inputs
