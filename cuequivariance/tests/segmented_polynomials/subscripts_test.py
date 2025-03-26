@@ -47,3 +47,5 @@ def test_subscripts():
 def test_canonicalize():
     assert sp.Subscripts("ui").canonicalize() == "uv"
     assert sp.Subscripts("ab,ad+bd").canonicalize() == "ui,uj+ij"
+    assert sp.Subscripts("i,j+ji").canonicalize() == "i,j+ji"
+    assert sp.Subscripts("j,i+ij").canonicalize() == "i,j+ji"

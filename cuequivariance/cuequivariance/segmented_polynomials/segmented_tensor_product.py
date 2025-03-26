@@ -577,7 +577,10 @@ class SegmentedTensorProduct:
     def symmetries(self) -> list[tuple[int, ...]]:
         """List of permutations that leave the tensor product invariant."""
 
-        d = self.consolidate_paths()
+        def clean(d):
+            return d.consolidate_paths().canonicalize_subscripts()
+
+        d = clean(self)
 
         ps = set()
         for group in self.operands_with_identical_segments():
@@ -589,7 +592,7 @@ class SegmentedTensorProduct:
                 )
                 if p in ps:
                     continue
-                if d == d.permute_operands(p).consolidate_paths():
+                if d == clean(d.permute_operands(p)):
                     ps.add(p)
                     ps.add(inverse_permutation(p))
                     ps = generate_permutations_from(ps)
@@ -826,14 +829,20 @@ class SegmentedTensorProduct:
         Return a new descriptor with a canonical representation of the subscripts.
 
         Examples:
-            >>> d = cue.SegmentedTensorProduct.from_subscripts("ab,ax,by+xy")
+            >>> d = cue.SegmentedTensorProduct.from_subscripts("ab,ax,by+yx")
             >>> d.canonicalize_subscripts()
             uv,ui,vj+ij sizes=0,0,0 num_segments=0,0,0 num_paths=0 i= j= u= v=
 
         This is useful to identify equivalent descriptors.
         """
         subscripts = Subscripts.canonicalize(self.subscripts)
-        return self.add_or_rename_modes(subscripts)
+        d = self.add_or_rename_modes(subscripts)
+        d = d.add_or_transpose_modes(
+            Subscripts.from_operands(
+                d.subscripts.operands, "".join(sorted(d.coefficient_subscripts))
+            )
+        )
+        return d
 
     def add_or_rename_modes(
         self, subscripts: str, *, mapping: Optional[dict[str, str]] = None
@@ -1322,24 +1331,23 @@ class SegmentedTensorProduct:
 
         assert len({self.operands[oid].num_segments for oid in operands}) == 1
 
-        def f(ii: tuple[int, ...]) -> tuple[int, ...]:
+        def f(path: Path) -> Path:
+            ii = path.indices
             aa = sorted([ii[oid] for oid in operands])
-            return tuple(
-                [
+            if len(set(aa)) < len(aa) and path.coefficients.ndim > 0:
+                raise NotImplementedError(
+                    "missing code to handle sorting non scalar coefficients."
+                )
+            return Path(
+                indices=[
                     aa[operands.index(oid)] if oid in operands else ii[oid]
                     for oid in range(self.num_operands)
-                ]
+                ],
+                coefficients=path.coefficients,
             )
 
         return dataclasses.replace(
-            self,
-            paths=[
-                Path(
-                    indices=f(path.indices),
-                    coefficients=path.coefficients,
-                )
-                for path in self.paths
-            ],
+            self, paths=[f(path) for path in self.paths]
         ).consolidate_paths()
 
     def symmetrize_operands(
