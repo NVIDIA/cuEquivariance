@@ -1325,10 +1325,14 @@ class SegmentedTensorProduct:
         self, operands: Sequence[int]
     ) -> SegmentedTensorProduct:
         """Reduce the number of paths by sorting the indices for identical operands."""
-        operands = sorted(set(operands))
+        operands = tuple(sorted(set(operands)))
         if len(operands) < 2:
             return self
 
+        return self._sort_indices_for_identical_operands(operands)
+
+    @functools.cache
+    def _sort_indices_for_identical_operands(self, operands: tuple[int, ...]):
         assert len({self.operands[oid].num_segments for oid in operands}) == 1
 
         non_trivial = any(
@@ -1360,10 +1364,14 @@ class SegmentedTensorProduct:
         self, operands: Sequence[int], force: bool = False
     ) -> SegmentedTensorProduct:
         """Symmetrize the specified operands permuting the indices."""
-        operands = sorted(set(operands))
+        operands = tuple(sorted(set(operands)))
         if len(operands) < 2:
             return self
 
+        return self._symmetrize_operands(operands, force)
+
+    @functools.cache
+    def _symmetrize_operands(self, operands: tuple[int, ...], force: bool):
         non_trivial = any(
             m in self.coefficient_subscripts
             for i in operands
