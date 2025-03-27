@@ -109,6 +109,14 @@ def verify_trt(module, onnx_module, inputs, dtype):
     torch.cuda.synchronize()
     torch.cuda.empty_cache()
 
+def find_dtype(inputs, fallback_dtype):
+    if isinstance(inputs, torch.Tensor):
+        return inputs.dtype
+    if isinstance(inputs, list) and len(inputs) > 0:
+        return find_dtype(inputs[0], fallback_dtype)
+    if isinstance(inputs, tuple) and len(inputs) > 0:
+        return find_dtype(inputs[0], fallback_dtype)
+    return fallback_dtype
 
 def module_with_mode(
     mode: str,
@@ -118,10 +126,7 @@ def module_with_mode(
     tmp_path: str,
     grad_modes: list[str] = ["eager", "compile", "jit", "export"],
 ) -> torch.nn.Module:
-    if isinstance(inputs[0], list):
-        dtype = inputs[0][0].dtype
-    else:
-        dtype = inputs[0].dtype
+    dtype = find_dtype(inputs, math_dtype)
     if mode in ["trt", "torch_trt", "onnx", "onnx_dynamo"]:
         if not ONNX_AVAILABLE:
             pytest.skip("ONNX not available!")
