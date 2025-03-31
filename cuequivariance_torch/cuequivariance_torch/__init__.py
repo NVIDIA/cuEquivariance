@@ -26,7 +26,7 @@ from .primitives.symmetric_tensor_product import (
 from .primitives.transpose import TransposeSegments, TransposeIrrepsLayout
 
 from .primitives.equivariant_tensor_product import EquivariantTensorProduct
-from .primitives.segmented_polynomial_product import SegmentedPolynomialProduct
+from .primitives.segmented_polynomial import SegmentedPolynomial
 from .operations.tp_channel_wise import ChannelWiseTensorProduct
 from .operations.tp_fully_connected import FullyConnectedTensorProduct
 from .operations.linear import Linear

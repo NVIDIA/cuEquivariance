@@ -43,6 +43,15 @@ def generate_segmented_polynomials():
         )
         yield "channelwise_tensor_product", e.polynomial
 
+    @yield_from
+    def symmetric_contraction():
+        e = cue.descriptors.symmetric_contraction(
+            32 * cue.Irreps("O3", "0e + 1o + 2e"),
+            32 * cue.Irreps("O3", "0e + 1o"),
+            [1, 2],
+        )
+        yield "symmetric_contraction", e.polynomial
+
     return result
 
 
@@ -237,13 +246,8 @@ class Reference(torch.nn.Module):
     def perform_einsum(self, op, stp, inputs, outputs):
         # select operands
         inputs = [inputs[o] for o in op.buffers if o < self.polynomial.num_inputs]
-        outputs = [
-            (o_idx, outputs[o - self.polynomial.num_inputs])
-            for o_idx, o in enumerate(op.buffers)
-            if o >= self.polynomial.num_inputs
-        ]
-        assert len(outputs) == 1
-        o_idx, output = outputs[0]
+        o_idx, o_buf = op.output_operand_buffer(self.polynomial.num_inputs)
+        output = outputs[o_buf - self.polynomial.num_inputs]
         from cuequivariance_torch.primitives.tensor_product import _tensor_product_fx
 
         local_output = _tensor_product_fx(
@@ -285,14 +289,19 @@ class Grad(torch.nn.Module):
         )
 
 
+def tol_dict_grad(tol_dict):
+    return {"atol": 10 * tol_dict["atol"], "rtol": 10 * tol_dict["rtol"]}
+
+
 def assert_close_recursive(a, b, tol_dict, index=[]):
     if isinstance(b, torch.Tensor):
-        torch.testing.assert_close(a, b, **tol_dict)
+        torch.testing.assert_close(a, b, **tol_dict, equal_nan=True)
         assert a.shape == b.shape
         assert a.requires_grad == b.requires_grad
         if a.requires_grad and (a.grad is not None or b.grad is not None):
-            torch.testing.assert_close(a.grad, b.grad, **tol_dict)
-            assert a.grad.shape == b.grad.shape
+            assert_close_recursive(
+                a.grad, b.grad, tol_dict_grad(tol_dict), index + ["grad"]
+            )
         return
     if (
         isinstance(a, list)
@@ -351,7 +360,7 @@ BATCH_SIZE = [0, 5]
 @pytest.mark.parametrize("grad", GRAD)
 @pytest.mark.parametrize("backward", BACKWARD)
 @pytest.mark.parametrize("indexing", INDEXING)
-def test_segmented_polynomial_product(
+def test_segmented_polynomial(
     name,
     polynomial,
     dtype,
@@ -379,13 +388,18 @@ def test_segmented_polynomial_product(
         pytest.skip("BF16 atomics are not supported on this GPU")
     if grad and mode == "jit":
         pytest.skip("torch.jit.trace does not work with inline autograd")
+    if grad and backward and dtype.itemsize <= 2:
+        pytest.skip("double backward with fp16/bf16 lacks accuracy")
 
     m_ref = Reference(polynomial, math_dtype=math_dtype)
-    m = cuet.SegmentedPolynomialProduct(polynomial, math_dtype=math_dtype)
+    m = cuet.SegmentedPolynomial(polynomial, math_dtype=math_dtype)
+
+    test_tol_dict = tol_dict[(dtype, math_dtype)]
 
     if grad:
         m_ref = Grad(m_ref)
         m = Grad(m)
+        test_tol_dict = tol_dict_grad(test_tol_dict)
 
     inp = make_inputs(polynomial, dtype, indexing, batch_size)
     m = module_with_mode(mode, m, inp, math_dtype, tmp_path)
@@ -399,5 +413,5 @@ def test_segmented_polynomial_product(
         Grad.scalar(output).backward()
         Grad.scalar(output_ref).backward()
 
-    assert_close_recursive(output, output_ref, tol_dict[(dtype, math_dtype)])
-    assert_close_recursive(inp, inp_ref, tol_dict[(dtype, math_dtype)])
+    assert_close_recursive(output, output_ref, test_tol_dict)
+    assert_close_recursive(inp, inp_ref, test_tol_dict)

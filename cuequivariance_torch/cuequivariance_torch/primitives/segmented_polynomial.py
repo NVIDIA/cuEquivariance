@@ -3,23 +3,19 @@ from typing import Dict, List, Optional
 
 import torch
 import torch.nn as nn
+from cuequivariance_ops_torch.tensor_product_uniform_1d_jit import (
+    BATCH_DIM_AUTO,
+    BATCH_DIM_BATCHED,
+    BATCH_DIM_INDEXED,
+    BATCH_DIM_SHARED,
+)
 
 try:
     # keep us an option to be independent of the torch.library machinery
     from cuequivariance_ops_torch.tensor_product_uniform_1d_jit import (
-        BATCH_DIM_AUTO,
-        BATCH_DIM_BATCHED,
-        BATCH_DIM_INDEXED,
-        BATCH_DIM_SHARED,
         tensor_product_uniform_1d_jit,
     )
 except Exception:
-    from cuequivariance_ops_torch.tensor_product_uniform_1d_jit import (
-        BATCH_DIM_AUTO,
-        BATCH_DIM_BATCHED,
-        BATCH_DIM_INDEXED,
-        BATCH_DIM_SHARED,
-    )
 
     def tensor_product_uniform_1d_jit(
         name: str,
@@ -69,7 +65,7 @@ except Exception:
         )
 
 
-class SegmentedPolynomialProductJit(nn.Module):
+class SegmentedPolynomialJit(nn.Module):
     def __init__(
         self,
         polynomial,
@@ -88,18 +84,17 @@ class SegmentedPolynomialProductJit(nn.Module):
                 all(len(s) == o.ndim for s in o.segments),
                 "all segments must have the same number of dimensions as the operand",
             )
+            torch._assert(
+                o.all_same_segment_shape(), "all segments must have the same shape"
+            )
             if o.ndim == 1 and len(o.segments) > 0:
                 if operand_extent is None:
-                    operand_extent = o.segments[0][0]
+                    (operand_extent,) = list(o.get_dims(0))
                 else:
                     torch._assert(
-                        operand_extent == o.segments[0][0],
+                        operand_extent == list(o.get_dims(0))[0],
                         "all operands must have the same extent",
                     )
-                torch._assert(
-                    all(operand_extent == s[0] for s in o.segments),
-                    "the extent of the operand must all be indentical",
-                )
         if operand_extent is None:
             operand_extent = 1
 
@@ -153,6 +148,12 @@ class SegmentedPolynomialProductJit(nn.Module):
         self.BATCH_DIM_BATCHED = BATCH_DIM_BATCHED
         self.BATCH_DIM_INDEXED = BATCH_DIM_INDEXED
 
+    # For torch.jit.trace, we cannot pass explicit optionals,
+    # so these must be passed as kwargs then.
+    # List[Optional[Tensor]] does not work for similar reasons, hence, Dict
+    # is the only option.
+    # Also, shapes cannot be passed as integers, so they are passed via a
+    # (potentially small-strided) tensor with the right shape.
     def forward(
         self,
         inputs: List[torch.Tensor],
@@ -251,7 +252,7 @@ class SegmentedPolynomialProductJit(nn.Module):
         )
 
 
-class SegmentedPolynomialProduct(nn.Module):
+class SegmentedPolynomial(nn.Module):
     def __init__(
         self,
         polynomial,
@@ -261,9 +262,7 @@ class SegmentedPolynomialProduct(nn.Module):
         **kwargs,
     ):
         super().__init__()
-        self.m = SegmentedPolynomialProductJit(
-            polynomial, math_dtype, output_dtype_map, name
-        )
+        self.m = SegmentedPolynomialJit(polynomial, math_dtype, output_dtype_map, name)
 
     def forward(
         self,
