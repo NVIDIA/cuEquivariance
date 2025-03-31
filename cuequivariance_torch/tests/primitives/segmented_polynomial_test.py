@@ -12,9 +12,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import torch
+from typing import Dict, List, Optional
+
 import pytest
-from typing import List, Optional, Dict
+import torch
 
 import cuequivariance as cue
 import cuequivariance_torch as cuet
@@ -64,7 +65,8 @@ def clone_input(x):
         raise ValueError(f"Unknown type: {type(x)}")
 
 
-ceil_div = lambda a, b: (a + b - 1) // b
+def ceil_div(a: int, b: int) -> int:
+    return (a + b - 1) // b
 
 
 def make_inputs_for_operands(
@@ -146,8 +148,6 @@ class Reference(torch.nn.Module):
         if output_shapes is None:
             output_shapes = {}
 
-        orig_inputs = inputs
-
         # deduce the batch size:
         # if there are any indices, their size is the batch size
         # otherwise, it is the largest first dimension of the inputs
@@ -173,7 +173,6 @@ class Reference(torch.nn.Module):
         if batch_size is None:
             batch_size = 1
 
-        # print(f"batch_size: {batch_size}")
         # create the output tensors
         outputs = []
         for i in range(self.polynomial.num_outputs):

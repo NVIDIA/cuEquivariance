@@ -1,23 +1,24 @@
+from itertools import accumulate
+from typing import Dict, List, Optional
+
 import torch
 import torch.nn as nn
-from typing import List, Optional, Dict
-from itertools import accumulate
 
 try:
     # keep us an option to be independent of the torch.library machinery
     from cuequivariance_ops_torch.tensor_product_uniform_1d_jit import (
-        tensor_product_uniform_1d_jit,
-        BATCH_DIM_SHARED,
+        BATCH_DIM_AUTO,
         BATCH_DIM_BATCHED,
         BATCH_DIM_INDEXED,
-        BATCH_DIM_AUTO,
+        BATCH_DIM_SHARED,
+        tensor_product_uniform_1d_jit,
     )
 except Exception:
     from cuequivariance_ops_torch.tensor_product_uniform_1d_jit import (
-        BATCH_DIM_SHARED,
+        BATCH_DIM_AUTO,
         BATCH_DIM_BATCHED,
         BATCH_DIM_INDEXED,
-        BATCH_DIM_AUTO,
+        BATCH_DIM_SHARED,
     )
 
     def tensor_product_uniform_1d_jit(

@@ -109,6 +109,7 @@ def verify_trt(module, onnx_module, inputs, dtype):
     torch.cuda.synchronize()
     torch.cuda.empty_cache()
 
+
 def find_dtype(inputs, fallback_dtype):
     if isinstance(inputs, torch.Tensor):
         return inputs.dtype
@@ -119,6 +120,7 @@ def find_dtype(inputs, fallback_dtype):
     if isinstance(inputs, dict) and "inputs" in inputs:
         return find_dtype(inputs["inputs"], fallback_dtype)
     return fallback_dtype
+
 
 def module_with_mode(
     mode: str,
