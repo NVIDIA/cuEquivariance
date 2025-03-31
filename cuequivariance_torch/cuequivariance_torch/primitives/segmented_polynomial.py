@@ -3,69 +3,73 @@ from typing import Dict, List, Optional
 
 import torch
 import torch.nn as nn
-from cuequivariance_ops_torch.tensor_product_uniform_1d_jit import (
-    BATCH_DIM_AUTO,
-    BATCH_DIM_BATCHED,
-    BATCH_DIM_INDEXED,
-    BATCH_DIM_SHARED,
-)
 
 try:
-    # keep us an option to be independent of the torch.library machinery
     from cuequivariance_ops_torch.tensor_product_uniform_1d_jit import (
-        tensor_product_uniform_1d_jit,
+        BATCH_DIM_AUTO,
+        BATCH_DIM_BATCHED,
+        BATCH_DIM_INDEXED,
+        BATCH_DIM_SHARED,
     )
-except Exception:
 
-    def tensor_product_uniform_1d_jit(
-        name: str,
-        math_dtype: torch.dtype,
-        operand_extent: int,
-        num_inputs: int,
-        num_outputs: int,
-        num_index: int,
-        buffer_dim: List[int],
-        buffer_num_segments: List[int],
-        batch_dim: List[int],
-        index_buffer: List[int],
-        dtypes: List[int],
-        num_operations: int,
-        num_operands: List[int],
-        operations: List[int],
-        num_paths: List[int],
-        path_indices_start: List[int],
-        path_coefficients_start: List[int],
-        path_indices: List[int],
-        path_coefficients: List[float],
-        batch_size: int,
-        tensors: List[torch.Tensor],
-    ) -> List[torch.Tensor]:
-        return torch.ops.cuequivariance_ops.tensor_product_uniform_1d_jit(
-            name,
-            math_dtype,
-            operand_extent,
-            num_inputs,
-            num_outputs,
-            num_index,
-            buffer_dim,
-            buffer_num_segments,
-            batch_dim,
-            index_buffer,
-            dtypes,
-            num_operations,
-            num_operands,
-            operations,
-            num_paths,
-            path_indices_start,
-            path_coefficients_start,
-            path_indices,
-            path_coefficients,
-            batch_size,
-            tensors,
+    try:
+        # keep us an option to be independent of the torch.library machinery
+        from cuequivariance_ops_torch.tensor_product_uniform_1d_jit import (
+            tensor_product_uniform_1d_jit,
         )
+    except Exception:
+
+        def tensor_product_uniform_1d_jit(
+            name: str,
+            math_dtype: torch.dtype,
+            operand_extent: int,
+            num_inputs: int,
+            num_outputs: int,
+            num_index: int,
+            buffer_dim: List[int],
+            buffer_num_segments: List[int],
+            batch_dim: List[int],
+            index_buffer: List[int],
+            dtypes: List[int],
+            num_operations: int,
+            num_operands: List[int],
+            operations: List[int],
+            num_paths: List[int],
+            path_indices_start: List[int],
+            path_coefficients_start: List[int],
+            path_indices: List[int],
+            path_coefficients: List[float],
+            batch_size: int,
+            tensors: List[torch.Tensor],
+        ) -> List[torch.Tensor]:
+            return torch.ops.cuequivariance_ops.tensor_product_uniform_1d_jit(
+                name,
+                math_dtype,
+                operand_extent,
+                num_inputs,
+                num_outputs,
+                num_index,
+                buffer_dim,
+                buffer_num_segments,
+                batch_dim,
+                index_buffer,
+                dtypes,
+                num_operations,
+                num_operands,
+                operations,
+                num_paths,
+                path_indices_start,
+                path_coefficients_start,
+                path_indices,
+                path_coefficients,
+                batch_size,
+                tensors,
+            )
+except ImportError:
+    tensor_product_uniform_1d_jit = None
 
 
-class SegmentedPolynomialJit(nn.Module):
+class SegmentedPolynomialFromUniform1dJit(nn.Module):
     def __init__(
         self,
         polynomial,
@@ -261,7 +265,9 @@ class SegmentedPolynomial(nn.Module):
         name: str = "segmented_polynomial",
     ):
         super().__init__()
-        self.m = SegmentedPolynomialJit(polynomial, math_dtype, output_dtype_map, name)
+        self.m = SegmentedPolynomialFromUniform1dJit(
+            polynomial, math_dtype, output_dtype_map, name
+        )
 
     def forward(
         self,
