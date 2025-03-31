@@ -116,6 +116,8 @@ def find_dtype(inputs, fallback_dtype):
         return find_dtype(inputs[0], fallback_dtype)
     if isinstance(inputs, tuple) and len(inputs) > 0:
         return find_dtype(inputs[0], fallback_dtype)
+    if isinstance(inputs, dict) and "inputs" in inputs:
+        return find_dtype(inputs["inputs"], fallback_dtype)
     return fallback_dtype
 
 def module_with_mode(
@@ -144,12 +146,18 @@ def module_with_mode(
             torch.jit.save(module, fname)
             module = torch.jit.load(fname)
         elif mode == "jit":
-            module = torch.jit.trace(module, inputs)
+            if isinstance(inputs, dict):
+                module = torch.jit.trace(module, example_kwarg_inputs=inputs)
+            else:
+                module = torch.jit.trace(module, inputs)
             fname = os.path.join(tmp_path, "test.ts")
             torch.jit.save(module, fname)
             module = torch.jit.load(fname)
         elif mode == "export":
-            exp_program = torch.export.export(module, tuple(inputs))
+            if isinstance(inputs, dict):
+                exp_program = torch.export.export(module, tuple(), inputs)
+            else:
+                exp_program = torch.export.export(module, tuple(inputs))
             fname = os.path.join(tmp_path, "test.pt2")
             torch.export.save(exp_program, fname)
             del exp_program

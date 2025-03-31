@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from typing import List, Optional
+from typing import List, Optional, Dict
 from itertools import accumulate
 
 try:
@@ -130,31 +130,21 @@ class SegmentedPolynomialProductJit(nn.Module):
         )
         self.num_operations = len(polynomial.operations)
         self.num_operands = [len(o.buffers) for o, stp in polynomial.operations]
-        self.operations = [
-            b for o, stp in polynomial.operations for b in o.buffers
-        ]
+        self.operations = [b for o, stp in polynomial.operations for b in o.buffers]
         self.num_paths = [stp.num_paths for o, stp in polynomial.operations]
         self.path_indices_start = [0] + list(
             accumulate(
-                [
-                    stp.num_paths * stp.num_operands
-                    for o, stp in polynomial.operations
-                ]
+                [stp.num_paths * stp.num_operands for o, stp in polynomial.operations]
             )
         )[:-1]
         self.path_coefficients_start = [0] + list(
             accumulate([stp.num_paths for o, stp in polynomial.operations])
         )[:-1]
         self.path_indices = [
-            i
-            for o, stp in polynomial.operations
-            for p in stp.paths
-            for i in p.indices
+            i for o, stp in polynomial.operations for p in stp.paths for i in p.indices
         ]
         self.path_coefficients = [
-            float(p.coefficients)
-            for o, stp in polynomial.operations
-            for p in stp.paths
+            float(p.coefficients) for o, stp in polynomial.operations for p in stp.paths
         ]
 
         self.BATCH_DIM_AUTO = BATCH_DIM_AUTO
@@ -165,73 +155,75 @@ class SegmentedPolynomialProductJit(nn.Module):
     def forward(
         self,
         inputs: List[torch.Tensor],
-        input_indices: Optional[List[Optional[torch.Tensor]]] = None,
-        output_shapes: Optional[List[Optional[int]]] = None,
-        output_indices: Optional[List[Optional[torch.Tensor]]] = None,
+        input_indices: Optional[Dict[int, torch.Tensor]] = None,
+        output_shapes: Optional[Dict[int, torch.Tensor]] = None,
+        output_indices: Optional[Dict[int, torch.Tensor]] = None,
     ):
+        empty_dict: Dict[int, torch.Tensor] = {}
+        if input_indices is None:
+            input_indices = dict(empty_dict)
+        if output_shapes is None:
+            output_shapes = dict(empty_dict)
+        if output_indices is None:
+            output_indices = dict(empty_dict)
+
         torch._assert(
             len(inputs) == self.num_inputs,
             "the number of inputs must match the number of inputs of the polynomial",
         )
-        torch._assert(
-            len(input_indices) <= self.num_inputs,
-            "the number of input indices must be less than or equal to the number of inputs of the polynomial",
-        )
-        torch._assert(
-            len(output_indices) <= self.num_outputs,
-            "the number of output indices must be less than or equal to the number of outputs of the polynomial",
-        )
-        torch._assert(
-            len(output_shapes) <= self.num_outputs,
-            "the number of output shapes must be less than or equal to the number of outputs of the polynomial",
-        )
-        if input_indices is None:
-            input_indices = []
-        if output_shapes is None:
-            output_shapes = []
-        if output_indices is None:
-            output_indices = []
+
+        for k, v in input_indices.items():
+            torch._assert(0 <= k < self.num_inputs, "input index must be in range")
+            torch._assert(v.ndim == 1, "input index must be one-dimensional")
+            torch._assert(
+                v.dtype in [torch.int32, torch.int64], "input index must be integral"
+            )
+        for k, v in output_indices.items():
+            torch._assert(0 <= k < self.num_outputs, "output index must be in range")
+            torch._assert(v.ndim == 1, "input index must be one-dimensional")
+            torch._assert(
+                v.dtype in [torch.int32, torch.int64], "input index must be integral"
+            )
+        for k, v in output_shapes.items():
+            torch._assert(0 <= k < self.num_outputs, "output index must be in range")
+            torch._assert(v.ndim == 2, "output shape must be two-dimensional")
 
         num_index = 0
         batch_dim = [self.BATCH_DIM_AUTO] * (self.num_inputs + self.num_outputs)
         index_buffer = [-1] * (self.num_inputs + self.num_outputs)
         tensors = list(inputs)
 
-        for idx_pos, idx_tensor in enumerate(input_indices):
-            if idx_tensor is not None and idx_tensor.numel() > 0:
-                batch_dim[idx_pos] = self.BATCH_DIM_INDEXED
-                tensors.append(idx_tensor)
-                index_buffer[idx_pos] = num_index
-                num_index += 1
-                index_buffer.append(inputs[idx_pos].shape[0])
+        for idx_pos, idx_tensor in input_indices.items():
+            batch_dim[idx_pos] = self.BATCH_DIM_INDEXED
+            tensors.append(idx_tensor)
+            index_buffer[idx_pos] = num_index
+            num_index += 1
+            index_buffer.append(inputs[idx_pos].shape[0])
 
-        for idx_pos, idx_tensor in enumerate(output_indices):
-            if idx_tensor is not None and idx_tensor.numel() > 0:
-                batch_dim[idx_pos + self.num_inputs] = (
-                    self.BATCH_DIM_INDEXED
-                )
-                tensors.append(idx_tensor)
-                index_buffer[idx_pos + self.num_inputs] = num_index
-                num_index += 1
-                output_shape = output_shapes[idx_pos]
-                torch._assert(output_shape is not None, "output shapes must be provided for output indices")
-                if output_shape is not None:
-                    index_buffer.append(output_shape)
+        for idx_pos, idx_tensor in output_indices.items():
+            batch_dim[idx_pos + self.num_inputs] = self.BATCH_DIM_INDEXED
+            tensors.append(idx_tensor)
+            index_buffer[idx_pos + self.num_inputs] = num_index
+            num_index += 1
+            torch._assert(
+                idx_pos in output_shapes,
+                "output shapes must be provided for output indices",
+            )
+            index_buffer.append(output_shapes[idx_pos].size(0))
 
         batch_size = self.BATCH_DIM_AUTO
-        for idx_pos, idx_shape in enumerate(output_shapes):
+        for idx_pos, idx_shape in output_shapes.items():
             if batch_dim[idx_pos + self.num_inputs] == self.BATCH_DIM_AUTO:
-                if idx_shape is not None:
-                    if idx_shape == 1:
-                        batch_dim[idx_pos + self.num_inputs] = (
-                            self.BATCH_DIM_SHARED
-                        )
-                    else:
-                        torch._assert(batch_size == self.BATCH_DIM_AUTO or batch_size == idx_shape, "batch size must be auto or the output shape")
-                        batch_dim[idx_pos + self.num_inputs] = (
-                            self.BATCH_DIM_BATCHED
-                        )
-                        batch_size = idx_shape
+                if idx_shape.size(0) == 1:
+                    batch_dim[idx_pos + self.num_inputs] = self.BATCH_DIM_SHARED
+                else:
+                    torch._assert(
+                        batch_size == self.BATCH_DIM_AUTO
+                        or batch_size == idx_shape.size(0),
+                        "batch size must be auto or the output shape",
+                    )
+                    batch_dim[idx_pos + self.num_inputs] = self.BATCH_DIM_BATCHED
+                    batch_size = idx_shape.size(0)
 
         return tensor_product_uniform_1d_jit(
             self.name,
@@ -265,22 +257,18 @@ class SegmentedPolynomialProduct(nn.Module):
         math_dtype: torch.dtype = torch.float32,
         output_dtype_map: List[int] = None,
         name: str = "segmented_polynomial",
+        **kwargs,
     ):
         super().__init__()
-        # try:
         self.m = SegmentedPolynomialProductJit(
             polynomial, math_dtype, output_dtype_map, name
         )
-        # except Exception:
-        #     self.m = SegmentedPolynomialTensorProductFallback(
-        #         polynomial, math_dtype, name
-        #     )
 
     def forward(
         self,
         inputs: List[torch.Tensor],
-        input_indices: Optional[List[Optional[torch.Tensor]]] = None,
-        output_shapes: Optional[List[Optional[int]]] = None,
-        output_indices: Optional[List[Optional[torch.Tensor]]] = None,
+        input_indices: Optional[Dict[int, torch.Tensor]] = None,
+        output_shapes: Optional[Dict[int, torch.Tensor]] = None,
+        output_indices: Optional[Dict[int, torch.Tensor]] = None,
     ):
         return self.m(inputs, input_indices, output_shapes, output_indices)

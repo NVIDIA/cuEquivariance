@@ -13,13 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import torch
-import numpy as np
 import pytest
-from typing import List, Optional
+from typing import List, Optional, Dict
+
 import cuequivariance as cue
 import cuequivariance_torch as cuet
-from cuequivariance_torch._tests.utils import module_with_mode
-# from equivariant_tensor_product_test import make_descriptors as make_equivariant_descriptors
+from cuequivariance_torch._tests.utils import module_with_mode, tol_dict
 
 device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
 
@@ -29,63 +28,6 @@ def generate_segmented_polynomials():
 
     def yield_from(fn):
         result.extend(list(fn()))
-
-    """
-    @yield_from
-    def one_operand():
-        d = cue.SegmentedTensorProduct.empty_segments([1])
-        yield (
-            "one operand, no path",
-            cue.SegmentedPolynomial(
-                [], [cue.SegmentedOperand.empty_segments(1)], [(cue.Operation([0]), d)]
-            ),
-        )
-
-        d_one_path = cue.SegmentedTensorProduct.empty_segments([1])
-        one_path = cue.SegmentedPolynomial(
-            [],
-            [cue.SegmentedOperand.empty_segments(1)],
-            [(cue.Operation([0]), d_one_path)],
-        )
-        d_one_path.add_path(0, c=123)
-        yield "one operand, one path", one_path
-
-    @yield_from
-    def UnshapedArray_bug():
-        e = cue.descriptors.symmetric_contraction(
-            cue.Irreps("O3", "0e"), cue.Irreps("O3", "0e"), [0, 1]
-        )
-        yield "UnshapedArray_bug", e.polynomial
-
-    @yield_from
-    def multiple_operand_shape_bug():
-        e = cue.descriptors.spherical_harmonics(cue.SO3(1), [2])
-        yield "multiple_operand_shape_bug", e.polynomial
-
-    @yield_from
-    def vmap():
-        e = cue.descriptors.full_tensor_product(
-            cue.Irreps("SO3", "1"), cue.Irreps("SO3", "1"), cue.Irreps("SO3", "1")
-        )
-        d = e.polynomial.operations[0][1]
-
-        yield (
-            "vmap",
-            cue.SegmentedPolynomial(
-                d.operands[:2],
-                [d.operands[2], d.operands[2]],
-                [
-                    (cue.Operation([0, 1, 2]), d),
-                    (cue.Operation([0, 1, 3]), d),
-                ],
-            ),
-        )
-
-    @yield_from
-    def equivariant_descriptors():
-        for elem in make_equivariant_descriptors():
-            yield "equivariant_descriptor", elem
-    """
 
     @yield_from
     def channelwise_tensor_product():
@@ -103,24 +45,23 @@ def generate_segmented_polynomials():
     return result
 
 
-def clone_input(inp):
-    result = []
-    for x in inp:
-        if isinstance(x, torch.Tensor):
-            result.append(x.clone().detach().requires_grad_(x.requires_grad))
-        elif isinstance(x, list) or isinstance(x, tuple):
-            result.append(clone_input(x))
-        elif (
-            isinstance(x, str)
-            or isinstance(x, int)
-            or isinstance(x, float)
-            or isinstance(x, bool)
-            or isinstance(x, type(None))
-        ):
-            result.append(x)
-        else:
-            raise ValueError(f"Unknown type: {type(x)}")
-    return tuple(result)
+def clone_input(x):
+    if isinstance(x, torch.Tensor):
+        return x.clone().detach().requires_grad_(x.requires_grad)
+    elif isinstance(x, list) or isinstance(x, tuple):
+        return tuple([clone_input(y) for y in x])
+    elif isinstance(x, dict):
+        return {k: clone_input(v) for k, v in x.items()}
+    elif (
+        isinstance(x, str)
+        or isinstance(x, int)
+        or isinstance(x, float)
+        or isinstance(x, bool)
+        or isinstance(x, type(None))
+    ):
+        return x
+    else:
+        raise ValueError(f"Unknown type: {type(x)}")
 
 
 ceil_div = lambda a, b: (a + b - 1) // b
@@ -130,7 +71,7 @@ def make_inputs_for_operands(
     operands, dtype, idx_amount, idx_kind, batch_size, tensor_init_fn
 ):
     tensors = []
-    indices = [None] * len(operands)
+    indices = {}
     for i, x in enumerate(operands):
         mode = "batch"
         if idx_amount == "all" or (idx_amount == "first" and i == 0):
@@ -159,12 +100,22 @@ def make_inputs(polynomial, dtype, indexing, batch_size):
     )
 
     def tensor_init_outputs(batch_size, size):
-        return batch_size
+        return torch.empty(
+            1, device=device, dtype=dtype, requires_grad=False
+        ).broadcast_to(batch_size, size)
 
     outputs, output_indices = make_inputs_for_operands(
         polynomial.outputs, dtype, *indexing["output"], batch_size, tensor_init_outputs
     )
-    return [inputs, input_indices, outputs, output_indices]
+    outputs = {i: o for i, o in enumerate(outputs)}
+    result = {"inputs": inputs}
+    if input_indices:
+        result["input_indices"] = input_indices
+    if outputs:
+        result["output_shapes"] = outputs
+    if output_indices:
+        result["output_indices"] = output_indices
+    return result
 
 
 class Reference(torch.nn.Module):
@@ -184,48 +135,38 @@ class Reference(torch.nn.Module):
     def forward(
         self,
         inputs: List[torch.Tensor],
-        input_indices: List[Optional[torch.Tensor]] = None,
-        output_shapes: List[Optional[int]] = None,
-        output_indices: List[Optional[torch.Tensor]] = None,
+        input_indices: Optional[Dict[int, torch.Tensor]] = None,
+        output_shapes: Optional[Dict[int, torch.Tensor]] = None,
+        output_indices: Optional[Dict[int, torch.Tensor]] = None,
     ):
         if input_indices is None:
-            input_indices = [None] * self.polynomial.num_inputs
+            input_indices = {}
         if output_indices is None:
-            output_indices = [None] * self.polynomial.num_outputs
+            output_indices = {}
         if output_shapes is None:
-            output_shapes = [None] * self.polynomial.num_outputs
+            output_shapes = {}
 
         orig_inputs = inputs
-        # print(f"inputs: {[i.shape if i is not None else None for i in inputs]}")
-        # print(
-        #    f"input_indices: {[i.shape if i is not None else None for i in input_indices]}"
-        # )
-        # print(f"output_shapes: {output_shapes}")
-        # print(
-        #    f"output_indices: {[i.shape if i is not None else None for i in output_indices]}"
-        # )
 
         # deduce the batch size:
         # if there are any indices, their size is the batch size
         # otherwise, it is the largest first dimension of the inputs
         # or the output_shaopes
         batch_size = None
-        for index in input_indices:
-            if index is not None:
-                batch_size = index.size(0)
-                break
-        for index in output_indices:
-            if index is not None:
-                batch_size = index.size(0)
-                break
+        for index in input_indices.values():
+            batch_size = index.size(0)
+            break
+        for index in output_indices.values():
+            batch_size = index.size(0)
+            break
         if batch_size is None:
-            for elem in output_shapes:
-                if elem is not None:
-                    batch_size = elem
+            for elem in output_shapes.values():
+                if elem.size(0) != 1:
+                    batch_size = elem.size(0)
                     break
         if batch_size is None:
             for inp in inputs:
-                if inp.size(0) > 1:
+                if inp.size(0) != 1:
                     batch_size = inp.size(0)
                     break
 
@@ -248,11 +189,10 @@ class Reference(torch.nn.Module):
                 output_dtype = self.math_dtype
 
             output_batch_size = None
-            if i < len(output_shapes):
-                if output_shapes[i] is not None:
-                    output_batch_size = output_shapes[i]
+            if i in output_shapes:
+                output_batch_size = output_shapes[i].size(0)
             if output_batch_size is None:
-                if i < len(output_indices) and output_indices[i] is not None:
+                if i in output_indices:
                     output_batch_size = output_indices[i].size(0)
             if output_batch_size is None:
                 output_batch_size = batch_size
@@ -263,47 +203,36 @@ class Reference(torch.nn.Module):
                     dtype=output_dtype,
                 )
             )
-        # print(f"outputs: {[o.shape for o in outputs]}")
 
-        # pad large enough
-        input_indices = list(input_indices) + [None] * self.polynomial.num_inputs
-        output_indices = list(output_indices) + [None] * self.polynomial.num_outputs
-
-        # print(f"pre-gather orig_inputs: {[i.shape if i is not None else None for i in orig_inputs]}")
         inputs = [
-            input.index_select(0, input_index) if input_index is not None else input
-            for input, input_index in zip(inputs, input_indices)
+            input.index_select(0, input_indices[idx]) if idx in input_indices else input
+            for idx, input in enumerate(inputs)
         ]
-        # print(f"post-gather orig_inputs: {[i.shape if i is not None else None for i in orig_inputs]}")
 
         regular_outputs = [
             torch.zeros(
-                (output_index.shape[0], output.shape[1]),
+                (output_indices[idx].size(0), output.size(1)),
                 device=output.device,
                 dtype=output.dtype,
             )
-            if output_index is not None
+            if idx in output_indices
             else output
-            for output, output_index in zip(outputs, output_indices)
+            for idx, output in enumerate(outputs)
         ]
-        # print(f"regular_outputs: {[o.shape for o in regular_outputs]}")
 
-        # print(f"pre-op orig_inputs: {[i.shape if i is not None else None for i in orig_inputs]}")
         # perform the operation
         for op, stp in self.polynomial.operations:
             self.perform_einsum(op, stp, inputs, regular_outputs)
-        # print(f"post-op orig_inputs: {[i.shape if i is not None else None for i in orig_inputs]}")
 
-        for output, regular_output, output_index in zip(
-            outputs, regular_outputs, output_indices
-        ):
-            if output_index is not None:
-                output_index = output_index.reshape(-1, 1).broadcast_to(
-                    regular_output.shape
+        for idx, (output, regular_output) in enumerate(zip(outputs, regular_outputs)):
+            if idx in output_indices:
+                output_index = (
+                    output_indices[idx]
+                    .reshape(-1, 1)
+                    .broadcast_to(regular_output.shape)
                 )
                 output.scatter_add_(0, output_index, regular_output)
 
-        # print(f"final orig_inputs: {[i.shape if i is not None else None for i in orig_inputs]}")
         return outputs
 
     def perform_einsum(self, op, stp, inputs, outputs):
@@ -321,7 +250,6 @@ class Reference(torch.nn.Module):
         local_output = _tensor_product_fx(
             stp.move_operand_last(o_idx), device, self.math_dtype, False
         )(*inputs)
-        # print(output.shape, local_output.shape, [i.shape for i in inputs])
         if output.shape[0] == 1:
             output += torch.sum(local_output, dim=0, keepdim=True)
         else:
@@ -338,24 +266,33 @@ class Grad(torch.nn.Module):
         self.m = m
 
     @staticmethod
-    def scalar(tensors):
-        result = 0
-        for t in tensors:
+    def scalar(tensors: List[torch.Tensor]) -> torch.Tensor:
+        result = tensors[0].pow(2).sum()
+        for t in tensors[1:]:
             result += t.pow(2).sum()
         return result
 
-    def forward(self, *args):
+    def forward(
+        self,
+        inputs: List[torch.Tensor],
+        input_indices: Optional[Dict[int, torch.Tensor]] = None,
+        output_shapes: Optional[Dict[int, torch.Tensor]] = None,
+        output_indices: Optional[Dict[int, torch.Tensor]] = None,
+    ):
         return torch.autograd.grad(
-            self.scalar(self.m(*args)), args[0], create_graph=True
+            [self.scalar(self.m(inputs, input_indices, output_shapes, output_indices))],
+            inputs,
+            create_graph=True,
         )
 
 
-def assert_close_recursive(a, b, index=[]):
+def assert_close_recursive(a, b, tol_dict, index=[]):
     if isinstance(b, torch.Tensor):
-        # torch.testing.assert_close(a, b)
+        torch.testing.assert_close(a, b, **tol_dict)
         assert a.shape == b.shape
-        if a.grad is not None or b.grad is not None:
-            # torch.testing.assert_close(a.grad, b.grad)
+        assert a.requires_grad == b.requires_grad
+        if a.requires_grad and (a.grad is not None or b.grad is not None):
+            torch.testing.assert_close(a.grad, b.grad, **tol_dict)
             assert a.grad.shape == b.grad.shape
         return
     if (
@@ -366,7 +303,12 @@ def assert_close_recursive(a, b, index=[]):
     ):
         assert len(a) == len(b)
         for i, (x, y) in enumerate(zip(a, b)):
-            assert_close_recursive(x, y, index + [i])
+            assert_close_recursive(x, y, tol_dict, index + [i])
+        return
+    if isinstance(a, dict):
+        assert a.keys() == b.keys()
+        for k in a:
+            assert_close_recursive(a[k], b[k], tol_dict, index + [k])
         return
     if a == b:
         return
@@ -380,19 +322,11 @@ DATA_TYPES_IN_MATH = [
     (torch.float64, torch.float32),
     (torch.float32, torch.float32),
     (torch.float64, torch.float64),
-]
-if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:
-    DATA_TYPES_IN_MATH += [
-        (torch.float16, torch.float32),
-        (torch.bfloat16, torch.float32),
-    ]
-DEBUG_DATA_TYPES_IN_MATH = [
-    (torch.float32, torch.float32),
+    (torch.float16, torch.float32),
+    (torch.bfloat16, torch.float32),
 ]
 
 EXPORT_MODES = ["eager", "compile", "script", "jit", "export"]
-EXPORT_MODES = ["eager", "compile", "export"]
-DEBUG_EXPORT_MODES = ["eager"]
 
 INDEXING = [
     {"input": (inp_amount, inp_kind), "output": (out_amount, out_kind)}
@@ -403,15 +337,12 @@ INDEXING = [
     if inp_kind != "batch" or inp_amount == "all"  # for batch, only "all" is valid
     if out_kind != "batch" or out_amount == "all"  # for batch, only "all" is valid
 ]
-DEBUG_INDEXING = [
-    {"input": ("all", "batched"), "output": ("all", "batched")},
-    {"input": ("first", "shared"), "output": ("all", "batched")},
-]
+
 GRAD = [False, True]
-DEBUG_GRAD = [False]
+
+BACKWARD = [False, True]
 
 BATCH_SIZE = [0, 5]
-DEBUG_BATCH_SIZE = [5]
 
 
 @pytest.mark.parametrize("name, polynomial", SEGMENTED_POLYNOMIALS)
@@ -419,9 +350,19 @@ DEBUG_BATCH_SIZE = [5]
 @pytest.mark.parametrize("batch_size", BATCH_SIZE)
 @pytest.mark.parametrize("mode", EXPORT_MODES)
 @pytest.mark.parametrize("grad", GRAD)
+@pytest.mark.parametrize("backward", BACKWARD)
 @pytest.mark.parametrize("indexing", INDEXING)
 def test_segmented_polynomial_product(
-    name, polynomial, dtype, math_dtype, batch_size, mode, grad, indexing, tmp_path
+    name,
+    polynomial,
+    dtype,
+    math_dtype,
+    batch_size,
+    mode,
+    grad,
+    backward,
+    indexing,
+    tmp_path,
 ):
     if not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
@@ -437,10 +378,8 @@ def test_segmented_polynomial_product(
         and dtype == torch.bfloat16
     ):
         pytest.skip("BF16 atomics are not supported on this GPU")
-
-    # todo check if this is actually needed
-    # if grad and batch_size == 0:
-    #    pytest.skip("Batch size is 0, so we cannot compute gradients")
+    if grad and mode == "jit":
+        pytest.skip("torch.jit.trace does not work with inline autograd")
 
     m_ref = Reference(polynomial, math_dtype=math_dtype)
     m = cuet.SegmentedPolynomialProduct(polynomial, math_dtype=math_dtype)
@@ -453,15 +392,13 @@ def test_segmented_polynomial_product(
     m = module_with_mode(mode, m, inp, math_dtype, tmp_path)
 
     inp_ref = clone_input(inp)
-    # print(f"len(inp[0]): {len(inp[0])}")
-    # print(f"len(inp_ref[0]): {len(inp_ref[0])}")
-    output = m(*inp)
-    output_ref = m_ref(*inp_ref)
-    Grad.scalar(output).backward()
-    Grad.scalar(output_ref).backward()
-    # print(f"len(inp[0]): {len(inp[0])}")
-    # print(f"len(inp_ref[0]): {len(inp_ref[0])}")
-    # print(f"output[0]: {output[0]}")
-    #print(f"output_ref: {output_ref}")
-    assert_close_recursive(output, output_ref)
-    assert_close_recursive(inp, inp_ref)
+
+    output = m(**inp)
+    output_ref = m_ref(**inp_ref)
+
+    if backward:
+        Grad.scalar(output).backward()
+        Grad.scalar(output_ref).backward()
+
+    assert_close_recursive(output, output_ref, tol_dict[(dtype, math_dtype)])
+    assert_close_recursive(inp, inp_ref, tol_dict[(dtype, math_dtype)])
