@@ -259,7 +259,6 @@ class SegmentedPolynomial(nn.Module):
         math_dtype: torch.dtype = torch.float32,
         output_dtype_map: List[int] = None,
         name: str = "segmented_polynomial",
-        **kwargs,
     ):
         super().__init__()
         self.m = SegmentedPolynomialJit(polynomial, math_dtype, output_dtype_map, name)
