@@ -29,7 +29,7 @@ def reshape(
 
 def sanitize_multi_index(indices, ndim: int) -> tuple[Any, ...]:
     if not isinstance(indices, tuple):
-        return (indices,)
+        indices = (indices,)
 
     if Ellipsis in indices:
         assert indices.count(Ellipsis) == 1, "Only one ellipsis allowed"
