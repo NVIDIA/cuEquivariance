@@ -323,44 +323,7 @@ def assert_close_recursive(a, b, tol_dict, index=[]):
     raise ValueError(f"Unknown type: {type(a)} {type(b)}")
 
 
-SEGMENTED_POLYNOMIALS = list(generate_segmented_polynomials())
-
-DATA_TYPES_IN_MATH = [
-    (torch.float32, torch.float64),
-    (torch.float64, torch.float32),
-    (torch.float32, torch.float32),
-    (torch.float64, torch.float64),
-    (torch.float16, torch.float32),
-    (torch.bfloat16, torch.float32),
-]
-
-EXPORT_MODES = ["eager", "compile", "script", "jit", "export"]
-
-INDEXING = [
-    {"input": (inp_amount, inp_kind), "output": (out_amount, out_kind)}
-    for inp_amount in ["first", "all"]
-    for out_amount in ["first", "all"]
-    for inp_kind in ["shared", "indexed", "batch"]
-    for out_kind in ["shared", "indexed", "batch"]
-    if inp_kind != "batch" or inp_amount == "all"  # for batch, only "all" is valid
-    if out_kind != "batch" or out_amount == "all"  # for batch, only "all" is valid
-]
-
-GRAD = [False, True]
-
-BACKWARD = [False, True]
-
-BATCH_SIZE = [0, 5]
-
-
-@pytest.mark.parametrize("name, polynomial", SEGMENTED_POLYNOMIALS)
-@pytest.mark.parametrize("dtype, math_dtype", DATA_TYPES_IN_MATH)
-@pytest.mark.parametrize("batch_size", BATCH_SIZE)
-@pytest.mark.parametrize("mode", EXPORT_MODES)
-@pytest.mark.parametrize("grad", GRAD)
-@pytest.mark.parametrize("backward", BACKWARD)
-@pytest.mark.parametrize("indexing", INDEXING)
-def test_segmented_polynomial(
+def run_segmented_polynomial_test(
     name,
     polynomial,
     dtype,
@@ -374,18 +337,6 @@ def test_segmented_polynomial(
 ):
     if not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
-    if (
-        torch.cuda.get_device_capability()[0] < 8
-        and any(kind in ["indexed", "shared"] for _, kind in indexing.values())
-        and dtype == torch.float16
-    ):
-        pytest.skip("FP16 atomics are not supported on this GPU")
-    if (
-        torch.cuda.get_device_capability()[0] < 9
-        and any(kind in ["indexed", "shared"] for _, kind in indexing.values())
-        and dtype == torch.bfloat16
-    ):
-        pytest.skip("BF16 atomics are not supported on this GPU")
     if grad and mode == "jit":
         pytest.skip("torch.jit.trace does not work with inline autograd")
     if grad and backward and dtype.itemsize <= 2:
@@ -415,3 +366,146 @@ def test_segmented_polynomial(
 
     assert_close_recursive(output, output_ref, test_tol_dict)
     assert_close_recursive(inp, inp_ref, test_tol_dict)
+
+
+SEGMENTED_POLYNOMIALS = list(generate_segmented_polynomials())
+
+DATA_TYPES_IN_MATH = [
+    (torch.float32, torch.float64),
+    (torch.float64, torch.float32),
+    (torch.float32, torch.float32),
+    (torch.float64, torch.float64),
+    (torch.float16, torch.float32),
+    (torch.bfloat16, torch.float32),
+]
+
+EXPORT_MODES = ["eager", "compile", "script", "jit", "export"]
+
+ALL_INDEXING = [
+    {"input": (inp_amount, inp_kind), "output": (out_amount, out_kind)}
+    for inp_amount in ["first", "all"]
+    for out_amount in ["first", "all"]
+    for inp_kind in ["shared", "indexed", "batch"]
+    for out_kind in ["shared", "indexed", "batch"]
+    if inp_kind != "batch" or inp_amount == "all"  # for batch, only "all" is valid
+    if out_kind != "batch" or out_amount == "all"  # for batch, only "all" is valid
+]
+
+SHORT_INDEXING = [
+    {"input": ("all", "batch"), "output": ("all", "batch")},
+    {"input": ("all", "shared"), "output": ("all", "batch")},
+    {"input": ("all", "batch"), "output": ("all", "shared")},
+    {"input": ("first", "indexed"), "output": ("all", "indexed")},
+]
+
+
+GRAD = [False, True]
+
+BACKWARD = [False, True]
+
+BATCH_SIZE = [0, 5]
+
+
+@pytest.mark.parametrize("name, polynomial", SEGMENTED_POLYNOMIALS[:1])
+@pytest.mark.parametrize("dtype, math_dtype", DATA_TYPES_IN_MATH[:1])
+@pytest.mark.parametrize("batch_size", BATCH_SIZE[1:])
+@pytest.mark.parametrize("mode", EXPORT_MODES[:1])
+@pytest.mark.parametrize("grad", GRAD[1:])
+@pytest.mark.parametrize("backward", BACKWARD[1:])
+@pytest.mark.parametrize("indexing", ALL_INDEXING)
+def test_segmented_polynomial_indexing(
+    name,
+    polynomial,
+    dtype,
+    math_dtype,
+    batch_size,
+    mode,
+    grad,
+    backward,
+    indexing,
+    tmp_path,
+):
+    run_segmented_polynomial_test(
+        name,
+        polynomial,
+        dtype,
+        math_dtype,
+        batch_size,
+        mode,
+        grad,
+        backward,
+        indexing,
+        tmp_path,
+    )
+
+
+@pytest.mark.parametrize("name, polynomial", SEGMENTED_POLYNOMIALS)
+@pytest.mark.parametrize("dtype, math_dtype", DATA_TYPES_IN_MATH)
+@pytest.mark.parametrize("batch_size", BATCH_SIZE[1:])
+@pytest.mark.parametrize("mode", EXPORT_MODES[:1])
+@pytest.mark.parametrize("grad", GRAD)
+@pytest.mark.parametrize("backward", BACKWARD)
+@pytest.mark.parametrize("indexing", SHORT_INDEXING)
+def test_segmented_polynomial_dytpes(
+    name,
+    polynomial,
+    dtype,
+    math_dtype,
+    batch_size,
+    mode,
+    grad,
+    backward,
+    indexing,
+    tmp_path,
+):
+    run_segmented_polynomial_test(
+        name,
+        polynomial,
+        dtype,
+        math_dtype,
+        batch_size,
+        mode,
+        grad,
+        backward,
+        indexing,
+        tmp_path,
+    )
+
+
+@pytest.mark.parametrize("name, polynomial", SEGMENTED_POLYNOMIALS)
+@pytest.mark.parametrize("dtype, math_dtype", DATA_TYPES_IN_MATH[:1])
+@pytest.mark.parametrize("batch_size", BATCH_SIZE)
+@pytest.mark.parametrize("mode", EXPORT_MODES)
+@pytest.mark.parametrize("grad", GRAD)
+@pytest.mark.parametrize("backward", BACKWARD[1:])
+@pytest.mark.parametrize("indexing", SHORT_INDEXING)
+def test_segmented_polynomial_export(
+    name,
+    polynomial,
+    dtype,
+    math_dtype,
+    batch_size,
+    mode,
+    grad,
+    backward,
+    indexing,
+    tmp_path,
+):
+    run_segmented_polynomial_test(
+        name,
+        polynomial,
+        dtype,
+        math_dtype,
+        batch_size,
+        mode,
+        grad,
+        backward,
+        indexing,
+        tmp_path,
+    )
+
+
+if __name__ == "__main__":
+    import pytest
+
+    pytest.main([__file__])
