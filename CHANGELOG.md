@@ -11,11 +11,17 @@
 
 
 # Added
+- [JAX] `cuex.segmented_polynomial` and `cuex.equivariant_polynomial`
+- [JAX] Advanced Batching capabilities, each input/output of a segmented polynomial can have multiple axes and any of those can be indexed.
 - Class `cue.SegmentedOperand`
 - Class `cue.SegmentedPolynomial`
 - Class `cue.EquivariantPolynomial` that contains a `cue.SegmentedPolynomial` and the `cue.Rep` of its inputs and outputs
 - Add caching for `cue.descriptor.symmetric_contraction`
+- Add caching for `cue.SegmentedTensorProduct.symmetrize_operands`
 
+
+### Fixed
+- `cue.SegmentedTensorProduct.sort_indices_for_identical_operands` was silently operating on STP with non scalar coefficient, now it will raise an error to say that this case is not implemented. We should implement it at some point.
 
 ## 0.3.0 (2025-03-05)
 
