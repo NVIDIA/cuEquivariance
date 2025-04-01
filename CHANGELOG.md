@@ -1,16 +1,20 @@
 ## Latest Changes
 
 ### Breaking Changes
-- Rename `SegmentedTensorProduct.flop_cost` in `flops`
+- Rename `SegmentedTensorProduct.flop_cost` in `flop`
 - Rename `SegmentedTensorProduct.memory_cost` in `memory`
 - Removed `IrrepsArray` in favor of `RepArray`
 - Change folder structure of cuequivariance and cuequivariance-jax. Now the main subfolders are `segmented_polynomials` and `group_theory`
 - Deprecate `cue.EquivariantTensorProduct` in favor of `cue.EquivariantPolynomial`
 - The descriptors return `cue.EquivariantPolynomial` instead of `cue.EquivariantTensorProduct`
+- Change `cue.SegmentedPolynomial.canonicalize_subscripts` behavior for chefficient subscripts. It transposes the coefficients to be ordered the same way as the rest of the subscripts.
+
 
 # Added
-- Class `cue.SegmentedOperand`, `cue.SegmentedPolynomial`
+- Class `cue.SegmentedOperand`
+- Class `cue.SegmentedPolynomial`
 - Class `cue.EquivariantPolynomial` that contains a `cue.SegmentedPolynomial` and the `cue.Rep` of its inputs and outputs
+- Add caching for `cue.descriptor.symmetric_contraction`
 
 
 ## 0.3.0 (2025-03-05)
