@@ -15,6 +15,7 @@
 import logging
 import math
 import os
+import warnings
 from functools import partial
 
 import jax
@@ -131,6 +132,13 @@ def segmented_polynomial(
 
     # Sanitize the inputs, outputs and indices
     inputs = [jnp.asarray(x) for x in inputs]
+    for out, ope in zip(outputs_shape_dtype, polynomial.outputs):
+        if len(out.shape) == 0:
+            raise ValueError(f"Output has no dimensions: {out}")
+        if out.shape[-1] != ope.size and out.shape[-1] != -1:
+            warnings.warn(
+                f"Output has shape {out.shape} but expected the last dimension to be {ope.size} for polynomial:\n{polynomial}"
+            )
     outputs_shape_dtype = [
         jax.ShapeDtypeStruct(x.shape[:-1] + (ope.size,), x.dtype)
         for x, ope in zip(outputs_shape_dtype, polynomial.outputs)
