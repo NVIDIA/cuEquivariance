@@ -92,6 +92,26 @@ def test_broadcasting():
     assert out.shape == (2, 2, 3)
 
 
+@pytest.mark.parametrize("mul", [10, 32])
+@pytest.mark.parametrize("impl", ["jax", "auto"])
+def test_empty_input(mul: int, impl: str):
+    poly = (
+        cue.descriptors.channelwise_tensor_product(
+            mul * cue.Irreps("SO3", "1"), cue.Irreps("SO3", "1"), cue.Irreps("SO3", "1")
+        )
+        .polynomial.flatten_coefficient_modes()
+        .squeeze_modes()
+    )
+
+    w = jnp.ones((poly.inputs[0].size,))
+    x = jnp.ones((2, 0, mul * 3))
+    y = jnp.ones((1, 0, 3))
+    [out] = cuex.segmented_polynomial(
+        poly, [w, x, y], [jax.ShapeDtypeStruct((2, 0, 3), jnp.float32)], impl=impl
+    )
+    assert out.shape == (2, 0, mul * 3)
+
+
 def test_vmap():
     e = cue.descriptors.full_tensor_product(
         cue.Irreps("SO3", "1"), cue.Irreps("SO3", "1"), cue.Irreps("SO3", "1")
