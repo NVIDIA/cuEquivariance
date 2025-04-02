@@ -208,8 +208,6 @@ def segmented_polynomial(
                         unique_indices.append(a)
             buffer_index.append(bi)
 
-    # TODO test num_batch_axes == 0
-
     # Set default math_dtype
     if math_dtype is None:
         math_dtype = jnp.result_type(*io_buffers)
@@ -387,6 +385,7 @@ def segmented_polynomial_impl(
     del inputs_and_indices
 
     assert all(polynomial.used_buffers())
+
     try:  # TODO: remove this try-except block
         polynomial = polynomial.unsymmetrize_for_identical_operands()
     except NotImplementedError:
