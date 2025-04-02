@@ -71,8 +71,16 @@ cuEquivariance is split into three packages:
    :alt: Main components of cuEquivariance
    :align: center
 
-Most tensor products are defined using the :class:`cue.EquivariantTensorProduct <cuequivariance.EquivariantTensorProduct>` class, which encapsulates the :class:`cue.Irreps <cuequivariance.Irreps>` and :class:`cue.IrrepsLayout <cuequivariance.IrrepsLayout>` for each input and the output. It also includes one or more instances of :class:`cue.SegmentedTensorProduct <cuequivariance.SegmentedTensorProduct>`, which define the tensor product operations.
-This descriptor is then used to create a :class:`cuet.EquivariantTensorProduct <cuequivariance_torch.EquivariantTensorProduct>` module, which can be used in PyTorch models. Or used to execute the tensor product operations using :class:`cuex.equivariant_polynomial <cuequivariance_jax.equivariant_polynomial>` in JAX.
+Most tensor products are defined using a hierarchy of components:
+
+* :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>` - Encapsulates the :class:`cue.Rep <cuequivariance.Rep>` for each input and the output
+* :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>` - Included in the EquivariantPolynomial, composed of one or several tensor products
+* :class:`cue.SegmentedTensorProduct <cuequivariance.SegmentedTensorProduct>` - Defines the specific tensor product operations
+
+This descriptor can then be used in two ways:
+
+* In PyTorch: Create a :class:`cuet.SegmentedPolynomial <cuequivariance_torch.SegmentedPolynomial>` module for use in models
+* In JAX: Execute using :class:`cuex.equivariant_polynomial <cuequivariance_jax.equivariant_polynomial>` or :class:`cuex.segmented_polynomial <cuequivariance_jax.segmented_polynomial>`
 
 Tutorials
 ---------
