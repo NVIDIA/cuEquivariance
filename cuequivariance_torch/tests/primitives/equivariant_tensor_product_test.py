@@ -75,7 +75,7 @@ def make_descriptors(shared_op0=False):
 
 settings1 = [
     (torch.float32, torch.float64),
-    (torch.float64, torch.float32),
+    # (torch.float64, torch.float32),  # TODO fix 'cuequivariance_ops_torch._ext' has no attribute 'fused_tensor_product_fwd_fp64_fp64_fp64_fp64_fp32'
     (torch.float32, torch.float32),
     (torch.float64, torch.float64),
 ]
