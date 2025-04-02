@@ -93,10 +93,10 @@ class SegmentedPolynomialFromUniform1dJit(nn.Module):
             )
             if o.ndim == 1 and len(o.segments) > 0:
                 if operand_extent is None:
-                    (operand_extent,) = list(o.get_dims(0))
+                    (operand_extent,) = o.segment_shape
                 else:
                     torch._assert(
-                        operand_extent == list(o.get_dims(0))[0],
+                        (operand_extent,) == o.segment_shape,
                         "all operands must have the same extent",
                     )
         if operand_extent is None:
@@ -257,6 +257,23 @@ class SegmentedPolynomialFromUniform1dJit(nn.Module):
 
 
 class SegmentedPolynomial(nn.Module):
+    """
+    PyTorch module that computes a segmented polynomial.
+
+    Currently, it supports segmented polynomials where all segment sizes are the same,
+    and each operand is one or zero dimensional.
+
+    Args:
+        polynomial: The segmented polynomial to compute.
+        math_dtype: Data type for computational operations, defaulting to float32.
+        inputs: List of input buffers as JAX arrays.
+        output_dtype_map: Optional list that, for each output buffer, specifies
+            the index of the input buffer from which it inherits its data type.
+            -1 means the math_dtype is used.
+            Default 0 if there are input tensors, otherwise -1.
+        name: Optional name for the operation. Defaults to "segmented_polynomial".
+    """
+
     def __init__(
         self,
         polynomial,
@@ -276,4 +293,31 @@ class SegmentedPolynomial(nn.Module):
         output_shapes: Optional[Dict[int, torch.Tensor]] = None,
         output_indices: Optional[Dict[int, torch.Tensor]] = None,
     ):
+        """
+        Computes the segmented polynomial based on the specified descriptor.
+
+        Args:
+            inputs: The input tensors. The number of input tensors must match
+                the number of input buffers in the descriptor.
+                Each input tensor should have a shape of (batch, operand_size) or
+                (1, operand_size) or (index, operand_size) in the indexed case.
+                Here, `operand_size` is the size of each operand as defined in
+                the descriptor.
+            input_indices: A dictionary that contains an optional indexing tensor
+                for each input tensor. The key is the index into the inputs.
+                If a key is not present, no indexing takes place.
+                The contents of the index tensor must be suitable to index the
+                input tensor (i.e. 0 <= index_tensor[i] < input.shape[0].
+            output_shapes: A dictionary specifying the size of the output batch
+                dimensions using Tensors. We only read shape_tensor.shape[0].
+                This is mandatory if the output tensor is indexed. Otherwise,
+                the default shape is (batch, operand_size).
+            output_indices: A dictionary that contains an optional indexing tensor
+                for each outout tensor. See input_indices for details.
+
+        Returns:
+            List[torch.Tensor]:
+                The output tensors resulting from the segmented polynomial.
+                Their shapes are specified just like the inputs.
+        """
         return self.m(inputs, input_indices, output_shapes, output_indices)
