@@ -137,7 +137,8 @@ def segmented_polynomial(
             raise ValueError(f"Output has no dimensions: {out}")
         if out.shape[-1] != ope.size and out.shape[-1] != -1:
             warnings.warn(
-                f"Output has shape {out.shape} but expected the last dimension to be {ope.size} for polynomial:\n{polynomial}"
+                f"Output has shape {out.shape} but expected the last dimension to be {ope.size} for polynomial:\n{polynomial}",
+                stacklevel=2,
             )
     outputs_shape_dtype = [
         jax.ShapeDtypeStruct(x.shape[:-1] + (ope.size,), x.dtype)
