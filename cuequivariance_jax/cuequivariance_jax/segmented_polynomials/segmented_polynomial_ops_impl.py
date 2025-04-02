@@ -82,6 +82,18 @@ def segmented_polynomial_ops_impl(
     assert polynomial.num_inputs + len(outputs_shape_dtype) == buffer_index.shape[0]
     assert polynomial.num_outputs == len(outputs_shape_dtype)
 
+    polynomial = polynomial.flatten_coefficient_modes()
+    if any(d.coefficient_subscripts != "" for _, d in polynomial.operations):
+        return make_error("Non-scalar coefficients are not supported")
+
+    # TODO: consider enabling the u=1 case
+    # def fn(op, d: cue.SegmentedTensorProduct):
+    #     if d.subscripts.modes() == []:
+    #         d = d.append_modes_to_all_operands("u", dict(u=1))
+    #     return op, d
+
+    # polynomial = polynomial.map_tensor_products(fn)
+
     # We don't use the feature that indices can index themselves
     buffer_index = np.concatenate(
         [buffer_index, np.full((len(indices), num_batch_axes), -1, np.int32)]
@@ -135,7 +147,7 @@ def segmented_polynomial_ops_impl(
         if i.dtype.type not in {jnp.int32, jnp.int64}:
             return make_error(f"Unsupported index type: {i.dtype}")
 
-    if len({b.shape[-1] for b in buffers}.union({1})) != 2:
+    if len({b.shape[-1] for b in buffers}.union({1})) > 2:
         return make_error(f"Buffer shapes not compatible {[b.shape for b in buffers]}")
 
     math_dtype = jnp.dtype(math_dtype)
