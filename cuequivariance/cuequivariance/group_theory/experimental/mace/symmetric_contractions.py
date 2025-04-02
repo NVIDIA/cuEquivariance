@@ -22,7 +22,7 @@ from cuequivariance.etc.linalg import round_to_sqrt_rational, triu_array
 
 
 def symmetric_contraction(
-    irreps_in: cue.Irreps, irreps_out: cue.Irreps, degrees: list[int]
+    irreps_in: cue.Irreps, irreps_out: cue.Irreps, degrees: tuple[int, ...]
 ) -> tuple[cue.EquivariantPolynomial, np.ndarray]:
     r"""
     subscripts: ``weights[u],input[u],output[u]``
@@ -43,6 +43,13 @@ def symmetric_contraction(
         x = cuex.randn(jax.random.key(1), e.inputs[1])
         y = cuex.equivariant_polynomial(e, [w, x])
     """
+    return symmetric_contraction_cached(irreps_in, irreps_out, tuple(degrees))
+
+
+@cache
+def symmetric_contraction_cached(
+    irreps_in: cue.Irreps, irreps_out: cue.Irreps, degrees: tuple[int, ...]
+) -> tuple[cue.EquivariantPolynomial, np.ndarray]:
     assert min(degrees) > 0
 
     # poly1 replicates the behavior of the original MACE implementation

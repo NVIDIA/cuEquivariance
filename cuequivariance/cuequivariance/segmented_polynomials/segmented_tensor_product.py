@@ -103,13 +103,13 @@ class SegmentedTensorProduct:
         )
 
     def set_paths(self, paths: list[Path]):
-        object.__setattr__(self, "paths", tuple(copy.deepcopy(path) for path in paths))
+        # no need to deepcopy, because Path is immutable
+        object.__setattr__(self, "paths", tuple(paths))
 
     def insert_path_(self, path_index: int, path: Path):
+        # no need to deepcopy, because Path is immutable
         object.__setattr__(
-            self,
-            "paths",
-            self.paths[:path_index] + (copy.deepcopy(path),) + self.paths[path_index:],
+            self, "paths", self.paths[:path_index] + (path,) + self.paths[path_index:]
         )
 
     # until here. Below we use dataclasses.replace or the setters to modify the attributes
@@ -330,11 +330,11 @@ class SegmentedTensorProduct:
             coefficient_formatter (callable, optional): A function to format the coefficients.
 
         Examples:
-            >>> d = cue.descriptors.fully_connected_tensor_product(
+            >>> ((_, d),) = cue.descriptors.fully_connected_tensor_product(
             ...     cue.Irreps("SO3", "4x0+4x1"),
             ...     cue.Irreps("SO3", "4x0+4x1"),
             ...     cue.Irreps("SO3", "4x0+4x1")
-            ... ).polynomial.operations[0][1]
+            ... ).polynomial.operations
             >>> d = d.flatten_coefficient_modes()
             >>> print(d.to_text())
             uvw,u,v,w sizes=320,16,16,16 num_segments=5,4,4,4 num_paths=16 u=4 v=4 w=4
@@ -367,7 +367,7 @@ class SegmentedTensorProduct:
                         + "]"
                     )
 
-        out += f"\nFlop cost: {' '.join(f'{oid}->{self.flops(oid)}' for oid in range(self.num_operands))}"
+        out += f"\nFlop cost: {' '.join(f'{oid}->{self.flop(oid)}' for oid in range(self.num_operands))}"
         out += f"\nMemory cost: {self.memory([1] * self.num_operands)}"
 
         if len(self.paths) > 0:
@@ -420,7 +420,7 @@ class SegmentedTensorProduct:
                     "size": ope.size,
                     "segment_offsets": [sl.start for sl in slices],
                     "segment_sizes": [sl.stop - sl.start for sl in slices],
-                    "flops": self.flops(oid),
+                    "flops": self.flop(oid),
                 }
                 for oid, (ope, ss), slices in zip(
                     range(self.num_operands),
@@ -577,7 +577,10 @@ class SegmentedTensorProduct:
     def symmetries(self) -> list[tuple[int, ...]]:
         """List of permutations that leave the tensor product invariant."""
 
-        d = self.consolidate_paths()
+        def clean(d):
+            return d.consolidate_paths().canonicalize_subscripts()
+
+        d = clean(self)
 
         ps = set()
         for group in self.operands_with_identical_segments():
@@ -589,7 +592,7 @@ class SegmentedTensorProduct:
                 )
                 if p in ps:
                     continue
-                if d == d.permute_operands(p).consolidate_paths():
+                if d == clean(d.permute_operands(p)):
                     ps.add(p)
                     ps.add(inverse_permutation(p))
                     ps = generate_permutations_from(ps)
@@ -599,7 +602,7 @@ class SegmentedTensorProduct:
         """Check if all coefficients are equal to one."""
         return np.all(self.stacked_coefficients == 1)
 
-    def flops(
+    def flop(
         self, operand: int, batch_size: int = 1, algorithm: str = "optimal"
     ) -> int:
         """
@@ -826,14 +829,20 @@ class SegmentedTensorProduct:
         Return a new descriptor with a canonical representation of the subscripts.
 
         Examples:
-            >>> d = cue.SegmentedTensorProduct.from_subscripts("ab,ax,by+xy")
+            >>> d = cue.SegmentedTensorProduct.from_subscripts("ab,ax,by+yx")
             >>> d.canonicalize_subscripts()
             uv,ui,vj+ij sizes=0,0,0 num_segments=0,0,0 num_paths=0 i= j= u= v=
 
         This is useful to identify equivalent descriptors.
         """
         subscripts = Subscripts.canonicalize(self.subscripts)
-        return self.add_or_rename_modes(subscripts)
+        d = self.add_or_rename_modes(subscripts)
+        d = d.add_or_transpose_modes(
+            Subscripts.from_operands(
+                d.subscripts.operands, "".join(sorted(d.coefficient_subscripts))
+            )
+        )
+        return d
 
     def add_or_rename_modes(
         self, subscripts: str, *, mapping: Optional[dict[str, str]] = None
@@ -852,15 +861,11 @@ class SegmentedTensorProduct:
         subscripts = Subscripts(subscripts)
 
         if subscripts.is_equivalent(self.subscripts):
-            d = SegmentedTensorProduct.from_subscripts(subscripts)
-            for oid, operand in enumerate(self.operands):
-                d.add_segments(oid, operand.segments)
-            for path in self.paths:
-                d.insert_path_(
-                    len(d.paths),
-                    Path(indices=path.indices, coefficients=path.coefficients),
-                )
-            return d
+            return SegmentedTensorProduct(
+                [(ope, ss) for ope, ss in zip(self.operands, subscripts.operands)],
+                subscripts.coefficients,
+                paths=self.paths,
+            )
 
         # Non trivial setting: the new subscripts might be a superset of the old subscripts
         # In this case, we need to properly map de mode dimensions and put 1s where needed
@@ -1100,6 +1105,9 @@ class SegmentedTensorProduct:
                 )
             to_remove = to_remove & modes
 
+        if not to_remove:
+            return self
+
         d = SegmentedTensorProduct.from_subscripts(
             "".join(ch for ch in self.subscripts if ch not in to_remove)
         )
@@ -1293,6 +1301,12 @@ class SegmentedTensorProduct:
     def consolidate_paths(self) -> SegmentedTensorProduct:
         """Consolidate the paths by merging duplicates and removing zeros."""
         # equivalent to self.fuse_paths_with_same_indices().remove_zero_paths().sort_paths()
+
+        # TODO: use numpy when possible
+        # if self.coefficients_are_stackable:
+        #     indices = self.indices  # (num_paths, num_operands)
+        #     coefficients = self.stacked_coefficients  # (num_paths, *coefficient_shape)
+
         paths = dict()
         for path in self.paths:
             if path.indices in paths:
@@ -1311,39 +1325,62 @@ class SegmentedTensorProduct:
         self, operands: Sequence[int]
     ) -> SegmentedTensorProduct:
         """Reduce the number of paths by sorting the indices for identical operands."""
-        operands = sorted(set(operands))
+        operands = tuple(sorted(set(operands)))
         if len(operands) < 2:
             return self
 
+        return self._sort_indices_for_identical_operands(operands)
+
+    @functools.cache
+    def _sort_indices_for_identical_operands(self, operands: tuple[int, ...]):
         assert len({self.operands[oid].num_segments for oid in operands}) == 1
 
-        def f(ii: tuple[int, ...]) -> tuple[int, ...]:
+        non_trivial = any(
+            m in self.coefficient_subscripts
+            for i in operands
+            for m in self.subscripts.operands[i]
+        )
+        if non_trivial:
+            raise NotImplementedError(
+                "missing code to handle sorting non scalar coefficients. Try to flatten the coefficients first."
+            )
+
+        def f(path: Path) -> Path:
+            ii = path.indices
             aa = sorted([ii[oid] for oid in operands])
-            return tuple(
-                [
+            return Path(
+                indices=[
                     aa[operands.index(oid)] if oid in operands else ii[oid]
                     for oid in range(self.num_operands)
-                ]
+                ],
+                coefficients=path.coefficients,
             )
 
         return dataclasses.replace(
-            self,
-            paths=[
-                Path(
-                    indices=f(path.indices),
-                    coefficients=path.coefficients,
-                )
-                for path in self.paths
-            ],
+            self, paths=[f(path) for path in self.paths]
         ).consolidate_paths()
 
     def symmetrize_operands(
         self, operands: Sequence[int], force: bool = False
     ) -> SegmentedTensorProduct:
         """Symmetrize the specified operands permuting the indices."""
-        operands = sorted(set(operands))
+        operands = tuple(sorted(set(operands)))
         if len(operands) < 2:
             return self
+
+        return self._symmetrize_operands(operands, force)
+
+    @functools.cache
+    def _symmetrize_operands(self, operands: tuple[int, ...], force: bool):
+        non_trivial = any(
+            m in self.coefficient_subscripts
+            for i in operands
+            for m in self.subscripts.operands[i]
+        )
+        if non_trivial:
+            raise NotImplementedError(
+                "missing code to handle symmetrizing non scalar coefficients. Try to flatten the coefficients first."
+            )
 
         permutations = list(itertools.permutations(range(len(operands))))
 
@@ -1381,6 +1418,9 @@ class SegmentedTensorProduct:
 
     def remove_empty_segments(self) -> SegmentedTensorProduct:
         """Remove empty segments."""
+
+        if all(d > 0 for dd in self.get_dimensions_dict().values() for d in dd):
+            return self
 
         def empty(D, oid, sid):
             return any(dim == 0 for dim in D.operands[oid][sid])

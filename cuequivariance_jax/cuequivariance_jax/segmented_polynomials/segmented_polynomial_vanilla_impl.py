@@ -20,46 +20,57 @@ import warnings
 import jax
 import jax.lax
 import jax.numpy as jnp
+import numpy as np
 
 import cuequivariance as cue
+from cuequivariance_jax.segmented_polynomials.utils import batch_size, indexing
 
 logger = logging.getLogger(__name__)
 
 
 def segmented_polynomial_vanilla_impl(
-    inputs: list[jax.Array],  # shape (batch_size, operand_size)
+    inputs: list[jax.Array],  # shape (*batch_sizes, operand_size)
     outputs_shape_dtype: tuple[jax.ShapeDtypeStruct, ...],
     indices: list[jax.Array],
-    buffer_index: list[int],
+    buffer_index: tuple[tuple[int, ...], ...],
     polynomial: cue.SegmentedPolynomial,
     math_dtype: jnp.dtype,
     name: str,
-) -> tuple[jax.Array, ...]:  # output buffers
+) -> list[jax.Array]:  # output buffers
     num_inputs = len(buffer_index) - len(outputs_shape_dtype)
-    outputs = [jnp.zeros(out.shape, out.dtype) for out in outputs_shape_dtype]
+
+    io_buffers = list(inputs) + [
+        jnp.zeros(out.shape, out.dtype) for out in outputs_shape_dtype
+    ]
+    buffer_index = np.array(buffer_index, dtype=np.int32)
+    num_batch_axes = buffer_index.shape[1]
+    batch_sizes = [
+        batch_size(
+            [x.shape[i] for x, idx in zip(io_buffers, buffer_index[:, i]) if idx < 0],
+        )
+        for i in range(num_batch_axes)
+    ]
 
     def scatter(i: int) -> jax.Array:
-        buffer = inputs[i]
-        if buffer_index[i] >= 0:
-            idx = indices[buffer_index[i]]
-            return buffer[idx]
-        return buffer
+        idx = indexing(buffer_index[i], io_buffers[i].shape, indices)
+        return inputs[i][idx]
 
     def gather(i: int, x: jax.Array) -> jax.Array:
-        buffer = outputs[i - num_inputs]
-        if buffer_index[i] >= 0:
-            idx = indices[buffer_index[i]]
-            return buffer.at[idx].add(x)
-        return buffer + x
+        idx = indexing(buffer_index[i], io_buffers[i].shape, indices)
+        return io_buffers[i].at[idx].add(x)
 
     for operation, d in polynomial.operations:
         ope_out, b_out = operation.output_operand_buffer(num_inputs)
 
         out = outputs_shape_dtype[b_out - num_inputs]
-        if buffer_index[b_out] >= 0:
-            out = jax.ShapeDtypeStruct(
-                indices[buffer_index[b_out]].shape + out.shape[1:], out.dtype
+        out = jax.ShapeDtypeStruct(
+            tuple(
+                b if i >= 0 else s
+                for i, b, s in zip(buffer_index[b_out], batch_sizes, out.shape)
             )
+            + out.shape[-1:],
+            out.dtype,
+        )
 
         output_segments: list[list[jax.Array]] = tp_list_list(
             *[scatter(i) for i in operation.input_buffers(num_inputs)],
@@ -76,9 +87,9 @@ def segmented_polynomial_vanilla_impl(
             out.shape[:-1],
             out.dtype,
         )
-        outputs[b_out - num_inputs] = gather(b_out, out)
+        io_buffers[b_out] = gather(b_out, out)
 
-    return tuple(outputs)
+    return tuple(io_buffers[num_inputs:])
 
 
 def flatten(x: jax.Array, axis: int) -> jax.Array:

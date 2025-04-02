@@ -1,16 +1,25 @@
 ## Latest Changes
 
 ### Breaking Changes
-- Rename `SegmentedTensorProduct.flop_cost` in `flops`
-- Rename `SegmentedTensorProduct.memory_cost` in `memory`
-- Removed `IrrepsArray` in favor of `RepArray`
-- Change folder structure of cuequivariance and cuequivariance-jax. Now the main subfolders are `segmented_polynomials` and `group_theory`
-- Deprecate `cue.EquivariantTensorProduct` in favor of `cue.EquivariantPolynomial`
-- The descriptors return `cue.EquivariantPolynomial` instead of `cue.EquivariantTensorProduct`
+- [Torch/JAX] Rename `SegmentedTensorProduct.flop_cost` to `flop`
+- [Torch/JAX] Rename `SegmentedTensorProduct.memory_cost` to `memory`
+- [Torch/JAX] Removed `IrrepsArray` in favor of `RepArray`
+- [Torch/JAX] Change folder structure of cuequivariance and cuequivariance-jax. Now the main subfolders are `segmented_polynomials` and `group_theory`
+- [Torch/JAX] Deprecate `cue.EquivariantTensorProduct` in favor of `cue.EquivariantPolynomial`
+- [Torch/JAX] The descriptors return `cue.EquivariantPolynomial` instead of `cue.EquivariantTensorProduct`
+- [Torch/JAX] Change `cue.SegmentedPolynomial.canonicalize_subscripts` behavior for coefficient subscripts. It transposes the coefficients to be ordered the same way as the rest of the subscripts.
 
-# Added
-- Class `cue.SegmentedOperand`, `cue.SegmentedPolynomial`
-- Class `cue.EquivariantPolynomial` that contains a `cue.SegmentedPolynomial` and the `cue.Rep` of its inputs and outputs
+### Added
+- [Torch/JAX] Class `cue.SegmentedOperand`
+- [Torch/JAX] Class `cue.SegmentedPolynomial`
+- [Torch/JAX] Class `cue.EquivariantPolynomial` that contains a `cue.SegmentedPolynomial` and the `cue.Rep` of its inputs and outputs
+- [Torch/JAX] Add caching for `cue.descriptor.symmetric_contraction`
+- [Torch/JAX] Add caching for `cue.SegmentedTensorProduct.symmetrize_operands`
+- [JAX] `cuex.segmented_polynomial` and `cuex.equivariant_polynomial`
+- [JAX] Advanced Batching capabilities, each input/output of a segmented polynomial can have multiple axes and any of those can be indexed.
+
+### Fixed
+- [Torch/JAX] `cue.SegmentedTensorProduct.sort_indices_for_identical_operands` was silently operating on STP with non scalar coefficient, now it will raise an error to say that this case is not implemented. We should implement it at some point.
 
 
 ## 0.3.0 (2025-03-05)

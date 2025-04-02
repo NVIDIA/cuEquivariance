@@ -445,6 +445,36 @@ class SegmentedPolynomial:
             operands[:num_inputs], operands[num_inputs:], tensor_products
         ).consolidate()
 
+    @classmethod
+    def concatenate(
+        cls,
+        inputs: Sequence[cue.SegmentedOperand],
+        outputs: Sequence[cue.SegmentedOperand],
+        polys: list[tuple[SegmentedPolynomial, Sequence[int | None]]],
+    ) -> SegmentedPolynomial:
+        """Concatenate segmented polynomials.
+
+        Args:
+            inputs: Sequence of input operands.
+            outputs: Sequence of output operands.
+            polys: List of tuples containing (polynomial, buffer_mapping), where
+                buffer_mapping[i] is the buffer index in the polynomial that corresponds
+                to the i-th buffer in the concatenated polynomial. If buffer_mapping[i] is None,
+                the i-th buffer in the concatenated polynomial is not used in the polynomial.
+
+        Returns:
+            A new SegmentedPolynomial with concatenated operations.
+        """
+        return cls(
+            inputs,
+            outputs,
+            [
+                ([mp.index(bid) for bid in ope.buffers], stp)
+                for pol, mp in polys
+                for ope, stp in pol.operations
+            ],
+        )
+
     def squeeze_modes(self) -> SegmentedPolynomial:
         """Squeeze the modes of the segmented tensor products."""
         return SegmentedPolynomial.from_default_buffers(
@@ -459,6 +489,14 @@ class SegmentedPolynomial:
             self.inputs,
             self.outputs,
             [(ope, stp.flatten_coefficient_modes()) for ope, stp in self.operations],
+        )
+
+    def flatten_modes(self, modes: list[str]) -> SegmentedPolynomial:
+        """Flatten the specified modes of the segmented tensor products."""
+        return SegmentedPolynomial.from_default_buffers(
+            self.inputs,
+            self.outputs,
+            [(ope, stp.flatten_modes(modes)) for ope, stp in self.operations],
         )
 
     def jvp(self, has_tangent: list[bool]) -> SegmentedPolynomial:
@@ -516,12 +554,12 @@ class SegmentedPolynomial:
             has_cotangent=has_cotangent,
         )
 
-    def flops(self, batch_size: int = 1) -> int:
+    def flop(self, batch_size: int = 1) -> int:
         """Compute the number of floating point operations in the polynomial."""
         n = 0
         for ope, stp in self.operations:
             oid, _ = ope.output_operand_buffer(self.num_inputs)
-            n += stp.flops(oid)
+            n += stp.flop(oid)
         return batch_size * n
 
     def memory(self, batch_sizes: list[int]) -> int:

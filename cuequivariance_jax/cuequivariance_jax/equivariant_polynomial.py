@@ -26,7 +26,7 @@ def equivariant_polynomial(
     outputs_shape_dtype: list[jax.ShapeDtypeStruct]
     | jax.ShapeDtypeStruct
     | None = None,
-    indices: list[jax.Array | None] | None = None,
+    indices: None | list[None | jax.Array | tuple[jax.Array | slice]] = None,
     math_dtype: jnp.dtype | None = None,
     name: str | None = None,
     impl: str = "auto",
@@ -80,7 +80,7 @@ def equivariant_polynomial(
         >>> result = cuex.equivariant_polynomial(
         ...   e,
         ...   [x],
-        ...   [jax.ShapeDtypeStruct((2, e.outputs[0].dim), jnp.float32)],
+        ...   jax.ShapeDtypeStruct((2, e.outputs[0].dim), jnp.float32),
         ...   indices=[None, i_out],
         ... )
         >>> result
@@ -123,6 +123,8 @@ def equivariant_polynomial(
             f"Unexpected number of indices. indices should None or a list of length {poly.num_operands}, got a list of length {len(indices)}."
         )
 
+    return_as_list = True
+
     if outputs_shape_dtype is None:
         if not all(i is None for i in indices[poly.num_inputs :]):
             raise ValueError(
@@ -143,8 +145,11 @@ def equivariant_polynomial(
             jax.ShapeDtypeStruct(inferred_shape + (rep.dim,), inferred_dtype)
             for rep in poly.outputs
         ]
+        if poly.num_outputs == 1:
+            return_as_list = False
 
     if hasattr(outputs_shape_dtype, "shape"):
+        return_as_list = False
         outputs_shape_dtype = [outputs_shape_dtype]
 
     if len(outputs_shape_dtype) != poly.num_outputs:
@@ -163,6 +168,6 @@ def equivariant_polynomial(
     )
     outputs = [cuex.RepArray(rep, x) for rep, x in zip(poly.outputs, outputs)]
 
-    if poly.num_outputs == 1:
+    if not return_as_list:
         return outputs[0]
     return outputs

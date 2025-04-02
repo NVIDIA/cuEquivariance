@@ -12,13 +12,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from functools import cache
+
 import cuequivariance as cue
 
 
 def symmetric_contraction(
     irreps_in: cue.Irreps,
     irreps_out: cue.Irreps,
-    degrees: list[int],
+    degrees: tuple[int, ...],
 ) -> cue.EquivariantPolynomial:
     """Construct the descriptor for a symmetric contraction.
 
@@ -29,7 +31,7 @@ def symmetric_contraction(
     Args:
         irreps_in (Irreps): The input irreps, the multiplicity are treated in parallel.
         irreps_out (Irreps): The output irreps.
-        degrees (list[int]): List of degrees for the symmetric contractions.
+        degrees (tuple[int, ...]): List of degrees for the symmetric contractions.
 
     Returns:
         EquivariantPolynomial: The descriptor of the symmetric contraction.
@@ -39,7 +41,7 @@ def symmetric_contraction(
         >>> cue.descriptors.symmetric_contraction(
         ...    16 * cue.Irreps("SO3", "0 + 1 + 2"),
         ...    16 * cue.Irreps("SO3", "0 + 1"),
-        ...    [1, 2, 3]
+        ...    (1, 2, 3)
         ... )
         ╭ a=32x0+80x0+176x0 b=16x0+16x1+16x2 -> C=16x0+16x1
         │  []·a[u]·b[u]➜C[u] ─────────── num_paths=4 u=16
@@ -48,11 +50,20 @@ def symmetric_contraction(
 
         Where ``32x0+80x0+176x0`` are the weights needed for each degree (32 for degree 1, 80 for degree 2, 176 for degree 3).
     """
+    return symmetric_contraction_cached(irreps_in, irreps_out, tuple(degrees))
+
+
+@cache
+def symmetric_contraction_cached(
+    irreps_in: cue.Irreps,
+    irreps_out: cue.Irreps,
+    degrees: tuple[int, ...],
+) -> cue.EquivariantPolynomial:
     degrees = list(degrees)
     if len(degrees) != 1:
         return cue.EquivariantPolynomial.stack(
             [
-                symmetric_contraction(irreps_in, irreps_out, [degree])
+                symmetric_contraction(irreps_in, irreps_out, (degree,))
                 for degree in degrees
             ],
             [True, False, False],

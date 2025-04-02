@@ -154,22 +154,22 @@ class Subscripts(str):
         Examples:
             >>> Subscripts("ab,b,a").canonicalize()
             'uv,v,u'
+
+            >>> Subscripts("ab,aj,bi+ij").canonicalize()
+            'uv,ui,vj+ji'
         """
         canonical_modes = "uvwabcdefghxyz"
         canonical_coeff = "ijklmnopqrst"
 
-        subscripts_coeff = self.coefficients.modes()  # ijk
-        subscripts_modes = [m for m in self.modes() if m not in subscripts_coeff]  # uvw
-
         mapping = dict()
-        for m in subscripts_modes:
+        for m in self.modes():
             if m not in mapping:
-                mapping[m] = canonical_modes[0]
-                canonical_modes = canonical_modes[1:]
-        for m in subscripts_coeff:
-            if m not in mapping:
-                mapping[m] = canonical_coeff[0]
-                canonical_coeff = canonical_coeff[1:]
+                if m in self.coefficients.modes():
+                    mapping[m] = canonical_coeff[0]
+                    canonical_coeff = canonical_coeff[1:]
+                else:
+                    mapping[m] = canonical_modes[0]
+                    canonical_modes = canonical_modes[1:]
 
         letters = sorted({m for m in self if m.isalpha()})
 
