@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import dataclasses
+from typing import Any, Callable
 
 import numpy as np
 
@@ -220,7 +221,12 @@ class EquivariantPolynomial:
             self.operands, self.polynomial.flatten_coefficient_modes()
         )
 
-    def jvp(self, has_tangent: list[bool]) -> EquivariantPolynomial:
+    def jvp(
+        self, has_tangent: list[bool]
+    ) -> tuple[
+        EquivariantPolynomial,
+        Callable[[tuple[list[Any], list[Any]]], tuple[list[Any], list[Any]]],
+    ]:
         """Compute the Jacobian-vector product of the polynomial.
 
         This method creates a new polynomial that, when evaluated, computes the Jacobian-vector
@@ -233,13 +239,17 @@ class EquivariantPolynomial:
             EquivariantPolynomial: A new polynomial representing the JVP operation.
         """
         p, m = self.polynomial.jvp(has_tangent)
-        return EquivariantPolynomial(m(self.operands), p), m
+        inputs, outputs = m((self.inputs, self.outputs))
+        return EquivariantPolynomial(inputs + outputs, p), m
 
     def transpose(
         self,
         is_undefined_primal: list[bool],
         has_cotangent: list[bool],
-    ) -> EquivariantPolynomial:
+    ) -> tuple[
+        EquivariantPolynomial,
+        Callable[[tuple[list[Any], list[Any]]], tuple[list[Any], list[Any]]],
+    ]:
         """Transpose the polynomial operation.
 
         This method creates a new polynomial that represents the transpose of the original operation.
@@ -256,11 +266,15 @@ class EquivariantPolynomial:
             ValueError: If the polynomial is non-linear and cannot be transposed.
         """
         p, m = self.polynomial.transpose(is_undefined_primal, has_cotangent)
-        return EquivariantPolynomial(m(self.operands), p), m
+        inputs, outputs = m((self.inputs, self.outputs))
+        return EquivariantPolynomial(inputs + outputs, p), m
 
     def backward(
         self, requires_gradient: list[bool], has_cotangent: list[bool]
-    ) -> EquivariantPolynomial:
+    ) -> tuple[
+        EquivariantPolynomial,
+        Callable[[tuple[list[Any], list[Any]]], tuple[list[Any], list[Any]]],
+    ]:
         """Compute the backward pass of the polynomial for gradient computation.
 
         This method combines the JVP and transpose operations to create a new polynomial that,
@@ -275,7 +289,8 @@ class EquivariantPolynomial:
             EquivariantPolynomial: A new polynomial for gradient computation.
         """
         p, m = self.polynomial.backward(requires_gradient, has_cotangent)
-        return EquivariantPolynomial(m(self.operands), p), m
+        inputs, outputs = m((self.inputs, self.outputs))
+        return EquivariantPolynomial(inputs + outputs, p), m
 
     def flop(self, batch_size: int = 1) -> int:
         """Compute the number of floating point operations in the polynomial.

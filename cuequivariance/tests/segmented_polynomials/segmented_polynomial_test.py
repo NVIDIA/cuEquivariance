@@ -248,7 +248,7 @@ def test_jvp():
     jvp_poly, map = poly.jvp([True, True])
 
     # Test mapping of operands
-    assert map([0, 1, 2]) == [0, 1, 0, 1, 2]
+    assert map(([0, 1], [2])) == ([0, 1, 0, 1], [2])
 
     # When both inputs have tangents, we need to concatenate inputs and tangents
     # The JVP polynomial expects inputs followed by their respective tangents
