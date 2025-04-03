@@ -184,22 +184,30 @@ class EquivariantPolynomial:
             cue.SegmentedPolynomial.stack([pol.polynomial for pol in polys], stacked),
         )
 
+    def flatten_modes(self, modes: list[str]) -> EquivariantPolynomial:
+        """Flatten the specified modes of the segmented tensor products."""
+        return EquivariantPolynomial(
+            self.operands, self.polynomial.flatten_modes(modes)
+        )
+
+    def all_same_segment_shape(self) -> bool:
+        """Whether all the segments have the same shape."""
+        return self.polynomial.all_same_segment_shape()
+
     def canonicalize_subscripts(self) -> EquivariantPolynomial:
         """Canonicalize the subscripts of the segmented tensor products."""
         return EquivariantPolynomial(
-            self.operands,
-            self.polynomial.canonicalize_subscripts(),
+            self.operands, self.polynomial.canonicalize_subscripts()
         )
 
-    def squeeze_modes(self) -> EquivariantPolynomial:
+    def squeeze_modes(self, modes: str | None = None) -> EquivariantPolynomial:
         """Squeeze the modes of the segmented tensor products.
 
         Returns:
             EquivariantPolynomial: A new polynomial with squeezed modes.
         """
         return EquivariantPolynomial(
-            self.operands,
-            self.polynomial.squeeze_modes(),
+            self.operands, self.polynomial.squeeze_modes(modes)
         )
 
     def flatten_coefficient_modes(self) -> EquivariantPolynomial:
@@ -209,8 +217,7 @@ class EquivariantPolynomial:
             EquivariantPolynomial: A new polynomial with flattened coefficient modes.
         """
         return EquivariantPolynomial(
-            self.operands,
-            self.polynomial.flatten_coefficient_modes(),
+            self.operands, self.polynomial.flatten_coefficient_modes()
         )
 
     def jvp(self, has_tangent: list[bool]) -> EquivariantPolynomial:
