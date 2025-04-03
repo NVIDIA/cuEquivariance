@@ -166,7 +166,7 @@ def segmented_polynomial_ops_impl(
     except ImportError as e:
         return make_error(f"cuequivariance_ops_jax is not installed: {e}")
 
-    if version.parse(__version__) < version.parse("0.4.0"):
+    if version.parse(__version__) < version.parse("0.4.0rc0"):
         warnings.warn(
             f"cuequivariance_ops_jax version {__version__} is too old, need at least 0.4.0"
         )
