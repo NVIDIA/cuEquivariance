@@ -26,6 +26,7 @@ Tensor Products
    :toctree: generated/
    :template: pytorch_module_template.rst
 
+   SegmentedPolynomial
    EquivariantTensorProduct
    TensorProduct
 
