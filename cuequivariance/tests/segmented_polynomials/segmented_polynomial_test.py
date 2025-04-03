@@ -245,7 +245,10 @@ def test_jvp():
     y_tangent = np.array([0.4, 0.5, 0.6])
 
     # Create the JVP polynomial for both inputs having tangents
-    jvp_poly = poly.jvp([True, True])
+    jvp_poly, map = poly.jvp([True, True])
+
+    # Test mapping of operands
+    assert map([0, 1, 2]) == [0, 1, 0, 1, 2]
 
     # When both inputs have tangents, we need to concatenate inputs and tangents
     # The JVP polynomial expects inputs followed by their respective tangents
@@ -259,13 +262,13 @@ def test_jvp():
     assert np.allclose(jvp_result[0], expected_jvp)
 
     # Test with only x having a tangent
-    jvp_x_only = poly.jvp([True, False])
+    jvp_x_only, _ = poly.jvp([True, False])
     x_only_result = jvp_x_only(x, y, x_tangent)
     expected_x_only = np.array([y.dot(x_tangent)])
     assert np.allclose(x_only_result[0], expected_x_only)
 
     # Test with only y having a tangent
-    jvp_y_only = poly.jvp([False, True])
+    jvp_y_only, _ = poly.jvp([False, True])
     y_only_result = jvp_y_only(x, y, y_tangent)
     expected_y_only = np.array([x.dot(y_tangent)])
     assert np.allclose(y_only_result[0], expected_y_only)
@@ -291,7 +294,7 @@ def test_transpose_linear():
     # Test transposing with respect to x (x is undefined primal)
     # is_undefined_primal = [True, False] means x is undefined, y is defined
     # has_cotangent = [True] means the output has a cotangent
-    transpose_x = poly.transpose(
+    transpose_x, _ = poly.transpose(
         is_undefined_primal=[True, False], has_cotangent=[True]
     )
 
@@ -303,7 +306,7 @@ def test_transpose_linear():
     assert np.allclose(x_result[0], expected_x_result)
 
     # Test transposing with respect to y (y is undefined primal)
-    transpose_y = poly.transpose(
+    transpose_y, _ = poly.transpose(
         is_undefined_primal=[False, True], has_cotangent=[True]
     )
 

@@ -468,6 +468,7 @@ def segmented_polynomial_jvp(
         impl=impl,
     )
 
+    jvp_poly, _ = polynomial.jvp([not isinstance(t, ad.Zero) for t in tangents])
     jvp_indices, jvp_buffer_index = _remap_indices_and_buffer_index(
         indices,
         buffer_index,
@@ -481,7 +482,7 @@ def segmented_polynomial_jvp(
         outputs_shape_dtype,
         jvp_indices,
         jvp_buffer_index,
-        polynomial.jvp([not isinstance(t, ad.Zero) for t in tangents]),
+        jvp_poly,
         math_dtype,
         name
         + "_jvp"
@@ -510,6 +511,10 @@ def segmented_polynomial_transpose(
     # The cotangents replace the outputs as inputs
     # The undefined primal inputs become outputs
 
+    tr_poly, _ = polynomial.transpose(
+        [ad.is_undefined_primal(x) for x in inputs],
+        [not isinstance(x, ad.Zero) for x in cotangents],
+    )
     tr_indices, tr_buffer_index = _remap_indices_and_buffer_index(
         indices,
         buffer_index,
@@ -532,10 +537,7 @@ def segmented_polynomial_transpose(
         ],
         tr_indices,
         tr_buffer_index,
-        polynomial.transpose(
-            [ad.is_undefined_primal(x) for x in inputs],
-            [not isinstance(x, ad.Zero) for x in cotangents],
-        ),
+        tr_poly,
         math_dtype,
         name + "_T",
         impl=impl,

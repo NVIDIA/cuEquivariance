@@ -232,12 +232,8 @@ class EquivariantPolynomial:
         Returns:
             EquivariantPolynomial: A new polynomial representing the JVP operation.
         """
-        return EquivariantPolynomial(
-            list(self.inputs)
-            + [x for has, x in zip(has_tangent, self.inputs) if has]
-            + list(self.outputs),
-            self.polynomial.jvp(has_tangent),
-        )
+        p, m = self.polynomial.jvp(has_tangent)
+        return EquivariantPolynomial(m(self.operands), p), m
 
     def transpose(
         self,
@@ -259,23 +255,8 @@ class EquivariantPolynomial:
         Raises:
             ValueError: If the polynomial is non-linear and cannot be transposed.
         """
-        return EquivariantPolynomial(
-            # defined inputs
-            [
-                x
-                for is_undefined, x in zip(is_undefined_primal, self.inputs)
-                if not is_undefined
-            ]
-            # cotangent outputs
-            + [x for has, x in zip(has_cotangent, self.outputs) if has]
-            # undefined inputs
-            + [
-                x
-                for is_undefined, x in zip(is_undefined_primal, self.inputs)
-                if is_undefined
-            ],
-            self.polynomial.transpose(is_undefined_primal, has_cotangent),
-        )
+        p, m = self.polynomial.transpose(is_undefined_primal, has_cotangent)
+        return EquivariantPolynomial(m(self.operands), p), m
 
     def backward(
         self, requires_gradient: list[bool], has_cotangent: list[bool]
@@ -293,12 +274,8 @@ class EquivariantPolynomial:
         Returns:
             EquivariantPolynomial: A new polynomial for gradient computation.
         """
-        return EquivariantPolynomial(
-            list(self.inputs)
-            + [x for has, x in zip(has_cotangent, self.outputs) if has]
-            + [x for req, x in zip(requires_gradient, self.inputs) if req],
-            self.polynomial.backward(requires_gradient, has_cotangent),
-        )
+        p, m = self.polynomial.backward(requires_gradient, has_cotangent)
+        return EquivariantPolynomial(m(self.operands), p), m
 
     def flop(self, batch_size: int = 1) -> int:
         """Compute the number of floating point operations in the polynomial.
