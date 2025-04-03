@@ -93,17 +93,20 @@ class TransposeSegments(torch.nn.Module):
         self.f = None
 
         if info is not None:
+            import_error = None
             if use_fallback is False or use_fallback is None:
                 try:
                     import cuequivariance_ops_torch  # noqa: F401
-                except ImportError:
-                    pass
+                except ImportError as e:
+                    import_error = e
                 else:
                     if torch.cuda.is_available():
                         self.f = _transpose(info).to(device=device)
 
             if use_fallback is False and self.f is None:
-                raise RuntimeError("CUDA kernel not available for TransposeSegments.")
+                raise RuntimeError(
+                    f"CUDA kernel not available for TransposeSegments: {import_error}"
+                )
 
             if self.f is None:
                 self.f = _transpose_segments_fx(segments).to(device=device)
