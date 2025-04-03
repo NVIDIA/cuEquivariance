@@ -21,6 +21,5 @@ Tutorials
 
    irreps
    layout
-   etp
+   ep
    stp
-   beta

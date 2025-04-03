@@ -13,10 +13,10 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 
-Equivariant Tensor Product
-==========================
+Equivariant Polynomials
+=======================
 
-The submodule :class:`cuequivariance.descriptors` contains many descriptors of Equivariant Tensor Products represented by the class :class:`cuequivariance.EquivariantTensorProduct`.
+The submodule ``cue.descriptors`` contains many descriptors of equivariant polynomials represented by the class :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`.
 
 Examples
 --------
@@ -28,7 +28,9 @@ Linear layer
 
     import cuequivariance as cue
 
-    cue.descriptors.linear(cue.Irreps("O3", "32x0e + 32x1o"), cue.Irreps("O3", "16x0e + 48x1o"))
+    irreps_in = cue.Irreps("O3", "32x0e + 32x1o")
+    irreps_out = cue.Irreps("O3", "16x0e + 48x1o")
+    cue.descriptors.linear(irreps_in, irreps_out)
 
 In this example, the first operand is the weights, they are always scalars.
 There is ``32 * 16 = 512`` weights to connect the ``0e`` together and ``32 * 48 = 1536`` weights to connect the ``1o`` together. This gives a total of ``2048`` weights.
@@ -52,6 +54,16 @@ Rotation
 
 This case is a bit of an edge case, it is a rotation of the input by angles encoded as :math:`sin(\theta)` and :math:`cos(\theta)`. See the function :func:`cuet.encode_rotation_angle <cuequivariance_torch.encode_rotation_angle>` for more details.
 
+Symmetric Contraction
+^^^^^^^^^^^^^^^^^^^^^
+
+.. jupyter-execute::
+
+    irreps = 128 * cue.Irreps("O3", "0e + 1o + 2e")
+    e = cue.descriptors.symmetric_contraction(irreps, irreps, [0, 1, 2, 3])
+    e
+
+
 Execution on JAX
 ----------------
 
@@ -62,10 +74,6 @@ Execution on JAX
     import cuequivariance as cue
     import cuequivariance_jax as cuex
 
-    e = cue.descriptors.linear(
-        cue.Irreps("O3", "32x0e + 32x1o"),
-        cue.Irreps("O3", "8x0e + 4x1o")
-    )
     w = cuex.randn(jax.random.key(0), e.inputs[0])
     x = cuex.randn(jax.random.key(1), e.inputs[1])
 
@@ -79,7 +87,7 @@ The output is a :class:`cuex.RepArray <cuequivariance_jax.RepArray>` object.
 Execution on PyTorch
 --------------------
 
-We can execute an :class:`cuequivariance.EquivariantTensorProduct` with PyTorch.
+The same descriptor can be used in PyTorch using the class :class:`cuet.SegmentedPolynomial <cuequivariance_torch.SegmentedPolynomial>`.
 
 .. jupyter-execute::
 
@@ -87,15 +95,45 @@ We can execute an :class:`cuequivariance.EquivariantTensorProduct` with PyTorch.
     import cuequivariance as cue
     import cuequivariance_torch as cuet
 
-    e = cue.descriptors.linear(
-        cue.Irreps("O3", "32x0e + 32x1o"),
-        cue.Irreps("O3", "8x0e + 4x1o")
-    )
-    module = cuet.EquivariantTensorProduct(e, layout=cue.ir_mul, use_fallback=True)
+    if torch.cuda.is_available():
+        module = cuet.SegmentedPolynomial(e.polynomial)
 
-    w = torch.randn(1, e.inputs[0].dim)
-    x = torch.randn(1, e.inputs[1].dim)
+        w = torch.randn(1, e.inputs[0].dim).cuda()
+        x = torch.randn(1, e.inputs[1].dim).cuda()
 
-    module(w, x)
+        module([w, x])
 
-Note that you have to specify the layout. If the layout specified is different from the one in the descriptor, the module will transpose the inputs/output to match the layout.
+Details
+-------
+
+An :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>` is composed of two main components:
+
+1. Lists of :class:`cue.Rep <cuequivariance.Rep>` objects that define the inputs and outputs of the polynomial
+2. A :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>` that describes how to compute the polynomial
+
+The :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>` itself consists of:
+
+* A list of :class:`cue.SegmentedOperand <cuequivariance.SegmentedOperand>` objects that represent the operands used in the computation
+* A list of operations, where each operation is a pair containing:
+    * An :class:`cue.Operation <cuequivariance.Operation>` object that defines what operation to perform
+    * A :class:`cue.SegmentedTensorProduct <cuequivariance.SegmentedTensorProduct>` that specifies how to perform the tensor product
+
+This hierarchical structure allows for efficient representation and computation of equivariant polynomials. Below we can examine these components for a specific example:
+
+.. jupyter-execute::
+
+    e.inputs, e.outputs
+
+.. jupyter-execute::
+
+    p = e.polynomial
+    p
+
+.. jupyter-execute::
+
+    p.inputs, p.outputs
+
+.. jupyter-execute::
+
+    p.operations
+    

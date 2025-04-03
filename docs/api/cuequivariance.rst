@@ -19,6 +19,18 @@
 cuequivariance
 ==============
 
+Segmented Polynomials
+---------------------
+
+.. autosummary::
+   :toctree: generated/
+   :template: class_template.rst
+
+   Operation
+   SegmentedOperand
+   SegmentedTensorProduct
+   SegmentedPolynomial
+
 Group Representations
 ---------------------
 
@@ -50,9 +62,6 @@ These classes represent tensor products and polynomials.
    Irreps
    IrrepsLayout
    IrrepsAndLayout
-   SegmentedTensorProduct
-   Operation
-   SegmentedPolynomial
    EquivariantPolynomial
 
 Descriptors

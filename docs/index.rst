@@ -87,9 +87,8 @@ Tutorials
 
 | :doc:`tutorials/irreps`
 | :doc:`tutorials/layout`
-| :doc:`tutorials/etp`
+| :doc:`tutorials/ep`
 | :doc:`tutorials/stp`
-| :doc:`tutorials/beta`
 
 .. toctree::
    :hidden:
