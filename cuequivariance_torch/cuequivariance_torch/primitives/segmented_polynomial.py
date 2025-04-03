@@ -4,6 +4,8 @@ from typing import Dict, List, Optional
 import torch
 import torch.nn as nn
 
+import cuequivariance as cue
+
 try:
     from cuequivariance_ops_torch.tensor_product_uniform_1d_jit import (
         BATCH_DIM_AUTO,
@@ -72,7 +74,7 @@ except ImportError:
 class SegmentedPolynomialFromUniform1dJit(nn.Module):
     def __init__(
         self,
-        polynomial,
+        polynomial: cue.SegmentedPolynomial,
         math_dtype: torch.dtype = torch.float32,
         output_dtype_map: List[int] = None,
         name: str = "segmented_polynomial",
@@ -264,7 +266,8 @@ class SegmentedPolynomial(nn.Module):
     and each operand is one or zero dimensional.
 
     Args:
-        polynomial: The segmented polynomial to compute.
+        polynomial: The segmented polynomial to compute, an instance of
+            `cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`.
         math_dtype: Data type for computational operations, defaulting to float32.
         output_dtype_map: Optional list that, for each output buffer, specifies
             the index of the input buffer from which it inherits its data type.
@@ -275,7 +278,7 @@ class SegmentedPolynomial(nn.Module):
 
     def __init__(
         self,
-        polynomial,
+        polynomial: cue.SegmentedPolynomial,
         math_dtype: torch.dtype = torch.float32,
         output_dtype_map: List[int] = None,
         name: str = "segmented_polynomial",
