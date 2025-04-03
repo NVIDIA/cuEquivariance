@@ -17,7 +17,7 @@ from __future__ import annotations
 import copy
 import dataclasses
 import itertools
-from typing import Callable, Sequence
+from typing import Any, Callable, Sequence
 
 import numpy as np
 
@@ -38,7 +38,7 @@ class SegmentedPolynomial:
     Args:
         inputs (tuple of SegmentedOperand): Input operands.
         outputs (tuple of SegmentedOperand): Output operands.
-        tensor_products (list of tuple of Operation and SegmentedTensorProduct): List of operation and tensor product pairs
+        operations (list of tuple of Operation and SegmentedTensorProduct): List of operation and tensor product pairs
             that define the polynomial transformation.
     """
 
@@ -91,26 +91,26 @@ class SegmentedPolynomial:
         cls,
         inputs: Sequence[cue.SegmentedOperand | None],
         outputs: Sequence[cue.SegmentedOperand | None],
-        tensor_products: Sequence[
+        operations: Sequence[
             tuple[cue.Operation | Sequence[int], cue.SegmentedTensorProduct]
         ],
     ):
         buffers = list(inputs) + list(outputs)
-        for ope, stp in tensor_products:
+        for ope, stp in operations:
             ope = cue.Operation(ope)
             assert isinstance(stp, cue.SegmentedTensorProduct)
             assert len(ope.buffers) == stp.num_operands
             for buffer_id, operand in zip(ope.buffers, stp.operands):
                 buffers[buffer_id] = operand
 
-        return cls(buffers[: len(inputs)], buffers[len(inputs) :], tensor_products)
+        return cls(buffers[: len(inputs)], buffers[len(inputs) :], operations)
 
     @classmethod
     def from_stps(
         cls,
         inputs: Sequence[cue.SegmentedOperand | None],
         outputs: Sequence[cue.SegmentedOperand | None],
-        tensor_products: Sequence[
+        operations: Sequence[
             tuple[cue.Operation | Sequence[int], cue.SegmentedTensorProduct]
         ],
     ) -> SegmentedPolynomial:
@@ -119,7 +119,7 @@ class SegmentedPolynomial:
         return cls.stack(
             [
                 cls.from_default_buffers(inputs, outputs, [(ope, stp)])
-                for ope, stp in tensor_products
+                for ope, stp in operations
             ],
             [ope is None for ope in inputs + outputs],
         )
@@ -475,12 +475,32 @@ class SegmentedPolynomial:
             ],
         )
 
-    def squeeze_modes(self) -> SegmentedPolynomial:
+    def flatten_modes(self, modes: list[str]) -> SegmentedPolynomial:
+        """Flatten the specified modes of the polynomial."""
+        return SegmentedPolynomial.from_default_buffers(
+            self.inputs,
+            self.outputs,
+            [(ope, stp.flatten_modes(modes)) for ope, stp in self.operations],
+        )
+
+    def all_same_segment_shape(self) -> bool:
+        """Check if all operands have the same segment shape."""
+        return all(ope.all_same_segment_shape() for ope in self.operands)
+
+    def canonicalize_subscripts(self) -> SegmentedPolynomial:
+        """Canonicalize the subscripts of the segmented tensor products."""
+        return SegmentedPolynomial.from_default_buffers(
+            self.inputs,
+            self.outputs,
+            [(ope, stp.canonicalize_subscripts()) for ope, stp in self.operations],
+        )
+
+    def squeeze_modes(self, modes: str | None = None) -> SegmentedPolynomial:
         """Squeeze the modes of the segmented tensor products."""
         return SegmentedPolynomial.from_default_buffers(
             self.inputs,
             self.outputs,
-            [(ope, stp.squeeze_modes()) for ope, stp in self.operations],
+            [(ope, stp.squeeze_modes(modes)) for ope, stp in self.operations],
         )
 
     def flatten_coefficient_modes(self) -> SegmentedPolynomial:
@@ -491,68 +511,96 @@ class SegmentedPolynomial:
             [(ope, stp.flatten_coefficient_modes()) for ope, stp in self.operations],
         )
 
-    def flatten_modes(self, modes: list[str]) -> SegmentedPolynomial:
-        """Flatten the specified modes of the segmented tensor products."""
-        return SegmentedPolynomial.from_default_buffers(
-            self.inputs,
-            self.outputs,
-            [(ope, stp.flatten_modes(modes)) for ope, stp in self.operations],
-        )
-
-    def jvp(self, has_tangent: list[bool]) -> SegmentedPolynomial:
+    def jvp(
+        self, has_tangent: list[bool]
+    ) -> tuple[
+        SegmentedPolynomial,
+        Callable[[tuple[list[Any], list[Any]]], tuple[list[Any], list[Any]]],
+    ]:
         """Compute the Jacobian-vector product of the polynomial."""
         assert len(has_tangent) == self.num_inputs
 
         # Symmetrizing the polynomial helps identify simplifications by group_by_operational_symmetries
         sym_poly = self.symmetrize_for_identical_operands()
 
-        new_tps = []
+        new_operations = []
         for ope, stp in sym_poly.operations:
             jvps = ope.jvp(has_tangent)
             permutations: list[tuple[int, ...]] = stp.symmetries()
             for multiplicator, ope in cue.Operation.group_by_operational_symmetries(
                 permutations, jvps
             ):
-                new_tps.append((ope, multiplicator * stp))
-        return SegmentedPolynomial(
-            list(self.inputs) + [x for has, x in zip(has_tangent, self.inputs) if has],
-            self.outputs,
-            new_tps,
+                new_operations.append((ope, multiplicator * stp))
+
+        def mapping(x: tuple[list[Any], list[Any]]) -> tuple[list[Any], list[Any]]:
+            inputs, outputs = x
+            inputs, outputs = list(inputs), list(outputs)
+            assert len(inputs) == self.num_inputs
+            assert len(outputs) == self.num_outputs
+
+            new_inputs = inputs + [x for has, x in zip(has_tangent, inputs) if has]
+            new_outputs = outputs
+
+            return new_inputs, new_outputs
+
+        jvp_poly = SegmentedPolynomial(
+            *mapping((self.inputs, self.outputs)), new_operations
         )
+        return jvp_poly, mapping
 
     def transpose(
         self,
         is_undefined_primal: list[bool],
         has_cotangent: list[bool],
-    ) -> SegmentedPolynomial:
+    ) -> tuple[
+        SegmentedPolynomial,
+        Callable[[tuple[list[Any], list[Any]]], tuple[list[Any], list[Any]]],
+    ]:
         """Transpose the polynomial."""
         assert len(is_undefined_primal) == self.num_inputs
         assert len(has_cotangent) == self.num_outputs
 
-        new_tps = []
+        new_operations = []
         for ope, stp in self.operations:
             ope = ope.transpose(is_undefined_primal, has_cotangent)
             if ope is not None:
-                new_tps.append((ope, stp))
-        return SegmentedPolynomial(
-            # defined inputs
-            [x for undef, x in zip(is_undefined_primal, self.inputs) if not undef]
-            # cotangent outputs
-            + [x for has, x in zip(has_cotangent, self.outputs) if has],
-            # undefined inputs
-            [x for undef, x in zip(is_undefined_primal, self.inputs) if undef],
-            new_tps,
+                new_operations.append((ope, stp))
+
+        def mapping(x: tuple[list[Any], list[Any]]) -> tuple[list[Any], list[Any]]:
+            inputs, outputs = x
+            inputs, outputs = list(inputs), list(outputs)
+            assert len(inputs) == self.num_inputs
+            assert len(outputs) == self.num_outputs
+
+            new_inputs = [
+                x for undef, x in zip(is_undefined_primal, inputs) if not undef
+            ] + [x for has, x in zip(has_cotangent, outputs) if has]
+            new_outputs = [x for undef, x in zip(is_undefined_primal, inputs) if undef]
+
+            return new_inputs, new_outputs
+
+        tr_poly = SegmentedPolynomial(
+            *mapping((self.inputs, self.outputs)), new_operations
         )
+        return tr_poly, mapping
 
     def backward(
         self, requires_gradient: list[bool], has_cotangent: list[bool]
-    ) -> SegmentedPolynomial:
+    ) -> tuple[
+        SegmentedPolynomial,
+        Callable[[tuple[list[Any], list[Any]]], tuple[list[Any], list[Any]]],
+    ]:
         """Compute the backward pass of the polynomial."""
-        return self.jvp(requires_gradient).transpose(
-            is_undefined_primal=[False] * self.num_inputs
-            + [True] * sum(requires_gradient),
-            has_cotangent=has_cotangent,
+        p, map1 = self.jvp(requires_gradient)
+        p, map2 = p.transpose(
+            [False] * self.num_inputs + [True] * sum(requires_gradient),
+            has_cotangent,
         )
+
+        def mapping(x: tuple[list[Any], list[Any]]) -> tuple[list[Any], list[Any]]:
+            return map2(map1(x))
+
+        return p, mapping
 
     def flop(self, batch_size: int = 1) -> int:
         """Compute the number of floating point operations in the polynomial."""

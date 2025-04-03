@@ -191,7 +191,7 @@ def tp_list_list(
         batch_modes = "ABCDEFGHIJKLMNOQRSTUVWXYZ"[: len(out_batch_shape)]
         terms_in = [batch_modes + path_in + ss for ss in d.subscripts.operands[:-1]]
         term_out = (
-            "".join(m for m, s in zip(batch_modes, out_batch_shape) if s > 1)
+            "".join(m for m, s in zip(batch_modes, out_batch_shape) if s != 1)
             + path_out
             + ss_out
         )

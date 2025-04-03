@@ -27,22 +27,16 @@ jax.config.update("jax_enable_x64", True)
 
 def test_one_operand():
     d = cue.SegmentedTensorProduct.empty_segments([1])
+    poly = cue.SegmentedPolynomial([], [cue.SegmentedOperand([()])], [([0], d)])
     [out] = cuex.segmented_polynomial(
-        cue.SegmentedPolynomial(
-            [], [cue.SegmentedOperand.empty_segments(1)], [(cue.Operation([0]), d)]
-        ),
-        [],
-        [jax.ShapeDtypeStruct((2, 1), jnp.float32)],
+        poly, [], [jax.ShapeDtypeStruct((2, 1), jnp.float32)]
     )
     np.testing.assert_array_equal(out, np.array([[0.0], [0.0]]))
 
     d.add_path(0, c=123)
+    poly = cue.SegmentedPolynomial([], [cue.SegmentedOperand([()])], [([0], d)])
     [out] = cuex.segmented_polynomial(
-        cue.SegmentedPolynomial(
-            [], [cue.SegmentedOperand.empty_segments(1)], [(cue.Operation([0]), d)]
-        ),
-        [],
-        [jax.ShapeDtypeStruct((2, 1), jnp.float32)],
+        poly, [], [jax.ShapeDtypeStruct((2, 1), jnp.float32)]
     )
     np.testing.assert_array_equal(out, np.array([[123.0], [123.0]]))
 
@@ -68,11 +62,9 @@ def test_multiple_operand_shape_bug():
     # Before, it was not possible to have an input
     # with a different shape than the output of the same operand.
     def h(x):
-        e = cue.descriptors.spherical_harmonics(cue.SO3(1), [2])
+        poly = cue.descriptors.spherical_harmonics(cue.SO3(1), [2]).polynomial
         [out] = cuex.segmented_polynomial(
-            e.polynomial,
-            [x],
-            [jax.ShapeDtypeStruct((5,), jnp.float32)],
+            poly, [x], [jax.ShapeDtypeStruct((5,), jnp.float32)]
         )
         return out
 
@@ -90,6 +82,43 @@ def test_broadcasting():
         poly, [x, y], [jax.ShapeDtypeStruct((2, 2, 3), jnp.float32)]
     )
     assert out.shape == (2, 2, 3)
+
+
+@pytest.mark.parametrize("mul", [10, 32])
+@pytest.mark.parametrize("impl", ["jax", "auto"])
+def test_empty_input(mul: int, impl: str):
+    poly = (
+        cue.descriptors.channelwise_tensor_product(
+            mul * cue.Irreps("SO3", "1"), cue.Irreps("SO3", "1"), cue.Irreps("SO3", "1")
+        )
+        .polynomial.flatten_coefficient_modes()
+        .squeeze_modes()
+    )
+
+    w = jnp.ones((poly.inputs[0].size,))
+    x = jnp.ones((2, 0, mul * 3))
+    y = jnp.ones((1, 0, 3))
+    [out] = cuex.segmented_polynomial(
+        poly, [w, x, y], [jax.ShapeDtypeStruct((2, 0, mul * 3), jnp.float32)], impl=impl
+    )
+    assert out.shape == (2, 0, mul * 3)
+
+
+@pytest.mark.parametrize("impl", ["jax", "auto"])
+def test_no_batch(impl: str):
+    poly = (
+        cue.descriptors.channelwise_tensor_product(
+            32 * cue.Irreps("SO3", "1"), cue.Irreps("SO3", "1"), cue.Irreps("SO3", "1")
+        )
+        .polynomial.flatten_coefficient_modes()
+        .squeeze_modes()
+    )
+
+    w, x, y = jnp.ones((poly.inputs[0].size,)), jnp.ones((96,)), jnp.ones((3,))
+    [out] = cuex.segmented_polynomial(
+        poly, [w, x, y], [jax.ShapeDtypeStruct((96,), jnp.float32)], impl=impl
+    )
+    assert out.shape == (96,)
 
 
 def test_vmap():

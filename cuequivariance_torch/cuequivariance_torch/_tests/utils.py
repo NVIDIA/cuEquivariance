@@ -110,6 +110,18 @@ def verify_trt(module, onnx_module, inputs, dtype):
     torch.cuda.empty_cache()
 
 
+def find_dtype(inputs, fallback_dtype):
+    if isinstance(inputs, torch.Tensor):
+        return inputs.dtype
+    if isinstance(inputs, list) and len(inputs) > 0:
+        return find_dtype(inputs[0], fallback_dtype)
+    if isinstance(inputs, tuple) and len(inputs) > 0:
+        return find_dtype(inputs[0], fallback_dtype)
+    if isinstance(inputs, dict) and "inputs" in inputs:
+        return find_dtype(inputs["inputs"], fallback_dtype)
+    return fallback_dtype
+
+
 def module_with_mode(
     mode: str,
     module: torch.nn.Module,
@@ -118,10 +130,7 @@ def module_with_mode(
     tmp_path: str,
     grad_modes: list[str] = ["eager", "compile", "jit", "export"],
 ) -> torch.nn.Module:
-    if isinstance(inputs[0], list):
-        dtype = inputs[0][0].dtype
-    else:
-        dtype = inputs[0].dtype
+    dtype = find_dtype(inputs, math_dtype)
     if mode in ["trt", "torch_trt", "onnx", "onnx_dynamo"]:
         if not ONNX_AVAILABLE:
             pytest.skip("ONNX not available!")
@@ -139,12 +148,18 @@ def module_with_mode(
             torch.jit.save(module, fname)
             module = torch.jit.load(fname)
         elif mode == "jit":
-            module = torch.jit.trace(module, inputs)
+            if isinstance(inputs, dict):
+                module = torch.jit.trace(module, example_kwarg_inputs=inputs)
+            else:
+                module = torch.jit.trace(module, inputs)
             fname = os.path.join(tmp_path, "test.ts")
             torch.jit.save(module, fname)
             module = torch.jit.load(fname)
         elif mode == "export":
-            exp_program = torch.export.export(module, tuple(inputs))
+            if isinstance(inputs, dict):
+                exp_program = torch.export.export(module, tuple(), inputs)
+            else:
+                exp_program = torch.export.export(module, tuple(inputs))
             fname = os.path.join(tmp_path, "test.pt2")
             torch.export.save(exp_program, fname)
             del exp_program

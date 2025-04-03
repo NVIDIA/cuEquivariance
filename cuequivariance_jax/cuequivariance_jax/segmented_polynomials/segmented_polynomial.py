@@ -15,6 +15,7 @@
 import logging
 import math
 import os
+import warnings
 from functools import partial
 
 import jax
@@ -131,6 +132,14 @@ def segmented_polynomial(
 
     # Sanitize the inputs, outputs and indices
     inputs = [jnp.asarray(x) for x in inputs]
+    for out, ope in zip(outputs_shape_dtype, polynomial.outputs):
+        if len(out.shape) == 0:
+            raise ValueError(f"Output has no dimensions: {out}")
+        if out.shape[-1] != ope.size and out.shape[-1] != -1:
+            warnings.warn(
+                f"Output has shape {out.shape} but expected the last dimension to be {ope.size} for polynomial:\n{polynomial}",
+                stacklevel=2,
+            )
     outputs_shape_dtype = [
         jax.ShapeDtypeStruct(x.shape[:-1] + (ope.size,), x.dtype)
         for x, ope in zip(outputs_shape_dtype, polynomial.outputs)
@@ -199,8 +208,6 @@ def segmented_polynomial(
                         bi.append(len(unique_indices))
                         unique_indices.append(a)
             buffer_index.append(bi)
-
-    # TODO test num_batch_axes == 0
 
     # Set default math_dtype
     if math_dtype is None:
@@ -379,6 +386,7 @@ def segmented_polynomial_impl(
     del inputs_and_indices
 
     assert all(polynomial.used_buffers())
+
     try:  # TODO: remove this try-except block
         polynomial = polynomial.unsymmetrize_for_identical_operands()
     except NotImplementedError:
@@ -460,6 +468,7 @@ def segmented_polynomial_jvp(
         impl=impl,
     )
 
+    jvp_poly, _ = polynomial.jvp([not isinstance(t, ad.Zero) for t in tangents])
     jvp_indices, jvp_buffer_index = _remap_indices_and_buffer_index(
         indices,
         buffer_index,
@@ -473,7 +482,7 @@ def segmented_polynomial_jvp(
         outputs_shape_dtype,
         jvp_indices,
         jvp_buffer_index,
-        polynomial.jvp([not isinstance(t, ad.Zero) for t in tangents]),
+        jvp_poly,
         math_dtype,
         name
         + "_jvp"
@@ -502,6 +511,10 @@ def segmented_polynomial_transpose(
     # The cotangents replace the outputs as inputs
     # The undefined primal inputs become outputs
 
+    tr_poly, _ = polynomial.transpose(
+        [ad.is_undefined_primal(x) for x in inputs],
+        [not isinstance(x, ad.Zero) for x in cotangents],
+    )
     tr_indices, tr_buffer_index = _remap_indices_and_buffer_index(
         indices,
         buffer_index,
@@ -524,10 +537,7 @@ def segmented_polynomial_transpose(
         ],
         tr_indices,
         tr_buffer_index,
-        polynomial.transpose(
-            [ad.is_undefined_primal(x) for x in inputs],
-            [not isinstance(x, ad.Zero) for x in cotangents],
-        ),
+        tr_poly,
         math_dtype,
         name + "_T",
         impl=impl,
