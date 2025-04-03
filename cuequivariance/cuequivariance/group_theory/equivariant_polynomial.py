@@ -26,14 +26,14 @@ import cuequivariance as cue
 class EquivariantPolynomial:
     """A polynomial representation with equivariance constraints.
 
-    This class extends SegmentedPolynomial by incorporating information about the group representations
+    This class extends :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>` by incorporating information about the group representations
     of each input and output tensor. It ensures that operations performed by the polynomial respect
     the equivariance constraints defined by these representations, making it suitable for building
     equivariant neural networks.
 
     Args:
-        operands (list[cue.Rep]): Group representations for all operands (inputs and outputs).
-        polynomial (cue.SegmentedPolynomial): The underlying polynomial transformation.
+        operands (list of :class:`cue.Rep <cuequivariance.Rep>`): Group representations for all operands (inputs and outputs).
+        polynomial (:class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`): The underlying polynomial transformation.
     """
 
     operands: tuple[cue.Rep, ...]
@@ -87,10 +87,10 @@ class EquivariantPolynomial:
         """Evaluate the polynomial on the given inputs.
 
         Args:
-            *inputs (np.ndarray): Input tensors to evaluate the polynomial on.
+            *inputs (numpy.ndarray): Input tensors to evaluate the polynomial on.
 
         Returns:
-            list[np.ndarray]: Output tensors resulting from the polynomial evaluation.
+            list of numpy.ndarray: Output tensors resulting from the polynomial evaluation.
         """
         return self.polynomial(*inputs)
 
@@ -146,11 +146,11 @@ class EquivariantPolynomial:
         across all polynomials.
 
         Args:
-            polys (list[EquivariantPolynomial]): List of polynomials to stack.
-            stacked (list[bool]): Boolean flags indicating which operands should be stacked.
+            polys (list of :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`): List of polynomials to stack.
+            stacked (list of bool): Boolean flags indicating which operands should be stacked.
 
         Returns:
-            EquivariantPolynomial: A new polynomial combining the stacked polynomials.
+            :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: A new polynomial combining the stacked polynomials.
 
         Raises:
             ValueError: If operands that are not stacked differ across polynomials.
@@ -233,10 +233,12 @@ class EquivariantPolynomial:
         product of the original polynomial. This is used for forward-mode automatic differentiation.
 
         Args:
-            has_tangent (list[bool]): Boolean flags indicating which inputs have tangent vectors.
+            has_tangent (list of bool): Boolean flags indicating which inputs have tangent vectors.
 
         Returns:
-            EquivariantPolynomial: A new polynomial representing the JVP operation.
+            tuple: A tuple containing:
+                - :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: A new polynomial representing the JVP operation.
+                - callable: A function that maps input/output representations to JVP input/output representations.
         """
         p, m = self.polynomial.jvp(has_tangent)
         inputs, outputs = m((self.inputs, self.outputs))
@@ -256,11 +258,13 @@ class EquivariantPolynomial:
         The transpose is essential for reverse-mode automatic differentiation.
 
         Args:
-            is_undefined_primal (list[bool]): Boolean flags indicating which inputs are undefined primals.
-            has_cotangent (list[bool]): Boolean flags indicating which outputs have cotangents.
+            is_undefined_primal (list of bool): Boolean flags indicating which inputs are undefined primals.
+            has_cotangent (list of bool): Boolean flags indicating which outputs have cotangents.
 
         Returns:
-            EquivariantPolynomial: A new polynomial representing the transposed operation.
+            tuple: A tuple containing:
+                - :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: A new polynomial representing the transposed operation.
+                - callable: A function that maps input/output representations to transposed input/output representations.
 
         Raises:
             ValueError: If the polynomial is non-linear and cannot be transposed.
@@ -282,11 +286,13 @@ class EquivariantPolynomial:
         core operation in reverse-mode automatic differentiation.
 
         Args:
-            requires_gradient (list[bool]): Boolean flags indicating which inputs require gradients.
-            has_cotangent (list[bool]): Boolean flags indicating which outputs have cotangents.
+            requires_gradient (list of bool): Boolean flags indicating which inputs require gradients.
+            has_cotangent (list of bool): Boolean flags indicating which outputs have cotangents.
 
         Returns:
-            EquivariantPolynomial: A new polynomial for gradient computation.
+            tuple: A tuple containing:
+                - :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: A new polynomial for gradient computation.
+                - callable: A function that maps input/output representations to backward input/output representations.
         """
         p, m = self.polynomial.backward(requires_gradient, has_cotangent)
         inputs, outputs = m((self.inputs, self.outputs))
@@ -307,7 +313,7 @@ class EquivariantPolynomial:
         """Compute the memory usage of the polynomial.
 
         Args:
-            batch_sizes (list[int]): The batch sizes for each operand.
+            batch_sizes (list of int): The batch sizes for each operand.
 
         Returns:
             int: The estimated memory usage in number of scalar elements.
