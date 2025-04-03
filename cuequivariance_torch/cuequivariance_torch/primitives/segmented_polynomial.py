@@ -266,7 +266,6 @@ class SegmentedPolynomial(nn.Module):
     Args:
         polynomial: The segmented polynomial to compute.
         math_dtype: Data type for computational operations, defaulting to float32.
-        inputs: List of input buffers as JAX arrays.
         output_dtype_map: Optional list that, for each output buffer, specifies
             the index of the input buffer from which it inherits its data type.
             -1 means the math_dtype is used.
@@ -313,7 +312,7 @@ class SegmentedPolynomial(nn.Module):
                 This is mandatory if the output tensor is indexed. Otherwise,
                 the default shape is (batch, operand_size).
             output_indices: A dictionary that contains an optional indexing tensor
-                for each outout tensor. See input_indices for details.
+                for each output tensor. See input_indices for details.
 
         Returns:
             List[torch.Tensor]:
