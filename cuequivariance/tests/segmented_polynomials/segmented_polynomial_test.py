@@ -351,7 +351,9 @@ def test_backward():
     cotangent = np.array([2.0])
 
     # Test backward with respect to both x and y
-    backward_both = poly.backward(requires_gradient=[True, True], has_cotangent=[True])
+    backward_both, _ = poly.backward(
+        requires_gradient=[True, True], has_cotangent=[True]
+    )
 
     # The backward polynomial computes gradients for all inputs that require gradients
     # For f(x,y) = x^T * y:
@@ -365,14 +367,14 @@ def test_backward():
     assert np.allclose(grad_y, expected_grad_y)
 
     # Test backward with respect to only x
-    backward_x = poly.backward(requires_gradient=[True, False], has_cotangent=[True])
+    backward_x, _ = poly.backward(requires_gradient=[True, False], has_cotangent=[True])
 
     # Should only compute gradient for x
     [grad_x_only] = backward_x(x, y, cotangent)
     assert np.allclose(grad_x_only, expected_grad_x)
 
     # Test backward with respect to only y
-    backward_y = poly.backward(requires_gradient=[False, True], has_cotangent=[True])
+    backward_y, _ = poly.backward(requires_gradient=[False, True], has_cotangent=[True])
 
     # Should only compute gradient for y
     [grad_y_only] = backward_y(x, y, cotangent)
