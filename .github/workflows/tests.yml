@@ -94,4 +94,4 @@ jobs:
         python -c "import cuequivariance_torch; print('cuet', cuequivariance_torch.__version__)"
     - name: Test with pytest
       run: |
-        pytest --doctest-modules -x cuequivariance_torch
+        CUDA_LAUNCH_BLOCKING=1 pytest --doctest-modules -x cuequivariance_torch
