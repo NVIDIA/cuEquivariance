@@ -475,6 +475,14 @@ class SegmentedPolynomial:
             ],
         )
 
+    def canonicalize_subscripts(self) -> SegmentedPolynomial:
+        """Canonicalize the subscripts of the segmented tensor products."""
+        return SegmentedPolynomial.from_default_buffers(
+            self.inputs,
+            self.outputs,
+            [(ope, stp.canonicalize_subscripts()) for ope, stp in self.operations],
+        )
+
     def squeeze_modes(self) -> SegmentedPolynomial:
         """Squeeze the modes of the segmented tensor products."""
         return SegmentedPolynomial.from_default_buffers(

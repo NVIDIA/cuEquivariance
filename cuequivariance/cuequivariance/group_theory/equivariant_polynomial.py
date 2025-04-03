@@ -184,6 +184,13 @@ class EquivariantPolynomial:
             cue.SegmentedPolynomial.stack([pol.polynomial for pol in polys], stacked),
         )
 
+    def canonicalize_subscripts(self) -> EquivariantPolynomial:
+        """Canonicalize the subscripts of the segmented tensor products."""
+        return EquivariantPolynomial(
+            self.operands,
+            self.polynomial.canonicalize_subscripts(),
+        )
+
     def squeeze_modes(self) -> EquivariantPolynomial:
         """Squeeze the modes of the segmented tensor products.
 
