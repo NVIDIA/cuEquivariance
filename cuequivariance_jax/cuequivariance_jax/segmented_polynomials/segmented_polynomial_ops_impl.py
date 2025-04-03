@@ -14,11 +14,13 @@
 # limitations under the License.
 import logging
 import re
+import warnings
 from dataclasses import dataclass
 
 import jax
 import jax.numpy as jnp
 import numpy as np
+from packaging import version
 
 import cuequivariance as cue
 from cuequivariance_jax.segmented_polynomials.utils import reshape
@@ -158,10 +160,19 @@ def segmented_polynomial_ops_impl(
         from cuequivariance_ops_jax import (
             Operation,
             Path,
+            __version__,
             tensor_product_uniform_1d_jit,
         )
     except ImportError as e:
         return make_error(f"cuequivariance_ops_jax is not installed: {e}")
+
+    if version.parse(__version__) < version.parse("0.4.0"):
+        warnings.warn(
+            f"cuequivariance_ops_jax version {__version__} is too old, need at least 0.4.0"
+        )
+        return make_error(
+            f"cuequivariance_ops_jax version {__version__} is too old, need at least 0.4.0"
+        )
 
     operations = []
     paths = []
