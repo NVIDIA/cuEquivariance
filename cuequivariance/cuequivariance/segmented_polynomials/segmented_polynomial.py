@@ -95,7 +95,7 @@ class SegmentedPolynomial:
         )
 
     @classmethod
-    def from_default_buffers(
+    def _from_default_operands(
         cls,
         inputs: Sequence[cue.SegmentedOperand | None],
         outputs: Sequence[cue.SegmentedOperand | None],
@@ -103,16 +103,6 @@ class SegmentedPolynomial:
             tuple[cue.Operation | Sequence[int], cue.SegmentedTensorProduct]
         ],
     ):
-        """Create a polynomial from default buffer assignments.
-
-        Args:
-            inputs (list of :class:`cue.SegmentedOperand <cuequivariance.SegmentedOperand>` | None): Default input operands, replaced by the STP operands if needed.
-            outputs (list of :class:`cue.SegmentedOperand <cuequivariance.SegmentedOperand>` | None): Default output operands, replaced by the STP operands if needed.
-            operations (list of tuple of :class:`cue.Operation <cuequivariance.Operation>` | list of int and :class:`cue.SegmentedTensorProduct <cuequivariance.SegmentedTensorProduct>`): Operations and tensor products.
-
-        Returns:
-            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: The constructed polynomial.
-        """
         buffers = list(inputs) + list(outputs)
         for ope, stp in operations:
             ope = cue.Operation(ope)
@@ -124,22 +114,9 @@ class SegmentedPolynomial:
         return cls(buffers[: len(inputs)], buffers[len(inputs) :], operations)
 
     def __hash__(self) -> int:
-        """Compute hash value for the polynomial.
-
-        Returns:
-            int: Hash value based on inputs, outputs and operations.
-        """
         return hash((self.inputs, self.outputs, self.operations))
 
     def __eq__(self, value) -> bool:
-        """Check equality with another polynomial.
-
-        Args:
-            value (:class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`): Polynomial to compare with.
-
-        Returns:
-            bool: True if polynomials are equal.
-        """
         assert isinstance(value, SegmentedPolynomial)
         return (
             self.inputs == value.inputs
@@ -148,14 +125,6 @@ class SegmentedPolynomial:
         )
 
     def __lt__(self, value) -> bool:
-        """Compare polynomials for ordering.
-
-        Args:
-            value (:class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`): Polynomial to compare with.
-
-        Returns:
-            bool: True if this polynomial is less than the other.
-        """
         assert isinstance(value, SegmentedPolynomial)
         return (
             self.inputs,
@@ -168,14 +137,6 @@ class SegmentedPolynomial:
         )
 
     def __mul__(self, factor: float) -> SegmentedPolynomial:
-        """Multiply polynomial by a scalar.
-
-        Args:
-            factor (float): Scalar factor.
-
-        Returns:
-            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: Scaled polynomial.
-        """
         return SegmentedPolynomial(
             self.inputs,
             self.outputs,
@@ -183,14 +144,6 @@ class SegmentedPolynomial:
         )
 
     def __rmul__(self, factor: float) -> SegmentedPolynomial:
-        """Right multiply polynomial by a scalar.
-
-        Args:
-            factor (float): Scalar factor.
-
-        Returns:
-            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: Scaled polynomial.
-        """
         return self.__mul__(factor)
 
     def __repr__(self):
@@ -269,6 +222,9 @@ class SegmentedPolynomial:
 
         Returns:
             list[np.ndarray]: List of output arrays.
+
+        Note:
+            This is a reference implementation using numpy and may not be optimized for performance.
         """
         inferred_shape = np.broadcast_shapes(*[x.shape[:-1] for x in inputs])
         inferred_dtype = np.result_type(*[x.dtype for x in inputs])
@@ -342,7 +298,7 @@ class SegmentedPolynomial:
         new_tensor_products = tuple(
             ope_stp for ope_stp in new_tensor_products if ope_stp is not None
         )
-        return SegmentedPolynomial.from_default_buffers(
+        return SegmentedPolynomial._from_default_operands(
             self.inputs, self.outputs, new_tensor_products
         )
 
@@ -519,34 +475,6 @@ class SegmentedPolynomial:
         )
 
     @classmethod
-    def stack_tensor_products(
-        cls,
-        inputs: Sequence[cue.SegmentedOperand | None],
-        outputs: Sequence[cue.SegmentedOperand | None],
-        operations: Sequence[
-            tuple[cue.Operation | Sequence[int], cue.SegmentedTensorProduct]
-        ],
-    ) -> SegmentedPolynomial:
-        """Stack segmented tensor products together.
-
-        Args:
-            inputs (list of :class:`cue.SegmentedOperand <cuequivariance.SegmentedOperand>` | None): Input operands.
-            outputs (list of :class:`cue.SegmentedOperand <cuequivariance.SegmentedOperand>` | None): Output operands.
-            operations (list of tuple of :class:`cue.Operation <cuequivariance.Operation>` | list of int and :class:`cue.SegmentedTensorProduct <cuequivariance.SegmentedTensorProduct>`): Operations and tensor products.
-
-        Returns:
-            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: The stacked polynomial.
-        """
-        inputs, outputs = list(inputs), list(outputs)
-        return cls.stack(
-            [
-                cls.from_default_buffers(inputs, outputs, [(ope, stp)])
-                for ope, stp in operations
-            ],
-            [ope is None for ope in inputs + outputs],
-        )
-
-    @classmethod
     def stack(
         cls, polys: list[SegmentedPolynomial], stacked: list[bool]
     ) -> SegmentedPolynomial:
@@ -662,6 +590,34 @@ class SegmentedPolynomial:
             ],
         )
 
+    @classmethod
+    def stack_tensor_products(
+        cls,
+        inputs: Sequence[cue.SegmentedOperand | None],
+        outputs: Sequence[cue.SegmentedOperand | None],
+        operations: Sequence[
+            tuple[cue.Operation | Sequence[int], cue.SegmentedTensorProduct]
+        ],
+    ) -> SegmentedPolynomial:
+        """Stack segmented tensor products together.
+
+        Args:
+            inputs (list of :class:`cue.SegmentedOperand <cuequivariance.SegmentedOperand>` | None): Input operands.
+            outputs (list of :class:`cue.SegmentedOperand <cuequivariance.SegmentedOperand>` | None): Output operands.
+            operations (list of tuple of :class:`cue.Operation <cuequivariance.Operation>` | list of int and :class:`cue.SegmentedTensorProduct <cuequivariance.SegmentedTensorProduct>`): Operations and tensor products.
+
+        Returns:
+            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: The stacked polynomial.
+        """
+        inputs, outputs = list(inputs), list(outputs)
+        return cls.stack(
+            [
+                cls._from_default_operands(inputs, outputs, [(ope, stp)])
+                for ope, stp in operations
+            ],
+            [ope is None for ope in inputs + outputs],
+        )
+
     def flatten_modes(self, modes: list[str]) -> SegmentedPolynomial:
         """Flatten specified modes in the polynomial.
 
@@ -671,7 +627,7 @@ class SegmentedPolynomial:
         Returns:
             :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: Polynomial with flattened modes.
         """
-        return SegmentedPolynomial.from_default_buffers(
+        return SegmentedPolynomial._from_default_operands(
             self.inputs,
             self.outputs,
             [(ope, stp.flatten_modes(modes)) for ope, stp in self.operations],
@@ -691,7 +647,7 @@ class SegmentedPolynomial:
         Returns:
             :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: Polynomial with canonicalized subscripts.
         """
-        return SegmentedPolynomial.from_default_buffers(
+        return SegmentedPolynomial._from_default_operands(
             self.inputs,
             self.outputs,
             [(ope, stp.canonicalize_subscripts()) for ope, stp in self.operations],
@@ -706,7 +662,7 @@ class SegmentedPolynomial:
         Returns:
             :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: Polynomial with squeezed modes.
         """
-        return SegmentedPolynomial.from_default_buffers(
+        return SegmentedPolynomial._from_default_operands(
             self.inputs,
             self.outputs,
             [(ope, stp.squeeze_modes(modes)) for ope, stp in self.operations],
@@ -718,7 +674,7 @@ class SegmentedPolynomial:
         Returns:
             :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: Polynomial with flattened coefficient modes.
         """
-        return SegmentedPolynomial.from_default_buffers(
+        return SegmentedPolynomial._from_default_operands(
             self.inputs,
             self.outputs,
             [(ope, stp.flatten_coefficient_modes()) for ope, stp in self.operations],
