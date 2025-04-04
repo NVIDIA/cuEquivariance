@@ -385,7 +385,7 @@ def segmented_polynomial_impl(
     inputs, indices = inputs_and_indices[:num_inputs], inputs_and_indices[num_inputs:]
     del inputs_and_indices
 
-    assert all(polynomial.used_buffers())
+    assert all(polynomial.used_operands())
 
     try:  # TODO: remove this try-except block
         polynomial = polynomial.unsymmetrize_for_identical_operands()

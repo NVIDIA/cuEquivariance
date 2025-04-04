@@ -106,7 +106,7 @@ def test_buffer_properties():
     # Test buffer properties
     assert [ope.size for ope in poly.operands] == [2, 2, 2, 1]
 
-    assert poly.used_buffers() == [True, True, True, True]
+    assert poly.used_operands() == [True, True, True, True]
 
 
 def test_remove_unused_buffers():
@@ -126,14 +126,14 @@ def test_remove_unused_buffers():
     )
 
     # Buffer 1 is not used
-    assert poly.used_buffers() == [True, False, True, True]
+    assert poly.used_operands() == [True, False, True, True]
 
     # Remove unused buffer
     cleaned_poly = poly.filter_drop_unsued_operands()
 
     assert cleaned_poly.num_inputs == 2
     assert cleaned_poly.num_outputs == 1
-    assert cleaned_poly.used_buffers() == [True, True, True]
+    assert cleaned_poly.used_operands() == [True, True, True]
 
 
 def test_consolidate():

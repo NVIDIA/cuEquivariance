@@ -68,8 +68,8 @@ class SegmentedPolynomial:
             assert isinstance(opt, cue.Operation)
             assert isinstance(stp, cue.SegmentedTensorProduct)
             assert len(opt.buffers) == stp.num_operands
-            for buffer_id, operand in zip(opt.buffers, stp.operands):
-                assert operand == operands[buffer_id]
+            for i, operand in zip(opt.buffers, stp.operands):
+                assert operand == operands[i]
 
             out_oid, bid = opt.output_operand_buffer(len(inputs))
             tmp.append(
@@ -91,15 +91,15 @@ class SegmentedPolynomial:
             tuple[cue.Operation | Sequence[int], cue.SegmentedTensorProduct]
         ],
     ):
-        buffers = list(inputs) + list(outputs)
+        operands = list(inputs) + list(outputs)
         for ope, stp in operations:
             ope = cue.Operation(ope)
             assert isinstance(stp, cue.SegmentedTensorProduct)
             assert len(ope.buffers) == stp.num_operands
-            for buffer_id, operand in zip(ope.buffers, stp.operands):
-                buffers[buffer_id] = operand
+            for i, operand in zip(ope.buffers, stp.operands):
+                operands[i] = operand
 
-        return cls(buffers[: len(inputs)], buffers[len(inputs) :], operations)
+        return cls(operands[: len(inputs)], operands[len(inputs) :], operations)
 
     @property
     def operands(self) -> tuple[cue.SegmentedOperand, ...]:
@@ -454,8 +454,8 @@ class SegmentedPolynomial:
             list[bool]: List where True indicates the input is used.
         """
         return [
-            any(buffer in ope.buffers for ope, _ in self.operations)
-            for buffer in range(self.num_inputs)
+            any(i in ope.buffers for ope, _ in self.operations)
+            for i in range(self.num_inputs)
         ]
 
     def used_outputs(self) -> list[bool]:
@@ -465,15 +465,15 @@ class SegmentedPolynomial:
             list[bool]: List where True indicates the output is used.
         """
         return [
-            any(buffer in ope.buffers for ope, _ in self.operations)
-            for buffer in range(self.num_inputs, self.num_inputs + self.num_outputs)
+            any(i in ope.buffers for ope, _ in self.operations)
+            for i in range(self.num_inputs, self.num_inputs + self.num_outputs)
         ]
 
-    def used_buffers(self) -> list[bool]:
-        """Get list of boolean values indicating which buffers are used in the polynomial.
+    def used_operands(self) -> list[bool]:
+        """Get list of boolean values indicating which operands are used in the polynomial.
 
         Returns:
-            list[bool]: List where True indicates the buffer is used.
+            list[bool]: List where True indicates the operand is used.
         """
         return self.used_inputs() + self.used_outputs()
 
@@ -683,7 +683,7 @@ class SegmentedPolynomial:
     # ------------------------------------------------------------------------
 
     def filter_keep_operands(self, keep: list[bool]) -> SegmentedPolynomial:
-        """Select which buffers to keep in the polynomial.
+        """Select which operands to keep in the polynomial.
 
         Use this method when you want to compute only a subset of the polynomial outputs
         and have control over which inputs to keep. For keeping all inputs (even if
@@ -691,10 +691,10 @@ class SegmentedPolynomial:
         use filter_drop_unsued_operands.
 
         Args:
-            keep (list[bool]): List indicating which buffers to keep.
+            keep (list[bool]): List indicating which operands to keep.
 
         Returns:
-            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: Polynomial with selected buffers.
+            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: Polynomial with selected operands.
         """
         assert len(keep) == self.num_operands
 
@@ -744,12 +744,12 @@ class SegmentedPolynomial:
         return self.filter_keep_operands([True] * self.num_inputs + keep)
 
     def filter_drop_unsued_operands(self) -> SegmentedPolynomial:
-        """Remove all unused buffers from the polynomial.
+        """Remove all unused operands from the polynomial.
 
         Returns:
-            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: Polynomial with unused buffers removed.
+            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: Polynomial with unused operands removed.
         """
-        return self.filter_keep_operands(self.used_buffers())
+        return self.filter_keep_operands(self.used_operands())
 
     def compute_only(self, keep: list[bool]) -> SegmentedPolynomial:
         """Create a polynomial that only computes selected outputs.
