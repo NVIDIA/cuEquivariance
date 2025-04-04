@@ -13,13 +13,21 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 
-Equivariant Polynomials
-=======================
+Polynomials
+===========
 
-The submodule ``cue.descriptors`` contains many descriptors of equivariant polynomials represented by the class :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`.
+Here is how the library is organized:
+
+* :class:`cue.SegmentedOperand <cuequivariance.SegmentedOperand>` objects represent arrays of numbers split into segments
+* :class:`cue.SegmentedTensorProduct <cuequivariance.SegmentedTensorProduct>` objects describe how to multiply operands together but have no notion of input/output
+* :class:`cue.Operation <cuequivariance.Operation>` objects introduce the concept of inputs and outputs, allowing for repeated inputs when needed
+* :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>` combines these elements to create polynomials, typically with one SegmentedTensorProduct per degree
+* :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>` adds :class:`cue.Rep <cuequivariance.Rep>` labels to each input/output to specify their representations, which is essential for equivariant polynomials
 
 Examples
 --------
+
+The submodule ``cue.descriptors`` contains many descriptors of equivariant polynomials. Each of those return a :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`.
 
 Linear layer
 ^^^^^^^^^^^^
@@ -44,6 +52,14 @@ Spherical Harmonics
 
 The spherical harmonics are polynomials of an input vector.
 This descriptor specifies the polynomials of degree 0, 1, 2 and 3.
+
+Channel Wise Tensor Product
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. jupyter-execute::
+
+    irreps = cue.Irreps("O3", "0e + 1o + 2e")
+    cue.descriptors.channelwise_tensor_product(32 * irreps, irreps, irreps)
 
 Rotation
 ^^^^^^^^
