@@ -41,6 +41,10 @@ class EquivariantPolynomial:
     outputs: tuple[cue.Rep, ...]
     polynomial: cue.SegmentedPolynomial
 
+    # ------------------------------------------------------------------------
+    # Core Structure and Initialization
+    # ------------------------------------------------------------------------
+
     def __init__(
         self,
         inputs: list[cue.Rep],
@@ -66,48 +70,10 @@ class EquivariantPolynomial:
                 f"{ope} incompatible with {rep}. {ope.size=} != {rep.dim=}"
             )
 
-    def __hash__(self) -> int:
-        return hash((self.operands, self.polynomial))
-
-    def __eq__(self, value) -> bool:
-        assert isinstance(value, EquivariantPolynomial)
-        return self.operands == value.operands and self.polynomial == value.polynomial
-
-    def __lt__(self, value) -> bool:
-        assert isinstance(value, EquivariantPolynomial)
-        return (
-            self.num_inputs,
-            self.num_outputs,
-            self.operands,
-            self.polynomial,
-        ) < (
-            value.num_inputs,
-            value.num_outputs,
-            value.operands,
-            value.polynomial,
-        )
-
-    def __mul__(self, factor: float) -> EquivariantPolynomial:
-        return EquivariantPolynomial(
-            self.inputs, self.outputs, self.polynomial * factor
-        )
-
-    def __rmul__(self, factor: float) -> EquivariantPolynomial:
-        return self.__mul__(factor)
-
-    def __repr__(self):
-        return self.polynomial.to_string([f"{rep}" for rep in self.operands])
-
-    def __call__(self, *inputs: np.ndarray) -> list[np.ndarray]:
-        """Evaluate the polynomial on the given inputs.
-
-        Args:
-            *inputs (numpy.ndarray): Input tensors to evaluate the polynomial on.
-
-        Returns:
-            list of numpy.ndarray: Output tensors resulting from the polynomial evaluation.
-        """
-        return self.polynomial(*inputs)
+    @property
+    def operands(self) -> tuple[cue.Rep, ...]:
+        """The group representations of the operands (inputs + outputs)."""
+        return self.inputs + self.outputs
 
     @property
     def num_operands(self) -> int:
@@ -124,30 +90,11 @@ class EquivariantPolynomial:
         """The number of output tensors produced by the polynomial."""
         return self.polynomial.num_outputs
 
-    @property
-    def operands(self) -> tuple[cue.Rep, ...]:
-        """The group representations of the operands (inputs + outputs)."""
-        return self.inputs + self.outputs
+    # ------------------------------------------------------------------------
+    # Class Construction Methods
+    # ------------------------------------------------------------------------
 
-    def fuse_stps(self) -> EquivariantPolynomial:
-        """Fuse segmented tensor products with identical operations and operands.
-
-        Returns:
-            EquivariantPolynomial: A new polynomial with fused tensor products.
-        """
-        return EquivariantPolynomial(
-            self.inputs, self.outputs, self.polynomial.fuse_stps()
-        )
-
-    def consolidate(self) -> EquivariantPolynomial:
-        """Consolidate the segmented tensor products.
-
-        Returns:
-            EquivariantPolynomial: A new polynomial with consolidated tensor products.
-        """
-        return EquivariantPolynomial(
-            self.inputs, self.outputs, self.polynomial.consolidate()
-        )
+    # Method eval_last_operand is present in SegmentedPolynomial but not in EquivariantPolynomial
 
     @classmethod
     def stack(
@@ -197,15 +144,125 @@ class EquivariantPolynomial:
         p = cue.SegmentedPolynomial.stack([pol.polynomial for pol in polys], stacked)
         return cls(operands[: p.num_inputs], operands[p.num_inputs :], p)
 
+    # Method stack_tensor_products is present in SegmentedPolynomial but not in EquivariantPolynomial
+
+    # Method concatenate is present in SegmentedPolynomial but not in EquivariantPolynomial
+
+    # ------------------------------------------------------------------------
+    # Standard Python Methods
+    # ------------------------------------------------------------------------
+
+    def __repr__(self):
+        return self.polynomial.to_string([f"{rep}" for rep in self.operands])
+
+    def __call__(self, *inputs: np.ndarray) -> list[np.ndarray]:
+        """Evaluate the polynomial on the given inputs.
+
+        Args:
+            *inputs (numpy.ndarray): Input tensors to evaluate the polynomial on.
+
+        Returns:
+            list of numpy.ndarray: Output tensors resulting from the polynomial evaluation.
+        """
+        return self.polynomial(*inputs)
+
+    def __hash__(self) -> int:
+        return hash((self.operands, self.polynomial))
+
+    def __eq__(self, value) -> bool:
+        assert isinstance(value, EquivariantPolynomial)
+        return self.operands == value.operands and self.polynomial == value.polynomial
+
+    def __lt__(self, value) -> bool:
+        assert isinstance(value, EquivariantPolynomial)
+        return (
+            self.num_inputs,
+            self.num_outputs,
+            self.operands,
+            self.polynomial,
+        ) < (
+            value.num_inputs,
+            value.num_outputs,
+            value.operands,
+            value.polynomial,
+        )
+
+    def __mul__(self, factor: float) -> EquivariantPolynomial:
+        return EquivariantPolynomial(
+            self.inputs, self.outputs, self.polynomial * factor
+        )
+
+    def __rmul__(self, factor: float) -> EquivariantPolynomial:
+        return self.__mul__(factor)
+
+    # ------------------------------------------------------------------------
+    # Analysis Methods
+    # ------------------------------------------------------------------------
+
+    def all_same_segment_shape(self) -> bool:
+        """Whether all the segments have the same shape."""
+        return self.polynomial.all_same_segment_shape()
+
+    # Method used_inputs is present in SegmentedPolynomial but not in EquivariantPolynomial
+
+    # Method used_outputs is present in SegmentedPolynomial but not in EquivariantPolynomial
+
+    # Method used_buffers is present in SegmentedPolynomial but not in EquivariantPolynomial
+
+    def flop(self, batch_size: int = 1) -> int:
+        """Compute the number of floating point operations in the polynomial.
+
+        Args:
+            batch_size (int, optional): The batch size for the computation. Defaults to 1.
+
+        Returns:
+            int: The estimated number of floating-point operations.
+        """
+        return self.polynomial.flop(batch_size)
+
+    def memory(self, batch_sizes: list[int]) -> int:
+        """Compute the memory usage of the polynomial.
+
+        Args:
+            batch_sizes (list of int): The batch sizes for each operand.
+
+        Returns:
+            int: The estimated memory usage in number of scalar elements.
+        """
+        assert len(batch_sizes) == len(self.operands)
+        return sum(Z * rep.dim for Z, rep in zip(batch_sizes, self.operands))
+
+    # ------------------------------------------------------------------------
+    # Transformation Methods
+    # ------------------------------------------------------------------------
+
+    # Method apply_fn is present in SegmentedPolynomial but not in EquivariantPolynomial
+
+    def fuse_stps(self) -> EquivariantPolynomial:
+        """Fuse segmented tensor products with identical operations and operands.
+
+        Returns:
+            EquivariantPolynomial: A new polynomial with fused tensor products.
+        """
+        return EquivariantPolynomial(
+            self.inputs, self.outputs, self.polynomial.fuse_stps()
+        )
+
+    def consolidate(self) -> EquivariantPolynomial:
+        """Consolidate the segmented tensor products.
+
+        Returns:
+            EquivariantPolynomial: A new polynomial with consolidated tensor products.
+        """
+        return EquivariantPolynomial(
+            self.inputs, self.outputs, self.polynomial.consolidate()
+        )
+
     def flatten_modes(self, modes: list[str]) -> EquivariantPolynomial:
         """Flatten the specified modes of the segmented tensor products."""
         return EquivariantPolynomial(
             self.inputs, self.outputs, self.polynomial.flatten_modes(modes)
         )
-
-    def all_same_segment_shape(self) -> bool:
-        """Whether all the segments have the same shape."""
-        return self.polynomial.all_same_segment_shape()
 
     def canonicalize_subscripts(self) -> EquivariantPolynomial:
         """Canonicalize the subscripts of the segmented tensor products."""
@@ -232,6 +289,26 @@ class EquivariantPolynomial:
         return EquivariantPolynomial(
             self.inputs, self.outputs, self.polynomial.flatten_coefficient_modes()
         )
+
+    # Method symmetrize_for_identical_operands is present in SegmentedPolynomial but not in EquivariantPolynomial
+
+    # Method unsymmetrize_for_identical_operands is present in SegmentedPolynomial but not in EquivariantPolynomial
+
+    # ------------------------------------------------------------------------
+    # Filtering Methods
+    # ------------------------------------------------------------------------
+
+    # Method filter_keep_operands is present in SegmentedPolynomial but not in EquivariantPolynomial
+
+    # Method filter_keep_outputs is present in SegmentedPolynomial but not in EquivariantPolynomial
+
+    # Method filter_drop_unsued_operands is present in SegmentedPolynomial but not in EquivariantPolynomial
+
+    # Method compute_only is present in SegmentedPolynomial but not in EquivariantPolynomial
+
+    # ------------------------------------------------------------------------
+    # Automatic Differentiation Methods
+    # ------------------------------------------------------------------------
 
     def jvp(
         self, has_tangent: list[bool]
@@ -306,26 +383,3 @@ class EquivariantPolynomial:
         """
         p, m = self.polynomial.backward(requires_gradient, has_cotangent)
         return EquivariantPolynomial(*m((self.inputs, self.outputs)), p), m
-
-    def flop(self, batch_size: int = 1) -> int:
-        """Compute the number of floating point operations in the polynomial.
-
-        Args:
-            batch_size (int, optional): The batch size for the computation. Defaults to 1.
-
-        Returns:
-            int: The estimated number of floating-point operations.
-        """
-        return self.polynomial.flop(batch_size)
-
-    def memory(self, batch_sizes: list[int]) -> int:
-        """Compute the memory usage of the polynomial.
-
-        Args:
-            batch_sizes (list of int): The batch sizes for each operand.
-
-        Returns:
-            int: The estimated memory usage in number of scalar elements.
-        """
-        assert len(batch_sizes) == len(self.operands)
-        return sum(Z * rep.dim for Z, rep in zip(batch_sizes, self.operands))
