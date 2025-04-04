@@ -55,9 +55,9 @@ def segmented_polynomial(
 ) -> list[jax.Array]:
     """Compute a segmented polynomial.
 
-    This function evaluates a segmented polynomial using either CUDA or JAX implementation.
-    The implementation choice is determined by the input characteristics and availability
-    of CUDA support.
+    Evaluates a segmented polynomial, which represents a mathematical operation composed of
+    several tensor products. The function supports both JAX and CUDA implementations for
+    maximum performance and flexibility.
 
     Args:
         polynomial: The segmented polynomial to compute.
@@ -69,34 +69,44 @@ def segmented_polynomial(
             determined from input types, defaulting to float32 if no float64 inputs
             are present. Defaults to None.
         name: Optional name for the operation. Defaults to None.
-        impl: Implementation to use, one of ["auto", "cuda", "jax"]. If "auto",
-            uses CUDA when available, falling back to JAX otherwise. Defaults to "auto".
+        impl: Implementation to use, one of ["auto", "cuda", "jax", "naive_jax"]. If "auto",
+            uses CUDA when available and efficient, falling back to JAX otherwise. Defaults to "auto".
 
     Returns:
-        List of JAX arrays containing the computed tensor product results.
+        List of JAX arrays containing the computed polynomial outputs.
 
-    Features:
-        - CUDA kernel activation conditions:
-            - STPs have a single mode which is a multiple of 32 (e.g. channelwise
-                tensor product with subscripts ``u,u,,u`` where u=128)
+    Performance Considerations:
+        - CUDA acceleration requirements:
+            - STPs have a single mode (e.g. channelwise tensor product with subscripts ``u,u,,u``)
             - Math data type is float32 or float64
-            - Input/output data types can be float32, float64, float16, or bfloat16
-            - Indices must be int32
-        - Supports infinite derivatives through JVP and transpose rules
-        - Limited batching support:
-            - Cannot batch buffers with indices
-            - Non-trivial batching may impact performance
+            - Input/output data types are float32, float64, float16, or bfloat16
         - Automatic optimizations:
             - Based on STP symmetries
             - Based on input buffer repetition patterns
-        - Automatic pruning of unused buffers and indices
+            - Automatic pruning of unused buffers and indices
+
+    Implementation Details:
+        - Supports JAX transformations: jit, grad, jvp, vmap
+            - Supports infinite derivatives through JVP and transpose rules
+            - Full batching support
 
     Note:
-        The function automatically determines the best implementation based on the
-        input characteristics when impl="auto". For maximum performance with CUDA-capable
-        hardware, ensure inputs match the CUDA kernel activation conditions.
+        For maximum performance with CUDA-capable hardware, ensure inputs match the
+        CUDA kernel activation conditions listed above. To verify wether the CUDA
+        implementation is used, set ``impl="cuda"`` or set ``logging.basicConfig(level=logging.INFO)``.
 
-    Example:
+    Examples:
+        Simple example with spherical harmonics:
+
+        >>> p = cue.descriptors.spherical_harmonics(cue.SO3(1), [0, 1, 2]).polynomial
+        >>> cuex.segmented_polynomial(
+        ...     p, [jnp.array([0.0, 1.0, 0.0])], [jax.ShapeDtypeStruct((-1,), jnp.float32)]
+        ... )
+        [Array([1.       , 0.       , 1.7320508, 0.       , 0.       , 0.       ,
+               2.236068 , 0.       , 0.       ], dtype=float32)]
+
+        Advanced example with tensor product and indexing:
+
         >>> poly: cue.SegmentedPolynomial = cue.descriptors.channelwise_tensor_product(
         ...     cue.Irreps(cue.O3, "32x0e + 32x1o + 32x1e + 32x2o"),
         ...     cue.Irreps(cue.O3, "0e + 1o + 1e"),
