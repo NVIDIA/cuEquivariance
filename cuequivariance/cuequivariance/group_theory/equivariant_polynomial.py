@@ -32,8 +32,8 @@ class EquivariantPolynomial:
     equivariant neural networks.
 
     Args:
-        inputs (list of :class:`cue.Rep <cuequivariance.Rep>`): Group representations for all operands (inputs and outputs).
-        outputs (list of :class:`cue.Rep <cuequivariance.Rep>`): Group representations for all operands (inputs and outputs).
+        inputs (tuple of :class:`cue.Rep <cuequivariance.Rep>`): Group representations for input tensors.
+        outputs (tuple of :class:`cue.Rep <cuequivariance.Rep>`): Group representations for output tensors.
         polynomial (:class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`): The underlying polynomial transformation.
     """
 
@@ -72,23 +72,39 @@ class EquivariantPolynomial:
 
     @property
     def operands(self) -> tuple[cue.Rep, ...]:
-        """The group representations of the operands (inputs + outputs)."""
+        """Get all operands (inputs and outputs) of the polynomial.
+
+        Returns:
+            tuple of :class:`cue.Rep <cuequivariance.Rep>`: Tuple of all operands.
+        """
         return self.inputs + self.outputs
 
     @property
-    def num_operands(self) -> int:
-        """The total number of operands (inputs and outputs) in the polynomial."""
-        return len(self.operands)
-
-    @property
     def num_inputs(self) -> int:
-        """The number of input tensors expected by the polynomial."""
-        return self.polynomial.num_inputs
+        """Get the number of input operands.
+
+        Returns:
+            int: Number of input operands.
+        """
+        return len(self.inputs)
 
     @property
     def num_outputs(self) -> int:
-        """The number of output tensors produced by the polynomial."""
-        return self.polynomial.num_outputs
+        """Get the number of output operands.
+
+        Returns:
+            int: Number of output operands.
+        """
+        return len(self.outputs)
+
+    @property
+    def num_operands(self) -> int:
+        """Get the total number of operands (inputs + outputs).
+
+        Returns:
+            int: Total number of operands.
+        """
+        return self.num_inputs + self.num_outputs
 
     # ------------------------------------------------------------------------
     # Class Construction Methods
@@ -100,21 +116,28 @@ class EquivariantPolynomial:
     def stack(
         cls, polys: list[EquivariantPolynomial], stacked: list[bool]
     ) -> EquivariantPolynomial:
-        """Stack multiple equivariant polynomials together.
+        """Stack equivariant polynomials together.
 
-        This method combines multiple polynomials by stacking their operands according to the
-        stacked parameter. Operands with the same index that are not stacked must be identical
-        across all polynomials.
+        This method combines multiple polynomials by stacking their operands where indicated
+        by the stacked parameter. Non-stacked operands must be identical across all polynomials.
 
         Args:
             polys (list of :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`): List of polynomials to stack.
-            stacked (list of bool): Boolean flags indicating which operands should be stacked.
+            stacked (list of bool): List indicating which operands should be stacked.
 
         Returns:
-            :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: A new polynomial combining the stacked polynomials.
+            :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: The stacked polynomial.
 
-        Raises:
-            ValueError: If operands that are not stacked differ across polynomials.
+        Example:
+            >>> p1 = cue.descriptors.spherical_harmonics(cue.SO3(1), [1, 2])
+            >>> p2 = cue.descriptors.spherical_harmonics(cue.SO3(1), [2, 3])
+            >>> cue.EquivariantPolynomial.stack([p1, p2], [False, True])
+            ╭ a=1 -> B=1+2+2+3
+            │  []·a[]➜B[] ───────── num_paths=3
+            │  []·a[]·a[]➜B[] ───── num_paths=22
+            ╰─ []·a[]·a[]·a[]➜B[] ─ num_paths=41
+
+            Note how the STPs of degree 2 has been automatically fused into a single STP.
         """
         assert len(polys) > 0
         num_operands = polys[0].num_operands
@@ -159,37 +182,44 @@ class EquivariantPolynomial:
         """Evaluate the polynomial on the given inputs.
 
         Args:
-            *inputs (numpy.ndarray): Input tensors to evaluate the polynomial on.
+            *inputs (np.ndarray): Input arrays to evaluate the polynomial on.
 
         Returns:
-            list of numpy.ndarray: Output tensors resulting from the polynomial evaluation.
+            list of np.ndarray: List of output arrays.
+
+        Note:
+            This is a reference implementation using numpy and may not be optimized for performance.
         """
         return self.polynomial(*inputs)
 
     def __hash__(self) -> int:
-        return hash((self.operands, self.polynomial))
+        return hash((self.inputs, self.outputs, self.polynomial))
 
     def __eq__(self, value) -> bool:
         assert isinstance(value, EquivariantPolynomial)
-        return self.operands == value.operands and self.polynomial == value.polynomial
+        return (
+            self.inputs == value.inputs
+            and self.outputs == value.outputs
+            and self.polynomial == value.polynomial
+        )
 
     def __lt__(self, value) -> bool:
         assert isinstance(value, EquivariantPolynomial)
         return (
-            self.num_inputs,
-            self.num_outputs,
-            self.operands,
+            self.inputs,
+            self.outputs,
             self.polynomial,
         ) < (
-            value.num_inputs,
-            value.num_outputs,
-            value.operands,
+            value.inputs,
+            value.outputs,
             value.polynomial,
         )
 
     def __mul__(self, factor: float) -> EquivariantPolynomial:
         return EquivariantPolynomial(
-            self.inputs, self.outputs, self.polynomial * factor
+            self.inputs,
+            self.outputs,
+            self.polynomial * factor,
         )
 
     def __rmul__(self, factor: float) -> EquivariantPolynomial:
@@ -200,14 +230,18 @@ class EquivariantPolynomial:
     # ------------------------------------------------------------------------
 
     def all_same_segment_shape(self) -> bool:
-        """Whether all the segments have the same shape."""
+        """Check if all operands have the same segment shape.
+
+        Returns:
+            bool: True if all operands have the same segment shape.
+        """
         return self.polynomial.all_same_segment_shape()
 
     def used_inputs(self) -> list[bool]:
         """Get list of boolean values indicating which inputs are used in the polynomial.
 
         Returns:
-            list[bool]: List where True indicates the input is used.
+            list of bool: List where True indicates the input is used.
         """
         return self.polynomial.used_inputs()
 
@@ -215,15 +249,15 @@ class EquivariantPolynomial:
         """Get list of boolean values indicating which outputs are used in the polynomial.
 
         Returns:
-            list[bool]: List where True indicates the output is used.
+            list of bool: List where True indicates the output is used.
         """
         return self.polynomial.used_outputs()
 
     def used_operands(self) -> list[bool]:
-        """Get list of boolean values indicating which used_operands are used in the polynomial.
+        """Get list of boolean values indicating which operands are used in the polynomial.
 
         Returns:
-            list[bool]: List where True indicates the operand is used.
+            list of bool: List where True indicates the operand is used.
         """
         return self.polynomial.used_operands()
 
@@ -231,10 +265,10 @@ class EquivariantPolynomial:
         """Compute the number of floating point operations in the polynomial.
 
         Args:
-            batch_size (int, optional): The batch size for the computation. Defaults to 1.
+            batch_size (int, optional): Batch size for computation. Defaults to 1.
 
         Returns:
-            int: The estimated number of floating-point operations.
+            int: Number of floating point operations.
         """
         return self.polynomial.flop(batch_size)
 
@@ -242,10 +276,12 @@ class EquivariantPolynomial:
         """Compute the memory usage of the polynomial.
 
         Args:
-            batch_sizes (list of int): The batch sizes for each operand.
+            batch_sizes (list of int): List of batch sizes for each operand. Each operand
+                can have its own batch size, allowing for different batch dimensions
+                per tensor.
 
         Returns:
-            int: The estimated memory usage in number of scalar elements.
+            int: Memory usage in number of elements.
         """
         assert len(batch_sizes) == len(self.operands)
         return sum(Z * rep.dim for Z, rep in zip(batch_sizes, self.operands))
@@ -276,39 +312,53 @@ class EquivariantPolynomial:
         """Fuse segmented tensor products with identical operations and operands.
 
         Returns:
-            EquivariantPolynomial: A new polynomial with fused tensor products.
+            :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: Polynomial with fused tensor products.
         """
         return EquivariantPolynomial(
             self.inputs, self.outputs, self.polynomial.fuse_stps()
         )
 
     def consolidate(self) -> EquivariantPolynomial:
-        """Consolidate the segmented tensor products.
+        """Consolidate the segmented tensor products by removing empty segments and squeezing modes.
 
         Returns:
-            EquivariantPolynomial: A new polynomial with consolidated tensor products.
+            :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: Consolidated polynomial.
         """
         return EquivariantPolynomial(
             self.inputs, self.outputs, self.polynomial.consolidate()
         )
 
     def flatten_modes(self, modes: list[str]) -> EquivariantPolynomial:
-        """Flatten the specified modes of the segmented tensor products."""
+        """Flatten specified modes in the polynomial.
+
+        Args:
+            modes (list of str): List of mode names to flatten.
+
+        Returns:
+            :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: Polynomial with flattened modes.
+        """
         return EquivariantPolynomial(
             self.inputs, self.outputs, self.polynomial.flatten_modes(modes)
         )
 
     def canonicalize_subscripts(self) -> EquivariantPolynomial:
-        """Canonicalize the subscripts of the segmented tensor products."""
+        """Canonicalize the subscripts of the segmented tensor products.
+
+        Returns:
+            :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: Polynomial with canonicalized subscripts.
+        """
         return EquivariantPolynomial(
             self.inputs, self.outputs, self.polynomial.canonicalize_subscripts()
         )
 
     def squeeze_modes(self, modes: str | None = None) -> EquivariantPolynomial:
-        """Squeeze the modes of the segmented tensor products.
+        """Squeeze specified modes in the polynomial.
+
+        Args:
+            modes (str | None, optional): Modes to squeeze. If None, squeezes all modes.
 
         Returns:
-            EquivariantPolynomial: A new polynomial with squeezed modes.
+            :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: Polynomial with squeezed modes.
         """
         return EquivariantPolynomial(
             self.inputs, self.outputs, self.polynomial.squeeze_modes(modes)
@@ -318,7 +368,7 @@ class EquivariantPolynomial:
         """Flatten the coefficient modes of the segmented tensor products.
 
         Returns:
-            EquivariantPolynomial: A new polynomial with flattened coefficient modes.
+            :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: Polynomial with flattened coefficient modes.
         """
         return EquivariantPolynomial(
             self.inputs, self.outputs, self.polynomial.flatten_coefficient_modes()
@@ -330,8 +380,7 @@ class EquivariantPolynomial:
         This operation increases the number of paths in the segmented tensor products.
 
         Returns:
-            :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`:
-                Polynomial with symmetrized paths.
+            :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: Polynomial with symmetrized paths.
         """
         return EquivariantPolynomial(
             self.inputs,
@@ -345,8 +394,7 @@ class EquivariantPolynomial:
         This operation decreases the number of paths in the segmented tensor products.
 
         Returns:
-            :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`:
-                Polynomial with unsymmetrized paths.
+            :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: Polynomial with unsymmetrized paths.
         """
         return EquivariantPolynomial(
             self.inputs,
@@ -362,10 +410,12 @@ class EquivariantPolynomial:
         """Select which operands to keep in the polynomial.
 
         Use this method when you want to compute only a subset of the polynomial outputs
-        and have control over which inputs to keep.
+        and have control over which inputs to keep. For keeping all inputs (even if
+        not used), use filter_keep_outputs. For automatically removing unused operands,
+        use filter_drop_unsued_operands.
 
         Args:
-            keep (list[bool]): List indicating which operands to keep.
+            keep (list of bool): List indicating which operands to keep.
 
         Returns:
             :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: Polynomial with selected operands.
@@ -389,7 +439,7 @@ class EquivariantPolynomial:
         """Select which outputs to keep in the polynomial.
 
         Args:
-            keep (list[bool]): List indicating which outputs to keep.
+            keep (list of bool): List indicating which outputs to keep.
 
         Returns:
             :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: Polynomial with selected outputs.
@@ -429,7 +479,7 @@ class EquivariantPolynomial:
         but will only compute the selected outputs.
 
         Args:
-            keep (list[bool]): List indicating which outputs to compute.
+            keep (list of bool): List indicating which outputs to compute.
 
         Returns:
             :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: Polynomial computing only selected outputs.
@@ -450,16 +500,12 @@ class EquivariantPolynomial:
     ]:
         """Compute the Jacobian-vector product of the polynomial.
 
-        This method creates a new polynomial that, when evaluated, computes the Jacobian-vector
-        product of the original polynomial. This is used for forward-mode automatic differentiation.
-
         Args:
-            has_tangent (list of bool): Boolean flags indicating which inputs have tangent vectors.
+            has_tangent (list of bool): List indicating which inputs have tangents.
 
         Returns:
-            tuple: A tuple containing:
-                - :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: A new polynomial representing the JVP operation.
-                - callable: A function that maps input/output representations to JVP input/output representations.
+            tuple of :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>` and Callable:
+                The JVP polynomial and a mapping function for inputs/outputs.
         """
         p, m = self.polynomial.jvp(has_tangent)
         return EquivariantPolynomial(*m((self.inputs, self.outputs)), p), m
@@ -472,22 +518,15 @@ class EquivariantPolynomial:
         EquivariantPolynomial,
         Callable[[tuple[list[Any], list[Any]]], tuple[list[Any], list[Any]]],
     ]:
-        """Transpose the polynomial operation.
-
-        This method creates a new polynomial that represents the transpose of the original operation.
-        The transpose is essential for reverse-mode automatic differentiation.
+        """Transpose the polynomial for reverse-mode automatic differentiation.
 
         Args:
-            is_undefined_primal (list of bool): Boolean flags indicating which inputs are undefined primals.
-            has_cotangent (list of bool): Boolean flags indicating which outputs have cotangents.
+            is_undefined_primal (list of bool): List indicating which inputs have undefined primals.
+            has_cotangent (list of bool): List indicating which outputs have cotangents.
 
         Returns:
-            tuple: A tuple containing:
-                - :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: A new polynomial representing the transposed operation.
-                - callable: A function that maps input/output representations to transposed input/output representations.
-
-        Raises:
-            ValueError: If the polynomial is non-linear and cannot be transposed.
+            tuple of :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>` and Callable:
+                The transposed polynomial and a mapping function for inputs/outputs.
         """
         p, m = self.polynomial.transpose(is_undefined_primal, has_cotangent)
         return EquivariantPolynomial(*m((self.inputs, self.outputs)), p), m
@@ -500,18 +539,13 @@ class EquivariantPolynomial:
     ]:
         """Compute the backward pass of the polynomial for gradient computation.
 
-        This method combines the JVP and transpose operations to create a new polynomial that,
-        when evaluated, computes gradients of outputs with respect to inputs. This is the
-        core operation in reverse-mode automatic differentiation.
-
         Args:
-            requires_gradient (list of bool): Boolean flags indicating which inputs require gradients.
-            has_cotangent (list of bool): Boolean flags indicating which outputs have cotangents.
+            requires_gradient (list of bool): List indicating which inputs require gradients.
+            has_cotangent (list of bool): List indicating which outputs have cotangents.
 
         Returns:
-            tuple: A tuple containing:
-                - :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: A new polynomial for gradient computation.
-                - callable: A function that maps input/output representations to backward input/output representations.
+            tuple of :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>` and Callable:
+                The backward polynomial and a mapping function for inputs/outputs.
         """
         p, m = self.polynomial.backward(requires_gradient, has_cotangent)
         return EquivariantPolynomial(*m((self.inputs, self.outputs)), p), m

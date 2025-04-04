@@ -167,8 +167,8 @@ class SegmentedPolynomial:
         by the stacked parameter. Non-stacked operands must be identical across all polynomials.
 
         Args:
-            polys (list[:class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`]): List of polynomials to stack.
-            stacked (list[bool]): List indicating which buffers should be stacked.
+            polys (list of :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`): List of polynomials to stack.
+            stacked (list of bool): List indicating which operands should be stacked.
 
         Returns:
             :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`:
@@ -267,9 +267,9 @@ class SegmentedPolynomial:
             inputs (list of :class:`cue.SegmentedOperand <cuequivariance.SegmentedOperand>`): Input operands for the concatenated polynomial.
             outputs (list of :class:`cue.SegmentedOperand <cuequivariance.SegmentedOperand>`): Output operands for the concatenated polynomial.
             polys (list of tuple of :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>` and list of int | None): List of tuples containing
-                (polynomial, buffer_mapping), where buffer_mapping[i] is the buffer index in the polynomial
-                that corresponds to the i-th buffer in the concatenated polynomial. If buffer_mapping[i] is None,
-                the i-th buffer in the concatenated polynomial is not used in the polynomial.
+                (polynomial, mapping), where mapping[i] is the operand index in the polynomial
+                that corresponds to the i-th operand in the concatenated polynomial. If mapping[i] is None,
+                the i-th operand in the concatenated polynomial is not used in the polynomial.
 
         Returns:
             :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`:
@@ -309,10 +309,10 @@ class SegmentedPolynomial:
         def sfmt(shape: tuple[int, ...]) -> str:
             return "(" + ",".join(str(d) for d in shape) + ")"
 
-        buffer_names = []
+        operand_names = []
         for ope in self.operands:
             if ope.all_same_segment_shape():
-                buffer_names.append(
+                operand_names.append(
                     f"[{ope.size}:{ope.num_segments}⨯{sfmt(ope.segment_shape)}]"
                 )
             else:
@@ -325,17 +325,17 @@ class SegmentedPolynomial:
                         break
                 if len(txts) < len(ope.segments):
                     txts.append("...")
-                buffer_names.append(f"[{ope.size}:{'+'.join(txts)}]")
-        return self.to_string(buffer_names)
+                operand_names.append(f"[{ope.size}:{'+'.join(txts)}]")
+        return self.to_string(operand_names)
 
-    def to_string(self, buffer_names: list[str] | None = None) -> str:
+    def to_string(self, operand_names: list[str] | None = None) -> str:
         buffer_txts = (
             IVARS[: self.num_inputs]
             + OVARS[self.num_inputs : self.num_inputs + self.num_outputs]
         )
-        if buffer_names is not None:
+        if operand_names is not None:
             buffer_txts = [
-                f"{symbol}={name}" for symbol, name in zip(buffer_txts, buffer_names)
+                f"{symbol}={name}" for symbol, name in zip(buffer_txts, operand_names)
             ]
 
         header = (
@@ -380,7 +380,7 @@ class SegmentedPolynomial:
             *inputs (np.ndarray): Input arrays to evaluate the polynomial on.
 
         Returns:
-            list[np.ndarray]: List of output arrays.
+            list of np.ndarray: List of output arrays.
 
         Note:
             This is a reference implementation using numpy and may not be optimized for performance.
@@ -451,7 +451,7 @@ class SegmentedPolynomial:
         """Get list of boolean values indicating which inputs are used in the polynomial.
 
         Returns:
-            list[bool]: List where True indicates the input is used.
+            list of bool: List where True indicates the input is used.
         """
         return [
             any(i in ope.buffers for ope, _ in self.operations)
@@ -462,7 +462,7 @@ class SegmentedPolynomial:
         """Get list of boolean values indicating which outputs are used in the polynomial.
 
         Returns:
-            list[bool]: List where True indicates the output is used.
+            list of bool: List where True indicates the output is used.
         """
         return [
             any(i in ope.buffers for ope, _ in self.operations)
@@ -473,7 +473,7 @@ class SegmentedPolynomial:
         """Get list of boolean values indicating which operands are used in the polynomial.
 
         Returns:
-            list[bool]: List where True indicates the operand is used.
+            list of bool: List where True indicates the operand is used.
         """
         return self.used_inputs() + self.used_outputs()
 
@@ -496,7 +496,7 @@ class SegmentedPolynomial:
         """Compute the memory usage of the polynomial.
 
         Args:
-            batch_sizes (list[int]): List of batch sizes for each operand. Each operand
+            batch_sizes (list of int): List of batch sizes for each operand. Each operand
                 can have its own batch size, allowing for different batch dimensions
                 per tensor.
 
@@ -590,7 +590,7 @@ class SegmentedPolynomial:
         """Flatten specified modes in the polynomial.
 
         Args:
-            modes (list[str]): List of mode names to flatten.
+            modes (list of str): List of mode names to flatten.
 
         Returns:
             :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: Polynomial with flattened modes.
@@ -691,7 +691,7 @@ class SegmentedPolynomial:
         use filter_drop_unsued_operands.
 
         Args:
-            keep (list[bool]): List indicating which operands to keep.
+            keep (list of bool): List indicating which operands to keep.
 
         Returns:
             :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: Polynomial with selected operands.
@@ -753,11 +753,12 @@ class SegmentedPolynomial:
 
     def compute_only(self, keep: list[bool]) -> SegmentedPolynomial:
         """Create a polynomial that only computes selected outputs.
+
         The new polynomial will keep the same operands as the original one,
         but will only compute the selected outputs.
 
         Args:
-            keep (list[bool]): List indicating which outputs to compute.
+            keep (list of bool): List indicating which outputs to compute.
 
         Returns:
             :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: Polynomial computing only selected outputs.
@@ -786,7 +787,7 @@ class SegmentedPolynomial:
         """Compute the Jacobian-vector product of the polynomial.
 
         Args:
-            has_tangent (list[bool]): List indicating which inputs have tangents.
+            has_tangent (list of bool): List indicating which inputs have tangents.
 
         Returns:
             tuple of :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>` and Callable:
@@ -833,8 +834,8 @@ class SegmentedPolynomial:
         """Transpose the polynomial for reverse-mode automatic differentiation.
 
         Args:
-            is_undefined_primal (list[bool]): List indicating which inputs have undefined primals.
-            has_cotangent (list[bool]): List indicating which outputs have cotangents.
+            is_undefined_primal (list of bool): List indicating which inputs have undefined primals.
+            has_cotangent (list of bool): List indicating which outputs have cotangents.
 
         Returns:
             tuple of :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>` and Callable:
@@ -876,8 +877,8 @@ class SegmentedPolynomial:
         """Compute the backward pass of the polynomial for gradient computation.
 
         Args:
-            requires_gradient (list[bool]): List indicating which inputs require gradients.
-            has_cotangent (list[bool]): List indicating which outputs have cotangents.
+            requires_gradient (list of bool): List indicating which inputs require gradients.
+            has_cotangent (list of bool): List indicating which outputs have cotangents.
 
         Returns:
             tuple of :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>` and Callable:
