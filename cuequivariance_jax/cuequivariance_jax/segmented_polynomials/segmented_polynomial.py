@@ -63,6 +63,7 @@ def segmented_polynomial(
         polynomial: The segmented polynomial to compute.
         inputs: List of input buffers as JAX arrays.
         outputs_shape_dtype: List of output shapes and dtypes specifications.
+            The last shape dimension can be set to -1 to infer the size from the polynomial descriptor.
         indices: Optional list of indices for inputs and outputs. If None, no indexing
             is applied. Defaults to None.
         math_dtype: Data type for computational operations. If None, automatically

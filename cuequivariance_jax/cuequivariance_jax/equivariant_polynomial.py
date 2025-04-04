@@ -43,6 +43,7 @@ def equivariant_polynomial(
         inputs: List of input :class:`cuex.RepArray <cuequivariance_jax.RepArray>`.
         outputs_shape_dtype: Shape and dtype specifications for outputs. If None,
             inferred from inputs when possible. When output indices are provided, this must be specified.
+            The last shape dimension can be set to -1 to infer the size from the polynomial descriptor.
         indices: Optional list of indices for inputs and outputs. Length must match
             total number of operands (inputs + outputs). Use None for unindexed
             operands. Defaults to None.
