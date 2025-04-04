@@ -329,25 +329,26 @@ class SegmentedPolynomial:
         return self.to_string(operand_names)
 
     def to_string(self, operand_names: list[str] | None = None) -> str:
-        buffer_txts = (
+        operand_symbols = (
             IVARS[: self.num_inputs]
             + OVARS[self.num_inputs : self.num_inputs + self.num_outputs]
         )
         if operand_names is not None:
-            buffer_txts = [
-                f"{symbol}={name}" for symbol, name in zip(buffer_txts, operand_names)
+            operand_symbols = [
+                f"{symbol}={name}"
+                for symbol, name in zip(operand_symbols, operand_names)
             ]
 
         header = (
-            " ".join(buffer_txts[: self.num_inputs])
+            " ".join(operand_symbols[: self.num_inputs])
             + " -> "
-            + " ".join(buffer_txts[self.num_inputs :])
+            + " ".join(operand_symbols[self.num_inputs :])
         )
 
         def f(ope: cue.Operation, stp: cue.SegmentedTensorProduct) -> str:
             items = [
-                f"{buffer}[{ss}]"
-                for buffer, ss in zip(
+                f"{operand_symbol}[{ss}]"
+                for operand_symbol, ss in zip(
                     ope.to_letters(self.num_inputs), stp.subscripts.operands
                 )
             ]
@@ -698,7 +699,7 @@ class SegmentedPolynomial:
         """
         assert len(keep) == self.num_operands
 
-        # Create a mapping from old buffer indices to new buffer indices
+        # Create a mapping from old operand indices to new operand indices
         new_index = []
         i = 0
         for u in keep:
@@ -708,20 +709,19 @@ class SegmentedPolynomial:
             else:
                 new_index.append(None)
 
-        # Filter tensor products that write to buffers we want to keep
-        # and remap the buffer indices
+        # Filter tensor products that write to operands we want to keep
+        # and remap the operand indices
         new_tensor_products = []
         for ope, stp in self.operations:
-            # Check if the operation writes to a buffer we want to keep
-            bid = ope.output_buffer(self.num_inputs)
-            if keep[bid]:
-                # Check if all input buffers needed by this operation are kept
+            # Check if the operation writes to an operand we want to keep
+            output_operand_idx = ope.output_buffer(self.num_inputs)
+            if keep[output_operand_idx]:
+                # Check if all input operands needed by this operation are kept
                 if not all(keep[buffer] for buffer in ope.buffers):
                     raise ValueError(
-                        f"Operation {ope} writes to buffer {bid} which is kept, but requires input buffers that are being dropped"
+                        f"Operation {ope} writes to operand {output_operand_idx} which is kept, but requires input operands that are being dropped"
                     )
 
-                # Remap buffer indices
                 new_ope = cue.Operation([new_index[buffer] for buffer in ope.buffers])
                 new_tensor_products.append((new_ope, stp))
 
