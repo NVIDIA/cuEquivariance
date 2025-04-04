@@ -46,6 +46,10 @@ class SegmentedPolynomial:
     outputs: tuple[cue.SegmentedOperand, ...]
     operations: tuple[tuple[cue.Operation, cue.SegmentedTensorProduct], ...]
 
+    # ------------------------------------------------------------------------
+    # Core Structure and Initialization
+    # ------------------------------------------------------------------------
+
     def __init__(
         self,
         inputs: Sequence[cue.SegmentedOperand],
@@ -79,22 +83,6 @@ class SegmentedPolynomial:
         object.__setattr__(self, "operations", tuple(operations))
 
     @classmethod
-    def eval_last_operand(cls, stp: cue.SegmentedTensorProduct):
-        """Create a polynomial that evaluates the last operand of a segmented tensor product.
-
-        Args:
-            stp (:class:`cue.SegmentedTensorProduct <cuequivariance.SegmentedTensorProduct>`): The tensor product to evaluate.
-
-        Returns:
-            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: A polynomial evaluating the last operand.
-        """
-        return cls(
-            stp.operands[:-1],
-            (stp.operands[-1],),
-            ((cue.Operation(tuple(range(stp.num_operands))), stp),),
-        )
-
-    @classmethod
     def _from_default_operands(
         cls,
         inputs: Sequence[cue.SegmentedOperand | None],
@@ -113,38 +101,209 @@ class SegmentedPolynomial:
 
         return cls(buffers[: len(inputs)], buffers[len(inputs) :], operations)
 
-    def __hash__(self) -> int:
-        return hash((self.inputs, self.outputs, self.operations))
+    @property
+    def operands(self) -> tuple[cue.SegmentedOperand, ...]:
+        """Get all operands (inputs and outputs) of the polynomial.
 
-    def __eq__(self, value) -> bool:
-        assert isinstance(value, SegmentedPolynomial)
-        return (
-            self.inputs == value.inputs
-            and self.outputs == value.outputs
-            and self.operations == value.operations
+        Returns:
+            tuple of :class:`cue.SegmentedOperand <cuequivariance.SegmentedOperand>`: Tuple of all operands.
+        """
+        return self.inputs + self.outputs
+
+    @property
+    def num_inputs(self) -> int:
+        """Get the number of input operands.
+
+        Returns:
+            int: Number of input operands.
+        """
+        return len(self.inputs)
+
+    @property
+    def num_outputs(self) -> int:
+        """Get the number of output operands.
+
+        Returns:
+            int: Number of output operands.
+        """
+        return len(self.outputs)
+
+    @property
+    def num_operands(self) -> int:
+        """Get the total number of operands (inputs + outputs).
+
+        Returns:
+            int: Total number of operands.
+        """
+        return self.num_inputs + self.num_outputs
+
+    # ------------------------------------------------------------------------
+    # Class Construction Methods
+    # ------------------------------------------------------------------------
+
+    @classmethod
+    def eval_last_operand(cls, stp: cue.SegmentedTensorProduct):
+        """Create a polynomial that evaluates the last operand of a segmented tensor product.
+
+        Args:
+            stp (:class:`cue.SegmentedTensorProduct <cuequivariance.SegmentedTensorProduct>`): The tensor product to evaluate.
+
+        Returns:
+            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: A polynomial evaluating the last operand.
+        """
+        return cls(
+            stp.operands[:-1],
+            (stp.operands[-1],),
+            ((cue.Operation(tuple(range(stp.num_operands))), stp),),
         )
 
-    def __lt__(self, value) -> bool:
-        assert isinstance(value, SegmentedPolynomial)
-        return (
-            self.inputs,
-            self.outputs,
-            self.operations,
-        ) < (
-            value.inputs,
-            value.outputs,
-            value.operations,
+    @classmethod
+    def stack(
+        cls, polys: list[SegmentedPolynomial], stacked: list[bool]
+    ) -> SegmentedPolynomial:
+        """Stack segmented polynomials together.
+
+        This method combines multiple polynomials by stacking their operands where indicated
+        by the stacked parameter. Non-stacked operands must be identical across all polynomials.
+
+        Args:
+            polys (list[:class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`]): List of polynomials to stack.
+            stacked (list[bool]): List indicating which buffers should be stacked.
+
+        Returns:
+            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`:
+                The stacked polynomial.
+
+        Example:
+            >>> p1 = cue.descriptors.spherical_harmonics(cue.SO3(1), [1, 2]).polynomial
+            >>> p2 = cue.descriptors.spherical_harmonics(cue.SO3(1), [2, 3]).polynomial
+            >>> cue.SegmentedPolynomial.stack([p1, p2], [False, True])
+            ╭ a=[3:3⨯()] -> B=[20:20⨯()]
+            │  []·a[]➜B[] ───────── num_paths=3
+            │  []·a[]·a[]➜B[] ───── num_paths=22
+            ╰─ []·a[]·a[]·a[]➜B[] ─ num_paths=41
+
+            Note how the STPs of degree 2 has been automatically fused into a single STP.
+        """
+        assert len(polys) > 0
+        num_inputs = polys[0].num_inputs
+        num_outputs = polys[0].num_outputs
+        assert all(pol.num_inputs == num_inputs for pol in polys)
+        assert all(pol.num_outputs == num_outputs for pol in polys)
+        assert len(stacked) == num_inputs + num_outputs
+
+        operands = []
+        for bid in range(num_inputs + num_outputs):
+            if stacked[bid]:
+                operands.append(
+                    cue.SegmentedOperand.stack(
+                        [
+                            pol.operands[bid]
+                            for pol in polys
+                            if pol.operands[bid]
+                            is not None  # special case for stack_tensor_products
+                        ]
+                    )
+                )
+            else:
+                ope = polys[0].operands[bid]
+                assert all(pol.operands[bid] == ope for pol in polys)
+                operands.append(ope)
+
+        tensor_products: list[tuple[cue.Operation, cue.SegmentedTensorProduct]] = []
+        for index, pol in enumerate(polys):
+            for ope, stp in pol.operations:
+                stp = copy.deepcopy(stp)
+                for oid, buffer in enumerate(ope.buffers):
+                    if stacked[buffer]:
+                        for p in reversed(polys[:index]):
+                            stp.insert_segments(oid, 0, p.operands[buffer].segments)
+                        for p in polys[index + 1 :]:
+                            stp.insert_segments(oid, -1, p.operands[buffer].segments)
+                tensor_products.append((ope, stp))
+
+        return cls(
+            operands[:num_inputs], operands[num_inputs:], tensor_products
+        ).consolidate()
+
+    @classmethod
+    def stack_tensor_products(
+        cls,
+        inputs: Sequence[cue.SegmentedOperand | None],
+        outputs: Sequence[cue.SegmentedOperand | None],
+        operations: Sequence[
+            tuple[cue.Operation | Sequence[int], cue.SegmentedTensorProduct]
+        ],
+    ) -> SegmentedPolynomial:
+        """Stack segmented tensor products together.
+
+        Args:
+            inputs (list of :class:`cue.SegmentedOperand <cuequivariance.SegmentedOperand>` | None): Input operands.
+            outputs (list of :class:`cue.SegmentedOperand <cuequivariance.SegmentedOperand>` | None): Output operands.
+            operations (list of tuple of :class:`cue.Operation <cuequivariance.Operation>` | list of int and :class:`cue.SegmentedTensorProduct <cuequivariance.SegmentedTensorProduct>`): Operations and tensor products.
+
+        Returns:
+            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: The stacked polynomial.
+        """
+        inputs, outputs = list(inputs), list(outputs)
+        return cls.stack(
+            [
+                cls._from_default_operands(inputs, outputs, [(ope, stp)])
+                for ope, stp in operations
+            ],
+            [ope is None for ope in inputs + outputs],
         )
 
-    def __mul__(self, factor: float) -> SegmentedPolynomial:
-        return SegmentedPolynomial(
-            self.inputs,
-            self.outputs,
-            tuple((ope, factor * stp) for ope, stp in self.operations),
+    @classmethod
+    def concatenate(
+        cls,
+        inputs: Sequence[cue.SegmentedOperand],
+        outputs: Sequence[cue.SegmentedOperand],
+        polys: list[tuple[SegmentedPolynomial, Sequence[int | None]]],
+    ) -> SegmentedPolynomial:
+        """Concatenate segmented polynomials.
+
+        Args:
+            inputs (list of :class:`cue.SegmentedOperand <cuequivariance.SegmentedOperand>`): Input operands for the concatenated polynomial.
+            outputs (list of :class:`cue.SegmentedOperand <cuequivariance.SegmentedOperand>`): Output operands for the concatenated polynomial.
+            polys (list of tuple of :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>` and list of int | None): List of tuples containing
+                (polynomial, buffer_mapping), where buffer_mapping[i] is the buffer index in the polynomial
+                that corresponds to the i-th buffer in the concatenated polynomial. If buffer_mapping[i] is None,
+                the i-th buffer in the concatenated polynomial is not used in the polynomial.
+
+        Returns:
+            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`:
+                The concatenated polynomial.
+
+        Example:
+            >>> p1 = cue.descriptors.spherical_harmonics(cue.SO3(1), [1, 2]).polynomial
+            >>> p2 = cue.descriptors.spherical_harmonics(cue.SO3(1), [2, 3]).polynomial
+            >>> [vec, sh1] = p1.operands
+            >>> [_, sh2] = p2.operands
+            >>> cue.SegmentedPolynomial.concatenate(
+            ...     [vec],
+            ...     [sh1, sh2],
+            ...     [(p1, [0, 1, None]), (p2, [0, None, 1])],
+            ... )
+            ╭ a=[3:3⨯()] -> B=[8:8⨯()] C=[12:12⨯()]
+            │  []·a[]➜B[] ───────── num_paths=3
+            │  []·a[]·a[]➜B[] ───── num_paths=11
+            │  []·a[]·a[]➜C[] ───── num_paths=11
+            ╰─ []·a[]·a[]·a[]➜C[] ─ num_paths=41
+        """
+        return cls(
+            inputs,
+            outputs,
+            [
+                ([mp.index(bid) for bid in ope.buffers], stp)
+                for pol, mp in polys
+                for ope, stp in pol.operations
+            ],
         )
 
-    def __rmul__(self, factor: float) -> SegmentedPolynomial:
-        return self.__mul__(factor)
+    # ------------------------------------------------------------------------
+    # Standard Python Methods
+    # ------------------------------------------------------------------------
 
     def __repr__(self):
         def sfmt(shape: tuple[int, ...]) -> str:
@@ -243,41 +402,113 @@ class SegmentedPolynomial:
             )
         return outputs
 
-    @property
-    def operands(self) -> tuple[cue.SegmentedOperand, ...]:
-        """Get all operands (inputs and outputs) of the polynomial.
+    def __hash__(self) -> int:
+        return hash((self.inputs, self.outputs, self.operations))
+
+    def __eq__(self, value) -> bool:
+        assert isinstance(value, SegmentedPolynomial)
+        return (
+            self.inputs == value.inputs
+            and self.outputs == value.outputs
+            and self.operations == value.operations
+        )
+
+    def __lt__(self, value) -> bool:
+        assert isinstance(value, SegmentedPolynomial)
+        return (
+            self.inputs,
+            self.outputs,
+            self.operations,
+        ) < (
+            value.inputs,
+            value.outputs,
+            value.operations,
+        )
+
+    def __mul__(self, factor: float) -> SegmentedPolynomial:
+        return SegmentedPolynomial(
+            self.inputs,
+            self.outputs,
+            tuple((ope, factor * stp) for ope, stp in self.operations),
+        )
+
+    def __rmul__(self, factor: float) -> SegmentedPolynomial:
+        return self.__mul__(factor)
+
+    # ------------------------------------------------------------------------
+    # Analysis Methods
+    # ------------------------------------------------------------------------
+
+    def all_same_segment_shape(self) -> bool:
+        """Check if all operands have the same segment shape.
 
         Returns:
-            tuple[:class:`cue.SegmentedOperand <cuequivariance.SegmentedOperand>`, ...]: Tuple of all operands.
+            bool: True if all operands have the same segment shape.
         """
-        return self.inputs + self.outputs
+        return all(ope.all_same_segment_shape() for ope in self.operands)
 
-    @property
-    def num_inputs(self) -> int:
-        """Get the number of input operands.
+    def used_inputs(self) -> list[bool]:
+        """Get list of boolean values indicating which inputs are used in the polynomial.
 
         Returns:
-            int: Number of input operands.
+            list[bool]: List where True indicates the input is used.
         """
-        return len(self.inputs)
+        return [
+            any(buffer in ope.buffers for ope, _ in self.operations)
+            for buffer in range(self.num_inputs)
+        ]
 
-    @property
-    def num_outputs(self) -> int:
-        """Get the number of output operands.
+    def used_outputs(self) -> list[bool]:
+        """Get list of boolean values indicating which outputs are used in the polynomial.
 
         Returns:
-            int: Number of output operands.
+            list[bool]: List where True indicates the output is used.
         """
-        return len(self.outputs)
+        return [
+            any(buffer in ope.buffers for ope, _ in self.operations)
+            for buffer in range(self.num_inputs, self.num_inputs + self.num_outputs)
+        ]
 
-    @property
-    def num_operands(self) -> int:
-        """Get the total number of operands (inputs + outputs).
+    def used_buffers(self) -> list[bool]:
+        """Get list of boolean values indicating which buffers are used in the polynomial.
 
         Returns:
-            int: Total number of operands.
+            list[bool]: List where True indicates the buffer is used.
         """
-        return self.num_inputs + self.num_outputs
+        return self.used_inputs() + self.used_outputs()
+
+    def flop(self, batch_size: int = 1) -> int:
+        """Compute the number of floating point operations in the polynomial.
+
+        Args:
+            batch_size (int, optional): Batch size for computation. Defaults to 1.
+
+        Returns:
+            int: Number of floating point operations.
+        """
+        n = 0
+        for ope, stp in self.operations:
+            oid, _ = ope.output_operand_buffer(self.num_inputs)
+            n += stp.flop(oid)
+        return batch_size * n
+
+    def memory(self, batch_sizes: list[int]) -> int:
+        """Compute the memory usage of the polynomial.
+
+        Args:
+            batch_sizes (list[int]): List of batch sizes for each operand. Each operand
+                can have its own batch size, allowing for different batch dimensions
+                per tensor.
+
+        Returns:
+            int: Memory usage in number of elements.
+        """
+        assert len(batch_sizes) == self.num_operands
+        return sum(Z * ope.size for Z, ope in zip(batch_sizes, self.operands))
+
+    # ------------------------------------------------------------------------
+    # Transformation Methods
+    # ------------------------------------------------------------------------
 
     def apply_fn(
         self,
@@ -355,35 +586,101 @@ class SegmentedPolynomial:
 
         return self.fuse_stps().apply_fn(f)
 
-    def used_inputs(self) -> list[bool]:
-        """Get list of boolean values indicating which inputs are used in the polynomial.
+    def flatten_modes(self, modes: list[str]) -> SegmentedPolynomial:
+        """Flatten specified modes in the polynomial.
+
+        Args:
+            modes (list[str]): List of mode names to flatten.
 
         Returns:
-            list[bool]: List where True indicates the input is used.
+            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: Polynomial with flattened modes.
         """
-        return [
-            any(buffer in ope.buffers for ope, _ in self.operations)
-            for buffer in range(self.num_inputs)
-        ]
+        return SegmentedPolynomial._from_default_operands(
+            self.inputs,
+            self.outputs,
+            [(ope, stp.flatten_modes(modes)) for ope, stp in self.operations],
+        )
 
-    def used_outputs(self) -> list[bool]:
-        """Get list of boolean values indicating which outputs are used in the polynomial.
+    def canonicalize_subscripts(self) -> SegmentedPolynomial:
+        """Canonicalize the subscripts of the segmented tensor products.
 
         Returns:
-            list[bool]: List where True indicates the output is used.
+            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: Polynomial with canonicalized subscripts.
         """
-        return [
-            any(buffer in ope.buffers for ope, _ in self.operations)
-            for buffer in range(self.num_inputs, self.num_inputs + self.num_outputs)
-        ]
+        return SegmentedPolynomial._from_default_operands(
+            self.inputs,
+            self.outputs,
+            [(ope, stp.canonicalize_subscripts()) for ope, stp in self.operations],
+        )
 
-    def used_buffers(self) -> list[bool]:
-        """Get list of boolean values indicating which buffers are used in the polynomial.
+    def squeeze_modes(self, modes: str | None = None) -> SegmentedPolynomial:
+        """Squeeze specified modes in the polynomial.
+
+        Args:
+            modes (str | None, optional): Modes to squeeze. If None, squeezes all modes.
 
         Returns:
-            list[bool]: List where True indicates the buffer is used.
+            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: Polynomial with squeezed modes.
         """
-        return self.used_inputs() + self.used_outputs()
+        return SegmentedPolynomial._from_default_operands(
+            self.inputs,
+            self.outputs,
+            [(ope, stp.squeeze_modes(modes)) for ope, stp in self.operations],
+        )
+
+    def flatten_coefficient_modes(self) -> SegmentedPolynomial:
+        """Flatten the coefficient modes of the segmented tensor products.
+
+        Returns:
+            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: Polynomial with flattened coefficient modes.
+        """
+        return SegmentedPolynomial._from_default_operands(
+            self.inputs,
+            self.outputs,
+            [(ope, stp.flatten_coefficient_modes()) for ope, stp in self.operations],
+        )
+
+    def symmetrize_for_identical_operands(self) -> SegmentedPolynomial:
+        """Symmetrize the paths of the segmented tensor products for identical operands.
+
+        This operation increases the number of paths in the segmented tensor products.
+
+        Returns:
+            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`:
+                Polynomial with symmetrized paths.
+        """
+        symmetrized_tensor_products = []
+        for ope, stp in self.operations:
+            for set_of_operands in ope.operands_with_identical_buffers():
+                stp = stp.symmetrize_operands(set_of_operands)
+            stp = stp.sort_paths()
+            symmetrized_tensor_products.append((ope, stp))
+
+        return SegmentedPolynomial(
+            self.inputs, self.outputs, symmetrized_tensor_products
+        )
+
+    def unsymmetrize_for_identical_operands(self) -> SegmentedPolynomial:
+        """Unsymmetrize the paths of the segmented tensor products for identical operands.
+
+        This operation decreases the number of paths in the segmented tensor products.
+
+        Returns:
+            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`:
+                Polynomial with unsymmetrized paths.
+        """
+
+        def optimize_paths(ope: cue.Operation, stp: cue.SegmentedTensorProduct):
+            for set_of_operands in ope.operands_with_identical_buffers():
+                stp = stp.sort_indices_for_identical_operands(set_of_operands)
+            stp = stp.sort_paths()
+            return ope, stp
+
+        return self.apply_fn(optimize_paths)
+
+    # ------------------------------------------------------------------------
+    # Filtering Methods
+    # ------------------------------------------------------------------------
 
     def filter_keep_operands(self, keep: list[bool]) -> SegmentedPolynomial:
         """Select which buffers to keep in the polynomial.
@@ -474,211 +771,9 @@ class SegmentedPolynomial:
             ],
         )
 
-    @classmethod
-    def stack(
-        cls, polys: list[SegmentedPolynomial], stacked: list[bool]
-    ) -> SegmentedPolynomial:
-        """Stack segmented polynomials together.
-
-        This method combines multiple polynomials by stacking their operands where indicated
-        by the stacked parameter. Non-stacked operands must be identical across all polynomials.
-
-        Args:
-            polys (list[:class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`]): List of polynomials to stack.
-            stacked (list[bool]): List indicating which buffers should be stacked.
-
-        Returns:
-            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`:
-                The stacked polynomial.
-
-        Example:
-            >>> p1 = cue.descriptors.spherical_harmonics(cue.SO3(1), [1, 2]).polynomial
-            >>> p2 = cue.descriptors.spherical_harmonics(cue.SO3(1), [2, 3]).polynomial
-            >>> cue.SegmentedPolynomial.stack([p1, p2], [False, True])
-            ╭ a=[3:3⨯()] -> B=[20:20⨯()]
-            │  []·a[]➜B[] ───────── num_paths=3
-            │  []·a[]·a[]➜B[] ───── num_paths=22
-            ╰─ []·a[]·a[]·a[]➜B[] ─ num_paths=41
-
-            Note how the STPs of degree 2 has been automatically fused into a single STP.
-        """
-        assert len(polys) > 0
-        num_inputs = polys[0].num_inputs
-        num_outputs = polys[0].num_outputs
-        assert all(pol.num_inputs == num_inputs for pol in polys)
-        assert all(pol.num_outputs == num_outputs for pol in polys)
-        assert len(stacked) == num_inputs + num_outputs
-
-        operands = []
-        for bid in range(num_inputs + num_outputs):
-            if stacked[bid]:
-                operands.append(
-                    cue.SegmentedOperand.stack(
-                        [
-                            pol.operands[bid]
-                            for pol in polys
-                            if pol.operands[bid]
-                            is not None  # special case for stack_tensor_products
-                        ]
-                    )
-                )
-            else:
-                ope = polys[0].operands[bid]
-                assert all(pol.operands[bid] == ope for pol in polys)
-                operands.append(ope)
-
-        tensor_products: list[tuple[cue.Operation, cue.SegmentedTensorProduct]] = []
-        for index, pol in enumerate(polys):
-            for ope, stp in pol.operations:
-                stp = copy.deepcopy(stp)
-                for oid, buffer in enumerate(ope.buffers):
-                    if stacked[buffer]:
-                        for p in reversed(polys[:index]):
-                            stp.insert_segments(oid, 0, p.operands[buffer].segments)
-                        for p in polys[index + 1 :]:
-                            stp.insert_segments(oid, -1, p.operands[buffer].segments)
-                tensor_products.append((ope, stp))
-
-        return cls(
-            operands[:num_inputs], operands[num_inputs:], tensor_products
-        ).consolidate()
-
-    @classmethod
-    def concatenate(
-        cls,
-        inputs: Sequence[cue.SegmentedOperand],
-        outputs: Sequence[cue.SegmentedOperand],
-        polys: list[tuple[SegmentedPolynomial, Sequence[int | None]]],
-    ) -> SegmentedPolynomial:
-        """Concatenate segmented polynomials.
-
-        Args:
-            inputs (list of :class:`cue.SegmentedOperand <cuequivariance.SegmentedOperand>`): Input operands for the concatenated polynomial.
-            outputs (list of :class:`cue.SegmentedOperand <cuequivariance.SegmentedOperand>`): Output operands for the concatenated polynomial.
-            polys (list of tuple of :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>` and list of int | None): List of tuples containing
-                (polynomial, buffer_mapping), where buffer_mapping[i] is the buffer index in the polynomial
-                that corresponds to the i-th buffer in the concatenated polynomial. If buffer_mapping[i] is None,
-                the i-th buffer in the concatenated polynomial is not used in the polynomial.
-
-        Returns:
-            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`:
-                The concatenated polynomial.
-
-        Example:
-            >>> p1 = cue.descriptors.spherical_harmonics(cue.SO3(1), [1, 2]).polynomial
-            >>> p2 = cue.descriptors.spherical_harmonics(cue.SO3(1), [2, 3]).polynomial
-            >>> [vec, sh1] = p1.operands
-            >>> [_, sh2] = p2.operands
-            >>> cue.SegmentedPolynomial.concatenate(
-            ...     [vec],
-            ...     [sh1, sh2],
-            ...     [(p1, [0, 1, None]), (p2, [0, None, 1])],
-            ... )
-            ╭ a=[3:3⨯()] -> B=[8:8⨯()] C=[12:12⨯()]
-            │  []·a[]➜B[] ───────── num_paths=3
-            │  []·a[]·a[]➜B[] ───── num_paths=11
-            │  []·a[]·a[]➜C[] ───── num_paths=11
-            ╰─ []·a[]·a[]·a[]➜C[] ─ num_paths=41
-        """
-        return cls(
-            inputs,
-            outputs,
-            [
-                ([mp.index(bid) for bid in ope.buffers], stp)
-                for pol, mp in polys
-                for ope, stp in pol.operations
-            ],
-        )
-
-    @classmethod
-    def stack_tensor_products(
-        cls,
-        inputs: Sequence[cue.SegmentedOperand | None],
-        outputs: Sequence[cue.SegmentedOperand | None],
-        operations: Sequence[
-            tuple[cue.Operation | Sequence[int], cue.SegmentedTensorProduct]
-        ],
-    ) -> SegmentedPolynomial:
-        """Stack segmented tensor products together.
-
-        Args:
-            inputs (list of :class:`cue.SegmentedOperand <cuequivariance.SegmentedOperand>` | None): Input operands.
-            outputs (list of :class:`cue.SegmentedOperand <cuequivariance.SegmentedOperand>` | None): Output operands.
-            operations (list of tuple of :class:`cue.Operation <cuequivariance.Operation>` | list of int and :class:`cue.SegmentedTensorProduct <cuequivariance.SegmentedTensorProduct>`): Operations and tensor products.
-
-        Returns:
-            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: The stacked polynomial.
-        """
-        inputs, outputs = list(inputs), list(outputs)
-        return cls.stack(
-            [
-                cls._from_default_operands(inputs, outputs, [(ope, stp)])
-                for ope, stp in operations
-            ],
-            [ope is None for ope in inputs + outputs],
-        )
-
-    def flatten_modes(self, modes: list[str]) -> SegmentedPolynomial:
-        """Flatten specified modes in the polynomial.
-
-        Args:
-            modes (list[str]): List of mode names to flatten.
-
-        Returns:
-            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: Polynomial with flattened modes.
-        """
-        return SegmentedPolynomial._from_default_operands(
-            self.inputs,
-            self.outputs,
-            [(ope, stp.flatten_modes(modes)) for ope, stp in self.operations],
-        )
-
-    def all_same_segment_shape(self) -> bool:
-        """Check if all operands have the same segment shape.
-
-        Returns:
-            bool: True if all operands have the same segment shape.
-        """
-        return all(ope.all_same_segment_shape() for ope in self.operands)
-
-    def canonicalize_subscripts(self) -> SegmentedPolynomial:
-        """Canonicalize the subscripts of the segmented tensor products.
-
-        Returns:
-            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: Polynomial with canonicalized subscripts.
-        """
-        return SegmentedPolynomial._from_default_operands(
-            self.inputs,
-            self.outputs,
-            [(ope, stp.canonicalize_subscripts()) for ope, stp in self.operations],
-        )
-
-    def squeeze_modes(self, modes: str | None = None) -> SegmentedPolynomial:
-        """Squeeze specified modes in the polynomial.
-
-        Args:
-            modes (str | None, optional): Modes to squeeze. If None, squeezes all modes.
-
-        Returns:
-            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: Polynomial with squeezed modes.
-        """
-        return SegmentedPolynomial._from_default_operands(
-            self.inputs,
-            self.outputs,
-            [(ope, stp.squeeze_modes(modes)) for ope, stp in self.operations],
-        )
-
-    def flatten_coefficient_modes(self) -> SegmentedPolynomial:
-        """Flatten the coefficient modes of the segmented tensor products.
-
-        Returns:
-            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: Polynomial with flattened coefficient modes.
-        """
-        return SegmentedPolynomial._from_default_operands(
-            self.inputs,
-            self.outputs,
-            [(ope, stp.flatten_coefficient_modes()) for ope, stp in self.operations],
-        )
+    # ------------------------------------------------------------------------
+    # Automatic Differentiation Methods
+    # ------------------------------------------------------------------------
 
     def jvp(
         self, has_tangent: list[bool]
@@ -692,7 +787,7 @@ class SegmentedPolynomial:
             has_tangent (list[bool]): List indicating which inputs have tangents.
 
         Returns:
-            tuple[:class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`, Callable]:
+            tuple of :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>` and Callable:
                 The JVP polynomial and a mapping function for inputs/outputs.
         """
         assert len(has_tangent) == self.num_inputs
@@ -740,7 +835,7 @@ class SegmentedPolynomial:
             has_cotangent (list[bool]): List indicating which outputs have cotangents.
 
         Returns:
-            tuple[:class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`, Callable]:
+            tuple of :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>` and Callable:
                 The transposed polynomial and a mapping function for inputs/outputs.
         """
         assert len(is_undefined_primal) == self.num_inputs
@@ -783,7 +878,7 @@ class SegmentedPolynomial:
             has_cotangent (list[bool]): List indicating which outputs have cotangents.
 
         Returns:
-            tuple[:class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`, Callable]:
+            tuple of :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>` and Callable:
                 The backward polynomial and a mapping function for inputs/outputs.
         """
         p, map1 = self.jvp(requires_gradient)
@@ -796,70 +891,3 @@ class SegmentedPolynomial:
             return map2(map1(x))
 
         return p, mapping
-
-    def flop(self, batch_size: int = 1) -> int:
-        """Compute the number of floating point operations in the polynomial.
-
-        Args:
-            batch_size (int, optional): Batch size for computation. Defaults to 1.
-
-        Returns:
-            int: Number of floating point operations.
-        """
-        n = 0
-        for ope, stp in self.operations:
-            oid, _ = ope.output_operand_buffer(self.num_inputs)
-            n += stp.flop(oid)
-        return batch_size * n
-
-    def memory(self, batch_sizes: list[int]) -> int:
-        """Compute the memory usage of the polynomial.
-
-        Args:
-            batch_sizes (list[int]): List of batch sizes for each operand. Each operand
-                can have its own batch size, allowing for different batch dimensions
-                per tensor.
-
-        Returns:
-            int: Memory usage in number of elements.
-        """
-        assert len(batch_sizes) == self.num_operands
-        return sum(Z * ope.size for Z, ope in zip(batch_sizes, self.operands))
-
-    def symmetrize_for_identical_operands(self) -> SegmentedPolynomial:
-        """Symmetrize the paths of the segmented tensor products for identical operands.
-
-        This operation increases the number of paths in the segmented tensor products.
-
-        Returns:
-            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`:
-                Polynomial with symmetrized paths.
-        """
-        symmetrized_tensor_products = []
-        for ope, stp in self.operations:
-            for set_of_operands in ope.operands_with_identical_buffers():
-                stp = stp.symmetrize_operands(set_of_operands)
-            stp = stp.sort_paths()
-            symmetrized_tensor_products.append((ope, stp))
-
-        return SegmentedPolynomial(
-            self.inputs, self.outputs, symmetrized_tensor_products
-        )
-
-    def unsymmetrize_for_identical_operands(self) -> SegmentedPolynomial:
-        """Unsymmetrize the paths of the segmented tensor products for identical operands.
-
-        This operation decreases the number of paths in the segmented tensor products.
-
-        Returns:
-            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`:
-                Polynomial with unsymmetrized paths.
-        """
-
-        def optimize_paths(ope: cue.Operation, stp: cue.SegmentedTensorProduct):
-            for set_of_operands in ope.operands_with_identical_buffers():
-                stp = stp.sort_indices_for_identical_operands(set_of_operands)
-            stp = stp.sort_paths()
-            return ope, stp
-
-        return self.apply_fn(optimize_paths)
