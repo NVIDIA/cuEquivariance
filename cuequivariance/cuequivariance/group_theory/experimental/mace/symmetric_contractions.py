@@ -161,8 +161,8 @@ def _symmetric_contraction(
         [
             cue.IrrepsAndLayout(irreps_in.new_scalars(w.size), cue.ir_mul),
             cue.IrrepsAndLayout(mul * irreps_in, cue.ir_mul),
-            cue.IrrepsAndLayout(mul * irreps_out, cue.ir_mul),
         ],
+        [cue.IrrepsAndLayout(mul * irreps_out, cue.ir_mul)],
         cue.SegmentedPolynomial(
             [w, x], [y], [(cue.Operation([0] + [1] * degree + [2]), d)]
         ),

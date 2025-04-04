@@ -62,10 +62,8 @@ def spherical_harmonics(
     d = d.symmetrize_operands(range(ell), force=True)
 
     return cue.EquivariantPolynomial(
-        [
-            cue.IrrepsAndLayout(cue.Irreps(ir_vec), cue.ir_mul),
-            cue.IrrepsAndLayout(cue.Irreps(ir), cue.ir_mul),
-        ],
+        [cue.IrrepsAndLayout(cue.Irreps(ir_vec), cue.ir_mul)],
+        [cue.IrrepsAndLayout(cue.Irreps(ir), cue.ir_mul)],
         cue.SegmentedPolynomial(
             [cue.SegmentedOperand([()] * 3)],
             [cue.SegmentedOperand([()] * ir.dim)],

@@ -122,8 +122,8 @@ def symmetric_contraction_cached(
         [
             cue.IrrepsAndLayout(irreps_in.new_scalars(d.operands[0].size), cue.ir_mul),
             cue.IrrepsAndLayout(mul * irreps_in, cue.ir_mul),
-            cue.IrrepsAndLayout(mul * irreps_out, cue.ir_mul),
         ],
+        [cue.IrrepsAndLayout(mul * irreps_out, cue.ir_mul)],
         cue.SegmentedPolynomial(
             [d.operands[0], input_operand],
             [d.operands[-1]],

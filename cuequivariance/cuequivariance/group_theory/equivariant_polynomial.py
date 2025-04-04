@@ -32,21 +32,34 @@ class EquivariantPolynomial:
     equivariant neural networks.
 
     Args:
-        operands (list of :class:`cue.Rep <cuequivariance.Rep>`): Group representations for all operands (inputs and outputs).
+        inputs (list of :class:`cue.Rep <cuequivariance.Rep>`): Group representations for all operands (inputs and outputs).
+        outputs (list of :class:`cue.Rep <cuequivariance.Rep>`): Group representations for all operands (inputs and outputs).
         polynomial (:class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`): The underlying polynomial transformation.
     """
 
-    operands: tuple[cue.Rep, ...]
+    inputs: tuple[cue.Rep, ...]
+    outputs: tuple[cue.Rep, ...]
     polynomial: cue.SegmentedPolynomial
 
-    def __init__(self, operands: list[cue.Rep], polynomial: cue.SegmentedPolynomial):
+    def __init__(
+        self,
+        inputs: list[cue.Rep],
+        outputs: list[cue.Rep],
+        polynomial: cue.SegmentedPolynomial,
+    ):
         assert isinstance(polynomial, cue.SegmentedPolynomial)
-        object.__setattr__(self, "operands", tuple(operands))
+        object.__setattr__(self, "inputs", tuple(inputs))
+        object.__setattr__(self, "outputs", tuple(outputs))
         object.__setattr__(self, "polynomial", polynomial)
-        if len(self.operands) != self.polynomial.num_operands:
+        if len(self.inputs) != self.polynomial.num_inputs:
             raise ValueError(
-                f"Number of operands {len(self.operands)} must equal the number of inputs"
-                f" {self.polynomial.num_inputs} plus the number of outputs {self.polynomial.num_outputs}"
+                f"Number of inputs {len(self.inputs)} must equal the number of inputs"
+                f" in the polynomial {self.polynomial.num_inputs}"
+            )
+        if len(self.outputs) != self.polynomial.num_outputs:
+            raise ValueError(
+                f"Number of outputs {len(self.outputs)} must equal the number of outputs"
+                f" in the polynomial {self.polynomial.num_outputs}"
             )
         for rep, ope in zip(self.operands, self.polynomial.operands):
             assert ope.size == rep.dim, (
@@ -75,7 +88,9 @@ class EquivariantPolynomial:
         )
 
     def __mul__(self, factor: float) -> EquivariantPolynomial:
-        return EquivariantPolynomial(self.operands, self.polynomial * factor)
+        return EquivariantPolynomial(
+            self.inputs, self.outputs, self.polynomial * factor
+        )
 
     def __rmul__(self, factor: float) -> EquivariantPolynomial:
         return self.__mul__(factor)
@@ -110,14 +125,9 @@ class EquivariantPolynomial:
         return self.polynomial.num_outputs
 
     @property
-    def inputs(self) -> tuple[cue.Rep, ...]:
-        """The group representations of the input tensors."""
-        return self.operands[: self.num_inputs]
-
-    @property
-    def outputs(self) -> tuple[cue.Rep, ...]:
-        """The group representations of the output tensors."""
-        return self.operands[self.num_inputs :]
+    def operands(self) -> tuple[cue.Rep, ...]:
+        """The group representations of the operands (inputs + outputs)."""
+        return self.inputs + self.outputs
 
     def fuse_stps(self) -> EquivariantPolynomial:
         """Fuse segmented tensor products with identical operations and operands.
@@ -125,7 +135,9 @@ class EquivariantPolynomial:
         Returns:
             EquivariantPolynomial: A new polynomial with fused tensor products.
         """
-        return EquivariantPolynomial(self.operands, self.polynomial.fuse_stps())
+        return EquivariantPolynomial(
+            self.inputs, self.outputs, self.polynomial.fuse_stps()
+        )
 
     def consolidate(self) -> EquivariantPolynomial:
         """Consolidate the segmented tensor products.
@@ -133,7 +145,9 @@ class EquivariantPolynomial:
         Returns:
             EquivariantPolynomial: A new polynomial with consolidated tensor products.
         """
-        return EquivariantPolynomial(self.operands, self.polynomial.consolidate())
+        return EquivariantPolynomial(
+            self.inputs, self.outputs, self.polynomial.consolidate()
+        )
 
     @classmethod
     def stack(
@@ -180,15 +194,13 @@ class EquivariantPolynomial:
                         )
                 operands.append(ope)
 
-        return cls(
-            operands,
-            cue.SegmentedPolynomial.stack([pol.polynomial for pol in polys], stacked),
-        )
+        p = cue.SegmentedPolynomial.stack([pol.polynomial for pol in polys], stacked)
+        return cls(operands[: p.num_inputs], operands[p.num_inputs :], p)
 
     def flatten_modes(self, modes: list[str]) -> EquivariantPolynomial:
         """Flatten the specified modes of the segmented tensor products."""
         return EquivariantPolynomial(
-            self.operands, self.polynomial.flatten_modes(modes)
+            self.inputs, self.outputs, self.polynomial.flatten_modes(modes)
         )
 
     def all_same_segment_shape(self) -> bool:
@@ -198,7 +210,7 @@ class EquivariantPolynomial:
     def canonicalize_subscripts(self) -> EquivariantPolynomial:
         """Canonicalize the subscripts of the segmented tensor products."""
         return EquivariantPolynomial(
-            self.operands, self.polynomial.canonicalize_subscripts()
+            self.inputs, self.outputs, self.polynomial.canonicalize_subscripts()
         )
 
     def squeeze_modes(self, modes: str | None = None) -> EquivariantPolynomial:
@@ -208,7 +220,7 @@ class EquivariantPolynomial:
             EquivariantPolynomial: A new polynomial with squeezed modes.
         """
         return EquivariantPolynomial(
-            self.operands, self.polynomial.squeeze_modes(modes)
+            self.inputs, self.outputs, self.polynomial.squeeze_modes(modes)
         )
 
     def flatten_coefficient_modes(self) -> EquivariantPolynomial:
@@ -218,7 +230,7 @@ class EquivariantPolynomial:
             EquivariantPolynomial: A new polynomial with flattened coefficient modes.
         """
         return EquivariantPolynomial(
-            self.operands, self.polynomial.flatten_coefficient_modes()
+            self.inputs, self.outputs, self.polynomial.flatten_coefficient_modes()
         )
 
     def jvp(
@@ -241,8 +253,7 @@ class EquivariantPolynomial:
                 - callable: A function that maps input/output representations to JVP input/output representations.
         """
         p, m = self.polynomial.jvp(has_tangent)
-        inputs, outputs = m((self.inputs, self.outputs))
-        return EquivariantPolynomial(inputs + outputs, p), m
+        return EquivariantPolynomial(*m((self.inputs, self.outputs)), p), m
 
     def transpose(
         self,
@@ -270,8 +281,7 @@ class EquivariantPolynomial:
             ValueError: If the polynomial is non-linear and cannot be transposed.
         """
         p, m = self.polynomial.transpose(is_undefined_primal, has_cotangent)
-        inputs, outputs = m((self.inputs, self.outputs))
-        return EquivariantPolynomial(inputs + outputs, p), m
+        return EquivariantPolynomial(*m((self.inputs, self.outputs)), p), m
 
     def backward(
         self, requires_gradient: list[bool], has_cotangent: list[bool]
@@ -295,8 +305,7 @@ class EquivariantPolynomial:
                 - callable: A function that maps input/output representations to backward input/output representations.
         """
         p, m = self.polynomial.backward(requires_gradient, has_cotangent)
-        inputs, outputs = m((self.inputs, self.outputs))
-        return EquivariantPolynomial(inputs + outputs, p), m
+        return EquivariantPolynomial(*m((self.inputs, self.outputs)), p), m
 
     def flop(self, batch_size: int = 1) -> int:
         """Compute the number of floating point operations in the polynomial.

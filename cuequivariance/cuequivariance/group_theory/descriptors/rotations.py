@@ -42,10 +42,8 @@ def fixed_axis_angle_rotation(
 
     d = d.flatten_coefficient_modes()
     return cue.EquivariantPolynomial(
-        [
-            cue.IrrepsAndLayout(irreps, cue.ir_mul),
-            cue.IrrepsAndLayout(irreps, cue.ir_mul),
-        ],
+        [cue.IrrepsAndLayout(irreps, cue.ir_mul)],
+        [cue.IrrepsAndLayout(irreps, cue.ir_mul)],
         cue.SegmentedPolynomial.eval_last_operand(d),
     )
 
@@ -81,8 +79,8 @@ def yxy_rotation(
             cue.IrrepsAndLayout(irreps.new_scalars(cbaio.operands[1].size), cue.ir_mul),
             cue.IrrepsAndLayout(irreps.new_scalars(cbaio.operands[2].size), cue.ir_mul),
             cue.IrrepsAndLayout(irreps, cue.ir_mul),
-            cue.IrrepsAndLayout(irreps, cue.ir_mul),
         ],
+        [cue.IrrepsAndLayout(irreps, cue.ir_mul)],
         cue.SegmentedPolynomial.eval_last_operand(cbaio),
     )
 
@@ -104,8 +102,8 @@ def xy_rotation(
             cue.IrrepsAndLayout(irreps.new_scalars(cbio.operands[0].size), cue.ir_mul),
             cue.IrrepsAndLayout(irreps.new_scalars(cbio.operands[1].size), cue.ir_mul),
             cue.IrrepsAndLayout(irreps, cue.ir_mul),
-            cue.IrrepsAndLayout(irreps, cue.ir_mul),
         ],
+        [cue.IrrepsAndLayout(irreps, cue.ir_mul)],
         cue.SegmentedPolynomial.eval_last_operand(cbio),
     )
 
@@ -127,8 +125,8 @@ def yx_rotation(
             cue.IrrepsAndLayout(irreps.new_scalars(cbio.operands[0].size), cue.ir_mul),
             cue.IrrepsAndLayout(irreps.new_scalars(cbio.operands[1].size), cue.ir_mul),
             cue.IrrepsAndLayout(irreps, cue.ir_mul),
-            cue.IrrepsAndLayout(irreps, cue.ir_mul),
         ],
+        [cue.IrrepsAndLayout(irreps, cue.ir_mul)],
         cue.SegmentedPolynomial.eval_last_operand(cbio),
     )
 
@@ -196,8 +194,8 @@ def y_rotation(
         [
             cue.IrrepsAndLayout(irreps.new_scalars(d.operands[0].size), cue.ir_mul),
             cue.IrrepsAndLayout(irreps, cue.ir_mul),
-            cue.IrrepsAndLayout(irreps, cue.ir_mul),
         ],
+        [cue.IrrepsAndLayout(irreps, cue.ir_mul)],
         cue.SegmentedPolynomial.eval_last_operand(d),
     )
 
@@ -230,8 +228,8 @@ def x_rotation(
         [
             cue.IrrepsAndLayout(irreps.new_scalars(d.operands[0].size), cue.ir_mul),
             cue.IrrepsAndLayout(irreps, cue.ir_mul),
-            cue.IrrepsAndLayout(irreps, cue.ir_mul),
         ],
+        [cue.IrrepsAndLayout(irreps, cue.ir_mul)],
         cue.SegmentedPolynomial.eval_last_operand(d),
     )
 
@@ -248,9 +246,7 @@ def inversion(irreps: cue.Irreps) -> cue.EquivariantPolynomial:
         d.add_path(None, None, c=H, dims={"u": mul})
     d = d.flatten_coefficient_modes()
     return cue.EquivariantPolynomial(
-        [
-            cue.IrrepsAndLayout(irreps, cue.ir_mul),
-            cue.IrrepsAndLayout(irreps, cue.ir_mul),
-        ],
+        [cue.IrrepsAndLayout(irreps, cue.ir_mul)],
+        [cue.IrrepsAndLayout(irreps, cue.ir_mul)],
         cue.SegmentedPolynomial.eval_last_operand(d),
     )

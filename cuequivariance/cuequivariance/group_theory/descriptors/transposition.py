@@ -28,6 +28,7 @@ def transpose(
     for mul, ir in irreps:
         d.add_path(None, None, c=1, dims={"u": mul, "i": ir.dim})
     return cue.EquivariantPolynomial(
-        [cue.IrrepsAndLayout(irreps, source), cue.IrrepsAndLayout(irreps, target)],
+        [cue.IrrepsAndLayout(irreps, source)],
+        [cue.IrrepsAndLayout(irreps, target)],
         cue.SegmentedPolynomial.eval_last_operand(d),
     )

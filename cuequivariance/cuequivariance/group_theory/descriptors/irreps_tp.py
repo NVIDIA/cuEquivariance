@@ -78,8 +78,8 @@ def fully_connected_tensor_product(
             cue.IrrepsAndLayout(irreps1.new_scalars(d.operands[0].size), cue.ir_mul),
             cue.IrrepsAndLayout(irreps1, cue.ir_mul),
             cue.IrrepsAndLayout(irreps2, cue.ir_mul),
-            cue.IrrepsAndLayout(irreps3, cue.ir_mul),
         ],
+        [cue.IrrepsAndLayout(irreps3, cue.ir_mul)],
         cue.SegmentedPolynomial.eval_last_operand(d),
     )
 
@@ -140,8 +140,8 @@ def full_tensor_product(
         [
             cue.IrrepsAndLayout(irreps1, cue.ir_mul),
             cue.IrrepsAndLayout(irreps2, cue.ir_mul),
-            cue.IrrepsAndLayout(irreps3, cue.ir_mul),
         ],
+        [cue.IrrepsAndLayout(irreps3, cue.ir_mul)],
         cue.SegmentedPolynomial.eval_last_operand(d),
     )
 
@@ -206,8 +206,8 @@ def channelwise_tensor_product(
             cue.IrrepsAndLayout(irreps1.new_scalars(d.operands[0].size), cue.ir_mul),
             cue.IrrepsAndLayout(irreps1, cue.ir_mul),
             cue.IrrepsAndLayout(irreps2, cue.ir_mul),
-            cue.IrrepsAndLayout(irreps3, cue.ir_mul),
         ],
+        [cue.IrrepsAndLayout(irreps3, cue.ir_mul)],
         cue.SegmentedPolynomial.eval_last_operand(d),
     )
 
@@ -290,8 +290,8 @@ def elementwise_tensor_product(
         [
             cue.IrrepsAndLayout(irreps1, cue.ir_mul),
             cue.IrrepsAndLayout(irreps2, cue.ir_mul),
-            cue.IrrepsAndLayout(irreps3, cue.ir_mul),
         ],
+        [cue.IrrepsAndLayout(irreps3, cue.ir_mul)],
         cue.SegmentedPolynomial.eval_last_operand(d),
     )
 
@@ -327,7 +327,7 @@ def linear(irreps_in: cue.Irreps, irreps_out: cue.Irreps) -> cue.EquivariantPoly
         [
             cue.IrrepsAndLayout(irreps_in.new_scalars(d.operands[0].size), cue.ir_mul),
             cue.IrrepsAndLayout(irreps_in, cue.ir_mul),
-            cue.IrrepsAndLayout(irreps_out, cue.ir_mul),
         ],
+        [cue.IrrepsAndLayout(irreps_out, cue.ir_mul)],
         cue.SegmentedPolynomial.eval_last_operand(d),
     )
