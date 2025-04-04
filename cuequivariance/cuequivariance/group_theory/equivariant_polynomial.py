@@ -203,11 +203,29 @@ class EquivariantPolynomial:
         """Whether all the segments have the same shape."""
         return self.polynomial.all_same_segment_shape()
 
-    # Method used_inputs is present in SegmentedPolynomial but not in EquivariantPolynomial
+    def used_inputs(self) -> list[bool]:
+        """Get list of boolean values indicating which inputs are used in the polynomial.
 
-    # Method used_outputs is present in SegmentedPolynomial but not in EquivariantPolynomial
+        Returns:
+            list[bool]: List where True indicates the input is used.
+        """
+        return self.polynomial.used_inputs()
 
-    # Method used_buffers is present in SegmentedPolynomial but not in EquivariantPolynomial
+    def used_outputs(self) -> list[bool]:
+        """Get list of boolean values indicating which outputs are used in the polynomial.
+
+        Returns:
+            list[bool]: List where True indicates the output is used.
+        """
+        return self.polynomial.used_outputs()
+
+    def used_operands(self) -> list[bool]:
+        """Get list of boolean values indicating which used_operands are used in the polynomial.
+
+        Returns:
+            list[bool]: List where True indicates the operand is used.
+        """
+        return self.polynomial.used_operands()
 
     def flop(self, batch_size: int = 1) -> int:
         """Compute the number of floating point operations in the polynomial.
@@ -236,7 +254,23 @@ class EquivariantPolynomial:
     # Transformation Methods
     # ------------------------------------------------------------------------
 
-    # Method apply_fn is present in SegmentedPolynomial but not in EquivariantPolynomial
+    def apply_fn(
+        self,
+        f: Callable[
+            [cue.Operation, cue.SegmentedTensorProduct],
+            tuple[cue.Operation, cue.SegmentedTensorProduct] | None,
+        ],
+    ) -> EquivariantPolynomial:
+        """Apply a function to each tensor product in the polynomial.
+
+        Args:
+            f (Callable): Function to apply to each operation and tensor product pair.
+
+        Returns:
+            :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: New polynomial with transformed tensor products.
+        """
+        new_polynomial = self.polynomial.apply_fn(f)
+        return EquivariantPolynomial(self.inputs, self.outputs, new_polynomial)
 
     def fuse_stps(self) -> EquivariantPolynomial:
         """Fuse segmented tensor products with identical operations and operands.
@@ -290,21 +324,119 @@ class EquivariantPolynomial:
             self.inputs, self.outputs, self.polynomial.flatten_coefficient_modes()
         )
 
-    # Method symmetrize_for_identical_operands is present in SegmentedPolynomial but not in EquivariantPolynomial
+    def symmetrize_for_identical_operands(self) -> EquivariantPolynomial:
+        """Symmetrize the paths of the segmented tensor products for identical operands.
 
-    # Method unsymmetrize_for_identical_operands is present in SegmentedPolynomial but not in EquivariantPolynomial
+        This operation increases the number of paths in the segmented tensor products.
+
+        Returns:
+            :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`:
+                Polynomial with symmetrized paths.
+        """
+        return EquivariantPolynomial(
+            self.inputs,
+            self.outputs,
+            self.polynomial.symmetrize_for_identical_operands(),
+        )
+
+    def unsymmetrize_for_identical_operands(self) -> EquivariantPolynomial:
+        """Unsymmetrize the paths of the segmented tensor products for identical operands.
+
+        This operation decreases the number of paths in the segmented tensor products.
+
+        Returns:
+            :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`:
+                Polynomial with unsymmetrized paths.
+        """
+        return EquivariantPolynomial(
+            self.inputs,
+            self.outputs,
+            self.polynomial.unsymmetrize_for_identical_operands(),
+        )
 
     # ------------------------------------------------------------------------
     # Filtering Methods
     # ------------------------------------------------------------------------
 
-    # Method filter_keep_operands is present in SegmentedPolynomial but not in EquivariantPolynomial
+    def filter_keep_operands(self, keep: list[bool]) -> EquivariantPolynomial:
+        """Select which operands to keep in the polynomial.
 
-    # Method filter_keep_outputs is present in SegmentedPolynomial but not in EquivariantPolynomial
+        Use this method when you want to compute only a subset of the polynomial outputs
+        and have control over which inputs to keep.
 
-    # Method filter_drop_unsued_operands is present in SegmentedPolynomial but not in EquivariantPolynomial
+        Args:
+            keep (list[bool]): List indicating which operands to keep.
 
-    # Method compute_only is present in SegmentedPolynomial but not in EquivariantPolynomial
+        Returns:
+            :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: Polynomial with selected operands.
+        """
+        assert len(keep) == self.num_operands
+
+        filtered_polynomial = self.polynomial.filter_keep_operands(keep)
+
+        filtered_inputs = [
+            rep for rep, k in zip(self.inputs, keep[: self.num_inputs]) if k
+        ]
+        filtered_outputs = [
+            rep for rep, k in zip(self.outputs, keep[self.num_inputs :]) if k
+        ]
+
+        return EquivariantPolynomial(
+            filtered_inputs, filtered_outputs, filtered_polynomial
+        )
+
+    def filter_keep_outputs(self, keep: list[bool]) -> EquivariantPolynomial:
+        """Select which outputs to keep in the polynomial.
+
+        Args:
+            keep (list[bool]): List indicating which outputs to keep.
+
+        Returns:
+            :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: Polynomial with selected outputs.
+        """
+        assert len(keep) == self.num_outputs
+        return self.filter_keep_operands([True] * self.num_inputs + keep)
+
+    def filter_drop_unsued_operands(self) -> EquivariantPolynomial:
+        """Remove all unused operands from the polynomial.
+
+        Returns:
+            :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: Polynomial with unused operands removed.
+        """
+        used = self.used_operands()
+
+        filtered_inputs = [
+            rep
+            for rep, used_flag in zip(self.inputs, used[: self.num_inputs])
+            if used_flag
+        ]
+        filtered_outputs = [
+            rep
+            for rep, used_flag in zip(self.outputs, used[self.num_inputs :])
+            if used_flag
+        ]
+
+        filtered_polynomial = self.polynomial.filter_drop_unsued_operands()
+
+        return EquivariantPolynomial(
+            filtered_inputs, filtered_outputs, filtered_polynomial
+        )
+
+    def compute_only(self, keep: list[bool]) -> EquivariantPolynomial:
+        """Create a polynomial that only computes selected outputs.
+
+        The new polynomial will keep the same operands as the original one,
+        but will only compute the selected outputs.
+
+        Args:
+            keep (list[bool]): List indicating which outputs to compute.
+
+        Returns:
+            :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: Polynomial computing only selected outputs.
+        """
+        assert len(keep) == self.num_outputs
+        filtered_polynomial = self.polynomial.compute_only(keep)
+        return EquivariantPolynomial(self.inputs, self.outputs, filtered_polynomial)
 
     # ------------------------------------------------------------------------
     # Automatic Differentiation Methods
