@@ -98,12 +98,7 @@ def bessel(x: jax.Array, n: int, x_max: float = 1.0) -> jax.Array:
 
     x = x[..., None]
     n = jnp.arange(1, n + 1, dtype=x.dtype)
-    x_nonzero = jnp.where(x == 0.0, 1.0, x)
-    return jnp.sqrt(2.0 / x_max) * jnp.where(
-        x == 0,
-        n * jnp.pi / x_max,
-        jnp.sin(n * jnp.pi / x_max * x_nonzero) / x_nonzero,
-    )
+    return jnp.sqrt(2.0 / x_max) * jnp.pi * n / x_max * jnp.sinc(n * x / x_max)
 
 
 def sus(x: jax.Array) -> jax.Array:
