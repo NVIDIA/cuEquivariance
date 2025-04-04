@@ -753,6 +753,8 @@ class SegmentedPolynomial:
 
     def compute_only(self, keep: list[bool]) -> SegmentedPolynomial:
         """Create a polynomial that only computes selected outputs.
+        The new polynomial will keep the same operands as the original one,
+        but will only compute the selected outputs.
 
         Args:
             keep (list[bool]): List indicating which outputs to compute.
