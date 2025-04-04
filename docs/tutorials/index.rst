@@ -21,5 +21,5 @@ Tutorials
 
    irreps
    layout
-   ep
+   poly
    stp
