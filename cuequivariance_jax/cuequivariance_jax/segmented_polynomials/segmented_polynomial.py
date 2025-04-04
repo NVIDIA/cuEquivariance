@@ -309,7 +309,7 @@ def segmented_polynomial_prim(
         outputs_shape_dtype=tuple(
             x for x, used in zip(outputs_shape_dtype, used_outputs) if used
         ),
-        polynomial=polynomial.select_buffers(used_inputs + used_outputs),
+        polynomial=polynomial.filter_keep_operands(used_inputs + used_outputs),
         math_dtype=jnp.dtype(math_dtype),
         name=str(name),
         impl=impl,
@@ -634,7 +634,7 @@ def segmented_polynomial_dce(
         eqn.primitive,
         dict(
             eqn.params,
-            polynomial=polynomial.select_buffers(used_inputs + used_outputs),
+            polynomial=polynomial.filter_keep_operands(used_inputs + used_outputs),
             buffer_index=buffer_index,
             outputs_shape_dtype=tuple(
                 x for x, used in zip(outputs_shape_dtype, used_outputs) if used
