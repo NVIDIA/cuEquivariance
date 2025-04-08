@@ -19,6 +19,16 @@ import dataclasses
 import numpy as np
 
 
+def np_asarray_with_copy(arr):
+    """Create a NumPy array with a copy in a version-compatible way."""
+    dtype = np.float64
+    order = "C"
+    try:
+        return np.asarray(arr, dtype=dtype, order=order, copy=True)
+    except TypeError:
+        return np.asarray(arr, dtype=dtype, order=order).copy()
+
+
 @dataclasses.dataclass(init=False, frozen=True)
 class Path:
     """
@@ -38,10 +48,7 @@ class Path:
 
     def __init__(self, indices, coefficients):
         super().__setattr__("indices", tuple(int(i) for i in indices))
-        super().__setattr__(
-            "coefficients",
-            np.asarray(coefficients, dtype=np.float64, order="C").copy(),
-        )
+        super().__setattr__("coefficients", np_asarray_with_copy(coefficients))
 
     def assert_valid(self):
         """Assert that the path is valid."""
