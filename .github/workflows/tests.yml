@@ -31,6 +31,14 @@ jobs:
     - name: Test with pytest
       run: |
         pytest --doctest-modules -x cuequivariance
+    - name: Downgrade numpy
+      run: |
+        python -m uv pip install -U "numpy==1.26.*"
+    - name: Test with pytest (numpy 1.26)
+      run: |
+        pytest --doctest-modules -x cuequivariance
+
+
 
   cuequivariance-jax:
     strategy:
