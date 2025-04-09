@@ -208,6 +208,8 @@ def test_jax_vs_cuda(dtype):
     )
     assert jax_out.shape == cud_out.shape
     assert jax_out.dtype == cud_out.dtype
+    jax_out = np.asarray(jax_out, dtype=np.float64)
+    cud_out = np.asarray(cud_out, dtype=np.float64)
     np.testing.assert_allclose(
         jax_out,
         cud_out,
