@@ -149,7 +149,8 @@ def full_tensor_product(
 def channelwise_tensor_product(
     irreps1: cue.Irreps,
     irreps2: cue.Irreps,
-    irreps3_filter: Optional[Sequence[cue.Irrep]] = None,
+    irreps3_filter=None,
+    simplify_irreps3: bool = False,
 ) -> cue.EquivariantPolynomial:
     """
     subscripts: ``weights[uv],lhs[iu],rhs[jv],output[kuv]``
@@ -164,6 +165,7 @@ def channelwise_tensor_product(
         irreps1 (Irreps): Irreps of the first operand.
         irreps2 (Irreps): Irreps of the second operand.
         irreps3_filter (sequence of Irrep, optional): Irreps of the output to consider.
+        simplify_irreps3 (bool, optional): If True, the irreps of the output are simplified.
 
     Returns:
         :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: Descriptor of the channelwise tensor product.
@@ -201,6 +203,18 @@ def channelwise_tensor_product(
     d = d.permute_segments(3, inv)
 
     d = d.normalize_paths_for_operand(-1)
+
+    if simplify_irreps3:
+        # We need to flatten the coefficients to do this simplification
+        d = d.flatten_coefficient_modes()
+
+        # Sort output segments to regroup them by irreps
+        segments = [(ir, k) for _mul, ir in irreps3 for k in range(ir.dim)]
+        segments = [(ir, k, sid) for sid, (ir, k) in enumerate(segments)]
+        segments = sorted(segments)
+        d = d.permute_segments(3, [sid for _, _, sid in segments])
+        irreps3 = irreps3.simplify()
+
     return cue.EquivariantPolynomial(
         [
             cue.IrrepsAndLayout(irreps1.new_scalars(d.operands[0].size), cue.ir_mul),
