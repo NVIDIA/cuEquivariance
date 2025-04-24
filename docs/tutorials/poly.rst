@@ -13,8 +13,8 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 
-Polynomials
-===========
+Segmented Polynomials
+=====================
 
 Here is how the library is organized:
 

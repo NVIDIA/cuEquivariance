@@ -1,5 +1,20 @@
 ## Latest Changes
 
+This release introduces some changes to the API, it introduce the class `cue.SegmentedPolynomial` (and corresponding counterparts) which generalizes the notion of segmented tensor product by allowing to construct non-homogeneous polynomials.
+
+### Added
+- [Torch] `cuet.SegmentedPolynomial` module giving access to the indexing features of the uniform 1d kernel
+- [Torch/JAX] Add full support for float16 and bfloat16
+- [Torch/JAX] Class `cue.SegmentedOperand`
+- [Torch/JAX] Class `cue.SegmentedPolynomial`
+- [Torch/JAX] Class `cue.EquivariantPolynomial` that contains a `cue.SegmentedPolynomial` and the `cue.Rep` of its inputs and outputs
+- [Torch/JAX] Add caching for `cue.descriptor.symmetric_contraction`
+- [Torch/JAX] Add caching for `cue.SegmentedTensorProduct.symmetrize_operands`
+- [JAX] ARM config support
+- [JAX] `cuex.segmented_polynomial` and `cuex.equivariant_polynomial`
+- [JAX] Advanced Batching capabilities, each input/output of a segmented polynomial can have multiple axes and any of those can be indexed.
+- [JAX] Implementation of the Dead Code Elimination rule for the primitive `cuex.segmented_polynomial`
+
 ### Breaking Changes
 - [Torch/JAX] Rename `SegmentedTensorProduct.flop_cost` to `flop`
 - [Torch/JAX] Rename `SegmentedTensorProduct.memory_cost` to `memory`
@@ -9,15 +24,6 @@
 - [Torch/JAX] The descriptors return `cue.EquivariantPolynomial` instead of `cue.EquivariantTensorProduct`
 - [Torch/JAX] Change `cue.SegmentedPolynomial.canonicalize_subscripts` behavior for coefficient subscripts. It transposes the coefficients to be ordered the same way as the rest of the subscripts.
 - [Torch] To reduce the size of the so library, we removed support of math dtype fp32 when using IO dtype fp64 in the case of the fully connected tensor product. (It concerns `cuet.FullyConnectedTensorProduct` and `cuet.FullyConnectedTensorProductConv`). Please open an issue if you need this feature.
-
-### Added
-- [Torch/JAX] Class `cue.SegmentedOperand`
-- [Torch/JAX] Class `cue.SegmentedPolynomial`
-- [Torch/JAX] Class `cue.EquivariantPolynomial` that contains a `cue.SegmentedPolynomial` and the `cue.Rep` of its inputs and outputs
-- [Torch/JAX] Add caching for `cue.descriptor.symmetric_contraction`
-- [Torch/JAX] Add caching for `cue.SegmentedTensorProduct.symmetrize_operands`
-- [JAX] `cuex.segmented_polynomial` and `cuex.equivariant_polynomial`
-- [JAX] Advanced Batching capabilities, each input/output of a segmented polynomial can have multiple axes and any of those can be indexed.
 
 ### Fixed
 - [Torch/JAX] `cue.SegmentedTensorProduct.sort_indices_for_identical_operands` was silently operating on STP with non scalar coefficient, now it will raise an error to say that this case is not implemented. We should implement it at some point.
