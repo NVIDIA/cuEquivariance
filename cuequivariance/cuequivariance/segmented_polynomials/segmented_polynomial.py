@@ -513,6 +513,14 @@ class SegmentedPolynomial:
     # ------------------------------------------------------------------------
 
     def permute_inputs(self, permutation: list[int]) -> SegmentedPolynomial:
+        """Permute the input operands of the polynomial.
+
+        Args:
+            permutation (list of int): The permutation to apply to the inputs.
+
+        Returns:
+            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: A new polynomial with permuted inputs.
+        """
         assert len(permutation) == self.num_inputs
         assert all(0 <= i < self.num_inputs for i in permutation)
         assert sorted(permutation) == list(range(self.num_inputs))
@@ -538,6 +546,14 @@ class SegmentedPolynomial:
         return SegmentedPolynomial(inputs, self.outputs, operations)
 
     def permute_outputs(self, permutation: list[int]) -> SegmentedPolynomial:
+        """Permute the output operands of the polynomial.
+
+        Args:
+            permutation (list of int): The permutation to apply to the outputs.
+
+        Returns:
+            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: A new polynomial with permuted outputs.
+        """
         assert len(permutation) == self.num_outputs
         assert all(0 <= i < self.num_outputs for i in permutation)
         assert sorted(permutation) == list(range(self.num_outputs))
