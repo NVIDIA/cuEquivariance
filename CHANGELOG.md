@@ -1,5 +1,8 @@
 ## Latest Changes
 
+
+## 0.4.0 (2025-04-25)
+
 This release introduces some changes to the API, it introduce the class `cue.SegmentedPolynomial` (and corresponding counterparts) which generalizes the notion of segmented tensor product by allowing to construct non-homogeneous polynomials.
 
 ### Added
