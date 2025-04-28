@@ -146,8 +146,15 @@ def equivariant_polynomial(
             )
         inferred_shape = jnp.broadcast_shapes(
             *[
-                x.shape[:-1] if i is None else i.shape + x.shape[1:-1]
+                x.shape[:-1]
+                if i is None
+                else (
+                    (i.total_repeat_length,) + x.shape[1:-1]
+                    if isinstance(i, cuex.Repeats)
+                    else i.shape + x.shape[1:-1]
+                )
                 for i, x in zip(indices, inputs)
+                if not isinstance(i, cuex.Repeats) or i.total_repeat_length is not None
             ]
         )
         inferred_dtype = jnp.result_type(*inputs)

@@ -427,6 +427,7 @@ def segmented_polynomial_impl(
     num_inputs = len(buffer_index) - len(outputs_shape_dtype)
     inputs, indices = inputs_and_indices[:num_inputs], inputs_and_indices[num_inputs:]
     del inputs_and_indices
+    assert polynomial.num_inputs == num_inputs
 
     assert all(polynomial.used_operands())
 
@@ -460,6 +461,68 @@ def segmented_polynomial_impl(
         )
 
     assert impl in ("auto", "cuda", "jax")
+
+    if any(mode == "repeated" for modes in index_mode for mode in modes):
+        print(f"{index_mode=}")
+        print(polynomial)
+        from cuequivariance_ops_jax import indexed_linear
+
+        assert len(indices) == 1, f"Expected 1 index, got {len(indices)}"
+
+        outputs = [jnp.zeros(out.shape, out.dtype) for out in outputs_shape_dtype]
+        for operation, d in polynomial.operations:
+            print(d.subscripts)
+            assert d.subscripts in [
+                "uv,wu,wv",
+                "uv,u,v",
+                "uv,v,u",
+                "u,v,vu",
+                "u,v,uv",
+            ], f"got {d.subscripts}"
+            subscripts = d.subscripts
+            op, i2 = operation.output_operand_buffer(polynomial.num_inputs)
+            assert op == 2, f"Expected output operand 2, got {op}"
+            [i0, i1] = operation.input_buffers(polynomial.num_inputs)
+            w, x, y = inputs[i0], inputs[i1], outputs_shape_dtype[i2 - num_inputs]
+
+            C = w.shape[0]
+
+            y = jnp.zeros(y.shape, y.dtype)
+            print(f"{w.shape=}, {x.shape=}, {y.shape=}")
+
+            [sw, sx, sy] = [ope.segment_slices() for ope in d.operands]
+            for path in d.paths:
+                u = d.get_path_dim(path, "u")
+                v = d.get_path_dim(path, "v")
+                i_dim = 1
+                if "w" in d.subscripts:
+                    i_dim = d.get_path_dim(path, "w")
+                Z = x.shape[0] * i_dim
+
+                w_ = w[:, sw[path.indices[0]]]
+                x_ = x[:, sx[path.indices[1]]]
+                y_ = y[:, sy[path.indices[2]]]
+
+                print(f"{w_.shape=}, {x_.shape=}, {y_.shape=}")
+                print(f"{u=}, {v=}, {C=}, {Z=}")
+
+                [sout] = indexed_linear(
+                    [w_, x_],
+                    [y_],
+                    i_dim * indices[0],
+                    u,
+                    v,
+                    C,
+                    Z,
+                    subscripts.replace("w", "").split(","),
+                    [(0, 1, 2)],
+                    path.coefficients.item(),
+                    math_dtype,
+                )
+                y = y.at[:, sy[path.indices[2]]].add(sout)
+            outputs[i2 - num_inputs] = outputs[i2 - num_inputs] + y
+
+        return outputs
 
     assert all(
         all(mode in ("batched_or_shared", "indexed") for mode in modes)
