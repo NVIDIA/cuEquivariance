@@ -441,3 +441,65 @@ def test_compute_only():
 
     assert np.all(filtered_output[0] == 0)
     assert np.array_equal(filtered_output[1], full_output[1])
+
+
+def test_permute_inputs_and_outputs():
+    """Test permuting inputs and outputs of a SegmentedPolynomial."""
+    # Create 3 inputs and 3 outputs
+    inputs = [
+        cue.SegmentedOperand.empty_segments(2),  # in1
+        cue.SegmentedOperand.empty_segments(3),  # in2
+        cue.SegmentedOperand.empty_segments(4),  # in3
+    ]
+    outputs = [
+        cue.SegmentedOperand.empty_segments(1),  # out1
+        cue.SegmentedOperand.empty_segments(1),  # out2
+        cue.SegmentedOperand.empty_segments(1),  # out3
+    ]
+
+    # Create operations: each input i maps to output i
+    operations = []
+    for i in range(3):
+        stp = cue.SegmentedTensorProduct.empty_segments([inputs[i].size, 1])
+        stp.add_path(i, 0, c=(i + 1.0))
+        operations.append((cue.Operation((i, i + 3)), stp))
+
+    poly = cue.SegmentedPolynomial(inputs, outputs, operations)
+
+    # Test data
+    x1 = np.array([1.0, 2.0])
+    x2 = np.array([3.0, 4.0, 5.0])
+    x3 = np.array([6.0, 7.0, 8.0, 9.0])
+
+    # Original results
+    y1, y2, y3 = poly(x1, x2, x3)
+
+    # Test input permutation [2,0,1]
+    perm_in = poly.permute_inputs([2, 0, 1])
+    y1_in, y2_in, y3_in = perm_in(x3, x1, x2)  # Inputs permuted
+
+    # Structure checks
+    assert [op.size for op in perm_in.inputs] == [4, 2, 3]
+    assert perm_in.operations[0][0].buffers[0] == 1  # Buffer references updated
+    assert perm_in.operations[1][0].buffers[0] == 2
+    assert perm_in.operations[2][0].buffers[0] == 0
+
+    # Output checks - results should match
+    assert np.isclose(y1_in, y1)
+    assert np.isclose(y2_in, y2)
+    assert np.isclose(y3_in, y3)
+
+    # Test output permutation [1,2,0]
+    perm_out = poly.permute_outputs([1, 2, 0])
+    y2_out, y3_out, y1_out = perm_out(x1, x2, x3)  # Outputs permuted
+
+    # Structure checks
+    assert [op.size for op in perm_out.outputs] == [1, 1, 1]
+    assert perm_out.operations[0][0].buffers[1] == 3  # Buffer indices preserved
+    assert perm_out.operations[1][0].buffers[1] == 4
+    assert perm_out.operations[2][0].buffers[1] == 5
+
+    # Output checks - results should match but in different order
+    assert np.isclose(y1_out, y1)
+    assert np.isclose(y2_out, y2)
+    assert np.isclose(y3_out, y3)

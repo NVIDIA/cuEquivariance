@@ -22,6 +22,7 @@ from typing import Any, Callable, Sequence
 import numpy as np
 
 import cuequivariance as cue
+from cuequivariance.etc.permutations import inverse_permutation
 from cuequivariance.segmented_polynomials.operation import IVARS, OVARS
 
 from .dimensions_dict import format_dimensions_dict
@@ -510,6 +511,74 @@ class SegmentedPolynomial:
     # ------------------------------------------------------------------------
     # Transformation Methods
     # ------------------------------------------------------------------------
+
+    def permute_inputs(self, permutation: list[int]) -> SegmentedPolynomial:
+        """Permute the input operands of the polynomial.
+
+        Args:
+            permutation (list of int): The permutation to apply to the inputs.
+
+        Returns:
+            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: A new polynomial with permuted inputs.
+        """
+        assert len(permutation) == self.num_inputs
+        assert all(0 <= i < self.num_inputs for i in permutation)
+        assert sorted(permutation) == list(range(self.num_inputs))
+
+        permutation = tuple(permutation)
+
+        inverse = inverse_permutation(permutation)
+        # permutation[new_buffer_index] = old_buffer_index
+        # inverse[old_buffer_index] = new_buffer_index
+        inputs = [self.inputs[i] for i in permutation]
+        operations = [
+            (
+                cue.Operation(
+                    [
+                        inverse[buffer] if buffer < self.num_inputs else buffer
+                        for buffer in ope.buffers
+                    ]
+                ),
+                stp,
+            )
+            for ope, stp in self.operations
+        ]
+        return SegmentedPolynomial(inputs, self.outputs, operations)
+
+    def permute_outputs(self, permutation: list[int]) -> SegmentedPolynomial:
+        """Permute the output operands of the polynomial.
+
+        Args:
+            permutation (list of int): The permutation to apply to the outputs.
+
+        Returns:
+            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: A new polynomial with permuted outputs.
+        """
+        assert len(permutation) == self.num_outputs
+        assert all(0 <= i < self.num_outputs for i in permutation)
+        assert sorted(permutation) == list(range(self.num_outputs))
+
+        permutation = tuple(permutation)
+
+        inverse = inverse_permutation(permutation)
+        # permutation[new_buffer_index] = old_buffer_index
+        # inverse[old_buffer_index] = new_buffer_index
+        outputs = [self.outputs[i] for i in permutation]
+        operations = [
+            (
+                cue.Operation(
+                    [
+                        self.num_inputs + inverse[buffer - self.num_inputs]
+                        if buffer >= self.num_inputs
+                        else buffer
+                        for buffer in ope.buffers
+                    ]
+                ),
+                stp,
+            )
+            for ope, stp in self.operations
+        ]
+        return SegmentedPolynomial(self.inputs, outputs, operations)
 
     def apply_fn(
         self,
