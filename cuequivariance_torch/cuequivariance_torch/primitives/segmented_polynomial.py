@@ -6,70 +6,12 @@ import torch.nn as nn
 
 import cuequivariance as cue
 
-try:
-    from cuequivariance_ops_torch.tensor_product_uniform_1d_jit import (
-        BATCH_DIM_AUTO,
-        BATCH_DIM_BATCHED,
-        BATCH_DIM_INDEXED,
-        BATCH_DIM_SHARED,
-    )
-
-    try:
-        # keep us an option to be independent of the torch.library machinery
-        from cuequivariance_ops_torch.tensor_product_uniform_1d_jit import (
-            tensor_product_uniform_1d_jit,
-        )
-    except Exception:
-
-        def tensor_product_uniform_1d_jit(
-            name: str,
-            math_dtype: torch.dtype,
-            operand_extent: int,
-            num_inputs: int,
-            num_outputs: int,
-            num_index: int,
-            buffer_dim: List[int],
-            buffer_num_segments: List[int],
-            batch_dim: List[int],
-            index_buffer: List[int],
-            dtypes: List[int],
-            num_operations: int,
-            num_operands: List[int],
-            operations: List[int],
-            num_paths: List[int],
-            path_indices_start: List[int],
-            path_coefficients_start: List[int],
-            path_indices: List[int],
-            path_coefficients: List[float],
-            batch_size: int,
-            tensors: List[torch.Tensor],
-        ) -> List[torch.Tensor]:
-            return torch.ops.cuequivariance_ops.tensor_product_uniform_1d_jit(
-                name,
-                math_dtype,
-                operand_extent,
-                num_inputs,
-                num_outputs,
-                num_index,
-                buffer_dim,
-                buffer_num_segments,
-                batch_dim,
-                index_buffer,
-                dtypes,
-                num_operations,
-                num_operands,
-                operations,
-                num_paths,
-                path_indices_start,
-                path_coefficients_start,
-                path_indices,
-                path_coefficients,
-                batch_size,
-                tensors,
-            )
-except ImportError:
-    tensor_product_uniform_1d_jit = None
-
+from cuequivariance_ops_torch.tensor_product_uniform_1d_jit import (
+    BATCH_DIM_AUTO,
+    BATCH_DIM_BATCHED,
+    BATCH_DIM_INDEXED,
+    BATCH_DIM_SHARED,
+)
 
 class SegmentedPolynomialFromUniform1dJit(nn.Module):
     def __init__(
@@ -199,7 +141,7 @@ class SegmentedPolynomialFromUniform1dJit(nn.Module):
         num_index = 0
         batch_dim = [self.BATCH_DIM_AUTO] * (self.num_inputs + self.num_outputs)
         index_buffer = [-1] * (self.num_inputs + self.num_outputs)
-        tensors = list(inputs)
+        tensors = []
 
         for idx_pos, idx_tensor in input_indices.items():
             batch_dim[idx_pos] = self.BATCH_DIM_INDEXED
@@ -233,7 +175,15 @@ class SegmentedPolynomialFromUniform1dJit(nn.Module):
                     batch_dim[idx_pos + self.num_inputs] = self.BATCH_DIM_BATCHED
                     batch_size = idx_shape.size(0)
 
-        return tensor_product_uniform_1d_jit(
+        return torch.ops.cuequivariance_ops.tensor_product_uniform_1d_jit(
+            inputs[0],
+            inputs[1],
+            inputs[2] if len(inputs) > 2 else None,
+            inputs[3] if len(inputs) > 3 else None,
+            None,
+            None,
+            None,
+            tensors,
             self.name,
             self.math_dtype,
             self.operand_extent,
@@ -253,8 +203,7 @@ class SegmentedPolynomialFromUniform1dJit(nn.Module):
             self.path_coefficients_start,
             self.path_indices,
             self.path_coefficients,
-            batch_size,
-            tensors,
+            batch_size
         )
 
 
