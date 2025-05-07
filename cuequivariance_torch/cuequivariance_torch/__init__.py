@@ -59,5 +59,11 @@ __all__ = [
     "SphericalHarmonics",
     "layers",
     "_Wrapper",
-    "SegmentedPolynomialProduct"
+    "SegmentedPolynomialProduct",
 ]
+
+try:
+    from cuequivariance_ops_torch import triangle_flash_attention
+    __all__ += [ "triangle_flash_attention" ]
+finally:
+    pass
