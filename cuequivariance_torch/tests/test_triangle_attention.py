@@ -8,10 +8,12 @@
 # without an express license agreement from NVIDIA CORPORATION or
 # its affiliates is strictly prohibited.
 
+import math
+from typing import List, Optional
+
 import pytest
 import torch
-import math
-from typing import Optional, List
+
 from cuequivariance_torch import triangle_flash_attention
 
 
@@ -59,17 +61,18 @@ def reference_attention(
 
 
 class TFA(torch.nn.Module):
-    def forward(self,
-                q: torch.Tensor,
-                k: torch.Tensor,
-                v: torch.Tensor,
-                mask_bias: torch.Tensor,
-                triangle_bias: torch.Tensor,
-                sm_scale: Optional[float] = None,
-                use_tf32: bool = False,
-                return_softmax_lse: bool = False,
-                return_softmax_maximums: bool = False,
-                ):
+    def forward(
+        self,
+        q: torch.Tensor,
+        k: torch.Tensor,
+        v: torch.Tensor,
+        mask_bias: torch.Tensor,
+        triangle_bias: torch.Tensor,
+        sm_scale: Optional[float] = None,
+        use_tf32: bool = False,
+        return_softmax_lse: bool = False,
+        return_softmax_maximums: bool = False,
+    ):
         return triangle_flash_attention(
             q,
             k,
@@ -77,9 +80,9 @@ class TFA(torch.nn.Module):
             mask_bias,
             triangle_bias,
             sm_scale=sm_scale,
-            use_tf32=use_tf32,               # Whether to use TF32 precision (False = use FP32)
+            use_tf32=use_tf32,  # Whether to use TF32 precision (False = use FP32)
             return_softmax_lse=return_softmax_lse,
-            return_softmax_maximums=return_softmax_maximums
+            return_softmax_maximums=return_softmax_maximums,
         )
 
 
@@ -92,40 +95,36 @@ def test_compilation_methods(use_tf32):
     T = 128  # sequence length
     H = 4  # number of heads
     D = 32  # head dimension (fixed)
-    
+
     # Create input tensors
     torch.manual_seed(42)
-    q = torch.randn(B, T, H, T, D, device='cuda', dtype=torch.float32)
-    k = torch.randn(B, T, H, T, D, device='cuda', dtype=torch.float32)
-    v = torch.randn(B, T, H, T, D, device='cuda', dtype=torch.float32)
-    mask_bias = torch.zeros(B, T, 1, 1, T, device='cuda', dtype=torch.float32)
-    triangle_bias = torch.randn(B, 1, H, T, T, device='cuda', dtype=torch.float32)
-    
+    q = torch.randn(B, T, H, T, D, device="cuda", dtype=torch.float32)
+    k = torch.randn(B, T, H, T, D, device="cuda", dtype=torch.float32)
+    v = torch.randn(B, T, H, T, D, device="cuda", dtype=torch.float32)
+    mask_bias = torch.zeros(B, T, 1, 1, T, device="cuda", dtype=torch.float32)
+    triangle_bias = torch.randn(B, 1, H, T, T, device="cuda", dtype=torch.float32)
+
     args = (q, k, v, mask_bias, triangle_bias, 1.0, use_tf32)
-    
+
     tfa = TFA()
     tfa_compiled = torch.compile(tfa, fullgraph=True)
-    
+
     output, lse, maximums = tfa_compiled(
-        *args,
-        return_softmax_lse=True,
-        return_softmax_maximums=True
+        *args, return_softmax_lse=True, return_softmax_maximums=True
     )
-    
+
     tfa_scripted = torch.jit.script(tfa)
     output1, lse1, maximums1 = tfa_scripted(
-        *args,
-        return_softmax_lse=True,
-        return_softmax_maximums=True
+        *args, return_softmax_lse=True, return_softmax_maximums=True
     )
-    
+
     torch.testing.assert_close(output1, output)
     torch.testing.assert_close(lse1, lse)
     torch.testing.assert_close(maximums1, maximums)
-    
+
     tfa_exported = torch.export.export(tfa, args=args).module()
     output2 = tfa_exported(*args)
-    
+
     torch.testing.assert_close(output2, output)
 
 
@@ -133,27 +132,27 @@ def test_compilation_methods(use_tf32):
 @pytest.mark.parametrize("use_tf32", [False, True], ids=["fp32", "tf32"])
 def test_vs_reference_implementation(use_tf32):
     """Test that triangle attention matches the PyTorch reference implementation."""
-    
+
     torch.manual_seed(1100)
     device = torch.device("cuda")
-    
+
     # Define dimensions
     B, N, H, D = 2, 186, 4, 32
-    
+
     # Create tensors
     q = torch.randn((B, N, H, N, D), device=device)
     k = torch.randn((B, N, H, N, D), device=device)
     v = torch.randn((B, N, H, N, D), device=device)
     q_scaled = q / math.sqrt(D)
-    
+
     # Create masks/biases
     mask_bias = torch.zeros((B, N, 1, 1, N), device=device)
     triangle_bias = torch.randn((B, 1, H, N, N), device=device)
     biases = [mask_bias, triangle_bias]
-    
+
     with torch.no_grad():
         pytorch_output = reference_attention(q_scaled, k, v, biases)
-    
+
     with torch.no_grad():
         cudnn_output, _ = triangle_flash_attention(
             q=q_scaled,
@@ -165,8 +164,12 @@ def test_vs_reference_implementation(use_tf32):
             return_softmax_lse=True,
             use_tf32=use_tf32,
         )
-    
+
     if use_tf32:
-        assert torch.allclose(cudnn_output, pytorch_output, atol=1e-2, rtol=1e-2), "Outputs don't match"
+        assert torch.allclose(cudnn_output, pytorch_output, atol=1e-2, rtol=1e-2), (
+            "Outputs don't match"
+        )
     else:
-        assert torch.allclose(cudnn_output, pytorch_output, atol=1e-6, rtol=1e-6), "Outputs don't match"
+        assert torch.allclose(cudnn_output, pytorch_output, atol=1e-6, rtol=1e-6), (
+            "Outputs don't match"
+        )
