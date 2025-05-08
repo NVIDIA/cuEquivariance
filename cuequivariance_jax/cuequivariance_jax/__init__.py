@@ -21,8 +21,14 @@ __version__ = (
 
 from .rep_array.rep_array_ import RepArray, from_segments
 from .rep_array.vmap import vmap
-from .rep_array.rep_array_utils import concatenate, randn, as_irreps_array, clebsch_gordan
+from .rep_array.rep_array_utils import (
+    concatenate,
+    randn,
+    as_irreps_array,
+    clebsch_gordan,
+)
 
+from .segmented_polynomials.utils import Repeats
 from .segmented_polynomials.segmented_polynomial import segmented_polynomial
 from .equivariant_polynomial import equivariant_polynomial
 
@@ -44,6 +50,7 @@ __all__ = [
     "randn",
     "as_irreps_array",
     "clebsch_gordan",
+    "Repeats",
     "segmented_polynomial",
     "equivariant_polynomial",
     "normalspace",
