@@ -129,6 +129,8 @@ def segmented_polynomial(
         >>> D.shape
         (11, 12, 1056)
     """
+    # TODO: Using cue.Repeats in the indices arguments is purpusfully not documented
+    # because this API is not settled yet. This is why we have a dedicated indexed_linear function
 
     if name is None:
         name = "segmented_polynomial"
@@ -466,10 +468,10 @@ def segmented_polynomial_impl(
     assert impl in ("auto", "cuda", "jax")
 
     if any(mode == "repeated" for modes in index_mode for mode in modes):
-        assert impl in ("auto", "cuda")
         return segmented_polynomial_hybrid_impl(
             **kwargs,
             index_mode=index_mode,
+            impl=impl,
         )
 
     assert all(

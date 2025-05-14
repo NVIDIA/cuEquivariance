@@ -12,3 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from .indexed_linear import indexed_linear
+from cuequivariance_jax.experimental import utils
+
+__all__ = ["indexed_linear", "utils"]

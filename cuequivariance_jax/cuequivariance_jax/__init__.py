@@ -41,6 +41,7 @@ from .activation import (
 from .spherical_harmonics import spherical_harmonics, normalize, norm
 
 from cuequivariance_jax import flax_linen
+from cuequivariance_jax import experimental
 
 __all__ = [
     "RepArray",
@@ -61,4 +62,5 @@ __all__ = [
     "normalize",
     "norm",
     "flax_linen",
+    "experimental",
 ]
