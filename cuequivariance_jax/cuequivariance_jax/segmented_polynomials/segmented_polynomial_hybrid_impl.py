@@ -22,6 +22,7 @@ import jax.numpy as jnp
 import numpy as np
 
 import cuequivariance as cue
+from cuequivariance_jax.segmented_polynomials.indexing_mode import IndexingMode
 from cuequivariance_jax.segmented_polynomials.utils import batch_size, indexing
 
 logger = logging.getLogger(__name__)
@@ -31,7 +32,7 @@ logger = logging.getLogger(__name__)
 class Buffer:
     data: jax.Array
     bi: list[int]  # buffer index
-    mode: list[str]
+    mode: list[IndexingMode]
 
 
 def segmented_polynomial_hybrid_impl(
@@ -39,7 +40,7 @@ def segmented_polynomial_hybrid_impl(
     outputs_shape_dtype: tuple[jax.ShapeDtypeStruct, ...],
     indices: list[jax.Array],
     buffer_index: tuple[tuple[int, ...], ...],
-    index_mode: tuple[tuple[str, ...], ...],
+    index_mode: tuple[tuple[IndexingMode, ...], ...],
     polynomial: cue.SegmentedPolynomial,
     math_dtype: jnp.dtype,
     impl: str,
@@ -222,7 +223,12 @@ def ein(
     if (
         impl != "jax"
         and formula in (",Auv,Au->Av", ",Auv,Av->Au")
-        and modes == (("repeated",), ("batched_or_shared",), ("batched_or_shared",))
+        and modes
+        == (
+            (IndexingMode.REPEATED,),
+            (IndexingMode.BATCHED_OR_SHARED,),
+            (IndexingMode.BATCHED_OR_SHARED,),
+        )
     ):
         from cuequivariance_ops_jax import indexed_linear
 
@@ -247,7 +253,12 @@ def ein(
     elif (
         impl != "jax"
         and formula in (",Auv,Awu->Awv", ",Auv,Awv->Awu")
-        and modes == (("repeated",), ("batched_or_shared",), ("batched_or_shared",))
+        and modes
+        == (
+            (IndexingMode.REPEATED,),
+            (IndexingMode.BATCHED_OR_SHARED,),
+            (IndexingMode.BATCHED_OR_SHARED,),
+        )
     ):
         from cuequivariance_ops_jax import indexed_linear
 
@@ -274,7 +285,12 @@ def ein(
     elif (
         impl != "jax"
         and formula in (",Au,Auv->Av", ",Au,Avu->Av")
-        and modes == (("batched_or_shared",), ("repeated",), ("batched_or_shared",))
+        and modes
+        == (
+            (IndexingMode.BATCHED_OR_SHARED,),
+            (IndexingMode.REPEATED,),
+            (IndexingMode.BATCHED_OR_SHARED,),
+        )
     ):
         from cuequivariance_ops_jax import indexed_linear
 
@@ -300,7 +316,12 @@ def ein(
     elif (
         impl != "jax"
         and formula in (",Auv,Awv->Auw", ",Auv,Avw->Auw")
-        and modes == (("batched_or_shared",), ("repeated",), ("batched_or_shared",))
+        and modes
+        == (
+            (IndexingMode.BATCHED_OR_SHARED,),
+            (IndexingMode.REPEATED,),
+            (IndexingMode.BATCHED_OR_SHARED,),
+        )
     ):
         from cuequivariance_ops_jax import indexed_linear
 
@@ -328,7 +349,12 @@ def ein(
     elif (
         impl != "jax"
         and formula in (",Au,Av->Avu", ",Au,Av->Auv")
-        and modes == (("batched_or_shared",), ("batched_or_shared",), ("repeated",))
+        and modes
+        == (
+            (IndexingMode.BATCHED_OR_SHARED,),
+            (IndexingMode.BATCHED_OR_SHARED,),
+            (IndexingMode.REPEATED,),
+        )
     ):
         from cuequivariance_ops_jax import indexed_linear
 
@@ -354,7 +380,12 @@ def ein(
     elif (
         impl != "jax"
         and formula in (",Auv,Auw->Awv", ",Auv,Auw->Avw")
-        and modes == (("batched_or_shared",), ("batched_or_shared",), ("repeated",))
+        and modes
+        == (
+            (IndexingMode.BATCHED_OR_SHARED,),
+            (IndexingMode.BATCHED_OR_SHARED,),
+            (IndexingMode.REPEATED,),
+        )
     ):
         from cuequivariance_ops_jax import indexed_linear
 
@@ -397,18 +428,20 @@ def ein(
 def scatter(
     x: jax.Array,
     bi: list[int],
-    modes: list[str],
+    modes: list[IndexingMode],
     indices: list[jax.Array],
     batch_sizes: list[int],
 ) -> jax.Array:
     if all(i < 0 for i in bi):
         return x
 
-    if modes == ("repeated",):
+    if modes == (IndexingMode.REPEATED,):
         counts = indices[bi[0]]
         return jnp.repeat(x, counts, axis=0, total_repeat_length=batch_sizes[0])
 
-    assert all(mode in ["batched_or_shared", "indexed"] for mode in modes)
+    assert all(
+        mode in [IndexingMode.BATCHED_OR_SHARED, IndexingMode.INDEXED] for mode in modes
+    )
     idx = indexing(bi, x.shape, indices)
     return x[idx]
 
@@ -417,17 +450,18 @@ def gather(
     output: jax.Array,
     x: jax.Array,
     bi: list[int],
-    modes: list[str],
+    modes: list[IndexingMode],
     indices: list[jax.Array],
 ) -> jax.Array:
     if all(i < 0 for i in bi):
         return x
-
-    if modes == ("repeated",):
+    if modes == (IndexingMode.REPEATED,):
         counts = indices[bi[0]]
         i = jnp.cumsum(jnp.append(0, counts[:-1]))
         return jnp.add.reduceat(x, i)
 
-    assert all(mode in ["batched_or_shared", "indexed"] for mode in modes)
+    assert all(
+        mode in [IndexingMode.BATCHED_OR_SHARED, IndexingMode.INDEXED] for mode in modes
+    )
     idx = indexing(bi, x.shape, indices)
     return output.at[idx].add(x)
