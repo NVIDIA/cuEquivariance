@@ -42,6 +42,28 @@ def indexed_linear(
             Defaults to "auto".
     Returns:
         Output data. Shape (Z, num_outputs).
+
+    Examples:
+        >>> import jax
+        >>> import jax.numpy as jnp
+        >>> import cuequivariance as cue
+        >>> import cuequivariance_jax as cuex
+        >>>
+        >>> num_species_total = 3
+        >>> batch_size = 10
+        >>> input_dim = 8
+        >>> output_dim = 16
+        >>> dtype = jnp.float32
+        >>> num_species = jnp.array([3, 4, 3], dtype=jnp.int32)
+        >>> input_array = jax.random.normal(jax.random.key(0), (batch_size, input_dim), dtype)
+        >>> input_irreps = cue.Irreps(cue.O3, f"{input_dim}x0e")
+        >>> output_irreps = cue.Irreps(cue.O3, f"{output_dim}x0e")
+        >>> e = cue.descriptors.linear(input_irreps, output_irreps)
+        >>> w = jax.random.normal(jax.random.key(1), (num_species_total, e.inputs[0].dim), dtype)
+        >>>
+        >>> result = cuex.experimental.indexed_linear(e.polynomial, num_species, w, input_array)
+        >>>
+        >>> assert result.shape == (batch_size, output_dim)
     """
     assert poly.num_inputs == 2
     assert poly.num_outputs == 1

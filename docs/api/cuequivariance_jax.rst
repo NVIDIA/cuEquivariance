@@ -61,3 +61,12 @@ Extra Modules
    :template: function_template.rst
 
    spherical_harmonics
+
+Experimental
+------------
+
+.. autosummary::
+   :toctree: generated/
+   :template: function_template.rst
+
+   experimental.indexed_linear
