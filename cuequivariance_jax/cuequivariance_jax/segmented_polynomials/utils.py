@@ -12,6 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from dataclasses import dataclass, field
 from typing import Any
 
 import jax
@@ -70,3 +71,29 @@ def indexing(
     return tuple(
         iota(shape, axis) if i < 0 else indices[i] for axis, i in enumerate(bi)
     )
+
+
+@dataclass(frozen=True)
+class Repeats:
+    """
+    A class to represent a sequence of repeated elements.
+
+    Example:
+        >>> a = Repeats(jnp.array([1, 0, 2]), 3)
+        >>> jnp.repeat(
+        ...     jnp.array([0.1, 0.2, 0.3], dtype=jnp.float32),
+        ...     a.repeats,
+        ...     total_repeat_length=a.total_repeat_length,
+        ... )
+        Array([0.1, 0.3, 0.3], dtype=float32)
+    """
+
+    repeats: jax.Array = field()
+    total_repeat_length: int = field(default=None)
+
+
+jax.tree_util.register_pytree_node(
+    Repeats,
+    lambda x: ((x.repeats,), (x.total_repeat_length,)),
+    lambda a, x: Repeats(x[0], a[0]),
+)
