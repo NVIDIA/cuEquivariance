@@ -11,9 +11,10 @@
 import pytest
 import torch
 
+
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is not available")
-@pytest.mark.skipif(torch.cuda.get_device_capability()[0] < 8, reason="Ampere+ GPU is needed!")
+@pytest.mark.skipif(
+    torch.cuda.get_device_capability()[0] < 8, reason="Ampere+ GPU is needed!"
+)
 def test_api():
     """Actual test is in cuequivariance_ops_torch."""
-    import cuequivariance_torch
-    from cuequivariance_torch import triangle_attention
