@@ -65,10 +65,18 @@ __all__ = [
 try:
     from cuequivariance_ops_torch import (
         triangle_attention,
-        triangle_multiplicative_update,
     )
     __all__ += [
         "triangle_attention",
+    ]
+except Exception:
+    pass
+
+try:
+    from cuequivariance_ops_torch import (
+        triangle_multiplicative_update,
+    )
+    __all__ += [
         "triangle_multiplicative_update",
     ]
 except Exception:
