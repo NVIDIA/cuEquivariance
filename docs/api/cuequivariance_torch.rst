@@ -61,6 +61,16 @@ Euclidean Operations
    encode_rotation_angle
    vector_to_euler_angles
 
+Triangle
+--------
+
+.. autosummary::
+   :toctree: generated/
+   :template: function_template.rst
+
+   triangle_attention
+   triangle_multiplicative_update
+
 Extra Modules
 -------------
 
