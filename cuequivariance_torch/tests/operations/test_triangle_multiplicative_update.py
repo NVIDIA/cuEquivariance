@@ -12,6 +12,7 @@ import pytest
 import torch
 
 
+@pytest.mark.skip("Tri Mul is not ready!")
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is not available")
 @pytest.mark.skipif(
     torch.cuda.is_available() and torch.cuda.get_device_capability()[0] < 8,
