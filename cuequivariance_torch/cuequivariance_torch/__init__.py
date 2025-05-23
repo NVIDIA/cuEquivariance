@@ -61,3 +61,15 @@ __all__ = [
     "_Wrapper",
     "SegmentedPolynomialProduct"
 ]
+
+try:
+    from cuequivariance_ops_torch import (
+        triangle_attention,
+        triangle_multiplicative_update,
+    )
+    __all__ += [
+        "triangle_attention",
+        "triangle_multiplicative_update",
+    ]
+except Exception:
+    pass
