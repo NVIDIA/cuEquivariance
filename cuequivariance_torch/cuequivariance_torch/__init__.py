@@ -43,29 +43,30 @@ from cuequivariance_torch import layers
 
 __all__ = [
     "TensorProduct",
+    "_Wrapper",
     "SymmetricTensorProduct",
     "IWeightedSymmetricTensorProduct",
     "TransposeSegments",
     "TransposeIrrepsLayout",
     "EquivariantTensorProduct",
+    "SegmentedPolynomial",
     "ChannelWiseTensorProduct",
     "FullyConnectedTensorProduct",
     "Linear",
     "SymmetricContraction",
     "Rotation",
-    "Inversion",
     "encode_rotation_angle",
     "vector_to_euler_angles",
+    "Inversion",
     "SphericalHarmonics",
     "layers",
-    "_Wrapper",
-    "SegmentedPolynomialProduct"
 ]
 
 try:
     from cuequivariance_ops_torch import (
         triangle_attention,
     )
+
     __all__ += [
         "triangle_attention",
     ]
