@@ -214,205 +214,49 @@ def ein(
     formula = ",".join(terms[:-1]) + "->" + terms[-1]
     modes = tuple([x.mode for x in segments] + [output.mode])
 
-    if impl == "auto":
-        try:
-            from cuequivariance_ops_jax import indexed_linear
-        except ImportError:
-            impl = "jax"
-
-    if (
-        impl != "jax"
-        and formula in (",Auv,Au->Av", ",Auv,Av->Au")
-        and modes
-        == (
-            (IndexingMode.REPEATED,),
-            (IndexingMode.BATCHED_OR_SHARED,),
-            (IndexingMode.BATCHED_OR_SHARED,),
-        )
+    if modes == (
+        (IndexingMode.BATCHED_OR_SHARED,),
+        (IndexingMode.REPEATED,),
+        (IndexingMode.BATCHED_OR_SHARED,),
     ):
-        from cuequivariance_ops_jax import indexed_linear
-
-        counts = indices[segments[0].bi[0]]
-        (C, u, v) = segments[0].data.shape
-        (Z, _) = segments[1].data.shape
-        assert counts.shape == (C,)
-        return indexed_linear(
-            segments[0].data,  # Cuv
-            segments[1].data,  # Zu or Zv
-            output.data,  # Zv or Zu
-            counts,
-            u,
-            v,
-            C,
-            Z,
-            {",Auv,Au->Av": ("uv", "u", "v"), ",Auv,Av->Au": ("uv", "v", "u")}[formula],
+        return stuff1(
+            formula,
             coefficients.item(),
-            math_dtype,
+            segments[0].data,
+            segments[1].data,
+            indices[segments[1].bi[0]],
         )
-
-    elif (
-        impl != "jax"
-        and formula in (",Auv,Awu->Awv", ",Auv,Awv->Awu")
-        and modes
-        == (
-            (IndexingMode.REPEATED,),
-            (IndexingMode.BATCHED_OR_SHARED,),
-            (IndexingMode.BATCHED_OR_SHARED,),
-        )
+    if modes == (
+        (IndexingMode.REPEATED,),
+        (IndexingMode.BATCHED_OR_SHARED,),
+        (IndexingMode.BATCHED_OR_SHARED,),
     ):
-        from cuequivariance_ops_jax import indexed_linear
-
-        counts = indices[segments[0].bi[0]]
-        (C, u, v) = segments[0].data.shape
-        (Z, w, _) = segments[1].data.shape
-        assert counts.shape == (C,)
-        return indexed_linear(
-            segments[0].data,  # Cuv
-            segments[1].data,  # Zwu or Zwv
-            output.data,  # Zwv or Zwu
-            counts * w,
-            u,
-            v,
-            C,
-            Z * w,
-            {",Auv,Awu->Awv": ("uv", "u", "v"), ",Auv,Awv->Awu": ("uv", "v", "u")}[
-                formula
-            ],
+        assert num_batch_axes == 1
+        assert coefficient_subscripts == ""
+        b, a, c = subscripts
+        [a, b, c] = (
+            cue.segmented_polynomials.Subscripts.from_operands([a, b, c])
+            .canonicalize()
+            .operands
+        )
+        return stuff1(
+            f",A{a},A{b}->A{c}",
             coefficients.item(),
-            math_dtype,
+            segments[1].data,
+            segments[0].data,
+            indices[segments[0].bi[0]],
         )
-
-    elif (
-        impl != "jax"
-        and formula in (",Au,Auv->Av", ",Au,Avu->Av")
-        and modes
-        == (
-            (IndexingMode.BATCHED_OR_SHARED,),
-            (IndexingMode.REPEATED,),
-            (IndexingMode.BATCHED_OR_SHARED,),
-        )
+    if modes == (
+        (IndexingMode.BATCHED_OR_SHARED,),
+        (IndexingMode.BATCHED_OR_SHARED,),
+        (IndexingMode.REPEATED,),
     ):
-        from cuequivariance_ops_jax import indexed_linear
-
-        counts = indices[segments[1].bi[0]]
-        (Z, u) = segments[0].data.shape
-        (C, _, _) = segments[1].data.shape
-        (Z, v) = output.data.shape
-        assert counts.shape == (C,)
-        return indexed_linear(
-            segments[0].data,  # Zu
-            segments[1].data,  # Cuv or Cvu
-            output.data,  # Zv
-            counts,
-            u,
-            v,
-            C,
-            Z,
-            {",Au,Auv->Av": ("u", "uv", "v"), ",Au,Avu->Av": ("u", "vu", "v")}[formula],
+        return stuff2(
+            formula,
             coefficients.item(),
-            math_dtype,
-        )
-
-    elif (
-        impl != "jax"
-        and formula in (",Auv,Awv->Auw", ",Auv,Avw->Auw")
-        and modes
-        == (
-            (IndexingMode.BATCHED_OR_SHARED,),
-            (IndexingMode.REPEATED,),
-            (IndexingMode.BATCHED_OR_SHARED,),
-        )
-    ):
-        from cuequivariance_ops_jax import indexed_linear
-
-        counts = indices[segments[1].bi[0]]
-        (Z, w, u) = segments[0].data.shape
-        (C, _, _) = segments[1].data.shape
-        (Z, w, v) = output.data.shape
-        assert counts.shape == (C,)
-        return indexed_linear(
-            segments[0].data,  # Zwu
-            segments[1].data,  # Cvu
-            output.data,  # Zwv
-            counts * w,
-            u,
-            v,
-            C,
-            Z * w,
-            {",Auv,Awv->Auw": ("u", "vu", "v"), ",Auv,Avw->Auw": ("u", "uv", "v")}[
-                formula
-            ],
-            coefficients.item(),
-            math_dtype,
-        )
-
-    elif (
-        impl != "jax"
-        and formula in (",Au,Av->Avu", ",Au,Av->Auv")
-        and modes
-        == (
-            (IndexingMode.BATCHED_OR_SHARED,),
-            (IndexingMode.BATCHED_OR_SHARED,),
-            (IndexingMode.REPEATED,),
-        )
-    ):
-        from cuequivariance_ops_jax import indexed_linear
-
-        counts = indices[output.bi[0]]
-        (Z, u) = segments[0].data.shape
-        (Z, v) = segments[1].data.shape
-        (C, _, _) = output.data.shape
-        assert counts.shape == (C,), f"{counts.shape=}, {C=}"
-        return indexed_linear(
-            segments[0].data,  # Zu
-            segments[1].data,  # Zv
-            output.data,  # Cvu or Cuv
-            counts,
-            u,
-            v,
-            C,
-            Z,
-            {",Au,Av->Avu": ("u", "v", "vu"), ",Au,Av->Auv": ("u", "v", "uv")}[formula],
-            coefficients.item(),
-            math_dtype,
-        )
-
-    elif (
-        impl != "jax"
-        and formula in (",Auv,Auw->Awv", ",Auv,Auw->Avw")
-        and modes
-        == (
-            (IndexingMode.BATCHED_OR_SHARED,),
-            (IndexingMode.BATCHED_OR_SHARED,),
-            (IndexingMode.REPEATED,),
-        )
-    ):
-        from cuequivariance_ops_jax import indexed_linear
-
-        counts = indices[output.bi[0]]
-        (Z, w, u) = segments[0].data.shape
-        (Z, w, v) = segments[1].data.shape
-        (C, _, _) = output.data.shape
-        assert counts.shape == (C,)
-        return indexed_linear(
-            segments[0].data,  # Zwu
-            segments[1].data,  # Zwv
-            output.data,  # Cuv or Cvu
-            counts * w,
-            u,
-            v,
-            C,
-            Z * w,
-            {",Auv,Auw->Awv": ("u", "v", "vu"), ",Auv,Auw->Avw": ("u", "v", "uv")}[
-                formula
-            ],
-            coefficients.item(),
-            math_dtype,
-        )
-
-    if impl == "cuda":
-        raise NotImplementedError(
-            "It was not possible to execute this operation on a custom CUDA kernel."
+            segments[0].data,
+            segments[1].data,
+            indices[output.bi[0]],
         )
 
     segments_data = [
@@ -465,3 +309,70 @@ def gather(
     )
     idx = indexing(bi, x.shape, indices)
     return output.at[idx].add(x)
+
+
+def ragged_dot_transpose(a, c, i):
+    """
+    Transpose of jax.lax.ragged_dot(a, b, i) == c w.r.t. b.
+
+    a: (batch_size, m)
+    c: (batch_size, n)
+    i: (num_groups,)
+    b: (num_groups, m, n)
+    """
+    dn = jax.lax.RaggedDotDimensionNumbers(
+        dot_dimension_numbers=(([0], [0]), ([], [])),
+        lhs_ragged_dimensions=[0],
+        rhs_group_dimensions=[],
+    )
+    return jax.lax.ragged_dot_general(a, c, i, dn)
+
+
+def stuff1(
+    formula: str, co: float, a: jax.Array, b: jax.Array, i: jax.Array
+) -> jax.Array:
+    print("hello from stuff1")
+    # b is the set of matrices
+    F = jax.lax.ragged_dot
+    tr = lambda x: jnp.transpose(x, (0, 2, 1))  # noqa
+
+    if formula == ",Au,Auv->Av":  # 1
+        return co * F(a, b, i)
+    if formula == ",Au,Avu->Av":  # 2
+        return co * F(a, tr(b), i)
+    if formula == ",Auv,Avw->Auw":  # 3, same as 1 with an extra u
+        (A, u, v) = a.shape
+        (_, v, w) = b.shape
+        return co * F(a.reshape(A * u, v), b, i * u).reshape(A, u, w)
+    if formula == ",Auv,Awv->Auw":
+        (A, u, v) = a.shape
+        (_, w, v) = b.shape
+        return co * F(a.reshape(A * u, v), tr(b), i * u).reshape(A, u, w)
+
+    raise NotImplementedError(
+        f"Unsupported formula: {formula} with co={co}, a.shape={a.shape}, b.shape={b.shape}, i.shape={i.shape}"
+    )
+
+
+def stuff2(formula: str, co: float, a: jax.Array, b: jax.Array, i: jax.Array):
+    print("hello from stuff2")
+    # output is the set of matrices
+    F = ragged_dot_transpose
+    tr = lambda x: jnp.transpose(x, (0, 2, 1))  # noqa
+
+    if formula == ",Au,Av->Auv":
+        return co * F(a, b, i)
+    if formula == ",Au,Av->Avu":
+        return co * tr(F(a, b, i))
+    if formula == ",Auv,Auw->Avw":
+        (A, u, v) = a.shape
+        (A, u, w) = b.shape
+        return co * F(a.reshape(A * u, v), b.reshape(A * u, w), i * u)
+    if formula == ",Auv,Auw->Awv":
+        (A, u, v) = a.shape
+        (A, u, w) = b.shape
+        return co * tr(F(a.reshape(A * u, v), b.reshape(A * u, w), i * u))
+
+    raise NotImplementedError(
+        f"Unsupported formula: {formula} with co={co}, a.shape={a.shape}, b.shape={b.shape}, i.shape={i.shape}"
+    )

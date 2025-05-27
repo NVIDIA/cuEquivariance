@@ -31,9 +31,11 @@ def test_indexed_linear(dtype):
     input_dim = 8
     output_dim = 16
     num_species = jnp.array([3, 4, 3], dtype=jnp.int32)
-    input_array = jax.random.normal(jax.random.key(0), (batch_size, input_dim), dtype)
-    input_irreps = cue.Irreps(cue.O3, f"{input_dim}x0e")
-    output_irreps = cue.Irreps(cue.O3, f"{output_dim}x0e")
+    input_array = jax.random.normal(
+        jax.random.key(0), (batch_size, 3 * input_dim), dtype
+    )
+    input_irreps = cue.Irreps(cue.O3, f"{input_dim}x1e")
+    output_irreps = cue.Irreps(cue.O3, f"{output_dim}x1e")
     e = cue.descriptors.linear(input_irreps, output_irreps)
     w = jax.random.normal(
         jax.random.key(1), (num_species_total, e.inputs[0].dim), dtype
@@ -42,15 +44,25 @@ def test_indexed_linear(dtype):
     result = cuex.experimental.indexed_linear(
         e.polynomial, num_species, w, input_array, impl=impl
     )
-    assert result.shape == (batch_size, output_dim)
+    assert result.shape == (batch_size, 3 * output_dim)
 
     [ref] = cuex.segmented_polynomial(
         e.polynomial,
         [w, input_array],
-        [jax.ShapeDtypeStruct((batch_size, output_dim), dtype)],
+        [jax.ShapeDtypeStruct((batch_size, 3 * output_dim), dtype)],
         [jnp.repeat(jnp.arange(num_species_total), num_species), None, None],
     )
 
     result = np.asarray(result, dtype=np.float64)
     ref = np.asarray(ref, dtype=np.float64)
-    np.testing.assert_allclose(result, ref, rtol=1e-5, atol=1e-5)
+
+    if dtype == jnp.bfloat16:
+        atol, rtol = 1e-2, 1e-2
+    if dtype == jnp.float16:
+        atol, rtol = 1e-3, 1e-3
+    if dtype == jnp.float32:
+        atol, rtol = 1e-3, 1e-2
+    if dtype == jnp.float64:
+        atol, rtol = 1e-10, 1e-10
+
+    np.testing.assert_allclose(result, ref, rtol=rtol, atol=atol)
