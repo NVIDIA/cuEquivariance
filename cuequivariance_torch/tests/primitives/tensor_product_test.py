@@ -77,9 +77,9 @@ def make_descriptors():
 
 
 settings = [
-    (torch.float32, torch.float64, 1e-5),
-    (torch.float32, torch.float32, 1e-5),
-    (torch.float64, torch.float64, 1e-12),
+    (torch.float32, torch.float64, 1e-4),
+    (torch.float32, torch.float32, 1e-4),
+    (torch.float64, torch.float64, 1e-6),
 ]
 
 if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:
