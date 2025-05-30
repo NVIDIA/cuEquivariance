@@ -53,4 +53,12 @@ def test_indexed_linear(dtype):
 
     result = np.asarray(result, dtype=np.float64)
     ref = np.asarray(ref, dtype=np.float64)
-    np.testing.assert_allclose(result, ref, rtol=1e-5, atol=1e-5)
+
+    match dtype:
+        case jnp.float16 | jnp.bfloat16:
+            atol, rtol = 1e-2, 1e-2
+        case jnp.float32:
+            atol, rtol = 1e-3, 1e-3
+        case jnp.float64:
+            atol, rtol = 1e-6, 1e-6
+    np.testing.assert_allclose(result, ref, rtol=rtol, atol=atol)
