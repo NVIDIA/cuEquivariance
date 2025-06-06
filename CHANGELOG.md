@@ -1,5 +1,18 @@
 ## Latest Changes
 
+## 0.5.0 (2025-06-10)
+
+This release introduces `triangle_attention` and `triangle_multiplicative_update`.
+
+### Added
+- [Torch] Add `cuet.triangle_attention`
+- [Torch] Add `cuet.triangle_multiplicative_update`
+- [Torch/JAX] Add argument `simplify_irreps3: bool = False` to `cue.descriptors.channelwise_tensor_product`
+- [Torch/JAX] Add method `permute_inputs` to `SegmentedPolynomial`
+
+### Improved
+- [Torch/JAX] In some settings, accelerate the CUDA kernel for uniform 1d segmented polynomials (like symmetric contraction and channelwise tensor product). While most operation speed are unchanged, we observe up to 2x speedup from some cases.
+
 
 ## 0.4.0 (2025-04-25)
 
