@@ -14,6 +14,8 @@ This release introduces `triangle_attention` and `triangle_multiplicative_update
 ### Improved
 - [Torch/JAX] In some settings, accelerate the CUDA kernel for uniform 1d segmented polynomials (like symmetric contraction and channelwise tensor product). While most operation speed are unchanged, we observe up to 2x speedup from some cases.
 
+### Limitations
+- Triangle Multiplicative Update: We do not claim full support on Blackwell GPUs due to a known Triton issue that is currently being analyzed. While we provide config files and users may attempt installation with the latest Triton from source, there is no guarantee that both performance/accuracy tests and torch.compile tests will pass in any torch version.
 
 ## 0.4.0 (2025-04-25)
 
