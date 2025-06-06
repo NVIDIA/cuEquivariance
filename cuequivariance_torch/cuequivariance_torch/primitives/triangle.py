@@ -12,8 +12,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import torch
 from typing import Optional, Tuple
+
+import torch
 
 
 def triangle_attention(
@@ -72,17 +73,22 @@ def triangle_attention(
         >>> # Calculate scale
         >>> scale = 1 / math.sqrt(hidden_dim)
         >>> # Forward pass
-        >>> output = triangle_attention(
+        >>> output, lse, max_val = triangle_attention(
         ...     q=q, k=k, v=v, bias=bias, mask=mask, scale=scale, return_aux=True)
         >>> print(output.shape)  # torch.Size([1, 128, 2, 128, 32])
+        torch.Size([1, 128, 2, 128, 32])
         >>> # Create gradient tensor and perform backward pass
         >>> grad_out = torch.randn_like(output)
         >>> output.backward(grad_out)
         >>> # Access gradients
         >>> print(q.grad.shape)  # torch.Size([1, 128, 2, 128, 32])
+        torch.Size([1, 128, 2, 128, 32])
         >>> print(k.grad.shape)  # torch.Size([1, 128, 2, 128, 32])
+        torch.Size([1, 128, 2, 128, 32])
         >>> print(v.grad.shape)  # torch.Size([1, 128, 2, 128, 32])
+        torch.Size([1, 128, 2, 128, 32])
         >>> print(bias.grad.shape)  # torch.Size([1, 1, 2, 128, 128])
+        torch.Size([1, 1, 2, 128, 128])
     """
 
     try:
@@ -166,11 +172,13 @@ def triangle_multiplicative_update(
         ...     mask=mask,
         ... ) #If CUEQ_DISABLE_AOT_TUNING is not set to 1, will default to json config look-up if config is available. If not, then proceeds to auto-tuning using Ahead Of Time Compilation.
         >>> print(output.shape)  # torch.Size([1, 128, 128, 128])
+        torch.Size([1, 128, 128, 128])
         >>> # Create gradient tensor and perform backward pass
         >>> grad_out = torch.randn_like(output)
         >>> output.backward(grad_out)
         >>> # Access gradients
         >>> print(x.grad.shape)  # torch.Size([1, 128, 128, 128])
+        torch.Size([1, 128, 128, 128])
     """
     try:
         from cuequivariance_ops_torch import triangle_multiplicative_update as f
