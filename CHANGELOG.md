@@ -7,6 +7,7 @@ This release introduces `triangle_attention` and `triangle_multiplicative_update
 ### Added
 - [Torch] Add `cuet.triangle_attention`
 - [Torch] Add `cuet.triangle_multiplicative_update`
+- [JAX] Add `cuex.experimental.indexed_linear`
 - [Torch/JAX] Add argument `simplify_irreps3: bool = False` to `cue.descriptors.channelwise_tensor_product`
 - [Torch/JAX] Add method `permute_inputs` to `SegmentedPolynomial`
 
