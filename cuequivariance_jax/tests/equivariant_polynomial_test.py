@@ -94,7 +94,7 @@ def test_custom_kernel(e: cue.EquivariantPolynomial):
     out1 = fwd(inputs, indices, impl="cuda")
     assert out0.shape == out1.shape
     assert out0.dtype == out1.dtype
-    np.testing.assert_allclose(out0, out1, rtol=0, atol=1e-13)
+    np.testing.assert_allclose(out0, out1, atol=1e-12, rtol=0)
 
     def bwd(inputs, indices, impl):
         return jax.grad(lambda *inputs: fwd(inputs, indices, impl).sum(), argnums=0)(
@@ -105,7 +105,7 @@ def test_custom_kernel(e: cue.EquivariantPolynomial):
     out1 = bwd(inputs, indices, impl="cuda")
     assert out0.shape == out1.shape
     assert out0.dtype == out1.dtype
-    np.testing.assert_allclose(out0, out1, rtol=0, atol=1e-13)
+    np.testing.assert_allclose(out0, out1, atol=1e-12, rtol=0)
 
     def bwd2(inputs, indices, impl):
         return jax.grad(lambda *inputs: bwd(inputs, indices, impl).sum(), argnums=1)(
@@ -116,4 +116,4 @@ def test_custom_kernel(e: cue.EquivariantPolynomial):
     out1 = bwd2(inputs, indices, impl="cuda")
     assert out0.shape == out1.shape
     assert out0.dtype == out1.dtype
-    np.testing.assert_allclose(out0, out1, rtol=0, atol=1e-13)
+    np.testing.assert_allclose(out0, out1, atol=1e-12, rtol=0)

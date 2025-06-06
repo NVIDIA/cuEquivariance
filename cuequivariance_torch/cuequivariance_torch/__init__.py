@@ -38,6 +38,10 @@ from .operations.rotation import (
     Inversion,
 )
 from .operations.spherical_harmonics import SphericalHarmonics
+from .primitives.triangle import (
+    triangle_attention,
+    triangle_multiplicative_update,
+)
 
 from cuequivariance_torch import layers
 
@@ -59,26 +63,7 @@ __all__ = [
     "vector_to_euler_angles",
     "Inversion",
     "SphericalHarmonics",
+    "triangle_attention",
+    "triangle_multiplicative_update",
     "layers",
 ]
-
-try:
-    from cuequivariance_ops_torch import (
-        triangle_attention,
-    )
-
-    __all__ += [
-        "triangle_attention",
-    ]
-except Exception:
-    pass
-
-try:
-    from cuequivariance_ops_torch import (
-        triangle_multiplicative_update,
-    )
-    __all__ += [
-        "triangle_multiplicative_update",
-    ]
-except Exception:
-    pass

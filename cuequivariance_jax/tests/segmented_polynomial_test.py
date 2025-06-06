@@ -217,6 +217,7 @@ def test_jax_vs_cuda(dtype):
             jnp.bfloat16: 1,
             jnp.float16: 1e-1,
             jnp.float32: 1e-4,
-            jnp.float64: 1e-8,
+            jnp.float64: 1e-12,
         }[dtype],
+        rtol=0,
     )
