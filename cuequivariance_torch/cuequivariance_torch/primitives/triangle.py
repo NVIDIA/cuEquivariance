@@ -32,9 +32,9 @@ def triangle_attention(
     .. math::
 
         \text{Attention}_q(Q, K, V, B, M) = \text{softmax}_k\left[\left(\begin{cases} 
-        s Q_q \cdot K_k + B_{qk} & \text{if } M_k = 1 \\
+        s\, Q_q \cdot K_k + B_{qk} & \text{if } M_k = 1 \\
         -10^9 & \text{otherwise}
-        \end{cases}\right)\right] V_k
+        \end{cases}\right) V_k \right]
 
 
     Args:
