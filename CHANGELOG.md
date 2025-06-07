@@ -3,11 +3,12 @@
 ## 0.5.0 (2025-06-10)
 
 This release introduces `triangle_attention` and `triangle_multiplicative_update`.
+This is the last release with cuda11 support. In the next release we will drop cuda11.
 
 ### Added
 - [Torch] Add `cuet.triangle_attention`
 - [Torch] Add `cuet.triangle_multiplicative_update`
-- [JAX] Add `cuex.experimental.indexed_linear`
+- [JAX] Add `cuex.experimental.indexed_linear`. Note that this function is not working with cuda11 because it requires cublas 12.5.
 - [Torch/JAX] Add argument `simplify_irreps3: bool = False` to `cue.descriptors.channelwise_tensor_product`
 - [Torch/JAX] Add method `permute_inputs` to `SegmentedPolynomial`
 
