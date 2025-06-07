@@ -18,8 +18,11 @@ This release introduces `triangle_attention` and `triangle_multiplicative_update
 - PyTorch does not currently bundle the latest Triton version as pytorch-triton. As a result, Blackwell GPU users may occasionally experience hangs or instability during model execution. Users may attempt installation with the latest Triton from source at their own risk. We are monitoring this issue and will remedy as soon as possible.
 
 ### Documentation
-- `cuet.triangle_multiplicative_update`: Auto-tuning **(which may take several hours)** is enabled by default for optimal performance. Users may disable auto-tuning by setting `CUEQ_DISABLE_AOT_TUNING = 1` in their environment.
-- `cuet.triangle_multiplicative_update`: If auto-tuning is disabled by setting `CUEQ_DISABLE_AOT_TUNING = 1`, the kernel defaults to tuning for current configuration (which may take several minutes). Users may disable this by setting `CUEQ_DEFAULT_CONFIG = 1` at the cost of performance.
+- `cuet.triangle_multiplicative_update`: Auto-tuning behavior can be controlled through environment variables:
+  - Default: Full Ahead-of-Time (AOT) auto-tuning enabled for optimal performance **(may take several hours)**
+  - Quick testing: Set `CUEQ_DISABLE_AOT_TUNING = 1` and `CUEQ_DEFAULT_CONFIG = 1` to disable all tuning
+  - Partial tuning: `CUEQ_DISABLE_AOT_TUNING = 1`, auto-tunes for new shapes encountered on first run. (may take several minutes)
+  - Note: When using Docker with default or partial tuning enabled, commit the container to persist tuning changes
 
 ## 0.4.0 (2025-04-25)
 
