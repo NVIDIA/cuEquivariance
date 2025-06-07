@@ -140,13 +140,13 @@ def triangle_multiplicative_update(
     2. Triangular projection (either outgoing or incoming)
     3. Output normalization and gating
 
-    The function supports both ahead-of-time (AOT) tuning and just-in-time (JIT) tuning:
+    The function supports both ahead-of-time (AOT) tuning and just-in-time (JIT) tuning.
+    Auto-tuning behavior can be controlled through environment variables:
 
-    - AOT tuning is enabled by default and **may take several hours to complete**. 
-      It can be disabled by setting CUEQ_DISABLE_AOT_TUNING=1
-    - When AOT is disabled:
-        * If CUEQ_DEFAULT_CONFIG=1: Uses default configuration without tuning
-        * If CUEQ_DEFAULT_CONFIG=0 or not set: Tunes the current configuration
+    - Default: Full Ahead-of-Time (AOT) auto-tuning enabled for optimal performance **(may take several hours)**
+    - Quick testing: Set `CUEQ_DISABLE_AOT_TUNING = 1` and `CUEQ_DEFAULT_CONFIG = 1` to disable all tuning
+    - On-Demand tuning: `CUEQ_DISABLE_AOT_TUNING = 1`, auto-tunes for new shapes encountered on first run. (may take several minutes)
+    - Note: When using Docker with default or on-demand tuning enabled, commit the container to persist tuning changes
 
     Args:
         x (torch.Tensor): Input tensor of shape (B, N, N, D) where:
