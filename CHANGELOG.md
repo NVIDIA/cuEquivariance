@@ -21,8 +21,8 @@ This release introduces `triangle_attention` and `triangle_multiplicative_update
 - `cuet.triangle_multiplicative_update`: Auto-tuning behavior can be controlled through environment variables:
   - Default: Full Ahead-of-Time (AOT) auto-tuning enabled for optimal performance **(may take several hours)**
   - Quick testing: Set `CUEQ_DISABLE_AOT_TUNING = 1` and `CUEQ_DEFAULT_CONFIG = 1` to disable all tuning
-  - Partial tuning: `CUEQ_DISABLE_AOT_TUNING = 1`, auto-tunes for new shapes encountered on first run. (may take several minutes)
-  - Note: When using Docker with default or partial tuning enabled, commit the container to persist tuning changes
+  - On-Demand tuning: `CUEQ_DISABLE_AOT_TUNING = 1`, auto-tunes for new shapes encountered on first run. (may take several minutes)
+  - Note: When using Docker with default or on-demand tuning enabled, commit the container to persist tuning changes
 
 ## 0.4.0 (2025-04-25)
 
