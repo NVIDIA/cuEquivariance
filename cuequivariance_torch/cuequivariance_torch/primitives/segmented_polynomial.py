@@ -81,6 +81,11 @@ class SegmentedPolynomialFromUniform1dJit(nn.Module):
     ):
         super().__init__()
 
+        if tensor_product_uniform_1d_jit is None:
+            raise ImportError(
+                "The cuequivariance_ops_torch.tensor_product_uniform_1d_jit module is not available."
+            )
+
         operand_extent = None
         for o in polynomial.operands:
             torch._assert(

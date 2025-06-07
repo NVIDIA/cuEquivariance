@@ -111,13 +111,12 @@ The same descriptor can be used in PyTorch using the class :class:`cuet.Segmente
     import cuequivariance as cue
     import cuequivariance_torch as cuet
 
-    if torch.cuda.is_available():
-        module = cuet.SegmentedPolynomial(e.polynomial)
+    module = cuet.SegmentedPolynomial(e.polynomial)
 
-        w = torch.randn(1, e.inputs[0].dim).cuda()
-        x = torch.randn(1, e.inputs[1].dim).cuda()
+    w = torch.randn(1, e.inputs[0].dim).cuda()
+    x = torch.randn(1, e.inputs[1].dim).cuda()
 
-        module([w, x])
+    module([w, x])
 
 Details
 -------
