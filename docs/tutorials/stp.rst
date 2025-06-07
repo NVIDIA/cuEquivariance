@@ -120,7 +120,7 @@ We are adding the segments of the input and output representations to the descri
 
    d
 
-Enumerating all the possible pairs of irreps and adding weight segements and paths between them when the irreps are the same.
+Enumerating all the possible pairs of irreps and adding weight segments and paths between them when the irreps are the same.
 
 .. jupyter-execute::
 
