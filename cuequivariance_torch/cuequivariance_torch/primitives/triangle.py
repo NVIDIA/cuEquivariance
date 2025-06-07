@@ -58,9 +58,9 @@ def triangle_attention(
         - D: attention dimension
 
     Returns:
-        output(torch.Tensor): Output tensor of shape (B, N, H, Q, D). dtype=q.dtype
-        lse(torch.Tensor): Auxiliary result (for special use only). dtype=float32
-        max(torch.Tensor): Auxiliary result (for special use only). dtype=float32
+        - output(torch.Tensor): Output tensor of shape (B, N, H, Q, D). dtype=q.dtype
+        - lse(torch.Tensor): Auxiliary result (for special use only). dtype=float32
+        - max(torch.Tensor): Auxiliary result (for special use only). dtype=float32
 
     Notes:
         (1) Context is saved for backward pass. You don't need to save it manually.
@@ -142,7 +142,8 @@ def triangle_multiplicative_update(
 
     The function supports both ahead-of-time (AOT) tuning and just-in-time (JIT) tuning:
 
-    - AOT tuning is enabled by default and can be disabled by setting CUEQ_DISABLE_AOT_TUNING=1
+    - AOT tuning is enabled by default and **may take several hours to complete**. 
+      It can be disabled by setting CUEQ_DISABLE_AOT_TUNING=1
     - When AOT is disabled:
         * If CUEQ_DEFAULT_CONFIG=1: Uses default configuration without tuning
         * If CUEQ_DEFAULT_CONFIG=0 or not set: Tunes the current configuration
