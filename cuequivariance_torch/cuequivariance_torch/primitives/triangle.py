@@ -31,10 +31,10 @@ def triangle_attention(
 
     .. math::
 
-        \text{Attention}_q(Q, K, V, B, M) = \sum_k \text{softmax}_k\left(\begin{cases} 
-        Q_q \cdot K_k + B_{qk} & \text{if } M_k = 1 \\
+        \text{Attention}_q(Q, K, V, B, M) = \text{softmax}_k\left[\left(\begin{cases} 
+        s Q_q \cdot K_k + B_{qk} & \text{if } M_k = 1 \\
         -10^9 & \text{otherwise}
-        \end{cases}\right) V_k
+        \end{cases}\right)\right] V_k
 
 
     Args:
@@ -45,7 +45,7 @@ def triangle_attention(
             Will be cast to float32 internally.
         mask (torch.Tensor, optional): Mask tensor of shape (B, N, 1, 1, K). For B=1, can also be (N, 1, 1, K).
             Will be cast to bool internally.
-        scale (float, optional): Float scale for q. If None, value 1/d**2 is used.
+        scale (float, optional): Float scale for q (s in the equation). If None, value 1/sqrt(d) is used.
         return_aux (bool): If True, two auxiliary tensors are returned along with the result.
             Defaults to False.
 
