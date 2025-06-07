@@ -12,10 +12,14 @@ This release introduces `triangle_attention` and `triangle_multiplicative_update
 - [Torch/JAX] Add method `permute_inputs` to `SegmentedPolynomial`
 
 ### Improved
-- [Torch/JAX] In some settings, accelerate the CUDA kernel for uniform 1d segmented polynomials (like symmetric contraction and channelwise tensor product). While most operation speed are unchanged, we observe up to 2x speedup from some cases.
+- [Torch/JAX] In some settings, accelerate the CUDA kernel for uniform 1d segmented polynomials (like symmetric contraction and channelwise tensor product). While most operation speeds are unchanged, we observe up to 2x speedup in some cases.
 
 ### Limitations
-- Triangle Multiplicative Update: We do not claim full support on Blackwell GPUs due to a known Triton issue that is currently being analyzed. While we provide config files and users may attempt installation with the latest Triton from source, there is no guarantee that both performance/accuracy tests and torch.compile tests will pass in any torch version.
+- PyTorch does not currently bundle the latest Triton version as pytorch-triton. As a result, Blackwell GPU users may occasionally experience hangs or instability during model execution. Users may attempt installation with the latest Triton from source at their own risk. We are monitoring this issue and will remedy as soon as possible.
+
+### Documentation
+- `cuet.triangle_multiplicative_update`: Auto-tuning **(which may take several hours)** is enabled by default for optimal performance. Users may disable auto-tuning by setting `CUEQ_DISABLE_AOT_TUNING = 1` in their environment.
+- `cuet.triangle_multiplicative_update`: If auto-tuning is disabled by setting `CUEQ_DISABLE_AOT_TUNING = 1`, the kernel defaults to tuning for current configuration (which may take several minutes). Users may disable this by setting `CUEQ_DEFAULT_CONFIG = 1` at the cost of performance.
 
 ## 0.4.0 (2025-04-25)
 
