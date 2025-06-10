@@ -38,26 +38,32 @@ from .operations.rotation import (
     Inversion,
 )
 from .operations.spherical_harmonics import SphericalHarmonics
+from .primitives.triangle import (
+    triangle_attention,
+    triangle_multiplicative_update,
+)
 
 from cuequivariance_torch import layers
 
 __all__ = [
     "TensorProduct",
+    "_Wrapper",
     "SymmetricTensorProduct",
     "IWeightedSymmetricTensorProduct",
     "TransposeSegments",
     "TransposeIrrepsLayout",
     "EquivariantTensorProduct",
+    "SegmentedPolynomial",
     "ChannelWiseTensorProduct",
     "FullyConnectedTensorProduct",
     "Linear",
     "SymmetricContraction",
     "Rotation",
-    "Inversion",
     "encode_rotation_angle",
     "vector_to_euler_angles",
+    "Inversion",
     "SphericalHarmonics",
+    "triangle_attention",
+    "triangle_multiplicative_update",
     "layers",
-    "_Wrapper",
-    "SegmentedPolynomialProduct"
 ]

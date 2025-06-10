@@ -1,5 +1,30 @@
 ## Latest Changes
 
+## 0.5.0 (2025-06-10)
+
+This release introduces `triangle_attention` and `triangle_multiplicative_update`.
+This is the last release with cuda11 support. In the next release we will drop cuda11.
+
+### Added
+- [Torch] Add `cuet.triangle_attention`
+- [Torch] Add `cuet.triangle_multiplicative_update`
+- [JAX] Add `cuex.experimental.indexed_linear`. Note that this function is not working with cuda11 because it requires cuBLAS 12.5.
+- [Torch/JAX] Add argument `simplify_irreps3: bool = False` to `cue.descriptors.channelwise_tensor_product`
+- [Torch/JAX] Add method `permute_inputs` to `SegmentedPolynomial`
+
+### Improved
+- [Torch/JAX] In some settings, accelerate the CUDA kernel for uniform 1d segmented polynomials (like symmetric contraction and channelwise tensor product). While most operation speeds are unchanged, we observe up to 2x speedup in some cases.
+
+### Limitations
+- PyTorch does not currently bundle the latest Triton version as pytorch-triton. As a result, Blackwell GPU users may occasionally experience hangs or instability during model execution. Users may attempt installation with the latest Triton from source at their own risk. We are monitoring this issue and will remedy as soon as possible.
+
+### Documentation
+- `cuet.triangle_multiplicative_update`: Auto-tuning behavior can be controlled through environment variables:
+  - Default: Full Ahead-of-Time (AOT) auto-tuning enabled for optimal performance **(may take several hours)**
+  - Quick testing: Set `CUEQ_DISABLE_AOT_TUNING = 1` and `CUEQ_DEFAULT_CONFIG = 1` to disable all tuning
+  - On-Demand tuning: `CUEQ_DISABLE_AOT_TUNING = 1`, auto-tunes for new shapes encountered on first run. (may take several minutes)
+  - Note: When using Docker with default or on-demand tuning enabled, commit the container to persist tuning changes
+  - Note: When running in a multi-GPU setup, we recommend setting `CUEQ_DISABLE_AOT_TUNING = 1` and `CUEQ_DEFAULT_CONFIG = 1`.
 
 ## 0.4.0 (2025-04-25)
 
