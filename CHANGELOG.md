@@ -24,7 +24,7 @@ This is the last release with cuda11 support. In the next release we will drop c
   - Quick testing: Set `CUEQ_DISABLE_AOT_TUNING = 1` and `CUEQ_DEFAULT_CONFIG = 1` to disable all tuning
   - On-Demand tuning: `CUEQ_DISABLE_AOT_TUNING = 1`, auto-tunes for new shapes encountered on first run. (may take several minutes)
   - Note: When using Docker with default or on-demand tuning enabled, commit the container to persist tuning changes
-  - Note: When running in a multi-GPU setup, we recommend setting `CUEQ_DISABLE_AOT_TUNING = 1` and `CUEQ_DEFAULT_CONFIG = 1` for now.
+  - Note: When running in a multi-GPU setup, we recommend setting `CUEQ_DISABLE_AOT_TUNING = 1` and `CUEQ_DEFAULT_CONFIG = 1`.
 
 ## 0.4.0 (2025-04-25)
 
