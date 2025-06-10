@@ -26,31 +26,47 @@ def triangle_attention(
     scale: Optional[float] = None,
     return_aux: bool = False,
 ) -> torch.Tensor | Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """
+    r"""
     Triangle Attention
+
+    .. math::
+
+        \text{Attention}_q(Q, K, V, B, M) = \sum_k\left[\text{softmax}_k\left(\begin{cases} 
+        s\, Q_q \cdot K_k + B_{qk} & \text{if } M_k = 1 \\
+        -10^9 & \text{otherwise}
+        \end{cases}\right) V_k \right]
+
 
     Args:
         q (torch.Tensor): Query tensor of shape (B, N, H, Q, D). For B=1, can also be (N, H, Q, D).
         k (torch.Tensor): Key tensor of shape (B, N, H, K, D). For B=1, can also be (N, H, K, D).
         v (torch.Tensor): Value tensor of shape (B, N, H, K, D). For B=1, can also be (N, H, K, D).
-        b (torch.Tensor): Bias tensor of shape (B, 1, H, Q, K), For B=1, can also be (1, H, Q, K).
-                          Note: Will be cast to float32 internally
-        mask (torch.Tensor): Mask tensor of shape (B, N, 1, 1, K). For B=1, can also be (N, 1, 1, K).
-                             Note: Optional, will be cast to bool internally.
-        scale (float): float scale for q. Optional, if None, value 1/d**2 is used.
-        return_aux (bool) = False. If True, two auxiliary tensors are returned along with the result.
-        where B is batch size, N is number of tokens, H is number of heads, Q is number of query tokens, K is number of key tokens, D is the attention dimension.
+        bias (torch.Tensor): Bias tensor of shape (B, 1, H, Q, K), For B=1, can also be (1, H, Q, K).
+            Will be cast to float32 internally.
+        mask (torch.Tensor, optional): Mask tensor of shape (B, N, 1, 1, K). For B=1, can also be (N, 1, 1, K).
+            Will be cast to bool internally.
+        scale (float, optional): Float scale for q (s in the equation). If None, value 1/sqrt(d) is used.
+        return_aux (bool): If True, two auxiliary tensors are returned along with the result.
+            Defaults to False.
+
+    Note:
+        - B: batch size
+        - N: number of tokens
+        - H: number of heads
+        - Q: number of query tokens
+        - K: number of key tokens
+        - D: attention dimension
 
     Returns:
-        output(torch.Tensor): Output tensor of shape (B, N, H, Q, D). dtype=q.dtype
-        lse(torch.Tensor): Auxiliary result (for special use only). dtype=float32
-        max(torch.Tensor): Auxiliary result (for special use only). dtype=float32
+        - output(torch.Tensor): Output tensor of shape (B, N, H, Q, D). dtype=q.dtype
+        - lse(torch.Tensor): Auxiliary result (for special use only). dtype=float32
+        - max(torch.Tensor): Auxiliary result (for special use only). dtype=float32
 
     Notes:
         (1) Context is saved for backward pass. You don't need to save it manually.
         (2) Kernel precision (fp32, bf16, fp16) is based on input dtypes. For tf32, set it from torch global scope
-    Limitations:
-        (1) Full FP32 is not supported for backward pass. Please set torch.backends.cuda.matmul.allow_tf32=True.
+        (3) **Limitation**: Full FP32 is not supported for backward pass. Please set `torch.backends.cuda.matmul.allow_tf32=True`.
+
     Example:
         >>> import torch
         >>> import math
@@ -60,16 +76,16 @@ def triangle_attention(
         >>> batch_size, seq_len, num_heads, hidden_dim = 1, 128, 2, 32
         >>> # Create input tensors on GPU with float16 precision
         >>> q = torch.randn(batch_size, seq_len, num_heads, seq_len, hidden_dim,
-        ...                device=device, dtype=torch.float16, requires_grad=True)
+        ...                 device=device, dtype=torch.float16, requires_grad=True)
         >>> k = torch.randn(batch_size, seq_len, num_heads, seq_len, hidden_dim,
-        ...                device=device, dtype=torch.float16, requires_grad=True)
+        ...                 device=device, dtype=torch.float16, requires_grad=True)
         >>> v = torch.randn(batch_size, seq_len, num_heads, seq_len, hidden_dim,
-        ...                device=device, dtype=torch.float16, requires_grad=True)
+        ...                 device=device, dtype=torch.float16, requires_grad=True)
         >>> bias = torch.randn(batch_size, 1, num_heads, seq_len, seq_len,
-        ...                   device=device, dtype=torch.float32, requires_grad=True)
+        ...                    device=device, dtype=torch.float32, requires_grad=True)
         >>> # Create optional mask
         >>> mask = torch.rand(batch_size, seq_len, 1, 1, seq_len,
-        ...                  device=device) < 0.5
+        ...                   device=device) < 0.5
         >>> # Calculate scale
         >>> scale = 1 / math.sqrt(hidden_dim)
         >>> # Forward pass
@@ -119,15 +135,18 @@ def triangle_multiplicative_update(
 
     This function performs a triangle multiplicative update operation, which is a key component
     in the AlphaFold2 architecture. The operation consists of:
+
     1. Input normalization and gating
     2. Triangular projection (either outgoing or incoming)
     3. Output normalization and gating
 
-    The function supports both ahead-of-time (AOT) tuning and just-in-time (JIT) tuning:
-    - AOT tuning is enabled by default and can be disabled by setting CUEQ_DISABLE_AOT_TUNING=1
-    - When AOT is disabled:
-        * If CUEQ_DEFAULT_CONFIG=1: Uses default configuration without tuning
-        * If CUEQ_DEFAULT_CONFIG=0 or not set: Tunes the current configuration
+    The function supports both ahead-of-time (AOT) tuning and just-in-time (JIT) tuning.
+    Auto-tuning behavior can be controlled through environment variables:
+
+    - Default: Full Ahead-of-Time (AOT) auto-tuning enabled for optimal performance **(may take several hours)**
+    - Quick testing: Set `CUEQ_DISABLE_AOT_TUNING = 1` and `CUEQ_DEFAULT_CONFIG = 1` to disable all tuning
+    - On-Demand tuning: `CUEQ_DISABLE_AOT_TUNING = 1`, auto-tunes for new shapes encountered on first run. (may take several minutes)
+    - Note: When using Docker with default or on-demand tuning enabled, commit the container to persist tuning changes
 
     Args:
         x (torch.Tensor): Input tensor of shape (B, N, N, D) where:
@@ -152,9 +171,7 @@ def triangle_multiplicative_update(
     Notes:
         (1) Context is saved for backward pass. You don't need to save it manually.
         (2) Kernel precision (fp32, bf16,fp16) is based on input dtypes. For tf32, set it from torch global scope
-
-    Limitations:
-        (1) Currently only supports hidden_dim values that are multiples of 32.
+        (3) **Limitation** Currently only supports hidden_dim values that are multiples of 32.
 
     Example:
         >>> import torch
