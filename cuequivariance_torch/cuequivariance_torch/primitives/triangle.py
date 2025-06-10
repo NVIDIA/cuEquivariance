@@ -70,40 +70,41 @@ def triangle_attention(
     Example:
         >>> import torch
         >>> import math
-        >>> from cuequivariance_ops_torch import triangle_attention
-        >>> device = torch.device("cuda")
-        >>> # Set up dimensions
-        >>> batch_size, seq_len, num_heads, hidden_dim = 1, 128, 2, 32
-        >>> # Create input tensors on GPU with float16 precision
-        >>> q = torch.randn(batch_size, seq_len, num_heads, seq_len, hidden_dim,
-        ...                 device=device, dtype=torch.float16, requires_grad=True)
-        >>> k = torch.randn(batch_size, seq_len, num_heads, seq_len, hidden_dim,
-        ...                 device=device, dtype=torch.float16, requires_grad=True)
-        >>> v = torch.randn(batch_size, seq_len, num_heads, seq_len, hidden_dim,
-        ...                 device=device, dtype=torch.float16, requires_grad=True)
-        >>> bias = torch.randn(batch_size, 1, num_heads, seq_len, seq_len,
-        ...                    device=device, dtype=torch.float32, requires_grad=True)
-        >>> # Create optional mask
-        >>> mask = torch.rand(batch_size, seq_len, 1, 1, seq_len,
-        ...                   device=device) < 0.5
-        >>> # Calculate scale
-        >>> scale = 1 / math.sqrt(hidden_dim)
-        >>> # Forward pass
-        >>> output, lse, max_val = triangle_attention(
-        ...     q=q, k=k, v=v, bias=bias, mask=mask, scale=scale, return_aux=True)
-        >>> print(output.shape)  # torch.Size([1, 128, 2, 128, 32])
+        >>> from cuequivariance_torch import triangle_attention
+        >>> if torch.cuda.is_available():  # doctest: +SKIP
+        ...     device = torch.device("cuda")
+        ...     # Set up dimensions
+        ...     batch_size, seq_len, num_heads, hidden_dim = 1, 128, 2, 32
+        ...     # Create input tensors on GPU with float16 precision
+        ...     q = torch.randn(batch_size, seq_len, num_heads, seq_len, hidden_dim,
+        ...                     device=device, dtype=torch.float16, requires_grad=True)
+        ...     k = torch.randn(batch_size, seq_len, num_heads, seq_len, hidden_dim,
+        ...                     device=device, dtype=torch.float16, requires_grad=True)
+        ...     v = torch.randn(batch_size, seq_len, num_heads, seq_len, hidden_dim,
+        ...                     device=device, dtype=torch.float16, requires_grad=True)
+        ...     bias = torch.randn(batch_size, 1, num_heads, seq_len, seq_len,
+        ...                        device=device, dtype=torch.float32, requires_grad=True)
+        ...     # Create optional mask
+        ...     mask = torch.rand(batch_size, seq_len, 1, 1, seq_len,
+        ...                       device=device) < 0.5
+        ...     # Calculate scale
+        ...     scale = 1 / math.sqrt(hidden_dim)
+        ...     # Forward pass
+        ...     output, lse, max_val = triangle_attention(
+        ...         q=q, k=k, v=v, bias=bias, mask=mask, scale=scale, return_aux=True)
+        ...     print(output.shape)  # torch.Size([1, 128, 2, 128, 32])
+        ...     # Create gradient tensor and perform backward pass
+        ...     grad_out = torch.randn_like(output)
+        ...     output.backward(grad_out)
+        ...     # Access gradients
+        ...     print(q.grad.shape)  # torch.Size([1, 128, 2, 128, 32])
+        ...     print(k.grad.shape)  # torch.Size([1, 128, 2, 128, 32])
+        ...     print(v.grad.shape)  # torch.Size([1, 128, 2, 128, 32])
+        ...     print(bias.grad.shape)  # torch.Size([1, 1, 2, 128, 128])
         torch.Size([1, 128, 2, 128, 32])
-        >>> # Create gradient tensor and perform backward pass
-        >>> grad_out = torch.randn_like(output)
-        >>> output.backward(grad_out)
-        >>> # Access gradients
-        >>> print(q.grad.shape)  # torch.Size([1, 128, 2, 128, 32])
         torch.Size([1, 128, 2, 128, 32])
-        >>> print(k.grad.shape)  # torch.Size([1, 128, 2, 128, 32])
         torch.Size([1, 128, 2, 128, 32])
-        >>> print(v.grad.shape)  # torch.Size([1, 128, 2, 128, 32])
         torch.Size([1, 128, 2, 128, 32])
-        >>> print(bias.grad.shape)  # torch.Size([1, 1, 2, 128, 128])
         torch.Size([1, 1, 2, 128, 128])
     """
 
@@ -175,26 +176,27 @@ def triangle_multiplicative_update(
 
     Example:
         >>> import torch
-        >>> from cuequivariance_ops_torch import triangle_multiplicative_update
-        >>> device = torch.device("cuda")
-        >>> batch_size, seq_len, hidden_dim = 1, 128, 128
-        >>> # Create input tensor
-        >>> x = torch.randn(batch_size, seq_len, seq_len, hidden_dim, requires_grad=True, device=device)
-        >>> # Create mask (1 for valid positions, 0 for masked)
-        >>> mask = torch.ones(batch_size, seq_len, seq_len, device=device)
-        >>> # Perform triangular multiplication
-        >>> output = triangle_multiplicative_update(
-        ...     x=x,
-        ...     direction="outgoing",  # or "incoming"
-        ...     mask=mask,
-        ... ) #If CUEQ_DISABLE_AOT_TUNING is not set to 1, will default to json config look-up if config is available. If not, then proceeds to auto-tuning using Ahead Of Time Compilation.
-        >>> print(output.shape)  # torch.Size([1, 128, 128, 128])
+        >>> from cuequivariance_torch import triangle_multiplicative_update
+        >>> if torch.cuda.is_available():  # doctest: +SKIP
+        ...     device = torch.device("cuda")
+        ...     batch_size, seq_len, hidden_dim = 1, 128, 128
+        ...     # Create input tensor
+        ...     x = torch.randn(batch_size, seq_len, seq_len, hidden_dim, requires_grad=True, device=device)
+        ...     # Create mask (1 for valid positions, 0 for masked)
+        ...     mask = torch.ones(batch_size, seq_len, seq_len, device=device)
+        ...     # Perform triangular multiplication
+        ...     output = triangle_multiplicative_update(
+        ...         x=x,
+        ...         direction="outgoing",  # or "incoming"
+        ...         mask=mask,
+        ...     ) #If CUEQ_DISABLE_AOT_TUNING is not set to 1, will default to json config look-up if config is available. If not, then proceeds to auto-tuning using Ahead Of Time Compilation.
+        ...     print(output.shape)  # torch.Size([1, 128, 128, 128])
+        ...     # Create gradient tensor and perform backward pass
+        ...     grad_out = torch.randn_like(output)
+        ...     output.backward(grad_out)
+        ...     # Access gradients
+        ...     print(x.grad.shape)  # torch.Size([1, 128, 128, 128])
         torch.Size([1, 128, 128, 128])
-        >>> # Create gradient tensor and perform backward pass
-        >>> grad_out = torch.randn_like(output)
-        >>> output.backward(grad_out)
-        >>> # Access gradients
-        >>> print(x.grad.shape)  # torch.Size([1, 128, 128, 128])
         torch.Size([1, 128, 128, 128])
     """
     try:
