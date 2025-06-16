@@ -16,6 +16,11 @@ from typing import Optional, Tuple
 
 import torch
 
+try:
+    from cuequivariance_ops_torch import TriMulPrecision
+except ImportError:
+    TriMulPrecision = None  # type: ignore
+
 
 def triangle_attention(
     q: torch.Tensor,
@@ -131,6 +136,7 @@ def triangle_multiplicative_update(
     p_out_weight: Optional[torch.Tensor] = None,
     g_out_weight: Optional[torch.Tensor] = None,
     eps: float = 1e-5,
+    precision: Optional[TriMulPrecision] = None,
 ) -> torch.Tensor:
     """Apply triangle multiplicative update operation.
 
@@ -144,9 +150,11 @@ def triangle_multiplicative_update(
     The function supports both ahead-of-time (AOT) tuning and just-in-time (JIT) tuning.
     Auto-tuning behavior can be controlled through environment variables:
 
-    - Default: Full Ahead-of-Time (AOT) auto-tuning enabled for optimal performance **(may take several hours)**
-    - Quick testing: Set `CUEQ_DISABLE_AOT_TUNING = 1` and `CUEQ_DEFAULT_CONFIG = 1` to disable all tuning
-    - On-Demand tuning: `CUEQ_DISABLE_AOT_TUNING = 1`, auto-tunes for new shapes encountered on first run. (may take several minutes)
+    - Quick testing: Default configuration where tuning configs, if existent, are looked-up. If not, then falls back to default kernel parameters. No tuning is performed.
+    - On-Demand tuning: Set `CUEQ_TRITON_TUNING_MODE = "ONDEMAND"` to auto-tune for new shapes encountered on first run (may take several minutes)
+    - AOT tuning: Set `CUEQ_TRITON_TUNING_MODE = "AOT"` to perform full ahead-of-time tuning for optimal performance **(may take several hours)**
+    - Force tuning: Set `CUEQ_TRITON_FORCE_TUNING = 1` to ignore previously saved settings and perform tuning
+    - Cache directory: Set `CUEQ_TRITON_CACHE_DIR` to specify where tuning configurations are stored
     - Note: When using Docker with default or on-demand tuning enabled, commit the container to persist tuning changes
 
     Args:
@@ -165,14 +173,20 @@ def triangle_multiplicative_update(
         p_out_weight (torch.Tensor): Weight tensor for output projection of shape (D, D).
         g_out_weight (torch.Tensor): Weight tensor for output gating of shape (D, D).
         eps (float, optional): Small constant for numerical stability in normalization. Defaults to 1e-5.
+        precision (Precision, optional): Precision mode for matrix multiplications. If None, uses TF32 if enabled in PyTorch using torch.backends.cuda.matmul.allow_tf32, otherwise uses default precision.
+            Available options:
+            - DEFAULT: Use default precision setting of triton.language.dot
+            - TF32: Use TensorFloat-32 precision
+            - TF32x3: Use TensorFloat-32 precision with 3x accumulation
+            - IEEE: Use IEEE 754 precision
 
     Returns:
         Output tensor of shape (batch_size, seq_len, seq_len, hidden_dim)
 
     Notes:
         (1) Context is saved for backward pass. You don't need to save it manually.
-        (2) Kernel precision (fp32, bf16,fp16) is based on input dtypes. For tf32, set it from torch global scope
-        (3) **Limitation** Currently only supports hidden_dim values that are multiples of 32.
+        (2) Kernel precision (fp32, bf16, fp16) is based on input dtypes. For tf32, set it from torch global scope using torch.backends.cuda.matmul.allow_tf32
+        (3) **Limitation**: Currently only supports hidden_dim values that are multiples of 32.
 
     Example:
         >>> import torch
@@ -189,7 +203,7 @@ def triangle_multiplicative_update(
         ...         x=x,
         ...         direction="outgoing",  # or "incoming"
         ...         mask=mask,
-        ...     ) #If CUEQ_DISABLE_AOT_TUNING is not set to 1, will default to json config look-up if config is available. If not, then proceeds to auto-tuning using Ahead Of Time Compilation.
+        ...     )
         ...     print(output.shape)  # torch.Size([1, 128, 128, 128])
         ...     # Create gradient tensor and perform backward pass
         ...     grad_out = torch.randn_like(output)
@@ -219,4 +233,5 @@ def triangle_multiplicative_update(
             p_out_weight,
             g_out_weight,
             eps,
+            precision,
         )
