@@ -153,7 +153,7 @@ def triangle_multiplicative_update(
     - Quick testing: Default configuration where tuning configs, if existent, are looked-up. If not, then falls back to default kernel parameters. No tuning is performed.
     - On-Demand tuning: Set `CUEQ_TRITON_TUNING_MODE = "ONDEMAND"` to auto-tune for new shapes encountered on first run (may take several minutes)
     - AOT tuning: Set `CUEQ_TRITON_TUNING_MODE = "AOT"` to perform full ahead-of-time tuning for optimal performance **(may take several hours)**
-    - Ignore user cache: Set `CUEQ_TRITON_IGNORE_EXISTING_CACHE = 1` to ignore previously saved user-local settings with AOT/ONDEMAND tuning. Maybe combined with AOT/On-Demand tuning options.
+    - Ignore user cache: Set CUEQ_TRITON_IGNORE_EXISTING_CACHE to ignore both the default settings that come with the package and any user-local settings previously saved with AOT/ONDEMAND tuning. May be used to regenerate optimal settings for a particular setup.
     - Cache directory: Set `CUEQ_TRITON_CACHE_DIR` to specify where tuning configurations are stored
     - Note: When using Docker with default or on-demand tuning enabled, commit the container to persist tuning changes
 
