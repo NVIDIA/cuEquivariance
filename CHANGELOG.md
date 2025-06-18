@@ -19,12 +19,16 @@ This release includes improvements to triangle multiplicative update with torch.
   - **Quick testing**: Default configuration where tuning configs, if existent, are looked-up. If not, then falls back to default kernel parameters. No tuning is performed.
   - **On-Demand tuning**: Set `CUEQ_TRITON_TUNING_MODE = "ONDEMAND"` to auto-tune for new shapes encountered on first run (may take several minutes)
   - **AOT tuning**: Set `CUEQ_TRITON_TUNING_MODE = "AOT"` to perform full ahead-of-time tuning for optimal performance **(may take several hours)**
-  - **Ignore cache**: Set `CUEQ_TRITON_IGNORE_EXISTING_CACHE` to ignore both the default settings that come with the package and any user-local settings previously saved with AOT/ONDEMAND tuning. May be used to regenerate optimal settings for a particular setup.
-  - **Cache directory**: Set `CUEQ_TRITON_CACHE_DIR` to specify where tuning configurations are stored
+  - **Ignore user cache**: Set `CUEQ_TRITON_IGNORE_EXISTING_CACHE` to ignore both the default settings that come with the package and any user-local settings previously saved with AOT/ONDEMAND tuning. May be used to regenerate optimal settings for a particular setup.
+  - **Cache directory**: Set `CUEQ_TRITON_CACHE_DIR` to specify where tuning configurations are stored. Default location is `${HOME}/.cache/cuequivariance-triton`. **Note**: When running in containers where `$HOME` is inside the container (typically `/root`), tuning changes may be lost on container restart unless the container is committed or a persistent cache directory is specified.
 
 ### Fixed
 - [Torch] Fixed torch.compile compatibility issues with triangle multiplicative update
 - [Torch] Tuning issues for `cuet.triangle_multiplicative_update` in multi-GPU system
+
+### Limitations
+- PyTorch does not currently bundle the latest Triton version as pytorch-triton. As a result, Blackwell GPU users may occasionally experience hangs or instability during model execution. Users may attempt installation with the latest Triton from source at their own risk. We are monitoring this issue and will remedy as soon as possible.
+- [Torch] Tuning is always performed for GPU-0 and may not be the optimal setting for all GPUs in a heterogenous multi-GPU setting
 
 ## 0.5.0 (2025-06-10)
 
