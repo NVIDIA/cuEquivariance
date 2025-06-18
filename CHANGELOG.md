@@ -28,7 +28,7 @@ This release includes improvements to triangle multiplicative update with torch.
 
 ### Limitations
 - PyTorch does not currently bundle the latest Triton version as pytorch-triton. As a result, Blackwell GPU users may occasionally experience hangs or instability during model execution. Users may attempt installation with the latest Triton from source at their own risk. We are monitoring this issue and will remedy as soon as possible.
-- [Torch] Tuning is always performed for GPU-0 and may not be the optimal setting for all GPUs in a heterogenous multi-GPU setting
+- [Torch] Tuning for `cuet.triangle_multiplicative_update` is always performed for GPU-0 and may not be the optimal setting for all GPUs in a heterogenous multi-GPU setting
 
 ## 0.5.0 (2025-06-10)
 
