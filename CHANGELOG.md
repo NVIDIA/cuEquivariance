@@ -6,7 +6,13 @@ This release includes improvements to triangle multiplicative update with torch.
 
 ### Added
 - [Torch] `torch.compile` support for `cuet.triangle_multiplicative_update`
-- [Torch] Optional precision argument for `cuet.triangle_multiplicative_update`
+- [Torch] Optional precision argument for `cuet.triangle_multiplicative_update`:
+  - `precision (Precision, optional)`: Precision mode for matrix multiplications. If None, uses TF32 if enabled in PyTorch using `torch.backends.cuda.matmul.allow_tf32`, otherwise uses DEFAULT precision.
+  - Available options:
+    - `DEFAULT`: Use default precision setting of `triton.language.dot`
+    - `TF32`: Use TensorFloat-32 precision
+    - `TF32x3`: Use TensorFloat-32 precision with 3x accumulation
+    - `IEEE`: Use IEEE 754 precision
 
 ### Improved
 - [Torch] Enhanced tuning configuration for `cuet.triangle_multiplicative_update` with multi-GPU support and multiple tuning modes:
