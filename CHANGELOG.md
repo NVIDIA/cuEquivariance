@@ -1,5 +1,25 @@
 ## Latest Changes
 
+## 0.5.1 (2025-06-18)
+
+This release includes improvements to triangle multiplicative update with torch.compile support and enhanced tuning configuration options.
+
+### Added
+- [Torch] `torch.compile` support for `cuet.triangle_multiplicative_update`
+- [Torch] Optional precision argument for `cuet.triangle_multiplicative_update`
+
+### Improved
+- [Torch] Enhanced tuning configuration for `cuet.triangle_multiplicative_update` with multi-GPU support and multiple tuning modes:
+  - **Quick testing**: Default configuration where tuning configs, if existent, are looked-up. If not, then falls back to default kernel parameters. No tuning is performed.
+  - **On-Demand tuning**: Set `CUEQ_TRITON_TUNING_MODE = "ONDEMAND"` to auto-tune for new shapes encountered on first run (may take several minutes)
+  - **AOT tuning**: Set `CUEQ_TRITON_TUNING_MODE = "AOT"` to perform full ahead-of-time tuning for optimal performance **(may take several hours)**
+  - **Ignore user cache**: Set `CUEQ_TRITON_IGNORE_EXISTING_CACHE` to ignore both the default settings that come with the package and any user-local settings previously saved with AOT/ONDEMAND tuning. May be used to regenerate optimal settings for a particular setup.
+  - **Cache directory**: Set `CUEQ_TRITON_CACHE_DIR` to specify where tuning configurations are stored
+
+### Fixed
+- [Torch] Fixed torch.compile compatibility issues with triangle multiplicative update
+- [Torch] Tuning issues for `cuet.triangle_multiplicative_update` in multi-GPU system
+
 ## 0.5.0 (2025-06-10)
 
 This release introduces `triangle_attention` and `triangle_multiplicative_update`.
