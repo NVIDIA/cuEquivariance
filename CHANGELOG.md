@@ -15,7 +15,7 @@ This release includes improvements to triangle multiplicative update with torch.
     - `IEEE`: Use IEEE 754 precision
 
 ### Improved
-- [Torch] Enhanced tuning configuration for `cuet.triangle_multiplicative_update` with multi-GPU support and multiple tuning modes:
+- [Torch] Enhanced tuning configuration for `cuet.triangle_multiplicative_update` with support for multi-process tuning. Our tuning modes:
   - **Quick testing**: Default configuration where tuning configs, if existent, are looked-up. If not, then falls back to default kernel parameters. No tuning is performed.
   - **On-Demand tuning**: Set `CUEQ_TRITON_TUNING_MODE = "ONDEMAND"` to auto-tune for new shapes encountered on first run (may take several minutes)
   - **AOT tuning**: Set `CUEQ_TRITON_TUNING_MODE = "AOT"` to perform full ahead-of-time tuning for optimal performance **(may take several hours)**
@@ -24,7 +24,7 @@ This release includes improvements to triangle multiplicative update with torch.
 
 ### Fixed
 - [Torch] Fixed torch.compile compatibility issues with triangle multiplicative update
-- [Torch] Tuning issues for `cuet.triangle_multiplicative_update` in multi-GPU system
+- [Torch] Tuning issues for `cuet.triangle_multiplicative_update` with multiple processes.
 
 ### Limitations
 - PyTorch does not currently bundle the latest Triton version as pytorch-triton. As a result, Blackwell GPU users may occasionally experience hangs or instability during model execution. Users may attempt installation with the latest Triton from source at their own risk. We are monitoring this issue and will remedy as soon as possible.
