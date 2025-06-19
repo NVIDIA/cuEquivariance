@@ -41,6 +41,7 @@ from .operations.spherical_harmonics import SphericalHarmonics
 from .primitives.triangle import (
     triangle_attention,
     triangle_multiplicative_update,
+    TriMulPrecision,
 )
 
 from cuequivariance_torch import layers
@@ -65,5 +66,6 @@ __all__ = [
     "SphericalHarmonics",
     "triangle_attention",
     "triangle_multiplicative_update",
+    "TriMulPrecision",
     "layers",
 ]
