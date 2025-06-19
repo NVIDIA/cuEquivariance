@@ -1,5 +1,35 @@
 ## Latest Changes
 
+## 0.5.1 (2025-06-18)
+
+This release includes improvements to triangle multiplicative update with torch.compile support and enhanced tuning configuration options.
+
+### Added
+- [Torch] `torch.compile` support for `cuet.triangle_multiplicative_update`
+- [Torch] Optional precision argument for `cuet.triangle_multiplicative_update`:
+  - `precision (Precision, optional)`: Precision mode for matrix multiplications. If None, uses TF32 if enabled in PyTorch using `torch.backends.cuda.matmul.allow_tf32`, otherwise uses DEFAULT precision.
+  - Available options:
+    - `DEFAULT`: Use default precision setting of `triton.language.dot`
+    - `TF32`: Use TensorFloat-32 precision
+    - `TF32x3`: Use TensorFloat-32 precision with 3x accumulation
+    - `IEEE`: Use IEEE 754 precision
+
+### Improved
+- [Torch] Enhanced tuning configuration for `cuet.triangle_multiplicative_update` with support for multi-process tuning. Our tuning modes:
+  - **Quick testing**: Default configuration where tuning configs, if existent, are looked-up. If not, then falls back to default kernel parameters. No tuning is performed.
+  - **On-Demand tuning**: Set `CUEQ_TRITON_TUNING_MODE = "ONDEMAND"` to auto-tune for new shapes encountered on first run (may take several minutes)
+  - **AOT tuning**: Set `CUEQ_TRITON_TUNING_MODE = "AOT"` to perform full ahead-of-time tuning for optimal performance **(may take several hours)**
+  - **Ignore cache**: Set `CUEQ_TRITON_IGNORE_EXISTING_CACHE` to ignore both the default settings that come with the package and any user-local settings previously saved with AOT/ONDEMAND tuning. May be used to regenerate optimal settings for a particular setup.
+  - **Cache directory**: Set `CUEQ_TRITON_CACHE_DIR` to specify where tuning configurations are stored. Default location is `${HOME}/.cache/cuequivariance-triton`. **Note**: When running in containers where `$HOME` is inside the container (typically `/root`), tuning changes may be lost on container restart unless the container is committed or a persistent cache directory is specified.
+
+### Fixed
+- [Torch] Fixed torch.compile compatibility issues with triangle multiplicative update
+- [Torch] Tuning issues for `cuet.triangle_multiplicative_update` with multiple processes.
+
+### Limitations
+- PyTorch does not currently bundle the latest Triton version as pytorch-triton. As a result, Blackwell GPU users may occasionally experience hangs or instability during model execution. Users may attempt installation with the latest Triton from source at their own risk. We are monitoring this issue and will remedy as soon as possible.
+- [Torch] Tuning for `cuet.triangle_multiplicative_update` is always performed for GPU-0 and may not be the optimal setting for all GPUs in a heterogenous multi-GPU setting
+
 ## 0.5.0 (2025-06-10)
 
 This release introduces `triangle_attention` and `triangle_multiplicative_update`.
