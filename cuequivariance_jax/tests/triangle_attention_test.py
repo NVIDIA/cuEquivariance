@@ -14,13 +14,20 @@
 # limitations under the License.
 import jax
 import jax.numpy as jnp
+import pytest
 from jax.test_util import check_grads
 
 import cuequivariance_jax as cuex
 
 
 def create_test_data(
-    batch_size=2, n_nodes=4, n_heads=2, seq_len_qo=8, seq_len_kv=6, d_model=32
+    platform: str,
+    batch_size=2,
+    n_nodes=4,
+    n_heads=2,
+    seq_len_qo=8,
+    seq_len_kv=6,
+    d_model=32,
 ):
     """Create test data for triangle attention."""
     key = jax.random.PRNGKey(42)
@@ -40,12 +47,26 @@ def create_test_data(
 
     scale = d_model**-0.5
 
+    [q, k, v, mask, bias] = jax.tree.map(
+        lambda x: jax.device_put(x, jax.local_devices(backend=platform)[0]),
+        [q, k, v, mask, bias],
+    )
+
     return q, k, v, mask, bias, scale
 
 
-def test_gradient_correctness_finite_differences():
+def require_platform(platform: str):
+    """Helper function to check GPU requirement based on platform parameter."""
+    if platform == "cuda" and jnp.ones(()).devices().pop().platform != "gpu":
+        pytest.skip("This test requires a CUDA device.")
+
+
+@pytest.mark.parametrize("platform", ["cpu", "cuda"])
+def test_gradient_correctness_finite_differences(platform):
     """Test gradient correctness using finite differences."""
-    q, k, v, mask, bias, scale = create_test_data()
+    require_platform(platform)
+
+    q, k, v, mask, bias, scale = create_test_data(platform)
 
     def fn(q, k, v, bias):
         output, _, _ = cuex.experimental.triangle_attention(
@@ -58,10 +79,17 @@ def test_gradient_correctness_finite_differences():
     )
 
 
-def test_basic_functionality():
+@pytest.mark.parametrize("platform", ["cpu", "cuda"])
+def test_basic_functionality(platform):
     """Basic test to ensure the function works."""
-    q, k, v, mask, bias, scale = create_test_data()
-    output, lse, amax = cuex.experimental.triangle_attention(q, k, v, mask, bias, scale)
+    require_platform(platform)
+
+    q, k, v, mask, bias, scale = create_test_data(platform)
+
+    def fn(q, k, v, mask, bias):
+        return cuex.experimental.triangle_attention(q, k, v, mask, bias, scale)
+
+    output, lse, amax = fn(q, k, v, mask, bias)
 
     # Basic shape checks
     assert output.shape == q.shape
