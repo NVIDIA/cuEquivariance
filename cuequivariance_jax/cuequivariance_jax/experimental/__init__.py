@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from .indexed_linear import indexed_linear
+from .triangle_attention import triangle_attention
 from cuequivariance_jax.experimental import utils
 
-__all__ = ["indexed_linear", "utils"]
+__all__ = ["indexed_linear", "triangle_attention", "utils"]

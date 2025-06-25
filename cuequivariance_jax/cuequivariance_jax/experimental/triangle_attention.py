@@ -1,0 +1,198 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+from functools import partial
+
+import jax
+from cuequivariance_ops_jax import (
+    triangle_attention_cuda_bwd,
+    triangle_attention_cuda_fwd,
+    triangle_attention_jax_fwd,
+)
+from jax import custom_vjp
+from jax.interpreters import mlir, xla
+
+fwd_p = jax.extend.core.Primitive("triangle_attention_fwd")
+fwd_p.multiple_results = True
+
+bwd_p = jax.extend.core.Primitive("triangle_attention_bwd")
+bwd_p.multiple_results = True
+
+
+def triangle_attention_fwd_abstract_eval(
+    q: jax.core.ShapedArray,  # [B, N, H, S_qo, D]
+    k: jax.core.ShapedArray,  # [B, N, H, S_kv, D]
+    v: jax.core.ShapedArray,  # [B, N, H, S_kv, D]
+    mask: jax.core.ShapedArray,  # [B, N, 1, 1, S_kv] boolean
+    bias: jax.core.ShapedArray,  # [B, 1, H, S_qo, S_kv]
+    *,
+    scale: float,
+    precision: jax.lax.Precision | None = None,
+) -> tuple[jax.core.ShapedArray, jax.core.ShapedArray, jax.core.ShapedArray]:
+    B, N, H, S_qo, D = q.shape
+    a_shape = jax.core.ShapedArray((B, N, H, S_qo, D), v.dtype)
+    lse_shape = jax.core.ShapedArray((B, N, H, S_qo, 1), q.dtype)
+    amax_shape = jax.core.ShapedArray((B, N, H, S_qo, 1), q.dtype)
+    return a_shape, lse_shape, amax_shape
+
+
+def triangle_attention_bwd_abstract_eval(
+    da: jax.core.ShapedArray,  # [B, N, H, S_qo, D]
+    a: jax.core.ShapedArray,  # [B, N, H, S_qo, D]
+    lse: jax.core.ShapedArray,  # [B, N, H, S_qo, 1]
+    q: jax.core.ShapedArray,  # [B, N, H, S_qo, D]
+    k: jax.core.ShapedArray,  # [B, N, H, S_kv, D]
+    v: jax.core.ShapedArray,  # [B, N, H, S_kv, D]
+    mask: jax.core.ShapedArray,  # [B, N, 1, 1, S_kv] boolean
+    bias: jax.core.ShapedArray,  # [B, 1, H, S_qo, S_kv]
+    *,
+    scale: float,
+    precision: jax.lax.Precision | None = None,
+) -> tuple[
+    jax.core.ShapedArray,
+    jax.core.ShapedArray,
+    jax.core.ShapedArray,
+    jax.core.ShapedArray,
+]:
+    dq_shape = jax.core.ShapedArray(q.shape, q.dtype)
+    dk_shape = jax.core.ShapedArray(k.shape, k.dtype)
+    dv_shape = jax.core.ShapedArray(v.shape, v.dtype)
+    dbias_shape = jax.core.ShapedArray(bias.shape, bias.dtype)
+    return dq_shape, dk_shape, dv_shape, dbias_shape
+
+
+def triangle_attention_fwd_impl(
+    platform: str | None,
+    q: jax.Array,  # [B, N, H, S_qo, D]
+    k: jax.Array,  # [B, N, H, S_kv, D]
+    v: jax.Array,  # [B, N, H, S_kv, D]
+    mask: jax.Array,  # [B, N, 1, 1, S_kv] boolean
+    bias: jax.Array,  # [B, 1, H, S_qo, S_kv]
+    *,
+    scale: float,
+    precision: jax.lax.Precision | None = None,
+) -> tuple[jax.Array, jax.Array, jax.Array]:
+    if platform == "cuda":
+        return triangle_attention_cuda_fwd(q, k, v, mask, bias, scale, precision)
+    else:
+        return triangle_attention_jax_fwd(q, k, v, mask, bias, scale, precision)
+
+
+def triangle_attention_bwd_impl(
+    platform: str | None,
+    da: jax.Array,  # [B, N, H, S_qo, D]
+    a: jax.Array,  # [B, N, H, S_qo, D]
+    lse: jax.Array,  # [B, N, H, S_qo, 1]
+    q: jax.Array,  # [B, N, H, S_qo, D]
+    k: jax.Array,  # [B, N, H, S_kv, D]
+    v: jax.Array,  # [B, N, H, S_kv, D]
+    mask: jax.Array,  # [B, N, 1, 1, S_kv] boolean
+    bias: jax.Array,  # [B, 1, H, S_qo, S_kv]
+    *,
+    scale: float,
+    precision: jax.lax.Precision | None = None,
+) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
+    if platform == "cuda":
+        return triangle_attention_cuda_bwd(
+            da, a, lse, q, k, v, mask, bias, scale, precision
+        )
+    else:
+        # Use JAX autodiff for backward pass
+        def forward_fn(q, k, v, bias):
+            a, lse, amax = triangle_attention_jax_fwd(
+                q, k, v, mask, bias, scale, precision
+            )
+            return a
+
+        _, vjp_fn = jax.vjp(forward_fn, q, k, v, bias)
+        dq, dk, dv, dbias = vjp_fn(da)
+        return dq, dk, dv, dbias
+
+
+fwd_p.def_abstract_eval(triangle_attention_fwd_abstract_eval)
+fwd_p.def_impl(partial(xla.apply_primitive, fwd_p))
+for platform in ["cuda", None]:
+    mlir.register_lowering(
+        fwd_p,
+        mlir.lower_fun(
+            partial(triangle_attention_fwd_impl, platform), fwd_p.multiple_results
+        ),
+        platform,
+    )
+
+bwd_p.def_abstract_eval(triangle_attention_bwd_abstract_eval)
+bwd_p.def_impl(partial(xla.apply_primitive, bwd_p))
+for platform in ["cuda", None]:
+    mlir.register_lowering(
+        bwd_p,
+        mlir.lower_fun(
+            partial(triangle_attention_bwd_impl, platform), bwd_p.multiple_results
+        ),
+        platform,
+    )
+
+
+@partial(custom_vjp, nondiff_argnames=("scale", "precision"))
+def triangle_attention(q, k, v, mask, bias, scale, precision=None):
+    r"""triangle attention
+
+    Args:
+        q: Query tensor of shape [B, N, H, S_qo, D].
+        k: Key tensor of shape [B, N, H, S_kv, D].
+        v: Value tensor of shape [B, N, H, S_kv, D].
+        mask: Mask tensor of shape [B, N, 1, 1, S_kv] (boolean, True means valid).
+        bias: Bias tensor of shape [B, 1, H, S_qo, S_kv].
+        scale: Scaling factor for the dot product.
+        precision: Precision for the computation (default is None).
+
+    Returns:
+        A tuple containing the attention output, log-sum-exp, and maximum value.
+
+    .. math::
+
+        \text{Attention}_a(Q, K, V, M, T) = \sum_b \text{softmax}_b(M_b ? -10^9 : (Q_a K_b + T_{ab})) V_b
+
+    where :math:`Q`, :math:`K`, and :math:`V` are the query, key, and value tensors,
+    :math:`M` is the mask bias, and :math:`T` is the triangle bias.
+    """
+    # Convert scale to static value if it's a JAX array
+    if hasattr(scale, "item"):
+        scale = float(scale.item())
+    else:
+        scale = float(scale)
+
+    # Handle precision None case
+    if precision is None:
+        precision = jax.lax.Precision.DEFAULT
+
+    return fwd_p.bind(q, k, v, mask, bias, scale=scale, precision=precision)
+
+
+def triangle_attention_fwd(q, k, v, mask, bias, scale, precision=None):
+    a, lse, amax = fwd_p.bind(q, k, v, mask, bias, scale=scale, precision=precision)
+    residuals = (a, lse, q, k, v, mask, bias)
+    return (a, lse, amax), residuals
+
+
+def triangle_attention_bwd(scale, precision, residuals, cotangents):
+    a, lse, q, k, v, mask, bias = residuals
+    da, dlse, damax = cotangents
+
+    dq, dk, dv, dbias = bwd_p.bind(
+        da, a, lse, q, k, v, mask, bias, scale=scale, precision=precision
+    )
+    return (dq, dk, dv, None, dbias)
+
+
+triangle_attention.defvjp(triangle_attention_fwd, triangle_attention_bwd)
