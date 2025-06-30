@@ -42,6 +42,8 @@ def execute_uniform_1d(
     math_dtype: jnp.dtype,
     name: str,
 ) -> list[jax.Array]:
+    error_message = f"Failed to execute 'uniform_1d' method for the following polynomial:\n{polynomial}\n"
+
     index_configuration = np.array(index_configuration)
     num_batch_axes = index_configuration.shape[1]
     assert (
@@ -49,11 +51,17 @@ def execute_uniform_1d(
     )
     assert polynomial.num_outputs == len(outputs_shape_dtype)
 
-    polynomial = polynomial.flatten_coefficient_modes()
-    polynomial = polynomial.squeeze_modes()
+    try:
+        polynomial = polynomial.flatten_coefficient_modes()
+    except ValueError as e:
+        raise ValueError(
+            error_message
+            + f"This method do not support coefficient modes. Flattening them failed:\n{e}"
+        ) from e
+    assert all(d.coefficient_subscripts == "" for _, d in polynomial.operations)
 
-    if any(d.coefficient_subscripts != "" for _, d in polynomial.operations):
-        raise ValueError("Non-scalar coefficients are not supported")
+    polynomial = polynomial.squeeze_modes()
+    polynomial = polynomial.canonicalize_subscripts()
 
     def fn(op, d: cue.SegmentedTensorProduct):
         if d.subscripts.modes() == []:
@@ -88,9 +96,26 @@ def execute_uniform_1d(
     extents = set()
     for ope, stp in polynomial.operations:
         if len(stp.subscripts.modes()) != 1:
-            raise ValueError(f"Unsupported STP: {stp}")
+            raise ValueError(
+                error_message
+                + f"The 'uniform_1d' method requires exactly one mode, but {len(stp.subscripts.modes())} modes were found in subscripts: {stp.subscripts}.\n"
+                + "Resolution: Consider applying 'flatten_modes()' to the polynomial to eliminate a mode by increasing the number of segments and paths. "
+                + "Please note that flattening modes with large extents may negatively impact performance."
+            )
+        assert stp.subscripts.modes() == ["u"], (
+            "Should be the case after canonicalization"
+        )
         if not stp.all_same_segment_shape():
-            raise ValueError(f"Unsupported STP: {stp}")
+            dims = stp.get_dims("u")
+            gcd = math.gcd(*stp.get_dims("u"))
+            suggestion = stp.split_mode("u", gcd)
+            raise ValueError(
+                error_message
+                + "The 'uniform_1d' method requires all segments to have uniform shapes within each operand.\n"
+                + f"Current configuration: {stp}\n"
+                + "Resolution: If your mode extents share a common divisor, consider applying 'split_mode()' to create uniform segment extents. "
+                + f"For mode u={dims}, the greatest common divisor is {gcd}. Applying 'split_mode()' would result in: {suggestion}"
+            )
 
         for i, operand in zip(ope.buffers, stp.operands):
             if operand.ndim == 1:
@@ -110,7 +135,7 @@ def execute_uniform_1d(
 
     if len(extents) != 1:
         raise ValueError(
-            f"The method uniform 1D requires a single uniform mode, got {extents}."
+            f"The 'uniform_1d' method requires a single uniform mode among all the STPs of the polynomial, got u={extents}."
         )
 
     if not all(b.ndim == num_batch_axes + 2 for b in buffers):
