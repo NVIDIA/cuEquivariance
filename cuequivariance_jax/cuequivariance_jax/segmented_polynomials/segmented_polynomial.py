@@ -75,6 +75,7 @@ def segmented_polynomial(
             - "naive": Uses a naive JAX implementation. It always works but is not optimized.
             - "uniform_1d": Uses a CUDA implementation for polynomials with a single uniform mode.
             - "gemm_grouped": Uses a CUDA implementation for polynomials mappable to matrix multiplications.
+            - "indexed_linear": Uses a CUDA implementation for linear layers with indexed weights.
         math_dtype: Data type for computational operations. If None, automatically
             determined from input types, defaulting to float32 if no float64 inputs
             are present. Defaults to None.
@@ -89,7 +90,7 @@ def segmented_polynomial(
             - Full batching support
 
     Examples:
-        Simple example with spherical harmonics:
+        Simple example computing the spherical harmonics:
 
         >>> p = cue.descriptors.spherical_harmonics(cue.SO3(1), [0, 1, 2]).polynomial
         >>> cuex.segmented_polynomial(
@@ -98,18 +99,18 @@ def segmented_polynomial(
         [Array([1.       , 0.       , 1.7320508, 0.       , 0.       , 0.       ,
                2.236068 , 0.       , 0.       ], dtype=float32)]
 
-        Advanced example with tensor product and indexing:
+        Example computing a tensor product with indexing using the "uniform_1d" method:
 
         >>> poly: cue.SegmentedPolynomial = cue.descriptors.channelwise_tensor_product(
         ...     cue.Irreps(cue.O3, "32x0e + 32x1o + 32x1e + 32x2o"),
         ...     cue.Irreps(cue.O3, "0e + 1o + 1e"),
         ...     cue.Irreps(cue.O3, "32x0e + 32x1o + 32x1e"),
-        ... ).polynomial.flatten_coefficient_modes().squeeze_modes()
+        ... ).polynomial
         >>> a = np.random.randn(1, 50, poly.inputs[0].size)
         >>> b = np.random.randn(10, 50, poly.inputs[1].size)
         >>> c = np.random.randn(100, 1, poly.inputs[2].size)
         >>> i = np.random.randint(0, 10, (100, 50))
-        >>> D = jax.ShapeDtypeStruct(shape=(11, 12, poly.outputs[0].size), dtype=np.float32)
+        >>> D = jax.ShapeDtypeStruct(shape=(11, 12, poly.outputs[0].size), dtype=jnp.float32)
         >>> j1 = np.random.randint(0, 11, (100, 50))
         >>> j2 = np.random.randint(0, 12, (100, 1))
         >>> [D] = cuex.segmented_polynomial(
@@ -117,9 +118,41 @@ def segmented_polynomial(
         ... )
         >>> D.shape
         (11, 12, 1056)
+
+        Example computing a linear layer using the "gemm_grouped" method:
+
+        >>> input_irreps = cue.Irreps(cue.O3, f"10x0e + 10x1o")
+        >>> output_irreps = cue.Irreps(cue.O3, f"20x0e + 20x1o")
+        >>> poly = cue.descriptors.linear(input_irreps, output_irreps).polynomial
+        >>> w = jax.random.normal(jax.random.key(0), (poly.inputs[0].size,), dtype=jnp.float32)
+        >>> x = jax.random.normal(jax.random.key(1), (10, poly.inputs[1].size), dtype=jnp.float32)
+        >>> y = jax.ShapeDtypeStruct((10, poly.outputs[0].size), jnp.float32)
+        >>> [y] = cuex.segmented_polynomial(
+        ...     poly,
+        ...     [w, x], [y],
+        ...     method="gemm_grouped",
+        ... )
+        >>> y.shape
+        (10, 80)
+
+        Example computing a linear layer with indexed weights using the "indexed_linear" method:
+
+        >>> input_irreps = cue.Irreps(cue.O3, f"10x0e + 10x1o")
+        >>> output_irreps = cue.Irreps(cue.O3, f"20x0e + 20x1o")
+        >>> poly = cue.descriptors.linear(input_irreps, output_irreps).polynomial
+        >>> counts = jnp.array([3, 4, 3], dtype=jnp.int32)  # Number of elements in each partition
+        >>> w = jax.random.normal(jax.random.key(0), (3, poly.inputs[0].size), dtype=jnp.float32)
+        >>> x = jax.random.normal(jax.random.key(1), (10, poly.inputs[1].size), dtype=jnp.float32)
+        >>> y = jax.ShapeDtypeStruct((10, poly.outputs[0].size), jnp.float32)
+        >>> [y] = cuex.segmented_polynomial(
+        ...     poly,
+        ...     [w, x], [y], [cuex.Repeats(counts), None, None],
+        ...     method="indexed_linear"
+        ... )
+        >>> y.shape
+        (10, 80)
     """
-    # TODO: Using cue.Repeats in the indices arguments is purpusfully not documented
-    # because this API is not settled yet. This is why we have a dedicated indexed_linear function
+
     if method == "":
         raise ValueError(
             "Hello! It looks like you're using code that was written for an older version of this library. "
@@ -129,8 +162,8 @@ def segmented_polynomial(
             "• 'naive' - Works everywhere but not optimized (good for testing)\n"
             "• 'uniform_1d' - Fast CUDA implementation for single uniform mode polynomials\n"
             "• 'gemm_grouped' - Fast CUDA implementation for matrix multiplication patterns\n"
-            "Example: segmented_polynomial(poly, inputs, outputs, method='naive')\n"
-            "For most use cases, try 'uniform_1d' first, then fall back to 'naive' if needed."
+            "• 'indexed_linear' - Fast CUDA implementation for linear layers with indexed weights\n\n"
+            "Example: outputs = segmented_polynomial(poly, inputs, outputs, method='naive')"
         )
 
     if name is None:

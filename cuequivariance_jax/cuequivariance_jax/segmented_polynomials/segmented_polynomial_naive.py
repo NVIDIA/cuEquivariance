@@ -24,9 +24,10 @@ import numpy as np
 
 import cuequivariance as cue
 from cuequivariance_jax.segmented_polynomials.indexing_mode import IndexingMode
+from cuequivariance_jax.segmented_polynomials.segmented_polynomial_indexed_linear import (
+    execute_indexed_linear,
+)
 from cuequivariance_jax.segmented_polynomials.utils import batch_size, indexing
-
-from .segmented_polynomial_indexed_linear import execute_indexed_linear
 
 logger = logging.getLogger(__name__)
 

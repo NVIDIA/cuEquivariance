@@ -24,7 +24,7 @@ import cuequivariance_jax as cuex
 @pytest.mark.parametrize("dtype", [jnp.float32, jnp.float16, jnp.bfloat16, jnp.float64])
 def test_indexed_linear(dtype):
     jax.config.update("jax_enable_x64", True)
-    impl = "cuda" if "cuda" in jax.devices()[0].platform else "auto"
+    method = "indexed_linear" if "cuda" in jax.devices()[0].platform else "naive"
 
     num_species_total = 3
     batch_size = 10
@@ -40,7 +40,7 @@ def test_indexed_linear(dtype):
     )
 
     result = cuex.experimental.indexed_linear(
-        e.polynomial, num_species, w, input_array, impl=impl
+        e.polynomial, num_species, w, input_array, method=method
     )
     assert result.shape == (batch_size, output_dim)
 
@@ -49,6 +49,7 @@ def test_indexed_linear(dtype):
         [w, input_array],
         [jax.ShapeDtypeStruct((batch_size, output_dim), dtype)],
         [jnp.repeat(jnp.arange(num_species_total), num_species), None, None],
+        method="naive",
     )
 
     result = np.asarray(result, dtype=np.float64)
