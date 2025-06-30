@@ -29,6 +29,9 @@ from jax.interpreters import ad, batching, mlir, partial_eval, xla
 import cuequivariance as cue
 import cuequivariance_jax as cuex  # noqa: F401
 from cuequivariance_jax.segmented_polynomials.indexing_mode import IndexingMode
+from cuequivariance_jax.segmented_polynomials.segmented_polynomial_gemm_grouped import (
+    execute_gemm_grouped,
+)
 from cuequivariance_jax.segmented_polynomials.segmented_polynomial_indexed_linear import (
     execute_indexed_linear,
 )
@@ -36,7 +39,6 @@ from cuequivariance_jax.segmented_polynomials.segmented_polynomial_naive import 
     execute_naive,
 )
 from cuequivariance_jax.segmented_polynomials.segmented_polynomial_uniform_1d import (
-    execute_gemm_grouped,
     execute_uniform_1d,
 )
 from cuequivariance_jax.segmented_polynomials.utils import (
