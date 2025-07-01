@@ -98,6 +98,7 @@ def execute_gemm_grouped(
     index_configuration: tuple[tuple[int, ...], ...],
     polynomial: cue.SegmentedPolynomial,
     math_dtype: jnp.dtype,
+    precision: jax.lax.Precision,
     name: str,
 ) -> list[jax.Array]:
     index_configuration = np.array(index_configuration)
@@ -223,7 +224,10 @@ def execute_gemm_grouped(
     assert len(num_batch_axes) == 1
     num_batch_axes = num_batch_axes.pop()
     gemm_outs = gemm_grouped(
-        gemms, [], np.full((2 * len(gemms), num_batch_axes), -1, np.int32)
+        gemms,
+        [],
+        np.full((2 * len(gemms), num_batch_axes), -1, np.int32),
+        use_tf32=(precision != jax.lax.Precision.HIGHEST),
     )
     outputs = [jnp.zeros(x.shape, dtype=x.dtype) for x in outputs_shape_dtype]
 

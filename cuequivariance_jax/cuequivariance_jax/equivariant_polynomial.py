@@ -31,6 +31,7 @@ def equivariant_polynomial(
     method: str = "",
     math_dtype: jnp.dtype | None = None,
     name: str | None = None,
+    precision: jax.lax.Precision = jax.lax.Precision.HIGHEST,
 ) -> list[cuex.RepArray] | cuex.RepArray:
     """Compute an equivariant polynomial.
 
@@ -47,11 +48,12 @@ def equivariant_polynomial(
             The last shape dimension can be set to -1 to infer the size from the polynomial descriptor.
         indices: Optional list of indices for inputs and outputs. Length must match
             total number of operands (inputs + outputs). Use None for unindexed
-            operands. Defaults to None.
+            operands. Defaults to None. Note that indices are not supported for all methods.
         method: Method to use for computation. See :func:`cuex.segmented_polynomial <cuequivariance_jax.segmented_polynomial>` for available methods.
         math_dtype: Data type for computational operations. If None, automatically
             determined from input types. Defaults to None.
         name: Optional name for the operation. Defaults to None.
+        precision: The precision to use for the computation. Defaults to HIGHEST. Note that precision is not supported for all methods.
 
     Returns:
         :class:`cuex.RepArray <cuequivariance_jax.RepArray>` or list of :class:`cuex.RepArray <cuequivariance_jax.RepArray>`
@@ -183,6 +185,7 @@ def equivariant_polynomial(
         math_dtype=math_dtype,
         name=name,
         method=method,
+        precision=precision,
     )
     outputs = [cuex.RepArray(rep, x) for rep, x in zip(poly.outputs, outputs)]
 

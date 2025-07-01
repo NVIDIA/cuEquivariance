@@ -40,6 +40,7 @@ def execute_naive(
     index_mode: tuple[tuple[IndexingMode, ...], ...],
     polynomial: cue.SegmentedPolynomial,
     math_dtype: jnp.dtype,
+    precision: jax.lax.Precision,
     name: str,
 ) -> list[jax.Array]:  # output buffers
     if any(mode == IndexingMode.REPEATED for modes in index_mode for mode in modes):
@@ -51,6 +52,7 @@ def execute_naive(
             index_mode,
             polynomial,
             math_dtype,
+            precision,
             name,
             run_kernel=False,
         )
@@ -100,7 +102,7 @@ def execute_naive(
             d=d.move_operand_last(ope_out),
             output_dtype=out.dtype,
             math_dtype=math_dtype,
-            precision=jax.lax.Precision.HIGHEST,
+            precision=precision,
             algorithm="compact_stacked" if d.all_same_segment_shape() else "sliced",
         )
         out = sum_cat_list_list(

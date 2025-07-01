@@ -43,6 +43,7 @@ def execute_indexed_linear(
     index_mode: tuple[tuple[IndexingMode, ...], ...],
     polynomial: cue.SegmentedPolynomial,
     math_dtype: jnp.dtype,
+    precision: jax.lax.Precision,
     name: str,
     run_kernel: bool = True,
 ) -> list[jax.Array]:  # output buffers
@@ -79,7 +80,7 @@ def execute_indexed_linear(
             batch_sizes=batch_sizes,
             d=d.move_operand_last(ope_out),
             math_dtype=math_dtype,
-            precision=jax.lax.Precision.HIGHEST,
+            precision=precision,
             run_kernel=run_kernel,
         )
         out = sum_cat_list_list(
@@ -215,6 +216,9 @@ def ein(
     terms = [coefficient_subscripts] + terms_in + [term_out]
     formula = ",".join(terms[:-1]) + "->" + terms[-1]
     modes = tuple([x.mode for x in segments] + [output.mode])
+
+    if run_kernel:
+        assert precision == jax.lax.Precision.HIGHEST
 
     if (
         run_kernel
