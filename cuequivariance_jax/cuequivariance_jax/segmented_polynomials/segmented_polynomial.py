@@ -540,7 +540,9 @@ def segmented_polynomial_impl(
         case "gemm_grouped":
             return execute_gemm_grouped(**kwargs, precision=precision)
         case "indexed_linear":
-            return execute_indexed_linear(**kwargs, index_mode=index_mode)
+            return execute_indexed_linear(
+                **kwargs, index_mode=index_mode, precision=precision
+            )
 
 
 def segmented_polynomial_jvp(
