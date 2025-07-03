@@ -278,6 +278,14 @@ def layer_norm_transpose(x, w, b, eps=1e-5, elementwise_affine=True, layout="nd-
 
     Returns:
         Normalized tensor with shape determined by the output layout
+
+    Examples:
+        >>> x = jnp.ones((4, 16, 64))  # (B, N, D)
+        >>> w = jnp.ones((64,))
+        >>> b = jnp.zeros((64,))
+        >>> out = layer_norm_transpose(x, w, b, layout="bnd->bnd")
+        >>> out.shape  # (B, N, D)
+        (4, 16, 64)
     """
     # Layout mapping with input parsing and output reshaping
     layout_map = {
