@@ -12,19 +12,25 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import enum
 from functools import partial
 
 import jax
 import jax.numpy as jnp
 import jax_triton as jt
 import triton
-from cuequivariance_ops.triton import (
-    Layout,
-    layer_norm_transpose_backward_kernel,
-    layer_norm_transpose_forward_kernel,
-)
 from jax import custom_vjp
 from jax.interpreters import mlir, xla
+
+
+# copy from cuequivariance_ops to avoid requiring cuequivariance_ops to be installed
+class Layout(enum.IntEnum):
+    BND_BND = 0
+    BDN_BND = 1
+    BND_BDN = 2
+    DBN_BND = 3
+    BND_DBN = 4
+
 
 # JAX primitives
 layer_norm_fwd_p = jax.extend.core.Primitive("layer_norm_transpose_fwd")
@@ -115,6 +121,8 @@ def layer_norm_transpose_reference_forward(x, w, b, eps, elementwise_affine, lay
 
 def _layer_norm_forward_impl(x, w, b, eps, elementwise_affine, layout):
     """Triton implementation of forward pass."""
+    from cuequivariance_ops.triton import layer_norm_transpose_forward_kernel
+
     B, N, D, (TILE_N, TILE_D) = get_dims_and_config(x, layout)
     out_shape = OUTPUT_SHAPES[layout](B, N, D)
 
@@ -146,6 +154,8 @@ def _layer_norm_backward_impl(
     grad_out, x, w, b, mean, rstd, eps, elementwise_affine, layout
 ):
     """Triton implementation of backward pass."""
+    from cuequivariance_ops.triton import layer_norm_transpose_backward_kernel
+
     B, N, D, (TILE_N, TILE_D) = get_dims_and_config(x, layout)
     num_tiles = triton.cdiv(N, TILE_N)
 
@@ -186,12 +196,18 @@ def _layer_norm_backward_impl(
 def layer_norm_impl(platform, is_forward, *args, **kwargs):
     """Unified implementation dispatcher."""
     if platform == "cuda":
-        return (
-            _layer_norm_forward_impl(*args, **kwargs)
-            if is_forward
-            else _layer_norm_backward_impl(*args, **kwargs)
-        )
-    elif is_forward:
+        try:
+            import cuequivariance_ops.triton  # noqa: F401
+        except ImportError:
+            pass
+        else:
+            return (
+                _layer_norm_forward_impl(*args, **kwargs)
+                if is_forward
+                else _layer_norm_backward_impl(*args, **kwargs)
+            )
+
+    if is_forward:
         return layer_norm_transpose_reference_forward(*args, **kwargs)
     else:
         # JAX autodiff for backward pass
