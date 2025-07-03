@@ -90,8 +90,6 @@ def layer_norm_transpose_reference_forward(x, w, b, eps, elementwise_affine, lay
         x = x.transpose(0, 2, 1)
     elif layout == Layout.DBN_BND:
         x = x.transpose(1, 2, 0)
-    elif layout == Layout.BND_DBN:
-        x = x.transpose(2, 0, 1)
 
     # Compute mean and normalize
     mean = jnp.mean(x, axis=2, keepdims=False)

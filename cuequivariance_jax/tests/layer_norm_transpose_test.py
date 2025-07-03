@@ -36,7 +36,7 @@ from cuequivariance_jax.triangle.layer_norm_transpose import (
         ("bdn->bnd", (2, 64, 16), (2, 16, 64), 64),  # Feature dim is 64
         ("bnd->bdn", (2, 16, 64), (2, 64, 16), 64),
         ("dbn->bnd", (64, 2, 16), (2, 16, 64), 64),  # Feature dim is 64
-        # ("bnd->dbn", (2, 16, 64), (64, 2, 16), 64),  # TODO fix this case
+        ("bnd->dbn", (2, 16, 64), (64, 2, 16), 64),
         # 4D layouts
         # TODO fix the following cases
         # ("bijd->bijd", (2, 8, 8, 64), (2, 8, 8, 64), 64),
