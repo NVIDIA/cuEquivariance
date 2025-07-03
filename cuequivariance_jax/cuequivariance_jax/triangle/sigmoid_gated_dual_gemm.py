@@ -50,14 +50,16 @@ def _abstract_eval_bwd(
     grad_out, x1, x2, w1, w2, mask, *, two_inputs, transpose_out, precision
 ):
     """Abstract evaluation for backward pass."""
+    # Always return 5 outputs in consistent order: grad_x1, grad_x2, grad_w1, grad_w2, grad_mask
     outputs = [
         jax.core.ShapedArray(x1.shape, x1.dtype),  # grad_x1
+        jax.core.ShapedArray(
+            x2.shape, x2.dtype
+        ),  # grad_x2 (may be zero if two_inputs=False)
         jax.core.ShapedArray(w1.shape, w1.dtype),  # grad_w1
         jax.core.ShapedArray(w2.shape, w2.dtype),  # grad_w2
+        jax.core.ShapedArray(mask.shape, mask.dtype),  # grad_mask
     ]
-    if two_inputs:
-        outputs.insert(1, jax.core.ShapedArray(x2.shape, x2.dtype))  # grad_x2
-    outputs.append(jax.core.ShapedArray(mask.shape, mask.dtype))  # grad_mask
     return tuple(outputs)
 
 
@@ -125,6 +127,8 @@ def _triton_backward(
 
     M, K, N = x1.shape[0], x1.shape[1], w1.shape[0]
     TILE_M, TILE_N, TILE_K = 64, 32, 32
+
+    assert N % TILE_N == 0 and K % TILE_K == 0
 
     out_shapes = [
         jax.ShapeDtypeStruct(shape=(M, N), dtype=x1.dtype),  # grad_xw1
@@ -196,15 +200,23 @@ def _impl_dispatcher(platform, is_forward, *args, **kwargs):
     else:
         # Use JAX autodiff for backward pass
         grad_out = args[0]
-        forward_args = args[1:]
+        x1, x2, w1, w2, mask = args[1:]
+        two_inputs = kwargs.get("two_inputs", False)
 
-        def forward_fn(*fwd_args):
-            return _reference_forward(*fwd_args, **kwargs)
+        def forward_fn(x1, x2, w1, w2, mask):
+            return _reference_forward(x1, x2, w1, w2, mask, **kwargs)
 
-        _, vjp_fn = jax.vjp(forward_fn, *forward_args)
+        _, vjp_fn = jax.vjp(forward_fn, x1, x2, w1, w2, mask)
         grad_outputs = vjp_fn(grad_out)
 
-        return tuple(grad_outputs)
+        # Ensure we return exactly 5 gradients: grad_x1, grad_x2, grad_w1, grad_w2, grad_mask
+        grad_x1, grad_x2, grad_w1, grad_w2, grad_mask = grad_outputs
+
+        # If not two_inputs, zero out grad_x2 but still return it
+        if not two_inputs:
+            grad_x2 = jnp.zeros_like(grad_x2)
+
+        return (grad_x1, grad_x2, grad_w1, grad_w2, grad_mask)
 
 
 # Register primitives
@@ -293,26 +305,15 @@ def _bwd(two_inputs, transpose_out, precision, residuals, grad_out):
         precision=precision,
     )
 
+    # grads is always (grad_x1, grad_x2, grad_w1, grad_w2, grad_mask)
+    grad_x1, grad_x2, grad_w1, grad_w2, grad_mask = grads
+
     if original_mask is None:
         # Replace mask gradient with zeros
         grad_mask = jnp.zeros_like(mask)
-        if two_inputs:
-            grad_x1, grad_x2, grad_w1, grad_w2, _ = grads
-            return (grad_x1, grad_x2, grad_w1, grad_w2, grad_mask)
-        else:
-            grad_x1, grad_w1, grad_w2, _ = grads
-            # For single input mode, still need to return gradient for dummy x2
-            grad_x2 = jnp.zeros_like(x2)
-            return (grad_x1, grad_x2, grad_w1, grad_w2, grad_mask)
 
     # Always return 5 gradients to match the core function signature
-    if two_inputs:
-        return grads
-    else:
-        # For single input mode, insert zero gradient for dummy x2
-        grad_x1, grad_w1, grad_w2, grad_mask = grads
-        grad_x2 = jnp.zeros_like(x2)
-        return (grad_x1, grad_x2, grad_w1, grad_w2, grad_mask)
+    return (grad_x1, grad_x2, grad_w1, grad_w2, grad_mask)
 
 
 _sigmoid_gated_dual_gemm_core.defvjp(_fwd, _bwd)
