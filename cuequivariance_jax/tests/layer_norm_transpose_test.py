@@ -33,17 +33,16 @@ from cuequivariance_jax.triangle.layer_norm_transpose import (
         ("nd->dn", (16, 64), (64, 16), 64),
         # 3D layouts
         ("bnd->bnd", (2, 16, 64), (2, 16, 64), 64),
-        ("bdn->bnd", (2, 64, 16), (2, 16, 64), 64),  # Feature dim is 64
+        ("bdn->bnd", (2, 64, 16), (2, 16, 64), 64),
         ("bnd->bdn", (2, 16, 64), (2, 64, 16), 64),
-        ("dbn->bnd", (64, 2, 16), (2, 16, 64), 64),  # Feature dim is 64
+        ("dbn->bnd", (64, 2, 16), (2, 16, 64), 64),
         ("bnd->dbn", (2, 16, 64), (64, 2, 16), 64),
         # 4D layouts
-        # TODO fix the following cases
-        # ("bijd->bijd", (2, 8, 8, 64), (2, 8, 8, 64), 64),
-        # ("bijd->bdij", (2, 8, 8, 64), (2, 64, 8, 8), 64),
-        # ("bdij->bijd", (2, 64, 8, 8), (2, 8, 8, 64), 64),  # Feature dim is 64
-        # ("dbij->bijd", (64, 2, 8, 8), (2, 8, 8, 64), 64),  # Feature dim is 64
-        # ("bijd->dbij", (2, 8, 8, 64), (64, 2, 8, 8), 64),
+        ("bijd->bijd", (2, 8, 8, 64), (2, 8, 8, 64), 64),
+        ("bijd->bdij", (2, 8, 8, 64), (2, 64, 8, 8), 64),
+        ("bdij->bijd", (2, 64, 8, 8), (2, 8, 8, 64), 64),
+        ("dbij->bijd", (64, 2, 8, 8), (2, 8, 8, 64), 64),
+        ("bijd->dbij", (2, 8, 8, 64), (64, 2, 8, 8), 64),
     ],
 )
 def test_layer_norm_transpose(
@@ -137,6 +136,23 @@ def test_layer_norm_transpose(
     ref_out, ref_mean, ref_rstd = layer_norm_transpose_reference_forward(
         x_ref, w, b, eps, elementwise_affine, layout_enum
     )
+
+    # Reshape reference output back to expected shape for 4D cases
+    if layout_str == "bijd->bijd":
+        B, II, J, D = x.shape
+        ref_out = ref_out.reshape(B, II, J, D)
+    elif layout_str == "bijd->bdij":
+        B, II, J, D = x.shape
+        ref_out = ref_out.reshape(B, D, II, J)
+    elif layout_str == "bdij->bijd":
+        B, D, II, J = x.shape
+        ref_out = ref_out.reshape(B, II, J, D)
+    elif layout_str == "dbij->bijd":
+        D, B, II, J = x.shape
+        ref_out = ref_out.reshape(B, II, J, D)
+    elif layout_str == "bijd->dbij":
+        B, II, J, D = x.shape
+        ref_out = ref_out.reshape(D, B, II, J)
 
     # Check that outputs match (within numerical precision)
     assert jnp.allclose(out, ref_out, rtol=1e-5, atol=1e-6), (
