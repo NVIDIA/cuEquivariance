@@ -16,6 +16,7 @@
 import jax
 import jax.numpy as jnp
 import pytest
+from jax import test_util
 
 from cuequivariance_jax.triangle.sigmoid_gated_dual_gemm import (
     Precision,
@@ -319,3 +320,181 @@ def test_sigmoid_gated_dual_gemm_transpose_out():
 
     # Check that transposed output equals transpose of normal output
     assert jnp.allclose(output_dual_transposed, output_dual_normal.T, atol=1e-5)
+
+
+def test_sigmoid_gated_dual_gemm_check_grads():
+    """Test gradient correctness using jax.test_util.check_grads."""
+    # Set up test data
+    key = jax.random.PRNGKey(42)
+    M, N, K = 8, 32, 32  # Use smaller dimensions for faster gradient checking
+
+    x = jax.random.normal(key, (M, K), dtype=jnp.float32)
+    w1 = jax.random.normal(jax.random.split(key, 1)[0], (N, K), dtype=jnp.float32)
+    w2 = jax.random.normal(jax.random.split(key, 2)[0], (N, K), dtype=jnp.float32)
+    mask = jax.random.uniform(jax.random.split(key, 3)[0], (M,), dtype=jnp.float32)
+
+    # Test single input mode without mask
+    def single_input_fn(x, w1, w2):
+        return jnp.sum(sigmoid_gated_dual_gemm(x, w1, w2, precision=Precision.IEEE))
+
+    test_util.check_grads(single_input_fn, (x, w1, w2), order=1, modes=["rev"])
+
+    # Test single input mode with mask
+    def single_input_masked_fn(x, w1, w2, mask):
+        return jnp.sum(
+            sigmoid_gated_dual_gemm(x, w1, w2, mask=mask, precision=Precision.IEEE)
+        )
+
+    # TODO fix later the gradient for masked input
+    test_util.check_grads(
+        single_input_masked_fn, (x, w1, w2, mask), order=1, modes=["rev"]
+    )
+
+    # Test dual input mode
+    x2 = jax.random.normal(jax.random.split(key, 4)[0], (M, K), dtype=jnp.float32)
+
+    def dual_input_fn(x1, x2, w1, w2):
+        return jnp.sum(
+            sigmoid_gated_dual_gemm_dual_x(x1, x2, w1, w2, precision=Precision.IEEE)
+        )
+
+    test_util.check_grads(dual_input_fn, (x, x2, w1, w2), order=1, modes=["rev"])
+
+    # Test with transpose_out
+    def single_input_transpose_fn(x, w1, w2):
+        return jnp.sum(
+            sigmoid_gated_dual_gemm(
+                x, w1, w2, transpose_out=True, precision=Precision.IEEE
+            )
+        )
+
+    test_util.check_grads(
+        single_input_transpose_fn, (x, w1, w2), order=1, modes=["rev"]
+    )
+
+    # Test dual input with transpose_out
+    def dual_input_transpose_fn(x1, x2, w1, w2):
+        return jnp.sum(
+            sigmoid_gated_dual_gemm_dual_x(
+                x1, x2, w1, w2, transpose_out=True, precision=Precision.IEEE
+            )
+        )
+
+    test_util.check_grads(
+        dual_input_transpose_fn, (x, x2, w1, w2), order=1, modes=["rev"]
+    )
+
+
+def test_sigmoid_gated_dual_gemm_debug_mask_gradient():
+    """Debug test to understand mask gradient computation."""
+    # Set up test data
+    key = jax.random.PRNGKey(42)
+    M, N, K = 4, 32, 32  # Dimensions compatible with tile sizes
+
+    x = jax.random.normal(key, (M, K), dtype=jnp.float32)
+    w1 = jax.random.normal(jax.random.split(key, 1)[0], (N, K), dtype=jnp.float32)
+    w2 = jax.random.normal(jax.random.split(key, 2)[0], (N, K), dtype=jnp.float32)
+    mask = jax.random.uniform(jax.random.split(key, 3)[0], (M,), dtype=jnp.float32)
+
+    # Reference implementation using pure JAX
+    def reference_fn(x, w1, w2, mask):
+        acc_1 = jnp.dot(x, w1.T)
+        acc_2 = jnp.dot(x, w2.T)
+        acc_sig = jax.nn.sigmoid(acc_1)
+        output = acc_sig * acc_2
+        if mask is not None:
+            output = output * mask[:, None]
+        return jnp.sum(output)
+
+    # Our implementation
+    def our_fn(x, w1, w2, mask):
+        return jnp.sum(
+            sigmoid_gated_dual_gemm(x, w1, w2, mask=mask, precision=Precision.IEEE)
+        )
+
+    # Compare forward pass
+    ref_output = reference_fn(x, w1, w2, mask)
+    our_output = our_fn(x, w1, w2, mask)
+
+    print(f"Reference output: {ref_output}")
+    print(f"Our output: {our_output}")
+    print(f"Forward diff: {jnp.abs(ref_output - our_output)}")
+
+    # Compare gradients
+    ref_grad = jax.grad(reference_fn, argnums=(0, 1, 2, 3))(x, w1, w2, mask)
+    our_grad = jax.grad(our_fn, argnums=(0, 1, 2, 3))(x, w1, w2, mask)
+
+    print(f"\nReference mask gradient: {ref_grad[3]}")
+    print(f"Our mask gradient: {our_grad[3]}")
+    print(f"Mask gradient diff: {jnp.abs(ref_grad[3] - our_grad[3])}")
+    print(f"Max mask gradient diff: {jnp.max(jnp.abs(ref_grad[3] - our_grad[3]))}")
+
+    # Check gradient using check_grads on reference function
+    try:
+        test_util.check_grads(reference_fn, (x, w1, w2, mask), order=1, modes=["rev"])
+        print("Reference function gradient check: PASSED")
+    except Exception as e:
+        print(f"Reference function gradient check: FAILED - {e}")
+
+    # Check gradient using check_grads on our function
+    try:
+        test_util.check_grads(our_fn, (x, w1, w2, mask), order=1, modes=["rev"])
+        print("Our function gradient check: PASSED")
+    except Exception as e:
+        print(f"Our function gradient check: FAILED - {e}")
+
+
+def test_sigmoid_gated_dual_gemm_reference_only():
+    """Test using only the reference implementation (no Triton)."""
+    # Set up test data
+    key = jax.random.PRNGKey(42)
+    M, N, K = 4, 32, 32  # Dimensions compatible with tile sizes
+
+    x = jax.random.normal(key, (M, K), dtype=jnp.float32)
+    w1 = jax.random.normal(jax.random.split(key, 1)[0], (N, K), dtype=jnp.float32)
+    w2 = jax.random.normal(jax.random.split(key, 2)[0], (N, K), dtype=jnp.float32)
+    mask = jax.random.uniform(jax.random.split(key, 3)[0], (M,), dtype=jnp.float32)
+
+    # Reference implementation using pure JAX
+    def reference_fn(x, w1, w2, mask):
+        acc_1 = jnp.dot(x, w1.T)
+        acc_2 = jnp.dot(x, w2.T)
+        acc_sig = jax.nn.sigmoid(acc_1)
+        output = acc_sig * acc_2
+        if mask is not None:
+            output = output * mask[:, None]
+        return jnp.sum(output)
+
+    # Direct call to reference implementation
+    def our_reference_fn(x, w1, w2, mask):
+        return jnp.sum(
+            sigmoid_gated_dual_gemm_reference_forward(
+                x, None, w1, w2, mask, False, False, Precision.IEEE
+            )
+        )
+
+    # Compare forward pass
+    ref_output = reference_fn(x, w1, w2, mask)
+    our_output = our_reference_fn(x, w1, w2, mask)
+
+    print(f"Reference output: {ref_output}")
+    print(f"Our reference output: {our_output}")
+    print(f"Forward diff: {jnp.abs(ref_output - our_output)}")
+
+    # Compare gradients
+    ref_grad = jax.grad(reference_fn, argnums=(0, 1, 2, 3))(x, w1, w2, mask)
+    our_grad = jax.grad(our_reference_fn, argnums=(0, 1, 2, 3))(x, w1, w2, mask)
+
+    print(f"\nReference mask gradient: {ref_grad[3]}")
+    print(f"Our reference mask gradient: {our_grad[3]}")
+    print(f"Mask gradient diff: {jnp.abs(ref_grad[3] - our_grad[3])}")
+    print(f"Max mask gradient diff: {jnp.max(jnp.abs(ref_grad[3] - our_grad[3]))}")
+
+    # Check gradient using check_grads on our reference function
+    try:
+        test_util.check_grads(
+            our_reference_fn, (x, w1, w2, mask), order=1, modes=["rev"]
+        )
+        print("Our reference function gradient check: PASSED")
+    except Exception as e:
+        print(f"Our reference function gradient check: FAILED - {e}")

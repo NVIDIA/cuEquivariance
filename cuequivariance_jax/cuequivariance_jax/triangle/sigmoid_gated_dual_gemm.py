@@ -33,144 +33,64 @@ class Precision(enum.IntEnum):
     IEEE = 3
 
 
-# JAX primitives for single input mode
-sigmoid_gated_dual_gemm_single_fwd_p = jax.extend.core.Primitive(
-    "sigmoid_gated_dual_gemm_single_fwd"
-)
-sigmoid_gated_dual_gemm_single_bwd_p = jax.extend.core.Primitive(
-    "sigmoid_gated_dual_gemm_single_bwd"
-)
-sigmoid_gated_dual_gemm_single_bwd_p.multiple_results = True
-
-# JAX primitives for dual input mode
-sigmoid_gated_dual_gemm_dual_fwd_p = jax.extend.core.Primitive(
-    "sigmoid_gated_dual_gemm_dual_fwd"
-)
-sigmoid_gated_dual_gemm_dual_bwd_p = jax.extend.core.Primitive(
-    "sigmoid_gated_dual_gemm_dual_bwd"
-)
-sigmoid_gated_dual_gemm_dual_bwd_p.multiple_results = True
+# Unified JAX primitives
+sigmoid_gated_dual_gemm_fwd_p = jax.extend.core.Primitive("sigmoid_gated_dual_gemm_fwd")
+sigmoid_gated_dual_gemm_bwd_p = jax.extend.core.Primitive("sigmoid_gated_dual_gemm_bwd")
+sigmoid_gated_dual_gemm_bwd_p.multiple_results = True
 
 
-def sigmoid_gated_dual_gemm_single_fwd_abstract_eval(
-    x1, w1, w2, mask, *, transpose_out, precision
-):
-    """Abstract evaluation for single input forward pass."""
-    M = x1.shape[0]
-    N = w1.shape[0]
-
-    if transpose_out:
-        out_shape = (N, M)
-    else:
-        out_shape = (M, N)
-
+def _abstract_eval_fwd(x1, x2, w1, w2, mask, *, two_inputs, transpose_out, precision):
+    """Abstract evaluation for forward pass."""
+    M, N = x1.shape[0], w1.shape[0]
+    out_shape = (N, M) if transpose_out else (M, N)
     return jax.core.ShapedArray(out_shape, x1.dtype)
 
 
-def sigmoid_gated_dual_gemm_single_bwd_abstract_eval(
-    grad_out, x1, w1, w2, mask, *, transpose_out, precision
+def _abstract_eval_bwd(
+    grad_out, x1, x2, w1, w2, mask, *, two_inputs, transpose_out, precision
 ):
-    """Abstract evaluation for single input backward pass."""
+    """Abstract evaluation for backward pass."""
     outputs = [
         jax.core.ShapedArray(x1.shape, x1.dtype),  # grad_x1
         jax.core.ShapedArray(w1.shape, w1.dtype),  # grad_w1
         jax.core.ShapedArray(w2.shape, w2.dtype),  # grad_w2
     ]
-
-    # Always include mask gradient since we create dummy mask in forward
+    if two_inputs:
+        outputs.insert(1, jax.core.ShapedArray(x2.shape, x2.dtype))  # grad_x2
     outputs.append(jax.core.ShapedArray(mask.shape, mask.dtype))  # grad_mask
-
     return tuple(outputs)
 
 
-def sigmoid_gated_dual_gemm_dual_fwd_abstract_eval(
-    x1, x2, w1, w2, mask, *, transpose_out, precision
-):
-    """Abstract evaluation for dual input forward pass."""
-    M = x1.shape[0]
-    N = w1.shape[0]
-
-    if transpose_out:
-        out_shape = (N, M)
-    else:
-        out_shape = (M, N)
-
-    return jax.core.ShapedArray(out_shape, x1.dtype)
-
-
-def sigmoid_gated_dual_gemm_dual_bwd_abstract_eval(
-    grad_out, x1, x2, w1, w2, mask, *, transpose_out, precision
-):
-    """Abstract evaluation for dual input backward pass."""
-    outputs = [
-        jax.core.ShapedArray(x1.shape, x1.dtype),  # grad_x1
-        jax.core.ShapedArray(x2.shape, x2.dtype),  # grad_x2
-        jax.core.ShapedArray(w1.shape, w1.dtype),  # grad_w1
-        jax.core.ShapedArray(w2.shape, w2.dtype),  # grad_w2
-    ]
-
-    # Always include mask gradient since we create dummy mask in forward
-    outputs.append(jax.core.ShapedArray(mask.shape, mask.dtype))  # grad_mask
-
-    return tuple(outputs)
-
-
-def sigmoid_gated_dual_gemm_reference_forward(
-    x1, x2, w1, w2, mask, two_inputs, transpose_out, precision
-):
+def _reference_forward(x1, x2, w1, w2, mask, two_inputs, transpose_out, precision):
     """Pure JAX reference implementation."""
     if two_inputs:
-        # Two input mode: x1 @ w1 and x2 @ w2
-        acc_1 = jnp.dot(x1, w1.T, precision=jax.lax.Precision.HIGHEST)  # (M, N)
-        acc_2 = jnp.dot(x2, w2.T, precision=jax.lax.Precision.HIGHEST)  # (M, N)
+        acc_1 = jnp.dot(x1, w1.T, precision=jax.lax.Precision.HIGHEST)
+        acc_2 = jnp.dot(x2, w2.T, precision=jax.lax.Precision.HIGHEST)
     else:
-        # Single input mode: x1 @ w1 and x1 @ w2
-        acc_1 = jnp.dot(x1, w1.T, precision=jax.lax.Precision.HIGHEST)  # (M, N)
-        acc_2 = jnp.dot(x1, w2.T, precision=jax.lax.Precision.HIGHEST)  # (M, N)
+        acc_1 = jnp.dot(x1, w1.T, precision=jax.lax.Precision.HIGHEST)
+        acc_2 = jnp.dot(x1, w2.T, precision=jax.lax.Precision.HIGHEST)
 
-    # Apply sigmoid gating
     acc_sig = jax.nn.sigmoid(acc_1)
     output = acc_sig * acc_2
 
-    # Apply mask if provided
     if mask is not None:
-        # Mask should be applied row-wise (along M dimension)
         output = output * mask[:, None]
 
-    # Transpose output if requested
-    if transpose_out:
-        output = output.T
-
-    return output
+    return output.T if transpose_out else output
 
 
-def _sigmoid_gated_dual_gemm_forward_impl(
-    x1, x2, w1, w2, mask, two_inputs, transpose_out, precision
-):
+def _triton_forward(x1, x2, w1, w2, mask, two_inputs, transpose_out, precision):
     """Triton implementation of forward pass."""
     from cuequivariance_ops.triton import fused_sigmoid_gated_dual_gemm_forward_kernel
 
-    M = x1.shape[0]
-    K = x1.shape[1]
-    N = w1.shape[0]
+    M, K, N = x1.shape[0], x1.shape[1], w1.shape[0]
+    TILE_M, TILE_N, TILE_K = 64, 32, 32
 
-    # Default tile sizes
-    TILE_M = 64
-    TILE_N = 32
-    TILE_K = 32
+    assert N % TILE_N == 0 and K % TILE_K == 0
 
-    assert N % TILE_N == 0, f"N ({N}) must be divisible by TILE_N ({TILE_N})"
-    assert K % TILE_K == 0, f"K ({K}) must be divisible by TILE_K ({TILE_K})"
-
-    if transpose_out:
-        out_shape = (N, M)
-    else:
-        out_shape = (M, N)
-
-    # Prepare outputs
+    out_shape = (N, M) if transpose_out else (M, N)
     out_shapes = [jax.ShapeDtypeStruct(shape=out_shape, dtype=x1.dtype)]
 
-    # Call triton kernel
     results = jt.triton_call(
         x1,
         x2,
@@ -192,10 +112,10 @@ def _sigmoid_gated_dual_gemm_forward_impl(
         TWO_INPUTS=two_inputs,
     )
 
-    return results[0] if len(results) == 1 else results
+    return results[0]
 
 
-def _sigmoid_gated_dual_gemm_backward_impl(
+def _triton_backward(
     grad_out, x1, x2, w1, w2, mask, two_inputs, transpose_out, precision
 ):
     """Triton implementation of backward pass."""
@@ -203,28 +123,16 @@ def _sigmoid_gated_dual_gemm_backward_impl(
         fused_sigmoid_gated_dual_gemm_backward_pregemm_kernel,
     )
 
-    M = x1.shape[0]
-    K = x1.shape[1]
-    N = w1.shape[0]
+    M, K, N = x1.shape[0], x1.shape[1], w1.shape[0]
+    TILE_M, TILE_N, TILE_K = 64, 32, 32
 
-    # Default tile sizes
-    TILE_M = 64
-    TILE_N = 32
-    TILE_K = 32
-
-    assert N % TILE_N == 0, f"N ({N}) must be divisible by TILE_N ({TILE_N})"
-    assert K % TILE_K == 0, f"K ({K}) must be divisible by TILE_K ({TILE_K})"
-    # Prepare output shapes
     out_shapes = [
         jax.ShapeDtypeStruct(shape=(M, N), dtype=x1.dtype),  # grad_xw1
         jax.ShapeDtypeStruct(shape=(M, N), dtype=x1.dtype),  # grad_xw2
     ]
     if mask is not None:
-        out_shapes.append(
-            jax.ShapeDtypeStruct(shape=(N, M), dtype=mask.dtype)
-        )  # grad_mask
+        out_shapes.append(jax.ShapeDtypeStruct(shape=(N, M), dtype=mask.dtype))
 
-    # Call triton kernel
     results = jt.triton_call(
         grad_out,
         x1,
@@ -250,347 +158,188 @@ def _sigmoid_gated_dual_gemm_backward_impl(
     grad_xw1, grad_xw2 = results[0], results[1]
     grad_mask = results[2] if len(results) > 2 else None
 
-    # Compute final gradients
     if two_inputs:
-        grad_w1 = jnp.dot(grad_xw1.T, x1)
-        grad_w2 = jnp.dot(grad_xw2.T, x2)
-        grad_x1 = jnp.dot(grad_xw1, w1)
-        grad_x2 = jnp.dot(grad_xw2, w2)
-
+        grad_w1, grad_w2 = jnp.dot(grad_xw1.T, x1), jnp.dot(grad_xw2.T, x2)
+        grad_x1, grad_x2 = jnp.dot(grad_xw1, w1), jnp.dot(grad_xw2, w2)
         result = [grad_x1, grad_x2, grad_w1, grad_w2]
-        if grad_mask is not None:
-            grad_mask = jnp.sum(grad_mask, axis=0)
-        else:
-            grad_mask = jnp.zeros(x1.shape[0], dtype=x1.dtype)
-        result.append(grad_mask)
-        return tuple(result)
     else:
-        grad_w1 = jnp.dot(grad_xw1.T, x1)
-        grad_w2 = jnp.dot(grad_xw2.T, x1)
+        grad_w1, grad_w2 = jnp.dot(grad_xw1.T, x1), jnp.dot(grad_xw2.T, x1)
         grad_x1 = jnp.dot(grad_xw1, w1) + jnp.dot(grad_xw2, w2)
-
         result = [grad_x1, grad_w1, grad_w2]
-        if grad_mask is not None:
-            grad_mask = jnp.sum(grad_mask, axis=0)
-        else:
-            grad_mask = jnp.zeros(x1.shape[0], dtype=x1.dtype)
-        result.append(grad_mask)
-        return tuple(result)
+
+    if grad_mask is not None:
+        grad_mask = jnp.sum(grad_mask, axis=0)
+    else:
+        grad_mask = jnp.zeros(x1.shape[0], dtype=x1.dtype)
+    result.append(grad_mask)
+
+    return tuple(result)
 
 
-def sigmoid_gated_dual_gemm_single_impl(platform, is_forward, *args, **kwargs):
-    """Implementation dispatcher for single input mode."""
+def _impl_dispatcher(platform, is_forward, *args, **kwargs):
+    """Implementation dispatcher."""
+
     if platform == "cuda":
         try:
             import cuequivariance_ops.triton  # noqa: F401
+
+            if is_forward:
+                return _triton_forward(*args, **kwargs)
+            else:
+                return _triton_backward(*args, **kwargs)
         except ImportError:
             pass
-        else:
-            if is_forward:
-                x1, w1, w2, mask = args
-                x2 = jnp.zeros_like(x1)  # dummy x2 for single input mode
 
-                return _sigmoid_gated_dual_gemm_forward_impl(
-                    x1, x2, w1, w2, mask, two_inputs=False, **kwargs
-                )
-            else:
-                grad_out, x1, w1, w2, mask = args
-                x2 = jnp.zeros_like(x1)  # dummy x2 for single input mode
-
-                return _sigmoid_gated_dual_gemm_backward_impl(
-                    grad_out, x1, x2, w1, w2, mask, two_inputs=False, **kwargs
-                )
-
+    # Fallback to reference implementation
     if is_forward:
-        x1, w1, w2, mask = args
-        transpose_out = kwargs.get("transpose_out", False)
-        precision = kwargs.get("precision", Precision.DEFAULT)
-        return sigmoid_gated_dual_gemm_reference_forward(
-            x1, None, w1, w2, mask, False, transpose_out, precision
-        )
+        return _reference_forward(*args, **kwargs)
     else:
-        # JAX autodiff for backward pass
-        grad_out, x1, w1, w2, mask = args
-        transpose_out = kwargs.get("transpose_out", False)
-        precision = kwargs.get("precision", Precision.DEFAULT)
+        # Use JAX autodiff for backward pass
+        grad_out = args[0]
+        forward_args = args[1:]
 
-        def forward_fn(x1, w1, w2, mask):
-            return sigmoid_gated_dual_gemm_reference_forward(
-                x1, None, w1, w2, mask, False, transpose_out, precision
-            )
+        def forward_fn(*fwd_args):
+            return _reference_forward(*fwd_args, **kwargs)
 
-            # Use JAX's autodiff for backward pass
-
-        _, vjp_fn = jax.vjp(forward_fn, x1, w1, w2, mask)
+        _, vjp_fn = jax.vjp(forward_fn, *forward_args)
         grad_outputs = vjp_fn(grad_out)
 
-        # Always return mask gradient since we create dummy mask in forward
-        result = [grad_outputs[0], grad_outputs[1], grad_outputs[2], grad_outputs[3]]
-        return tuple(result)
+        return tuple(grad_outputs)
 
 
-def sigmoid_gated_dual_gemm_dual_impl(platform, is_forward, *args, **kwargs):
-    """Implementation dispatcher for dual input mode."""
-    if platform == "cuda":
-        try:
-            import cuequivariance_ops.triton  # noqa: F401
-        except ImportError:
-            pass
-        else:
-            if is_forward:
-                x1, x2, w1, w2, mask = args
-
-                return _sigmoid_gated_dual_gemm_forward_impl(
-                    x1, x2, w1, w2, mask, two_inputs=True, **kwargs
-                )
-            else:
-                grad_out, x1, x2, w1, w2, mask = args
-
-                return _sigmoid_gated_dual_gemm_backward_impl(
-                    grad_out, x1, x2, w1, w2, mask, two_inputs=True, **kwargs
-                )
-
-    if is_forward:
-        x1, x2, w1, w2, mask = args
-        transpose_out = kwargs.get("transpose_out", False)
-        precision = kwargs.get("precision", Precision.DEFAULT)
-        return sigmoid_gated_dual_gemm_reference_forward(
-            x1, x2, w1, w2, mask, True, transpose_out, precision
-        )
-    else:
-        # JAX autodiff for backward pass
-        grad_out, x1, x2, w1, w2, mask = args
-        transpose_out = kwargs.get("transpose_out", False)
-        precision = kwargs.get("precision", Precision.DEFAULT)
-
-        def forward_fn(x1, x2, w1, w2, mask):
-            return sigmoid_gated_dual_gemm_reference_forward(
-                x1, x2, w1, w2, mask, True, transpose_out, precision
-            )
-
-            # Use JAX's autodiff for backward pass
-
-        _, vjp_fn = jax.vjp(forward_fn, x1, x2, w1, w2, mask)
-        grad_outputs = vjp_fn(grad_out)
-
-        # Always return mask gradient since we create dummy mask in forward
-        result = [
-            grad_outputs[0],
-            grad_outputs[1],
-            grad_outputs[2],
-            grad_outputs[3],
-            grad_outputs[4],
-        ]
-        return tuple(result)
-
-
-# Register single input primitives
-sigmoid_gated_dual_gemm_single_fwd_p.def_abstract_eval(
-    sigmoid_gated_dual_gemm_single_fwd_abstract_eval
+# Register primitives
+sigmoid_gated_dual_gemm_fwd_p.def_abstract_eval(_abstract_eval_fwd)
+sigmoid_gated_dual_gemm_fwd_p.def_impl(
+    partial(xla.apply_primitive, sigmoid_gated_dual_gemm_fwd_p)
 )
-sigmoid_gated_dual_gemm_single_fwd_p.def_impl(
-    partial(xla.apply_primitive, sigmoid_gated_dual_gemm_single_fwd_p)
-)
-sigmoid_gated_dual_gemm_single_bwd_p.def_abstract_eval(
-    sigmoid_gated_dual_gemm_single_bwd_abstract_eval
-)
-sigmoid_gated_dual_gemm_single_bwd_p.def_impl(
-    partial(xla.apply_primitive, sigmoid_gated_dual_gemm_single_bwd_p)
+sigmoid_gated_dual_gemm_bwd_p.def_abstract_eval(_abstract_eval_bwd)
+sigmoid_gated_dual_gemm_bwd_p.def_impl(
+    partial(xla.apply_primitive, sigmoid_gated_dual_gemm_bwd_p)
 )
 
-# Register dual input primitives
-sigmoid_gated_dual_gemm_dual_fwd_p.def_abstract_eval(
-    sigmoid_gated_dual_gemm_dual_fwd_abstract_eval
-)
-sigmoid_gated_dual_gemm_dual_fwd_p.def_impl(
-    partial(xla.apply_primitive, sigmoid_gated_dual_gemm_dual_fwd_p)
-)
-sigmoid_gated_dual_gemm_dual_bwd_p.def_abstract_eval(
-    sigmoid_gated_dual_gemm_dual_bwd_abstract_eval
-)
-sigmoid_gated_dual_gemm_dual_bwd_p.def_impl(
-    partial(xla.apply_primitive, sigmoid_gated_dual_gemm_dual_bwd_p)
-)
-
-# Register lowering for single input mode
+# Register lowering for both platforms
 for platform in ["cuda", None]:
     mlir.register_lowering(
-        sigmoid_gated_dual_gemm_single_fwd_p,
-        mlir.lower_fun(
-            partial(sigmoid_gated_dual_gemm_single_impl, platform, True),
-            False,
-        ),
+        sigmoid_gated_dual_gemm_fwd_p,
+        mlir.lower_fun(partial(_impl_dispatcher, platform, True), False),
         platform,
     )
     mlir.register_lowering(
-        sigmoid_gated_dual_gemm_single_bwd_p,
-        mlir.lower_fun(
-            partial(sigmoid_gated_dual_gemm_single_impl, platform, False),
-            sigmoid_gated_dual_gemm_single_bwd_p.multiple_results,
-        ),
-        platform,
-    )
-    mlir.register_lowering(
-        sigmoid_gated_dual_gemm_dual_fwd_p,
-        mlir.lower_fun(
-            partial(sigmoid_gated_dual_gemm_dual_impl, platform, True),
-            False,
-        ),
-        platform,
-    )
-    mlir.register_lowering(
-        sigmoid_gated_dual_gemm_dual_bwd_p,
-        mlir.lower_fun(
-            partial(sigmoid_gated_dual_gemm_dual_impl, platform, False),
-            sigmoid_gated_dual_gemm_dual_bwd_p.multiple_results,
-        ),
+        sigmoid_gated_dual_gemm_bwd_p,
+        mlir.lower_fun(partial(_impl_dispatcher, platform, False), True),
         platform,
     )
 
 
-@partial(custom_vjp, nondiff_argnames=("transpose_out", "precision"))
-def _sigmoid_gated_dual_gemm_single(
-    x1,
-    w1,
-    w2,
-    mask,
-    transpose_out=False,
-    precision=Precision.DEFAULT,
+@partial(custom_vjp, nondiff_argnames=("two_inputs", "transpose_out", "precision"))
+def _sigmoid_gated_dual_gemm_core(
+    x1, x2, w1, w2, mask, two_inputs, transpose_out, precision
 ):
-    """JAX implementation of sigmoid-gated dual GEMM with single input and custom VJP."""
+    """Core implementation with custom VJP."""
     if isinstance(precision, int):
         precision = Precision(precision)
 
-    # Handle None values for JAX primitives
     if mask is None:
-        mask = jnp.ones(x1.shape[0], dtype=x1.dtype)  # dummy mask
+        mask = jnp.ones(x1.shape[0], dtype=x1.dtype)
 
-    result = sigmoid_gated_dual_gemm_single_fwd_p.bind(
+    return sigmoid_gated_dual_gemm_fwd_p.bind(
         x1,
+        x2,
         w1,
         w2,
         mask,
+        two_inputs=two_inputs,
         transpose_out=transpose_out,
         precision=precision,
     )
 
-    return result
 
-
-def _sigmoid_gated_dual_gemm_single_fwd(x1, w1, w2, mask, transpose_out, precision):
-    # Store original mask value
+def _fwd(x1, x2, w1, w2, mask, two_inputs, transpose_out, precision):
     original_mask = mask
-
-    # Handle None values for JAX primitives
     if mask is None:
-        mask = jnp.ones(x1.shape[0], dtype=x1.dtype)  # dummy mask
+        mask = jnp.ones(x1.shape[0], dtype=x1.dtype)
 
-    result = sigmoid_gated_dual_gemm_single_fwd_p.bind(
-        x1,
-        w1,
-        w2,
-        mask,
-        transpose_out=transpose_out,
-        precision=precision,
-    )
-
-    return result, (x1, w1, w2, original_mask)
-
-
-def _sigmoid_gated_dual_gemm_single_bwd(transpose_out, precision, residuals, grad_out):
-    x1, w1, w2, mask = residuals
-
-    # Handle None values for JAX primitives
-    if mask is None:
-        mask = jnp.ones(x1.shape[0], dtype=x1.dtype)  # dummy mask
-
-    return sigmoid_gated_dual_gemm_single_bwd_p.bind(
-        grad_out,
-        x1,
-        w1,
-        w2,
-        mask,
-        transpose_out=transpose_out,
-        precision=precision,
-    )
-
-
-_sigmoid_gated_dual_gemm_single.defvjp(
-    _sigmoid_gated_dual_gemm_single_fwd, _sigmoid_gated_dual_gemm_single_bwd
-)
-
-
-@partial(custom_vjp, nondiff_argnames=("transpose_out", "precision"))
-def _sigmoid_gated_dual_gemm_dual(
-    x1,
-    x2,
-    w1,
-    w2,
-    mask,
-    transpose_out=False,
-    precision=Precision.DEFAULT,
-):
-    """JAX implementation of sigmoid-gated dual GEMM with dual input and custom VJP."""
-    if isinstance(precision, int):
-        precision = Precision(precision)
-
-    # Handle None values for JAX primitives
-    if mask is None:
-        mask = jnp.ones(x1.shape[0], dtype=x1.dtype)  # dummy mask
-
-    result = sigmoid_gated_dual_gemm_dual_fwd_p.bind(
+    result = sigmoid_gated_dual_gemm_fwd_p.bind(
         x1,
         x2,
         w1,
         w2,
         mask,
+        two_inputs=two_inputs,
         transpose_out=transpose_out,
         precision=precision,
     )
 
-    return result
+    return result, (x1, x2, w1, w2, original_mask)
 
 
-def _sigmoid_gated_dual_gemm_dual_fwd(x1, x2, w1, w2, mask, transpose_out, precision):
-    # Handle None values for JAX primitives
-    if mask is None:
-        mask = jnp.ones(x1.shape[0], dtype=x1.dtype)  # dummy mask
-
-    result = sigmoid_gated_dual_gemm_dual_fwd_p.bind(
-        x1,
-        x2,
-        w1,
-        w2,
-        mask,
-        transpose_out=transpose_out,
-        precision=precision,
+def _bwd(two_inputs, transpose_out, precision, residuals, grad_out):
+    x1, x2, w1, w2, original_mask = residuals
+    mask = (
+        original_mask
+        if original_mask is not None
+        else jnp.ones(x1.shape[0], dtype=x1.dtype)
     )
 
-    return result, (x1, x2, w1, w2, mask)
-
-
-def _sigmoid_gated_dual_gemm_dual_bwd(transpose_out, precision, residuals, grad_out):
-    x1, x2, w1, w2, mask = residuals
-
-    # Handle None values for JAX primitives
-    if mask is None:
-        mask = jnp.ones(x1.shape[0], dtype=x1.dtype)  # dummy mask
-
-    return sigmoid_gated_dual_gemm_dual_bwd_p.bind(
+    grads = sigmoid_gated_dual_gemm_bwd_p.bind(
         grad_out,
         x1,
         x2,
         w1,
         w2,
         mask,
+        two_inputs=two_inputs,
         transpose_out=transpose_out,
         precision=precision,
     )
 
+    if original_mask is None:
+        # Replace mask gradient with zeros
+        grad_mask = jnp.zeros_like(mask)
+        if two_inputs:
+            grad_x1, grad_x2, grad_w1, grad_w2, _ = grads
+            return (grad_x1, grad_x2, grad_w1, grad_w2, grad_mask)
+        else:
+            grad_x1, grad_w1, grad_w2, _ = grads
+            # For single input mode, still need to return gradient for dummy x2
+            grad_x2 = jnp.zeros_like(x2)
+            return (grad_x1, grad_x2, grad_w1, grad_w2, grad_mask)
 
-_sigmoid_gated_dual_gemm_dual.defvjp(
-    _sigmoid_gated_dual_gemm_dual_fwd, _sigmoid_gated_dual_gemm_dual_bwd
-)
+    # Always return 5 gradients to match the core function signature
+    if two_inputs:
+        return grads
+    else:
+        # For single input mode, insert zero gradient for dummy x2
+        grad_x1, grad_w1, grad_w2, grad_mask = grads
+        grad_x2 = jnp.zeros_like(x2)
+        return (grad_x1, grad_x2, grad_w1, grad_w2, grad_mask)
+
+
+_sigmoid_gated_dual_gemm_core.defvjp(_fwd, _bwd)
+
+
+def _prepare_inputs(x, w1, w2):
+    """Prepare inputs and handle reshaping."""
+    x = jnp.asarray(x)
+    w1 = jnp.asarray(w1)
+    w2 = jnp.asarray(w2)
+
+    original_shape = x.shape
+    if x.ndim > 2:
+        x = x.reshape(-1, x.shape[-1])
+
+    return x, w1, w2, original_shape
+
+
+def _reshape_output(out, original_shape, w1_shape, transpose_out):
+    """Reshape output back to original batch dimensions."""
+    if len(original_shape) > 2:
+        if transpose_out:
+            out_shape = (w1_shape[0], *original_shape[:-1])
+        else:
+            out_shape = (*original_shape[:-1], w1_shape[0])
+        out = out.reshape(out_shape)
+    return out
 
 
 def sigmoid_gated_dual_gemm(
@@ -603,61 +352,35 @@ def sigmoid_gated_dual_gemm(
 ):
     """Apply fused sigmoid-gated dual GEMM operation with single input.
 
-    This function performs a dual matrix multiplication with sigmoid gating:
-    1. First matrix multiplication: x @ w1
-    2. Second matrix multiplication: x @ w2
-    3. Apply sigmoid to the first result
-    4. Element-wise multiplication of sigmoid output with second result
-    5. Optional masking of the final output
+    Performs: sigmoid(x @ w1) * (x @ w2) with optional masking.
 
     Args:
-        x: Input tensor of shape (M, K)
-        w1: First weight matrix of shape (N, K) for the main projection
-        w2: Second weight matrix of shape (N, K) for the gating projection
-        mask: Optional mask tensor of shape (M,) for element-wise multiplication
+        x: Input tensor of shape (M, K) or (..., K)
+        w1: First weight matrix of shape (N, K)
+        w2: Second weight matrix of shape (N, K)
+        mask: Optional mask tensor of shape (M,) or (...,)
         transpose_out: Whether to transpose the output
         precision: Precision mode for matrix multiplication
 
     Returns:
-        Output tensor of shape (M, N) if transpose_out=False, (N, M) if transpose_out=True
-
-    Examples:
-        >>> x = jnp.ones((4, 128))  # (M, K)
-        >>> w1 = jnp.ones((64, 128))  # (N, K)
-        >>> w2 = jnp.ones((64, 128))  # (N, K)
-        >>> out = sigmoid_gated_dual_gemm(x, w1, w2)
-        >>> out.shape  # (M, N)
-        (4, 64)
+        Output tensor of shape (M, N) or (..., N) if transpose_out=False,
+        (N, M) or (N, ...) if transpose_out=True
     """
-    # Ensure inputs are contiguous
-    x = jnp.asarray(x)
-    w1 = jnp.asarray(w1)
-    w2 = jnp.asarray(w2)
+    x, w1, w2, original_shape = _prepare_inputs(x, w1, w2)
+    x2 = jnp.zeros_like(x)  # dummy x2 for single input mode
 
-    # Reshape x to 2D if needed
-    original_shape = x.shape
-    if x.ndim > 2:
-        x = x.reshape(-1, x.shape[-1])
-
-    # Call internal implementation
-    out = _sigmoid_gated_dual_gemm_single(
+    out = _sigmoid_gated_dual_gemm_core(
         x,
+        x2,
         w1,
         w2,
         mask,
+        two_inputs=False,
         transpose_out=transpose_out,
         precision=precision,
     )
 
-    # Reshape output back to original batch dimensions
-    if len(original_shape) > 2:
-        if transpose_out:
-            out_shape = (w1.shape[0], *original_shape[:-1])
-        else:
-            out_shape = (*original_shape[:-1], w1.shape[0])
-        out = out.reshape(out_shape)
-
-    return out
+    return _reshape_output(out, original_shape, w1.shape, transpose_out)
 
 
 def sigmoid_gated_dual_gemm_dual_x(
@@ -671,63 +394,45 @@ def sigmoid_gated_dual_gemm_dual_x(
 ):
     """Apply fused sigmoid-gated dual GEMM operation with two inputs.
 
-    This function performs a dual matrix multiplication with sigmoid gating:
-    1. First matrix multiplication: x1 @ w1
-    2. Second matrix multiplication: x2 @ w2
-    3. Apply sigmoid to the first result
-    4. Element-wise multiplication of sigmoid output with second result
-    5. Optional masking of the final output
+    Performs: sigmoid(x1 @ w1) * (x2 @ w2) with optional masking.
 
     Args:
-        x1: First input tensor of shape (M, K)
-        x2: Second input tensor of shape (M, K)
-        w1: First weight matrix of shape (N, K) for the main projection
-        w2: Second weight matrix of shape (N, K) for the gating projection
-        mask: Optional mask tensor of shape (M,) for element-wise multiplication
+        x1: First input tensor of shape (M, K) or (..., K)
+        x2: Second input tensor of shape (M, K) or (..., K)
+        w1: First weight matrix of shape (N, K)
+        w2: Second weight matrix of shape (N, K)
+        mask: Optional mask tensor of shape (M,) or (...,)
         transpose_out: Whether to transpose the output
         precision: Precision mode for matrix multiplication
 
     Returns:
-        Output tensor of shape (M, N) if transpose_out=False, (N, M) if transpose_out=True
-
-    Examples:
-        >>> x1 = jnp.ones((4, 128))  # (M, K)
-        >>> x2 = jnp.ones((4, 128))  # (M, K)
-        >>> w1 = jnp.ones((64, 128))  # (N, K)
-        >>> w2 = jnp.ones((64, 128))  # (N, K)
-        >>> out = sigmoid_gated_dual_gemm_dual_x(x1, x2, w1, w2)
-        >>> out.shape  # (M, N)
-        (4, 64)
+        Output tensor of shape (M, N) or (..., N) if transpose_out=False,
+        (N, M) or (N, ...) if transpose_out=True
     """
-    # Ensure inputs are contiguous
-    x1 = jnp.asarray(x1)
+    x1, w1, w2, original_shape = _prepare_inputs(x1, w1, w2)
     x2 = jnp.asarray(x2)
-    w1 = jnp.asarray(w1)
-    w2 = jnp.asarray(w2)
-
-    # Reshape inputs to 2D if needed
-    original_shape = x1.shape
-    if x1.ndim > 2:
-        x1 = x1.reshape(-1, x1.shape[-1])
+    if x2.ndim > 2:
         x2 = x2.reshape(-1, x2.shape[-1])
 
-    # Call internal implementation
-    out = _sigmoid_gated_dual_gemm_dual(
+    out = _sigmoid_gated_dual_gemm_core(
         x1,
         x2,
         w1,
         w2,
         mask,
+        two_inputs=True,
         transpose_out=transpose_out,
         precision=precision,
     )
 
-    # Reshape output back to original batch dimensions
-    if len(original_shape) > 2:
-        if transpose_out:
-            out_shape = (w1.shape[0], *original_shape[:-1])
-        else:
-            out_shape = (*original_shape[:-1], w1.shape[0])
-        out = out.reshape(out_shape)
+    return _reshape_output(out, original_shape, w1.shape, transpose_out)
 
-    return out
+
+# Export reference function for tests
+def sigmoid_gated_dual_gemm_reference_forward(
+    x1, x2, w1, w2, mask, two_inputs, transpose_out, precision
+):
+    """Reference implementation for testing - matches original function signature."""
+    return _reference_forward(
+        x1, x2, w1, w2, mask, two_inputs, transpose_out, precision
+    )
