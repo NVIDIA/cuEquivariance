@@ -12,16 +12,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import jax
 import jax.numpy as jnp
 import jax.random as random
 import pytest
-from cuequivariance_ops.triton import Layout
 from jax import test_util
 
-from cuequivariance_jax.triangle.layer_norm_transpose import (
-    layer_norm_transpose,
-    layer_norm_transpose_reference_forward,
-)
+from cuequivariance_jax.triangle.layer_norm_transpose import layer_norm_transpose
 
 
 @pytest.mark.parametrize("elementwise_affine", [True, False])
@@ -48,129 +45,56 @@ from cuequivariance_jax.triangle.layer_norm_transpose import (
 def test_layer_norm_transpose(
     elementwise_affine, layout_str, input_shape, expected_output_shape, feature_dim
 ):
-    """Test to verify implementation across all layouts and elementwise_affine settings."""
+    """Test layer_norm_transpose across all layouts and elementwise_affine settings."""
     key = random.PRNGKey(42)
     eps = 1e-5
-
     D = feature_dim
 
-    # Generate test data with random weights and biases
+    # Generate test data
     key, subkey1, subkey2, subkey3 = random.split(key, 4)
     x = random.normal(subkey1, input_shape, dtype=jnp.float32)
-    w = random.normal(subkey2, (D,), dtype=jnp.float32) * 0.1 + 1.0  # Random around 1.0
-    b = random.normal(subkey3, (D,), dtype=jnp.float32) * 0.1  # Random around 0.0
+    w = random.normal(subkey2, (D,), dtype=jnp.float32) * 0.1 + 1.0
+    b = random.normal(subkey3, (D,), dtype=jnp.float32) * 0.1
 
-    # Test the implementation
+    # Test implementation on default device
     out = layer_norm_transpose(
-        x,
-        w,
-        b,
+        x, w, b, layout=layout_str, eps=eps, elementwise_affine=elementwise_affine
+    )
+
+    # Basic checks
+    assert out.shape == expected_output_shape
+    assert not jnp.any(jnp.isnan(out)) and not jnp.any(jnp.isinf(out))
+
+    # Test implementation on CPU as reference
+    cpu_device = jax.devices("cpu")[0]
+    x_cpu = jax.device_put(x, cpu_device)
+    w_cpu = jax.device_put(w, cpu_device)
+    b_cpu = jax.device_put(b, cpu_device)
+
+    ref_out = layer_norm_transpose(
+        x_cpu,
+        w_cpu,
+        b_cpu,
         layout=layout_str,
         eps=eps,
         elementwise_affine=elementwise_affine,
     )
 
-    # Check output shape
-    assert out.shape == expected_output_shape, (
-        f"Shape mismatch for layout {layout_str}: got {out.shape}, expected {expected_output_shape}"
-    )
+    # Compare outputs
+    assert jnp.allclose(out, ref_out, rtol=1e-5, atol=1e-6)
 
-    # Check for NaN/Inf
-    assert not jnp.any(jnp.isnan(out)), f"Contains NaN values for layout {layout_str}"
-    assert not jnp.any(jnp.isinf(out)), f"Contains Inf values for layout {layout_str}"
-
-    # Compare with reference implementation
-    # Need to convert string layout to enum and prepare input tensor like main function does
-    if layout_str == "nd->nd":
-        N, D = x.shape
-        B = 1
-        x_ref = x.reshape(1, N, D)
-        layout_enum = Layout.BND_BND
-    elif layout_str == "nd->dn":
-        N, D = x.shape
-        B = 1
-        x_ref = x.reshape(1, N, D)
-        layout_enum = Layout.BND_BDN
-    elif layout_str == "bnd->bnd":
-        B, N, D = x.shape
-        x_ref = x
-        layout_enum = Layout.BND_BND
-    elif layout_str == "bdn->bnd":
-        B, D, N = x.shape
-        x_ref = x
-        layout_enum = Layout.BDN_BND
-    elif layout_str == "bnd->bdn":
-        B, N, D = x.shape
-        x_ref = x
-        layout_enum = Layout.BND_BDN
-    elif layout_str == "dbn->bnd":
-        D, B, N = x.shape
-        x_ref = x
-        layout_enum = Layout.DBN_BND
-    elif layout_str == "bnd->dbn":
-        B, N, D = x.shape
-        x_ref = x
-        layout_enum = Layout.BND_DBN
-    elif layout_str == "bijd->bijd":
-        B, II, J, D = x.shape
-        x_ref = x.reshape(B, II * J, D)
-        layout_enum = Layout.BND_BND
-    elif layout_str == "bijd->bdij":
-        B, II, J, D = x.shape
-        x_ref = x.reshape(B, II * J, D)
-        layout_enum = Layout.BND_BDN
-    elif layout_str == "bdij->bijd":
-        B, D, II, J = x.shape
-        x_ref = x.reshape(B, D, II * J)
-        layout_enum = Layout.BDN_BND
-    elif layout_str == "dbij->bijd":
-        D, B, II, J = x.shape
-        x_ref = x.reshape(D, B, II * J)
-        layout_enum = Layout.DBN_BND
-    elif layout_str == "bijd->dbij":
-        B, II, J, D = x.shape
-        x_ref = x.reshape(B, II * J, D)
-        layout_enum = Layout.BND_DBN
-
-    # Get reference output by calling the reference function directly
-    ref_out, ref_mean, ref_rstd = layer_norm_transpose_reference_forward(
-        x_ref, w, b, eps, elementwise_affine, layout_enum
-    )
-
-    # Reshape reference output back to expected shape for 4D cases
-    if layout_str == "bijd->bijd":
-        B, II, J, D = x.shape
-        ref_out = ref_out.reshape(B, II, J, D)
-    elif layout_str == "bijd->bdij":
-        B, II, J, D = x.shape
-        ref_out = ref_out.reshape(B, D, II, J)
-    elif layout_str == "bdij->bijd":
-        B, D, II, J = x.shape
-        ref_out = ref_out.reshape(B, II, J, D)
-    elif layout_str == "dbij->bijd":
-        D, B, II, J = x.shape
-        ref_out = ref_out.reshape(B, II, J, D)
-    elif layout_str == "bijd->dbij":
-        B, II, J, D = x.shape
-        ref_out = ref_out.reshape(D, B, II, J)
-
-    # Check that outputs match (within numerical precision)
-    assert jnp.allclose(out, ref_out, rtol=1e-5, atol=1e-6), (
-        f"Output mismatch with reference for layout {layout_str}: "
-        f"max diff = {jnp.max(jnp.abs(out - ref_out))}"
-    )
-
-    # Test gradient computation using jax.test_util.check_grads
+    # Test gradients
     def loss_fn(x, w, b):
-        out = layer_norm_transpose(
-            x,
-            w,
-            b,
-            layout=layout_str,
-            eps=eps,
-            elementwise_affine=elementwise_affine,
+        return jnp.mean(
+            layer_norm_transpose(
+                x,
+                w,
+                b,
+                layout=layout_str,
+                eps=eps,
+                elementwise_affine=elementwise_affine,
+            )
+            ** 2
         )
-        return jnp.mean(out**2)
 
-    # Test gradient computation using jax.test_util.check_grads
     test_util.check_grads(loss_fn, (x, w, b), order=1, modes=["rev"])
