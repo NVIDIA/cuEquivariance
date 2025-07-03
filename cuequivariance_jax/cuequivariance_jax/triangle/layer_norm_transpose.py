@@ -172,11 +172,15 @@ def _layer_norm_backward_impl(
         LAYOUT=layout.value,
     )
 
-    return (
-        grad_x,
-        jnp.sum(grad_w_tiles, axis=(0, 1)),
-        jnp.sum(grad_b_tiles, axis=(0, 1)),
-    )
+    grad_w = jnp.sum(grad_w_tiles, axis=(0, 1))
+    grad_b = jnp.sum(grad_b_tiles, axis=(0, 1))
+
+    # When elementwise_affine=False, gradients w.r.t. w and b should be zero
+    if not elementwise_affine:
+        grad_w = jnp.zeros_like(w)
+        grad_b = jnp.zeros_like(b)
+
+    return grad_x, grad_w, grad_b
 
 
 def layer_norm_impl(platform, is_forward, *args, **kwargs):

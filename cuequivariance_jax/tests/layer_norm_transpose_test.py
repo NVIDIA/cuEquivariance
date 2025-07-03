@@ -172,27 +172,5 @@ def test_layer_norm_transpose(
         )
         return jnp.mean(out**2)
 
-    if elementwise_affine:
-        # Check gradients for all parameters when elementwise_affine=True
-        test_util.check_grads(loss_fn, (x, w, b), order=1, modes=["rev"])
-    else:
-        # When elementwise_affine=False, only check gradient w.r.t. input x
-        # The gradients w.r.t. w and b should be zero but may be numerically unstable
-        def loss_fn_x_only(x):
-            out = layer_norm_transpose(
-                x,
-                w,
-                b,
-                layout=layout_str,
-                eps=eps,
-                elementwise_affine=elementwise_affine,
-            )
-            return jnp.mean(out**2)
-
-        test_util.check_grads(loss_fn_x_only, (x,), order=1, modes=["rev"])
-
-        # Note: When elementwise_affine=False, gradients w.r.t. w and b should ideally be zero
-        # but the current implementation may not handle this correctly. This is a known issue.
-        # For now, we just verify that gradients can be computed without errors
-
-        # TODO: Fix implementation so that grad_w and grad_b are zero when elementwise_affine=False
+    # Test gradient computation using jax.test_util.check_grads
+    test_util.check_grads(loss_fn, (x, w, b), order=1, modes=["rev"])
