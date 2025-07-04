@@ -13,6 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+from contextlib import contextmanager
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -27,22 +30,74 @@ from cuequivariance_jax.triangle.sigmoid_gated_dual_gemm import (
 )
 
 
+@contextmanager
+def temp_env_vars(**env_vars):
+    """Context manager to temporarily set environment variables."""
+    original_values = {}
+    for key, value in env_vars.items():
+        original_values[key] = os.environ.get(key)
+        if value is None:
+            if key in os.environ:
+                del os.environ[key]
+        else:
+            os.environ[key] = value
+
+    try:
+        yield
+    finally:
+        for key, original_value in original_values.items():
+            if original_value is None:
+                if key in os.environ:
+                    del os.environ[key]
+            else:
+                os.environ[key] = original_value
+
+
+def create_test_data(M=32, N=64, K=128, include_mask=False, batch_size=None):
+    """Create standard test data for sigmoid_gated_dual_gemm tests."""
+    key = jax.random.key(42)
+    data = {
+        "x": jax.random.normal(key, (M, K), dtype=jnp.float32),
+        "w1": jax.random.normal(jax.random.key(1), (N, K), dtype=jnp.float32),
+        "w2": jax.random.normal(jax.random.key(2), (N, K), dtype=jnp.float32),
+        "x2": jax.random.normal(jax.random.key(3), (M, K), dtype=jnp.float32),
+    }
+
+    if include_mask:
+        data["mask"] = jax.random.uniform(jax.random.key(4), (M,), dtype=jnp.float32)
+
+    if batch_size is not None:
+        data["x_batch"] = jax.random.normal(
+            jax.random.key(5), (batch_size, M, K), dtype=jnp.float32
+        )
+        data["x2_batch"] = jax.random.normal(
+            jax.random.key(6), (batch_size, M, K), dtype=jnp.float32
+        )
+
+    return data
+
+
+def validate_output(output, expected_shape, output_name="output"):
+    """Validate output shape and check for NaN values."""
+    assert output.shape == expected_shape, f"{output_name} shape mismatch"
+    assert not jnp.any(jnp.isnan(output)), f"{output_name} contains NaN values"
+
+
 def test_sigmoid_gated_dual_gemm_comprehensive():
     """Comprehensive test covering API, shapes, batching, and basic functionality."""
-    key = jax.random.PRNGKey(42)
     M, N, K = 64, 128, 256
     B = 4
 
-    # Test data
-    x = jax.random.normal(key, (M, K), dtype=jnp.float32)
-    w1 = jax.random.normal(jax.random.key(1), (N, K), dtype=jnp.float32)
-    w2 = jax.random.normal(jax.random.key(2), (N, K), dtype=jnp.float32)
-    mask = jax.random.uniform(jax.random.key(3), (M,), dtype=jnp.float32)
-    x2 = jax.random.normal(jax.random.key(4), (M, K), dtype=jnp.float32)
-
-    # Batch data
-    x_batch = jax.random.normal(jax.random.key(5), (B, M, K), dtype=jnp.float32)
-    x2_batch = jax.random.normal(jax.random.key(6), (B, M, K), dtype=jnp.float32)
+    # Create test data
+    test_data = create_test_data(M, N, K, include_mask=True, batch_size=B)
+    x, w1, w2, x2, mask = (
+        test_data["x"],
+        test_data["w1"],
+        test_data["w2"],
+        test_data["x2"],
+        test_data["mask"],
+    )
+    x_batch, x2_batch = test_data["x_batch"], test_data["x2_batch"]
 
     # Test single input API
     output = sigmoid_gated_dual_gemm(x, w1, w2)
@@ -103,14 +158,17 @@ def test_sigmoid_gated_dual_gemm_comprehensive():
 
 def test_sigmoid_gated_dual_gemm_correctness():
     """Test correctness against manual computation for both single and dual input modes."""
-    key = jax.random.PRNGKey(42)
     M, N, K = 4, 32, 32  # Use dimensions compatible with tile sizes
 
-    x = jax.random.normal(key, (M, K), dtype=jnp.float32)
-    w1 = jax.random.normal(jax.random.key(1), (N, K), dtype=jnp.float32)
-    w2 = jax.random.normal(jax.random.key(2), (N, K), dtype=jnp.float32)
-    mask = jax.random.uniform(jax.random.key(3), (M,), dtype=jnp.float32)
-    x2 = jax.random.normal(jax.random.key(4), (M, K), dtype=jnp.float32)
+    # Create test data
+    test_data = create_test_data(M, N, K, include_mask=True)
+    x, w1, w2, x2, mask = (
+        test_data["x"],
+        test_data["w1"],
+        test_data["w2"],
+        test_data["x2"],
+        test_data["mask"],
+    )
 
     tol = 1e-5
 
@@ -143,11 +201,15 @@ def test_sigmoid_gated_dual_gemm_gradients(backend):
     """Test gradient computation for all modes."""
     M, N, K = 8, 32, 32  # Use smaller dimensions for faster gradient checking
 
-    x = jax.random.normal(jax.random.key(0), (M, K), dtype=jnp.float32)
-    x2 = jax.random.normal(jax.random.key(1), (M, K), dtype=jnp.float32)
-    w1 = jax.random.normal(jax.random.key(2), (N, K), dtype=jnp.float32)
-    w2 = jax.random.normal(jax.random.key(3), (N, K), dtype=jnp.float32)
-    mask = jax.random.uniform(jax.random.key(4), (M,), dtype=jnp.float32)
+    # Create test data
+    test_data = create_test_data(M, N, K, include_mask=True)
+    x, w1, w2, x2, mask = (
+        test_data["x"],
+        test_data["w1"],
+        test_data["w2"],
+        test_data["x2"],
+        test_data["mask"],
+    )
 
     if backend == "cpu":
         device = jax.devices("cpu")[0]
@@ -195,13 +257,11 @@ def test_sigmoid_gated_dual_gemm_gradients(backend):
 )
 def test_sigmoid_gated_dual_gemm_precision_modes(precision):
     """Test different precision modes."""
-    key = jax.random.PRNGKey(42)
     M, N, K = 32, 64, 128
 
-    x = jax.random.normal(key, (M, K), dtype=jnp.float32)
-    w1 = jax.random.normal(jax.random.key(1), (N, K), dtype=jnp.float32)
-    w2 = jax.random.normal(jax.random.key(2), (N, K), dtype=jnp.float32)
-    x2 = jax.random.normal(jax.random.key(3), (M, K), dtype=jnp.float32)
+    # Create test data
+    test_data = create_test_data(M, N, K)
+    x, w1, w2, x2 = test_data["x"], test_data["w1"], test_data["w2"], test_data["x2"]
 
     # Test single input with different precision
     output = sigmoid_gated_dual_gemm(x, w1, w2, precision=precision)
@@ -210,3 +270,33 @@ def test_sigmoid_gated_dual_gemm_precision_modes(precision):
     # Test dual input with different precision
     output_dual = sigmoid_gated_dual_gemm_dual_x(x, x2, w1, w2, precision=precision)
     assert output_dual.shape == (M, N)
+
+
+@pytest.mark.parametrize("tuning_mode", ["AOT", "ONDEMAND", None])
+def test_sigmoid_gated_dual_gemm_triton_tuning_modes(tuning_mode):
+    """Test sigmoid_gated_dual_gemm with different CUEQ_TRITON_TUNING environment variable values."""
+    env_vars = {
+        "CUEQ_TRITON_TUNING": tuning_mode,
+        "CUEQ_TRITON_IGNORE_EXISTING_CACHE": "1",
+    }
+
+    with temp_env_vars(**env_vars):
+        # Create test data
+        M, N, K = 32, 64, 128
+        test_data = create_test_data(M, N, K)
+
+        # Test single input mode
+        output = sigmoid_gated_dual_gemm(
+            test_data["x"], test_data["w1"], test_data["w2"]
+        )
+        validate_output(output, (M, N), "single input output")
+
+        # Test dual input mode
+        output_dual = sigmoid_gated_dual_gemm_dual_x(
+            test_data["x"], test_data["x2"], test_data["w1"], test_data["w2"]
+        )
+        validate_output(output_dual, (M, N), "dual input output")
+
+
+if __name__ == "__main__":
+    test_sigmoid_gated_dual_gemm_triton_tuning_modes("ONDEMAND")
