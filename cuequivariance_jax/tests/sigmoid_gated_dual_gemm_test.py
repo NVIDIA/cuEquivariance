@@ -35,18 +35,14 @@ def test_sigmoid_gated_dual_gemm_comprehensive():
 
     # Test data
     x = jax.random.normal(key, (M, K), dtype=jnp.float32)
-    w1 = jax.random.normal(jax.random.split(key, 1)[0], (N, K), dtype=jnp.float32)
-    w2 = jax.random.normal(jax.random.split(key, 2)[0], (N, K), dtype=jnp.float32)
-    mask = jax.random.uniform(jax.random.split(key, 3)[0], (M,), dtype=jnp.float32)
-    x2 = jax.random.normal(jax.random.split(key, 4)[0], (M, K), dtype=jnp.float32)
+    w1 = jax.random.normal(jax.random.key(1), (N, K), dtype=jnp.float32)
+    w2 = jax.random.normal(jax.random.key(2), (N, K), dtype=jnp.float32)
+    mask = jax.random.uniform(jax.random.key(3), (M,), dtype=jnp.float32)
+    x2 = jax.random.normal(jax.random.key(4), (M, K), dtype=jnp.float32)
 
     # Batch data
-    x_batch = jax.random.normal(
-        jax.random.split(key, 5)[0], (B, M, K), dtype=jnp.float32
-    )
-    x2_batch = jax.random.normal(
-        jax.random.split(key, 6)[0], (B, M, K), dtype=jnp.float32
-    )
+    x_batch = jax.random.normal(jax.random.key(5), (B, M, K), dtype=jnp.float32)
+    x2_batch = jax.random.normal(jax.random.key(6), (B, M, K), dtype=jnp.float32)
 
     # Test single input API
     output = sigmoid_gated_dual_gemm(x, w1, w2)
@@ -111,10 +107,10 @@ def test_sigmoid_gated_dual_gemm_correctness():
     M, N, K = 4, 32, 32  # Use dimensions compatible with tile sizes
 
     x = jax.random.normal(key, (M, K), dtype=jnp.float32)
-    w1 = jax.random.normal(jax.random.split(key, 1)[0], (N, K), dtype=jnp.float32)
-    w2 = jax.random.normal(jax.random.split(key, 2)[0], (N, K), dtype=jnp.float32)
-    mask = jax.random.uniform(jax.random.split(key, 3)[0], (M,), dtype=jnp.float32)
-    x2 = jax.random.normal(jax.random.split(key, 4)[0], (M, K), dtype=jnp.float32)
+    w1 = jax.random.normal(jax.random.key(1), (N, K), dtype=jnp.float32)
+    w2 = jax.random.normal(jax.random.key(2), (N, K), dtype=jnp.float32)
+    mask = jax.random.uniform(jax.random.key(3), (M,), dtype=jnp.float32)
+    x2 = jax.random.normal(jax.random.key(4), (M, K), dtype=jnp.float32)
 
     tol = 1e-5
 
@@ -143,7 +139,7 @@ def test_sigmoid_gated_dual_gemm_correctness():
 
 
 @pytest.mark.parametrize("backend", ["cpu", "gpu"])
-def test_sigmoid_gated_dual_gemm_gradients_1(backend):
+def test_sigmoid_gated_dual_gemm_gradients(backend):
     """Test gradient computation for all modes."""
     M, N, K = 8, 32, 32  # Use smaller dimensions for faster gradient checking
 
@@ -151,13 +147,14 @@ def test_sigmoid_gated_dual_gemm_gradients_1(backend):
     x2 = jax.random.normal(jax.random.key(1), (M, K), dtype=jnp.float32)
     w1 = jax.random.normal(jax.random.key(2), (N, K), dtype=jnp.float32)
     w2 = jax.random.normal(jax.random.key(3), (N, K), dtype=jnp.float32)
+    mask = jax.random.uniform(jax.random.key(4), (M,), dtype=jnp.float32)
 
     if backend == "cpu":
         device = jax.devices("cpu")[0]
     elif backend == "gpu":
         device = jax.devices("gpu")[0]
 
-    [x, x2, w1, w2] = jax.device_put([x, x2, w1, w2], device)
+    [x, x2, w1, w2, mask] = jax.device_put([x, x2, w1, w2, mask], device)
 
     # Test single input gradients
     def single_input_fn(x, w1, w2):
@@ -184,25 +181,6 @@ def test_sigmoid_gated_dual_gemm_gradients_1(backend):
 
     test_util.check_grads(dual_input_fn, (x, x2, w1, w2), order=1, modes=["rev"])
 
-
-@pytest.mark.parametrize("backend", ["cpu", "gpu"])
-def test_sigmoid_gated_dual_gemm_gradients_2(backend):
-    """Test gradient computation for all modes."""
-    key = jax.random.PRNGKey(42)
-    M, N, K = 8, 32, 32  # Use smaller dimensions for faster gradient checking
-
-    x = jax.random.normal(key, (M, K), dtype=jnp.float32)
-    w1 = jax.random.normal(jax.random.split(key, 1)[0], (N, K), dtype=jnp.float32)
-    w2 = jax.random.normal(jax.random.split(key, 2)[0], (N, K), dtype=jnp.float32)
-    mask = jax.random.uniform(jax.random.split(key, 3)[0], (M,), dtype=jnp.float32)
-
-    if backend == "cpu":
-        device = jax.devices("cpu")[0]
-    elif backend == "gpu":
-        device = jax.devices("gpu")[0]
-
-    [x, w1, w2, mask] = jax.device_put([x, w1, w2, mask], device)
-
     # Test masked input gradients
     def masked_fn(x, w1, w2, mask):
         return jnp.sum(
@@ -221,9 +199,9 @@ def test_sigmoid_gated_dual_gemm_precision_modes(precision):
     M, N, K = 32, 64, 128
 
     x = jax.random.normal(key, (M, K), dtype=jnp.float32)
-    w1 = jax.random.normal(jax.random.split(key, 1)[0], (N, K), dtype=jnp.float32)
-    w2 = jax.random.normal(jax.random.split(key, 2)[0], (N, K), dtype=jnp.float32)
-    x2 = jax.random.normal(jax.random.split(key, 3)[0], (M, K), dtype=jnp.float32)
+    w1 = jax.random.normal(jax.random.key(1), (N, K), dtype=jnp.float32)
+    w2 = jax.random.normal(jax.random.key(2), (N, K), dtype=jnp.float32)
+    x2 = jax.random.normal(jax.random.key(3), (M, K), dtype=jnp.float32)
 
     # Test single input with different precision
     output = sigmoid_gated_dual_gemm(x, w1, w2, precision=precision)
