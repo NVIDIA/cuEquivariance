@@ -24,6 +24,13 @@ import triton
 from jax import custom_vjp
 from jax.interpreters import mlir, xla
 
+try:
+    import cuequivariance_ops  # noqa: F401
+
+    HAS_CUE_OPS = True
+except ImportError:
+    HAS_CUE_OPS = False
+
 
 # Precision modes matching cuequivariance_ops
 class Precision(enum.IntEnum):
@@ -31,6 +38,17 @@ class Precision(enum.IntEnum):
     TF32 = 1
     TF32x3 = 2
     IEEE = 3
+
+    def _to_jax(self):
+        """Convert Precision enum to JAX precision."""
+        if self == Precision.DEFAULT:
+            return jax.lax.Precision.DEFAULT
+        elif self == Precision.TF32:
+            return jax.lax.Precision.HIGH
+        elif self == Precision.TF32x3:
+            return jax.lax.Precision.HIGHEST
+        elif self == Precision.IEEE:
+            return jax.lax.Precision.HIGHEST
 
 
 # Unified JAX primitives
@@ -50,30 +68,32 @@ def _abstract_eval_bwd(
     grad_out, x1, x2, w1, w2, mask, *, two_inputs, transpose_out, precision
 ):
     """Abstract evaluation for backward pass."""
-    # Always return 5 outputs in consistent order: grad_x1, grad_x2, grad_w1, grad_w2, grad_mask
-    outputs = [
+    return (
         jax.core.ShapedArray(x1.shape, x1.dtype),  # grad_x1
-        jax.core.ShapedArray(
-            x2.shape, x2.dtype
-        ),  # grad_x2 (may be zero if two_inputs=False)
+        jax.core.ShapedArray(x2.shape, x2.dtype),  # grad_x2
         jax.core.ShapedArray(w1.shape, w1.dtype),  # grad_w1
         jax.core.ShapedArray(w2.shape, w2.dtype),  # grad_w2
         jax.core.ShapedArray(mask.shape, mask.dtype),  # grad_mask
-    ]
-    return tuple(outputs)
+    )
 
 
 def _reference_forward(x1, x2, w1, w2, mask, two_inputs, transpose_out, precision):
     """Pure JAX reference implementation."""
+    # x1: (M, K)
+    # x2: (M, K)
+    # w1: (N, K)
+    # w2: (N, K)
+    # mask: (M,) or None
+    # returns: (M, N) or (N, M) if transpose_out=True
+    precision = precision._to_jax()
     if two_inputs:
-        acc_1 = jnp.dot(x1, w1.T, precision=jax.lax.Precision.HIGHEST)
-        acc_2 = jnp.dot(x2, w2.T, precision=jax.lax.Precision.HIGHEST)
+        acc_1 = jnp.dot(x1, w1.T, precision=precision)
+        acc_2 = jnp.dot(x2, w2.T, precision=precision)
     else:
-        acc_1 = jnp.dot(x1, w1.T, precision=jax.lax.Precision.HIGHEST)
-        acc_2 = jnp.dot(x1, w2.T, precision=jax.lax.Precision.HIGHEST)
+        acc_1 = jnp.dot(x1, w1.T, precision=precision)
+        acc_2 = jnp.dot(x1, w2.T, precision=precision)
 
-    acc_sig = jax.nn.sigmoid(acc_1)
-    output = acc_sig * acc_2
+    output = jax.nn.sigmoid(acc_1) * acc_2
 
     if mask is not None:
         output = output * mask[:, None]
@@ -81,12 +101,13 @@ def _reference_forward(x1, x2, w1, w2, mask, two_inputs, transpose_out, precisio
     return output.T if transpose_out else output
 
 
-def _triton_forward(x1, x2, w1, w2, mask, two_inputs, transpose_out, precision):
+def _triton_forward(x1, x2, w1, w2, mask, *, two_inputs, transpose_out, precision):
     """Triton implementation of forward pass."""
     from cuequivariance_ops.triton import fused_sigmoid_gated_dual_gemm_forward_kernel
 
     M, K, N = x1.shape[0], x1.shape[1], w1.shape[0]
-    TILE_M, TILE_N, TILE_K = 64, 32, 32
+    TILE_M, TILE_N, TILE_K = (64, 32, 32)
+    # TODO import the autotuning from the PyTorch implementation
 
     assert N % TILE_N == 0 and K % TILE_K == 0
 
@@ -135,7 +156,10 @@ def _triton_backward(
         jax.ShapeDtypeStruct(shape=(M, N), dtype=x1.dtype),  # grad_xw2
     ]
     if mask is not None:
-        out_shapes.append(jax.ShapeDtypeStruct(shape=(N, M), dtype=mask.dtype))
+        num_tiles_n = triton.cdiv(N, TILE_N)
+        out_shapes.append(
+            jax.ShapeDtypeStruct(shape=(num_tiles_n, M), dtype=mask.dtype)
+        )
 
     results = jt.triton_call(
         grad_out,
@@ -162,37 +186,33 @@ def _triton_backward(
     grad_xw1, grad_xw2 = results[0], results[1]
     grad_mask = results[2] if len(results) > 2 else None
 
+    precision = precision._to_jax()
+    grad_w1 = jnp.dot(grad_xw1.T, x1, precision=precision)
+    grad_x1 = jnp.dot(grad_xw1, w1, precision=precision)
     if two_inputs:
-        grad_w1, grad_w2 = jnp.dot(grad_xw1.T, x1), jnp.dot(grad_xw2.T, x2)
-        grad_x1, grad_x2 = jnp.dot(grad_xw1, w1), jnp.dot(grad_xw2, w2)
-        result = [grad_x1, grad_x2, grad_w1, grad_w2]
+        grad_w2 = jnp.dot(grad_xw2.T, x2, precision=precision)
+        grad_x2 = jnp.dot(grad_xw2, w2, precision=precision)
     else:
-        grad_w1, grad_w2 = jnp.dot(grad_xw1.T, x1), jnp.dot(grad_xw2.T, x1)
-        grad_x1 = jnp.dot(grad_xw1, w1) + jnp.dot(grad_xw2, w2)
-        result = [grad_x1, grad_w1, grad_w2]
+        grad_w2 = jnp.dot(grad_xw2.T, x1, precision=precision)
+        grad_x1 += jnp.dot(grad_xw2, w2, precision=precision)
+        grad_x2 = jnp.zeros_like(x2)
 
     if grad_mask is not None:
         grad_mask = jnp.sum(grad_mask, axis=0)
     else:
         grad_mask = jnp.zeros(x1.shape[0], dtype=x1.dtype)
-    result.append(grad_mask)
 
-    return tuple(result)
+    return grad_x1, grad_x2, grad_w1, grad_w2, grad_mask
 
 
 def _impl_dispatcher(platform, is_forward, *args, **kwargs):
     """Implementation dispatcher."""
 
-    if platform == "cuda":
-        try:
-            import cuequivariance_ops.triton  # noqa: F401
-
-            if is_forward:
-                return _triton_forward(*args, **kwargs)
-            else:
-                return _triton_backward(*args, **kwargs)
-        except ImportError:
-            pass
+    if platform == "cuda" and HAS_CUE_OPS:
+        if is_forward:
+            return _triton_forward(*args, **kwargs)
+        else:
+            return _triton_backward(*args, **kwargs)
 
     # Fallback to reference implementation
     if is_forward:
@@ -201,22 +221,12 @@ def _impl_dispatcher(platform, is_forward, *args, **kwargs):
         # Use JAX autodiff for backward pass
         grad_out = args[0]
         x1, x2, w1, w2, mask = args[1:]
-        two_inputs = kwargs.get("two_inputs", False)
 
         def forward_fn(x1, x2, w1, w2, mask):
             return _reference_forward(x1, x2, w1, w2, mask, **kwargs)
 
         _, vjp_fn = jax.vjp(forward_fn, x1, x2, w1, w2, mask)
-        grad_outputs = vjp_fn(grad_out)
-
-        # Ensure we return exactly 5 gradients: grad_x1, grad_x2, grad_w1, grad_w2, grad_mask
-        grad_x1, grad_x2, grad_w1, grad_w2, grad_mask = grad_outputs
-
-        # If not two_inputs, zero out grad_x2 but still return it
-        if not two_inputs:
-            grad_x2 = jnp.zeros_like(grad_x2)
-
-        return (grad_x1, grad_x2, grad_w1, grad_w2, grad_mask)
+        return vjp_fn(grad_out)
 
 
 # Register primitives
@@ -430,7 +440,7 @@ def sigmoid_gated_dual_gemm_dual_x(
 
 
 # Export reference function for tests
-def sigmoid_gated_dual_gemm_reference_forward(
+def _sigmoid_gated_dual_gemm_reference(
     x1, x2, w1, w2, mask, two_inputs, transpose_out, precision
 ):
     """Reference implementation for testing - matches original function signature."""

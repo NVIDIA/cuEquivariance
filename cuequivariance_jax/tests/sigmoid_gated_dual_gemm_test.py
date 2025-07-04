@@ -15,14 +15,15 @@
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
 from jax import test_util
 
 from cuequivariance_jax.triangle.sigmoid_gated_dual_gemm import (
     Precision,
+    _sigmoid_gated_dual_gemm_reference,
     sigmoid_gated_dual_gemm,
     sigmoid_gated_dual_gemm_dual_x,
-    sigmoid_gated_dual_gemm_reference_forward,
 )
 
 
@@ -79,7 +80,7 @@ def test_sigmoid_gated_dual_gemm_comprehensive():
     assert output_dual_batch.shape == (B, M, N)
 
     # Test reference implementation
-    output_ref = sigmoid_gated_dual_gemm_reference_forward(
+    output_ref = _sigmoid_gated_dual_gemm_reference(
         x,
         None,
         w1,
@@ -91,7 +92,7 @@ def test_sigmoid_gated_dual_gemm_comprehensive():
     )
     assert output_ref.shape == (M, N)
 
-    output_ref_dual = sigmoid_gated_dual_gemm_reference_forward(
+    output_ref_dual = _sigmoid_gated_dual_gemm_reference(
         x,
         x2,
         w1,
@@ -115,46 +116,48 @@ def test_sigmoid_gated_dual_gemm_correctness():
     mask = jax.random.uniform(jax.random.split(key, 3)[0], (M,), dtype=jnp.float32)
     x2 = jax.random.normal(jax.random.split(key, 4)[0], (M, K), dtype=jnp.float32)
 
-    # Test single input correctness
-    acc_1 = jnp.dot(x, w1.T)
-    acc_2 = jnp.dot(x, w2.T)
-    acc_sig = jax.nn.sigmoid(acc_1)
-    expected_single = acc_sig * acc_2
+    tol = 1e-5
 
+    # Test single input correctness
+    expected_single = _sigmoid_gated_dual_gemm_reference(
+        x, None, w1, w2, None, False, False, Precision.IEEE
+    )
     output_single = sigmoid_gated_dual_gemm(x, w1, w2, precision=Precision.IEEE)
-    assert jnp.max(jnp.abs(output_single - expected_single)) < 5e-2
-    assert jnp.mean(jnp.abs(output_single - expected_single)) < 5e-3
+    np.testing.assert_allclose(output_single, expected_single, rtol=tol, atol=tol)
 
     # Test single input with mask
     expected_masked = expected_single * mask[:, None]
     output_masked = sigmoid_gated_dual_gemm(
         x, w1, w2, mask=mask, precision=Precision.IEEE
     )
-    assert jnp.max(jnp.abs(output_masked - expected_masked)) < 1e-2
-    assert jnp.mean(jnp.abs(output_masked - expected_masked)) < 1e-3
+    np.testing.assert_allclose(output_masked, expected_masked, rtol=tol, atol=tol)
 
     # Test dual input correctness
-    acc_1_dual = jnp.dot(x, w1.T)
-    acc_2_dual = jnp.dot(x2, w2.T)
-    acc_sig_dual = jax.nn.sigmoid(acc_1_dual)
-    expected_dual = acc_sig_dual * acc_2_dual
-
+    expected_dual = _sigmoid_gated_dual_gemm_reference(
+        x, x2, w1, w2, None, True, False, Precision.IEEE
+    )
     output_dual = sigmoid_gated_dual_gemm_dual_x(
         x, x2, w1, w2, precision=Precision.IEEE
     )
-    assert jnp.max(jnp.abs(output_dual - expected_dual)) < 1e-2
-    assert jnp.mean(jnp.abs(output_dual - expected_dual)) < 1e-3
+    np.testing.assert_allclose(output_dual, expected_dual, rtol=tol, atol=tol)
 
 
-def test_sigmoid_gated_dual_gemm_gradients_1():
+@pytest.mark.parametrize("backend", ["cpu", "gpu"])
+def test_sigmoid_gated_dual_gemm_gradients_1(backend):
     """Test gradient computation for all modes."""
-    key = jax.random.PRNGKey(42)
     M, N, K = 8, 32, 32  # Use smaller dimensions for faster gradient checking
 
-    x = jax.random.normal(key, (M, K), dtype=jnp.float32)
-    w1 = jax.random.normal(jax.random.split(key, 1)[0], (N, K), dtype=jnp.float32)
-    w2 = jax.random.normal(jax.random.split(key, 2)[0], (N, K), dtype=jnp.float32)
-    x2 = jax.random.normal(jax.random.split(key, 4)[0], (M, K), dtype=jnp.float32)
+    x = jax.random.normal(jax.random.key(0), (M, K), dtype=jnp.float32)
+    x2 = jax.random.normal(jax.random.key(1), (M, K), dtype=jnp.float32)
+    w1 = jax.random.normal(jax.random.key(2), (N, K), dtype=jnp.float32)
+    w2 = jax.random.normal(jax.random.key(3), (N, K), dtype=jnp.float32)
+
+    if backend == "cpu":
+        device = jax.devices("cpu")[0]
+    elif backend == "gpu":
+        device = jax.devices("gpu")[0]
+
+    [x, x2, w1, w2] = jax.device_put([x, x2, w1, w2], device)
 
     # Test single input gradients
     def single_input_fn(x, w1, w2):
@@ -198,10 +201,7 @@ def test_sigmoid_gated_dual_gemm_gradients_2(backend):
     elif backend == "gpu":
         device = jax.devices("gpu")[0]
 
-    x = jax.device_put(x, device)
-    w1 = jax.device_put(w1, device)
-    w2 = jax.device_put(w2, device)
-    mask = jax.device_put(mask, device)
+    [x, w1, w2, mask] = jax.device_put([x, w1, w2, mask], device)
 
     # Test masked input gradients
     def masked_fn(x, w1, w2, mask):
