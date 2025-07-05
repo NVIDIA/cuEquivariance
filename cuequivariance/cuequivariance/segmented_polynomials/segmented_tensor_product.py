@@ -1802,6 +1802,85 @@ class SegmentedTensorProduct:
         """Amplify the path coefficients by a factor."""
         return self * factor
 
+    def __getitem__(self, key) -> SegmentedTensorProduct:
+        """
+        Slice the SegmentedTensorProduct to get a subset.
+
+        Args:
+            key: A slice, int, or tuple of slices/ints for each operand.
+
+        Returns:
+            SegmentedTensorProduct: A new descriptor with sliced operands and filtered paths.
+
+        Examples:
+            >>> # Assuming `d` is a SegmentedTensorProduct with 3 operands:
+            >>> # Slice second operand to segments 1:3, keep others unchanged
+            >>> d_subset = d[:, 1:3, :]
+            >>> # Select only segment 0 from first operand
+            >>> d_subset = d[0, :, :]
+            >>> # Complex slicing
+            >>> d_subset = d[::2, 1:5, -2:]
+        """
+        if not isinstance(key, tuple):
+            key = (key,)
+
+        if len(key) != self.num_operands:
+            raise ValueError(
+                f"Expected a slice or int for each operand, got {len(key)} keys for {self.num_operands} operands."
+            )
+
+        # Create new operands with sliced segments
+        new_operands_and_subscripts = []
+        segment_mappings = []  # Maps old segment indices to new ones
+
+        for slice_obj, (operand, subscripts) in zip(key, self.operands_and_subscripts):
+            if isinstance(slice_obj, int):
+                slice_obj = _canonicalize_index(
+                    "slice", slice_obj, len(operand.segments)
+                )
+                slice_obj = slice(slice_obj, slice_obj + 1)
+
+            if not isinstance(slice_obj, slice):
+                raise TypeError(f"Invalid slice type: {type(slice_obj)}")
+
+            # Apply slice to segments
+            sliced_segments = operand.segments[slice_obj]
+            new_operand = cue.SegmentedOperand(
+                ndim=operand.ndim, segments=sliced_segments
+            )
+
+            # Create mapping from old to new segment indices
+            old_indices = list(range(len(operand.segments)))[slice_obj]
+            mapping = {old_idx: new_idx for new_idx, old_idx in enumerate(old_indices)}
+
+            new_operands_and_subscripts.append((new_operand, subscripts))
+            segment_mappings.append(mapping)
+
+        # Filter and update paths
+        new_paths = []
+        for path in self.paths:
+            # Check if all referenced segments still exist
+            new_indices = []
+            valid_path = True
+
+            for oid, old_segment_idx in enumerate(path.indices):
+                if old_segment_idx in segment_mappings[oid]:
+                    new_indices.append(segment_mappings[oid][old_segment_idx])
+                else:
+                    valid_path = False
+                    break
+
+            if valid_path:
+                new_paths.append(
+                    Path(indices=new_indices, coefficients=path.coefficients)
+                )
+
+        return SegmentedTensorProduct(
+            operands_and_subscripts=new_operands_and_subscripts,
+            coefficient_subscripts=self.coefficient_subscripts,
+            paths=new_paths,
+        )
+
 
 def _canonicalize_index(name: str, index: int, size: int) -> int:
     if not (-size <= index < size):
