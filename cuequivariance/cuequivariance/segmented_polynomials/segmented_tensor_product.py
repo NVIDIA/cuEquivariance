@@ -1802,9 +1802,26 @@ class SegmentedTensorProduct:
         """Amplify the path coefficients by a factor."""
         return self * factor
 
+    @property
+    def slice_by_segment(self) -> _SegmentSlicer:
+        """Return a slicer that allows slicing by segment index."""
+        return _SegmentSlicer(self)
+
+    @property
+    def slice_by_size(self) -> _SizeSlicer:
+        """Return a slicer that allows slicing by flat size/offset."""
+        return _SizeSlicer(self)
+
+
+class _SegmentSlicer:
+    """Helper class for slicing SegmentedTensorProduct by segment index."""
+
+    def __init__(self, stp: SegmentedTensorProduct):
+        self.stp = stp
+
     def __getitem__(self, key) -> SegmentedTensorProduct:
         """
-        Slice the SegmentedTensorProduct to get a subset.
+        Slice the SegmentedTensorProduct to get a subset by segment indices.
 
         Args:
             key: A slice, int, or tuple of slices/ints for each operand.
@@ -1815,25 +1832,27 @@ class SegmentedTensorProduct:
         Examples:
             >>> # Assuming `d` is a SegmentedTensorProduct with 3 operands:
             >>> # Slice second operand to segments 1:3, keep others unchanged
-            >>> d_subset = d[:, 1:3, :]
+            >>> d_subset = d.slice_by_segment[:, 1:3, :]
             >>> # Select only segment 0 from first operand
-            >>> d_subset = d[0, :, :]
+            >>> d_subset = d.slice_by_segment[0, :, :]
             >>> # Complex slicing
-            >>> d_subset = d[::2, 1:5, -2:]
+            >>> d_subset = d.slice_by_segment[::2, 1:5, -2:]
         """
         if not isinstance(key, tuple):
             key = (key,)
 
-        if len(key) != self.num_operands:
+        if len(key) != self.stp.num_operands:
             raise ValueError(
-                f"Expected a slice or int for each operand, got {len(key)} keys for {self.num_operands} operands."
+                f"Expected a slice or int for each operand, got {len(key)} keys for {self.stp.num_operands} operands."
             )
 
         # Create new operands with sliced segments
         new_operands_and_subscripts = []
         segment_mappings = []  # Maps old segment indices to new ones
 
-        for slice_obj, (operand, subscripts) in zip(key, self.operands_and_subscripts):
+        for slice_obj, (operand, subscripts) in zip(
+            key, self.stp.operands_and_subscripts
+        ):
             if isinstance(slice_obj, int):
                 slice_obj = _canonicalize_index(
                     "slice", slice_obj, len(operand.segments)
@@ -1858,7 +1877,7 @@ class SegmentedTensorProduct:
 
         # Filter and update paths
         new_paths = []
-        for path in self.paths:
+        for path in self.stp.paths:
             # Check if all referenced segments still exist
             new_indices = []
             valid_path = True
@@ -1877,7 +1896,110 @@ class SegmentedTensorProduct:
 
         return SegmentedTensorProduct(
             operands_and_subscripts=new_operands_and_subscripts,
-            coefficient_subscripts=self.coefficient_subscripts,
+            coefficient_subscripts=self.stp.coefficient_subscripts,
+            paths=new_paths,
+        )
+
+
+class _SizeSlicer:
+    """Helper class for slicing SegmentedTensorProduct by flat size/offset."""
+
+    def __init__(self, stp: SegmentedTensorProduct):
+        self.stp = stp
+
+    def __getitem__(self, key) -> SegmentedTensorProduct:
+        """
+        Slice the SegmentedTensorProduct to get a subset by flat size/offset.
+
+        Args:
+            key: A slice, int, or tuple of slices/ints for each operand.
+
+        Returns:
+            SegmentedTensorProduct: A new descriptor with sliced operands and filtered paths.
+
+        Examples:
+            >>> # Assuming `d` is a SegmentedTensorProduct with 3 operands:
+            >>> # Slice second operand by flat size
+            >>> d_subset = d.slice_by_size[:, 10:30, :]
+            >>> # Select by flat offset
+            >>> d_subset = d.slice_by_size[5, :, :]
+        """
+        if not isinstance(key, tuple):
+            key = (key,)
+
+        if len(key) != self.stp.num_operands:
+            raise ValueError(
+                f"Expected a slice or int for each operand, got {len(key)} keys for {self.stp.num_operands} operands."
+            )
+
+        # Create new operands with sliced segments
+        new_operands_and_subscripts = []
+        segment_mappings = []  # Maps old segment indices to new ones
+
+        for slice_obj, (operand, subscripts) in zip(
+            key, self.stp.operands_and_subscripts
+        ):
+            if isinstance(slice_obj, int):
+                slice_obj = _canonicalize_index("slice", slice_obj, operand.size)
+                slice_obj = slice(slice_obj, slice_obj + 1)
+
+            if not isinstance(slice_obj, slice):
+                raise TypeError(f"Invalid slice type: {type(slice_obj)}")
+
+            # Use the operand's size-based slicing
+            new_operand = operand.slice_by_size[slice_obj]
+
+            # Create mapping from old to new segment indices
+            # We need to find which segments are included in the size slice
+            start, stop, step = slice_obj.indices(operand.size)
+            if step != 1:
+                raise ValueError("Step sizes other than 1 are not supported")
+
+            mapping = {}
+            offset = 0
+            new_segment_idx = 0
+
+            for old_segment_idx, segment in enumerate(operand.segments):
+                segment_size = math.prod(segment)
+                segment_start = offset
+                segment_end = offset + segment_size
+
+                # Check if this segment overlaps with [start, stop)
+                if segment_start < stop and segment_end > start:
+                    mapping[old_segment_idx] = new_segment_idx
+                    new_segment_idx += 1
+
+                offset += segment_size
+
+                # If we've passed the stop point, we can break
+                if offset >= stop:
+                    break
+
+            new_operands_and_subscripts.append((new_operand, subscripts))
+            segment_mappings.append(mapping)
+
+        # Filter and update paths
+        new_paths = []
+        for path in self.stp.paths:
+            # Check if all referenced segments still exist
+            new_indices = []
+            valid_path = True
+
+            for oid, old_segment_idx in enumerate(path.indices):
+                if old_segment_idx in segment_mappings[oid]:
+                    new_indices.append(segment_mappings[oid][old_segment_idx])
+                else:
+                    valid_path = False
+                    break
+
+            if valid_path:
+                new_paths.append(
+                    Path(indices=new_indices, coefficients=path.coefficients)
+                )
+
+        return SegmentedTensorProduct(
+            operands_and_subscripts=new_operands_and_subscripts,
+            coefficient_subscripts=self.stp.coefficient_subscripts,
             paths=new_paths,
         )
 
