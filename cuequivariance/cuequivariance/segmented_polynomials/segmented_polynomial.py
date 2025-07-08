@@ -24,6 +24,9 @@ import numpy as np
 import cuequivariance as cue
 from cuequivariance.etc.permutations import inverse_permutation
 from cuequivariance.segmented_polynomials.operation import IVARS, OVARS
+from cuequivariance.segmented_polynomials.segmented_tensor_product import (
+    _canonicalize_index,
+)
 
 from .dimensions_dict import format_dimensions_dict
 
@@ -748,6 +751,104 @@ class SegmentedPolynomial:
 
         return self.apply_fn(optimize_paths)
 
+    def split_operand_by_size(
+        self, operand_id: int, offsets: list[int]
+    ) -> SegmentedPolynomial:
+        """Split an operand into multiple operands based on specified offsets.
+
+        Args:
+            operand_id (int): Index of the operand to split.
+            offsets (list of int): List of offsets to split the operand at.
+
+        Returns:
+            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: Polynomial with the specified operand split.
+        """
+        operand_id = _canonicalize_index("operand_id", operand_id, self.num_operands)
+        assert len(offsets) > 0
+        operand = self.operands[operand_id]
+        assert offsets[0] == 0, "Offsets must start at 0"
+        assert offsets[-1] == operand.size, (
+            "Offsets must end at the size of the operand"
+        )
+
+        splits: list[cue.SegmentedOperand] = []
+        for i in range(len(offsets) - 1):
+            start, end = offsets[i], offsets[i + 1]
+            splits.append(self.operands[operand_id].slice_by_size[start:end])
+
+        # Create the new operands list by replacing the operand at operand_id with the splits
+        new_operands = list(self.operands)
+        new_operands[operand_id : operand_id + 1] = splits
+
+        # Determine new inputs and outputs
+        if operand_id < self.num_inputs:
+            # We're splitting an input
+            new_inputs = new_operands[: self.num_inputs - 1 + len(splits)]
+            new_outputs = new_operands[self.num_inputs - 1 + len(splits) :]
+        else:
+            # We're splitting an output
+            new_inputs = new_operands[: self.num_inputs]
+            new_outputs = new_operands[self.num_inputs :]
+
+        # Create new operations
+        new_operations: list[tuple[cue.Operation, cue.SegmentedTensorProduct]] = []
+        for ope, stp in self.operations:
+            # Count how many times operand_id is used in this operation
+            operand_usage_count = sum(1 for buf in ope.buffers if buf == operand_id)
+
+            if operand_usage_count == 0:
+                # This operation doesn't use the operand we're splitting
+                # Just adjust buffer indices for operands that come after the split
+                new_buffers = []
+                for buf in ope.buffers:
+                    if buf < operand_id:
+                        new_buffers.append(buf)
+                    elif buf == operand_id:
+                        # This shouldn't happen since operand_usage_count == 0
+                        raise ValueError("Inconsistent operand usage count")
+                    else:
+                        # Adjust for the fact that we've inserted (len(splits) - 1) additional operands
+                        new_buffers.append(buf + len(splits) - 1)
+                new_operations.append((cue.Operation(new_buffers), stp))
+            else:
+                # This operation uses the operand we're splitting
+                # Generate all combinations of splits for the positions where operand_id is used
+                import itertools
+
+                # Find positions where operand_id is used
+                positions_of_operand = [
+                    i for i, buf in enumerate(ope.buffers) if buf == operand_id
+                ]
+
+                # Generate all combinations of splits for these positions
+                for combination in itertools.product(
+                    range(len(splits)), repeat=operand_usage_count
+                ):
+                    new_buffers = list(ope.buffers)
+
+                    # Replace operand_id with the appropriate split indices
+                    for pos, split_idx in zip(positions_of_operand, combination):
+                        new_buffers[pos] = operand_id + split_idx
+
+                    # Adjust other buffer indices for operands that come after the split
+                    for i, buf in enumerate(new_buffers):
+                        if buf > operand_id and i not in positions_of_operand:
+                            new_buffers[i] = buf + len(splits) - 1
+
+                    # Create sliced STP for this combination
+                    slice_tuple = [slice(None)] * stp.num_operands
+                    for pos, split_idx in zip(positions_of_operand, combination):
+                        start, end = offsets[split_idx], offsets[split_idx + 1]
+                        slice_tuple[pos] = slice(start, end)
+
+                    sliced_stp = stp.slice_by_size[tuple(slice_tuple)]
+
+                    # Only add operations that have paths
+                    if sliced_stp.num_paths > 0:
+                        new_operations.append((cue.Operation(new_buffers), sliced_stp))
+
+        return SegmentedPolynomial(new_inputs, new_outputs, new_operations)
+
     # ------------------------------------------------------------------------
     # Filtering Methods
     # ------------------------------------------------------------------------
@@ -963,135 +1064,3 @@ class SegmentedPolynomial:
             return map2(map1(x))
 
         return p, mapping
-
-    # ------------------------------------------------------------------------
-    # Slicing Methods
-    # ------------------------------------------------------------------------
-
-    @property
-    def slice_by_segment(self) -> "_PolynomialSegmentSlicer":
-        """Return a slicer that allows slicing by segment index."""
-        return _PolynomialSegmentSlicer(self)
-
-    @property
-    def slice_by_size(self) -> "_PolynomialSizeSlicer":
-        """Return a slicer that allows slicing by flat size/offset."""
-        return _PolynomialSizeSlicer(self)
-
-
-class _PolynomialSegmentSlicer:
-    """Helper class for slicing SegmentedPolynomial by segment index."""
-
-    def __init__(self, poly: SegmentedPolynomial):
-        self.poly = poly
-
-    def __getitem__(self, key) -> SegmentedPolynomial:
-        """
-        Slice the SegmentedPolynomial to get a subset by segment indices.
-
-        Args:
-            key: A slice or tuple of slices for each operand.
-
-        Returns:
-            SegmentedPolynomial: A new polynomial with sliced operands and updated operations.
-
-        Examples:
-            >>> import cuequivariance as cue
-            >>> stp = cue.SegmentedTensorProduct.from_subscripts("u,u")
-            >>> stp.add_segment(0, (2,))
-            0
-            >>> stp.add_segment(0, (2,))
-            1
-            >>> stp.add_segment(1, (2,))
-            0
-            >>> stp.add_path(0, 0, c=1.0)
-            0
-            >>> poly = cue.SegmentedPolynomial.eval_last_operand(stp)
-            >>> poly.slice_by_segment[1:, :]
-            ╭ a=[2:1⨯(2)] -> B=[2:1⨯(2)]
-            ╰─ []·a[u]➜B[u] ─ num_paths=0 u=2
-        """
-        if not isinstance(key, tuple):
-            key = (key,)
-
-        if len(key) != self.poly.num_operands:
-            raise ValueError(
-                f"Expected a slice or int for each operand, got {len(key)} keys for {self.poly.num_operands} operands."
-            )
-
-        assert all(isinstance(k, slice) for k in key), "All keys must be slices."
-
-        # Slice all operands
-        new_operands = [
-            op.slice_by_segment[k] for op, k in zip(self.poly.operands, key)
-        ]
-
-        # Update operations
-        new_operations = [
-            (ope, stp.slice_by_segment[tuple(key[bid] for bid in ope.buffers)])
-            for ope, stp in self.poly.operations
-        ]
-
-        return SegmentedPolynomial(
-            new_operands[: self.poly.num_inputs],
-            new_operands[self.poly.num_inputs :],
-            new_operations,
-        )
-
-
-class _PolynomialSizeSlicer:
-    """Helper class for slicing SegmentedPolynomial by flat size/offset."""
-
-    def __init__(self, poly: SegmentedPolynomial):
-        self.poly = poly
-
-    def __getitem__(self, key) -> SegmentedPolynomial:
-        """
-        Slice the SegmentedPolynomial to get a subset by flat size/offset.
-
-        Args:
-            key: A slice or tuple of slices for each operand.
-
-        Returns:
-            SegmentedPolynomial: A new polynomial with sliced operands and updated operations.
-
-        Examples:
-            >>> import cuequivariance as cue
-            >>> stp = cue.SegmentedTensorProduct.from_subscripts("u,u")
-            >>> stp.add_segment(0, (2,))
-            0
-            >>> stp.add_segment(0, (2,))
-            1
-            >>> stp.add_segment(1, (2,))
-            0
-            >>> stp.add_path(0, 0, c=1.0)
-            0
-            >>> poly = cue.SegmentedPolynomial.eval_last_operand(stp)
-            >>> poly.slice_by_size[2:, :]
-            ╭ a=[2:1⨯(2)] -> B=[2:1⨯(2)]
-            ╰─ []·a[u]➜B[u] ─ num_paths=0 u=2
-        """
-        if not isinstance(key, tuple):
-            key = (key,)
-
-        if len(key) != self.poly.num_operands:
-            raise ValueError(
-                f"Expected a slice or int for each operand, got {len(key)} keys for {self.poly.num_operands} operands."
-            )
-
-        assert all(isinstance(k, slice) for k in key), "All keys must be slices."
-
-        # Slice all operands
-        new_operands = [op.slice_by_size[k] for op, k in zip(self.poly.operands, key)]
-
-        # Update operations
-        new_operations = [
-            (ope, stp.slice_by_size[tuple(key[bid] for bid in ope.buffers)])
-            for ope, stp in self.poly.operations
-        ]
-
-        return SegmentedPolynomial(
-            new_operands[: self.poly.num_inputs],
-            new_operands[self.poly.num_inputs :],
-            new_operations,
-        )

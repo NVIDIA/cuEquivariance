@@ -151,7 +151,6 @@ def channelwise_tensor_product(
     irreps2: cue.Irreps,
     irreps3_filter=None,
     simplify_irreps3: bool = False,
-    separated_output_operands: bool = False,
 ) -> cue.EquivariantPolynomial:
     """
     subscripts: ``weights[uv],lhs[iu],rhs[jv],output[kuv]``
@@ -167,7 +166,6 @@ def channelwise_tensor_product(
         irreps2 (Irreps): Irreps of the second operand.
         irreps3_filter (sequence of Irrep, optional): Irreps of the output to consider.
         simplify_irreps3 (bool, optional): If True, the irreps of the output are simplified.
-        separated_output_operands (bool, optional): If True, the output irreps are separated into different operands.
 
     Returns:
         :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: Descriptor of the channelwise tensor product.
@@ -222,31 +220,8 @@ def channelwise_tensor_product(
         cue.IrrepsAndLayout(irreps1, cue.ir_mul),
         cue.IrrepsAndLayout(irreps2, cue.ir_mul),
     ]
-
-    if separated_output_operands:
-        assert simplify_irreps3, (
-            "separated_output_operands requires simplify_irreps3 to be True"
-        )
-
-        d_per_irrep = []
-        i = 0
-        for mul, ir in irreps3:
-            size = mul * ir.dim
-            d_per_irrep += [d.slice_by_size[:, :, :, i : i + size]]
-            i += size
-
-        rep_outputs = [
-            cue.IrrepsAndLayout(irreps3[i : i + 1], cue.ir_mul)
-            for i in range(len(irreps3))
-        ]
-        poly = cue.SegmentedPolynomial(
-            d.operands[:-1],
-            [d.operands[-1] for d in d_per_irrep],
-            [((0, 1, 2, 3 + i), d) for i, d in enumerate(d_per_irrep)],
-        )
-    else:
-        rep_outputs = [cue.IrrepsAndLayout(irreps3, cue.ir_mul)]
-        poly = cue.SegmentedPolynomial.eval_last_operand(d)
+    rep_outputs = [cue.IrrepsAndLayout(irreps3, cue.ir_mul)]
+    poly = cue.SegmentedPolynomial.eval_last_operand(d)
     return cue.EquivariantPolynomial(rep_inputs, rep_outputs, poly)
 
 

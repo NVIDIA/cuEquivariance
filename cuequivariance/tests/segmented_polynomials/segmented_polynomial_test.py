@@ -505,125 +505,67 @@ def test_permute_inputs_and_outputs():
     assert np.isclose(y3_out, y3)
 
 
-def test_slice_by_segment():
-    """Test slicing SegmentedPolynomial by segment indices and by size/offset."""
-    # Create a polynomial with multiple segments using the correct pattern
-    stp = cue.SegmentedTensorProduct.from_subscripts("i,j,k")
+def test_split_operand_by_size():
+    """Test splitting operands by size in various scenarios."""
 
-    # Add segments with proper dimensions
-    # input1: 3 segments of size 2 each
-    input1_seg0 = stp.add_segment(0, (2,))
-    input1_seg1 = stp.add_segment(0, (2,))
-    input1_seg2 = stp.add_segment(0, (2,))
-
-    # input2: 3 segments of size 3 each
-    input2_seg0 = stp.add_segment(1, (3,))
-    input2_seg1 = stp.add_segment(1, (3,))
-    input2_seg2 = stp.add_segment(1, (3,))
-
-    # output: 2 segments of size 2 each
-    output_seg0 = stp.add_segment(2, (2,))
-    output_seg1 = stp.add_segment(2, (2,))
-
-    # Add paths that map segments from inputs to outputs
-    stp.add_path(input1_seg0, input2_seg0, output_seg0, c=1.0)
-    stp.add_path(input1_seg1, input2_seg1, output_seg1, c=2.0)
-    stp.add_path(input1_seg2, input2_seg2, output_seg0, c=3.0)
+    # Test 1: Basic input splitting
+    stp = cue.SegmentedTensorProduct.empty_segments([3, 3, 1])
+    stp.add_path(0, 0, 0, c=1.0)
+    stp.add_path(0, 1, 0, c=1.0)
+    stp.add_path(1, 1, 0, c=1.0)
+    stp.add_path(1, 2, 0, c=1.0)
 
     poly = cue.SegmentedPolynomial.eval_last_operand(stp)
+    assert (poly.num_inputs, poly.num_outputs) == (2, 1)
 
-    # Test 1: Slice with single segment selection - using slice objects
-    sliced1 = poly.slice_by_segment[
-        slice(0, 1), slice(1, 2), slice(0, 1)
-    ]  # input1[0], input2[1], output[0]
-    assert sliced1.inputs[0].num_segments == 1
-    assert sliced1.inputs[1].num_segments == 1
-    assert sliced1.outputs[0].num_segments == 1
-    assert sliced1.inputs[0].size == 2
-    assert sliced1.inputs[1].size == 3
-    assert sliced1.outputs[0].size == 2
+    # Split first input into 3 single-element parts
+    split = poly.split_operand_by_size(0, [0, 1, 2, 3])
+    assert (split.num_inputs, split.num_outputs) == (4, 1)
 
-    # Test 2: Slice with slice objects
-    sliced2 = poly.slice_by_segment[
-        0:2, 1:3, :
-    ]  # First 2 segments of input1, last 2 of input2, all of output
-    assert sliced2.inputs[0].num_segments == 2
-    assert sliced2.inputs[1].num_segments == 2
-    assert sliced2.outputs[0].num_segments == 2
-    assert sliced2.inputs[0].size == 4  # 2 segments * 2 elements each
-    assert sliced2.inputs[1].size == 6  # 2 segments * 3 elements each
+    # Test numerical equivalence
+    x = np.array([1.0, 2.0, 3.0])
+    y = np.array([4.0, 5.0, 6.0])
+    [A] = poly(x, y)
+    [B] = split(np.array([1.0]), np.array([2.0]), np.array([3.0]), y)
+    np.testing.assert_allclose(A, B)
 
-    # Test 3: Mixed single segment and slice
-    sliced3 = poly.slice_by_segment[
-        slice(1, 2), :, slice(0, 1)
-    ]  # input1[1], all of input2, output[0]
-    assert sliced3.inputs[0].num_segments == 1
-    assert sliced3.inputs[1].num_segments == 3
-    assert sliced3.outputs[0].num_segments == 1
+    # Test 2: Operand used multiple times (quadratic terms)
+    stp_quad = cue.SegmentedTensorProduct.empty_segments([2, 2, 1])
+    stp_quad.add_path(0, 0, 0, c=1.0)  # x[0] * x[0]
+    stp_quad.add_path(1, 1, 0, c=2.0)  # x[1] * x[1]
+    stp_quad.add_path(0, 1, 0, c=3.0)  # x[0] * x[1]
+    stp_quad.add_path(1, 0, 0, c=4.0)  # x[1] * x[0]
 
-    # Test 4: Single key (slice) - should work for single operand case
-    simple_stp = cue.SegmentedTensorProduct.from_subscripts("i,j")
-    simple_stp.add_segment(0, (2,))
-    simple_stp.add_segment(0, (2,))
-    simple_stp.add_segment(1, (1,))
-    simple_stp.add_segment(1, (1,))
-    simple_stp.add_path(0, 0, c=1.0)
-    simple_stp.add_path(1, 1, c=2.0)
+    poly_quad = cue.SegmentedPolynomial(
+        [stp_quad.operands[0]], [stp_quad.operands[-1]], [((0, 0, 1), stp_quad)]
+    )
 
-    simple_poly = cue.SegmentedPolynomial.eval_last_operand(simple_stp)
-    sliced_simple = simple_poly.slice_by_segment[slice(0, 1), slice(0, 1)]
-    assert sliced_simple.inputs[0].num_segments == 1
-    assert sliced_simple.outputs[0].num_segments == 1
+    # Split into 2 single-element parts
+    split_quad = poly_quad.split_operand_by_size(0, [0, 1, 2])
+    assert (split_quad.num_inputs, split_quad.num_outputs) == (2, 1)
+    assert len(split_quad.operations) == 4  # All 4 combinations: 00, 01, 10, 11
 
-    # Test 5: Error handling - wrong number of keys
-    try:
-        poly.slice_by_segment[slice(0, 1), slice(1, 2)]  # Missing key for output
-        assert False, "Should have raised ValueError"
-    except ValueError as e:
-        assert "Expected a slice or int for each operand" in str(e)
+    # Test numerical equivalence
+    x_orig = np.array([1.0, 2.0])
+    [result_orig] = poly_quad(x_orig)
+    [result_split] = split_quad(x_orig[:1], x_orig[1:])
+    np.testing.assert_allclose(result_orig, result_split)
 
-    # Test 6: Verify basic functionality with a simpler case
-    # Use make_simple_stp() which already works
-    simple_stp2 = make_simple_stp()
-    simple_poly2 = cue.SegmentedPolynomial.eval_last_operand(simple_stp2)
+    # Test 3: Split output operand
+    stp_out = cue.SegmentedTensorProduct.empty_segments([2, 4])
+    stp_out.add_path(0, 0, c=1.0)
+    stp_out.add_path(0, 1, c=2.0)
+    stp_out.add_path(1, 2, c=3.0)
+    stp_out.add_path(1, 3, c=4.0)
 
-    # Test slicing - this polynomial has 3 operands (2 inputs, 1 output)
-    # Each operand has 2 segments
-    sliced_simple2 = simple_poly2.slice_by_segment[
-        slice(0, 1), slice(0, 1), slice(0, 1)
-    ]
-    assert sliced_simple2.inputs[0].num_segments == 1
-    assert sliced_simple2.inputs[1].num_segments == 1
-    assert sliced_simple2.outputs[0].num_segments == 1
+    poly_out = cue.SegmentedPolynomial.eval_last_operand(stp_out)
 
-    # Test slice_by_size functionality
-    # Test 7: slice_by_size with flat indices
-    # For the original poly: input1 has 6 elements (3 segments * 2 each),
-    # input2 has 9 elements (3 segments * 3 each), output has 4 elements (2 segments * 2 each)
-    size_sliced1 = poly.slice_by_size[
-        slice(0, 2), slice(0, 3), slice(0, 2)
-    ]  # First 2 elements of each
-    assert size_sliced1.inputs[0].size == 2
-    assert size_sliced1.inputs[1].size == 3
-    assert size_sliced1.outputs[0].size == 2
+    # Split output into 2 parts of size 2 each
+    split_out = poly_out.split_operand_by_size(1, [0, 2, 4])
+    assert (split_out.num_inputs, split_out.num_outputs) == (1, 2)
 
-    # Test 8: slice_by_size with larger ranges
-    size_sliced2 = poly.slice_by_size[slice(0, 4), slice(3, 6), :]  # Different ranges
-    assert size_sliced2.inputs[0].size == 4
-    assert size_sliced2.inputs[1].size == 3
-    assert size_sliced2.outputs[0].size == 4  # All elements
-
-    # Test 9: slice_by_size error handling - wrong number of keys
-    try:
-        poly.slice_by_size[slice(0, 2), slice(0, 3)]  # Missing key for output
-        assert False, "Should have raised ValueError"
-    except ValueError as e:
-        assert "Expected a slice or int for each operand" in str(e)
-
-    # Test 10: slice_by_size with simple polynomial
-    size_sliced_simple = simple_poly2.slice_by_size[
-        slice(0, 1), slice(0, 1), slice(0, 1)
-    ]
-    assert size_sliced_simple.inputs[0].size == 1
-    assert size_sliced_simple.inputs[1].size == 1
-    assert size_sliced_simple.outputs[0].size == 1
+    # Test numerical equivalence
+    x_test = np.array([1.0, 2.0])
+    [result_orig] = poly_out(x_test)
+    result_split = split_out(x_test)
+    np.testing.assert_allclose(result_orig, np.concatenate(result_split))
