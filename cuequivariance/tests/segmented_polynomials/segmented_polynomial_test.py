@@ -543,7 +543,6 @@ def test_split_operand_by_size():
     # Split into 2 single-element parts
     split_quad = poly_quad.split_operand_by_size(0, [0, 1, 2])
     assert (split_quad.num_inputs, split_quad.num_outputs) == (2, 1)
-    assert len(split_quad.operations) == 4  # All 4 combinations: 00, 01, 10, 11
 
     # Test numerical equivalence
     x_orig = np.array([1.0, 2.0])

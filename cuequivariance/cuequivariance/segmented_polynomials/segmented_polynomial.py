@@ -75,10 +75,11 @@ class SegmentedPolynomial:
             for i, operand in zip(opt.buffers, stp.operands):
                 assert operand == operands[i]
 
-            out_oid, bid = opt.output_operand_buffer(len(inputs))
-            tmp.append(
-                (bid, opt.move_operand_last(out_oid), stp.move_operand_last(out_oid))
-            )
+            bid = opt.output_buffer(len(inputs))
+            perm = list(range(stp.num_operands))
+            perm = sorted(perm, key=lambda i: opt.buffers[i])
+            tmp.append((bid, opt.permute_operands(perm), stp.permute_operands(perm)))
+
         tmp = sorted(tmp)
         operations = [(opt, stp) for _, opt, stp in tmp]
 
@@ -847,7 +848,9 @@ class SegmentedPolynomial:
                     if sliced_stp.num_paths > 0:
                         new_operations.append((cue.Operation(new_buffers), sliced_stp))
 
-        return SegmentedPolynomial(new_inputs, new_outputs, new_operations)
+        return SegmentedPolynomial(
+            new_inputs, new_outputs, new_operations
+        ).consolidate()
 
     # ------------------------------------------------------------------------
     # Filtering Methods
