@@ -13,9 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-from contextlib import contextmanager
-
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -28,29 +25,6 @@ from cuequivariance_jax.triangle.sigmoid_gated_dual_gemm import (
     sigmoid_gated_dual_gemm,
     sigmoid_gated_dual_gemm_dual_x,
 )
-
-
-@contextmanager
-def temp_env_vars(**env_vars):
-    """Context manager to temporarily set environment variables."""
-    original_values = {}
-    for key, value in env_vars.items():
-        original_values[key] = os.environ.get(key)
-        if value is None:
-            if key in os.environ:
-                del os.environ[key]
-        else:
-            os.environ[key] = value
-
-    try:
-        yield
-    finally:
-        for key, original_value in original_values.items():
-            if original_value is None:
-                if key in os.environ:
-                    del os.environ[key]
-            else:
-                os.environ[key] = original_value
 
 
 def create_test_data(M=32, N=64, K=128, include_mask=False, batch_size=None):
@@ -273,30 +247,26 @@ def test_sigmoid_gated_dual_gemm_precision_modes(precision):
 
 
 @pytest.mark.parametrize("tuning_mode", ["AOT", "ONDEMAND", None])
-def test_sigmoid_gated_dual_gemm_triton_tuning_modes(tuning_mode):
+def test_sigmoid_gated_dual_gemm_triton_tuning_modes(tuning_mode, monkeypatch):
     """Test sigmoid_gated_dual_gemm with different CUEQ_TRITON_TUNING environment variable values."""
-    env_vars = {
-        "CUEQ_TRITON_TUNING": tuning_mode,
-        "CUEQ_TRITON_IGNORE_EXISTING_CACHE": "1",
-    }
 
-    with temp_env_vars(**env_vars):
-        # Create test data
-        M, N, K = 32, 64, 128
-        test_data = create_test_data(M, N, K)
+    # Configure environment variables using pytest's monkeypatch fixture
+    if tuning_mode is None:
+        monkeypatch.delenv("CUEQ_TRITON_TUNING", raising=False)
+    else:
+        monkeypatch.setenv("CUEQ_TRITON_TUNING", tuning_mode)
+    monkeypatch.setenv("CUEQ_TRITON_IGNORE_EXISTING_CACHE", "1")
 
-        # Test single input mode
-        output = sigmoid_gated_dual_gemm(
-            test_data["x"], test_data["w1"], test_data["w2"]
-        )
-        validate_output(output, (M, N), "single input output")
+    # Create test data
+    M, N, K = 32, 64, 128
+    test_data = create_test_data(M, N, K)
 
-        # Test dual input mode
-        output_dual = sigmoid_gated_dual_gemm_dual_x(
-            test_data["x"], test_data["x2"], test_data["w1"], test_data["w2"]
-        )
-        validate_output(output_dual, (M, N), "dual input output")
+    # Test single input mode
+    output = sigmoid_gated_dual_gemm(test_data["x"], test_data["w1"], test_data["w2"])
+    validate_output(output, (M, N), "single input output")
 
-
-if __name__ == "__main__":
-    test_sigmoid_gated_dual_gemm_triton_tuning_modes("ONDEMAND")
+    # Test dual input mode
+    output_dual = sigmoid_gated_dual_gemm_dual_x(
+        test_data["x"], test_data["x2"], test_data["w1"], test_data["w2"]
+    )
+    validate_output(output_dual, (M, N), "dual input output")
