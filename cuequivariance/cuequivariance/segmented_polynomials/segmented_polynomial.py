@@ -752,6 +752,89 @@ class SegmentedPolynomial:
 
         return self.apply_fn(optimize_paths)
 
+    def split_operand_by_segment(
+        self, operand_id: int, segment_splits: list[int]
+    ) -> SegmentedPolynomial:
+        """Split an operand into multiple operands based on segment boundaries.
+
+        Args:
+            operand_id (int): Index of the operand to split.
+            segment_splits (list of int): List of segment indices where to split the operand.
+                                        Must start with 0 and end with the total number of segments.
+
+        Returns:
+            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: Polynomial with the specified operand split.
+        """
+        operand_id = _canonicalize_index("operand_id", operand_id, self.num_operands)
+
+        assert len(segment_splits) > 0
+        assert (
+            segment_splits[0] == 0
+            and segment_splits[-1] == self.operands[operand_id].num_segments
+        )
+
+        # Create splits and new operands
+        splits = [
+            self.operands[operand_id].slice_by_segment[
+                segment_splits[i] : segment_splits[i + 1]
+            ]
+            for i in range(len(segment_splits) - 1)
+        ]
+        new_operands = list(self.operands)
+        new_operands[operand_id : operand_id + 1] = splits
+
+        # Determine new inputs and outputs
+        split_offset = len(splits) - 1
+        if operand_id < self.num_inputs:
+            new_inputs = new_operands[: self.num_inputs + split_offset]
+            new_outputs = new_operands[self.num_inputs + split_offset :]
+        else:
+            new_inputs = new_operands[: self.num_inputs]
+            new_outputs = new_operands[self.num_inputs :]
+
+        # Create new operations
+        import itertools
+
+        new_operations = []
+        for ope, stp in self.operations:
+            positions = [i for i, buf in enumerate(ope.buffers) if buf == operand_id]
+
+            if not positions:
+                # Adjust buffer indices for operands after the split
+                new_buffers = [
+                    buf + split_offset if buf > operand_id else buf
+                    for buf in ope.buffers
+                ]
+                new_operations.append((cue.Operation(new_buffers), stp))
+            else:
+                # Generate all combinations for split positions
+                for combo in itertools.product(
+                    range(len(splits)), repeat=len(positions)
+                ):
+                    new_buffers = list(ope.buffers)
+
+                    # Set split indices and adjust other buffers
+                    for pos, split_idx in zip(positions, combo):
+                        new_buffers[pos] = operand_id + split_idx
+                    for i, buf in enumerate(new_buffers):
+                        if buf > operand_id and i not in positions:
+                            new_buffers[i] = buf + split_offset
+
+                    # Create sliced STP
+                    slices = [slice(None)] * stp.num_operands
+                    for pos, split_idx in zip(positions, combo):
+                        slices[pos] = slice(
+                            segment_splits[split_idx], segment_splits[split_idx + 1]
+                        )
+
+                    sliced_stp = stp.slice_by_segment[tuple(slices)]
+                    if sliced_stp.num_paths > 0:
+                        new_operations.append((cue.Operation(new_buffers), sliced_stp))
+
+        return SegmentedPolynomial(
+            new_inputs, new_outputs, new_operations
+        ).consolidate()
+
     def split_operand_by_size(
         self, operand_id: int, offsets: list[int]
     ) -> SegmentedPolynomial:
@@ -772,85 +855,29 @@ class SegmentedPolynomial:
             "Offsets must end at the size of the operand"
         )
 
-        splits: list[cue.SegmentedOperand] = []
-        for i in range(len(offsets) - 1):
-            start, end = offsets[i], offsets[i + 1]
-            splits.append(self.operands[operand_id].slice_by_size[start:end])
+        # Convert size offsets to segment splits
+        segment_slices = operand.segment_slices()
+        segment_splits = []
 
-        # Create the new operands list by replacing the operand at operand_id with the splits
-        new_operands = list(self.operands)
-        new_operands[operand_id : operand_id + 1] = splits
+        for offset in offsets:
+            # Find which segment this offset corresponds to
+            segment_idx = None
+            for i, seg_slice in enumerate(segment_slices):
+                if seg_slice.start == offset:
+                    segment_idx = i
+                    break
+            if offset == operand.size:
+                segment_idx = len(segment_slices)
 
-        # Determine new inputs and outputs
-        if operand_id < self.num_inputs:
-            # We're splitting an input
-            new_inputs = new_operands[: self.num_inputs - 1 + len(splits)]
-            new_outputs = new_operands[self.num_inputs - 1 + len(splits) :]
-        else:
-            # We're splitting an output
-            new_inputs = new_operands[: self.num_inputs]
-            new_outputs = new_operands[self.num_inputs :]
+            if segment_idx is None:
+                raise ValueError(
+                    f"Offset {offset} does not align with segment boundaries. "
+                    f"Valid offsets are: {[seg_slice.start for seg_slice in segment_slices] + [operand.size]}"
+                )
 
-        # Create new operations
-        new_operations: list[tuple[cue.Operation, cue.SegmentedTensorProduct]] = []
-        for ope, stp in self.operations:
-            # Count how many times operand_id is used in this operation
-            operand_usage_count = sum(1 for buf in ope.buffers if buf == operand_id)
+            segment_splits.append(segment_idx)
 
-            if operand_usage_count == 0:
-                # This operation doesn't use the operand we're splitting
-                # Just adjust buffer indices for operands that come after the split
-                new_buffers = []
-                for buf in ope.buffers:
-                    if buf < operand_id:
-                        new_buffers.append(buf)
-                    elif buf == operand_id:
-                        # This shouldn't happen since operand_usage_count == 0
-                        raise ValueError("Inconsistent operand usage count")
-                    else:
-                        # Adjust for the fact that we've inserted (len(splits) - 1) additional operands
-                        new_buffers.append(buf + len(splits) - 1)
-                new_operations.append((cue.Operation(new_buffers), stp))
-            else:
-                # This operation uses the operand we're splitting
-                # Generate all combinations of splits for the positions where operand_id is used
-                import itertools
-
-                # Find positions where operand_id is used
-                positions_of_operand = [
-                    i for i, buf in enumerate(ope.buffers) if buf == operand_id
-                ]
-
-                # Generate all combinations of splits for these positions
-                for combination in itertools.product(
-                    range(len(splits)), repeat=operand_usage_count
-                ):
-                    new_buffers = list(ope.buffers)
-
-                    # Replace operand_id with the appropriate split indices
-                    for pos, split_idx in zip(positions_of_operand, combination):
-                        new_buffers[pos] = operand_id + split_idx
-
-                    # Adjust other buffer indices for operands that come after the split
-                    for i, buf in enumerate(new_buffers):
-                        if buf > operand_id and i not in positions_of_operand:
-                            new_buffers[i] = buf + len(splits) - 1
-
-                    # Create sliced STP for this combination
-                    slice_tuple = [slice(None)] * stp.num_operands
-                    for pos, split_idx in zip(positions_of_operand, combination):
-                        start, end = offsets[split_idx], offsets[split_idx + 1]
-                        slice_tuple[pos] = slice(start, end)
-
-                    sliced_stp = stp.slice_by_size[tuple(slice_tuple)]
-
-                    # Only add operations that have paths
-                    if sliced_stp.num_paths > 0:
-                        new_operations.append((cue.Operation(new_buffers), sliced_stp))
-
-        return SegmentedPolynomial(
-            new_inputs, new_outputs, new_operations
-        ).consolidate()
+        return self.split_operand_by_segment(operand_id, segment_splits)
 
     # ------------------------------------------------------------------------
     # Filtering Methods
