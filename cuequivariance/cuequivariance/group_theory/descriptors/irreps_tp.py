@@ -215,14 +215,15 @@ def channelwise_tensor_product(
         d = d.permute_segments(3, [sid for _, _, sid in segments])
         irreps3 = irreps3.simplify()
 
-    rep_inputs = [
-        cue.IrrepsAndLayout(irreps1.new_scalars(d.operands[0].size), cue.ir_mul),
-        cue.IrrepsAndLayout(irreps1, cue.ir_mul),
-        cue.IrrepsAndLayout(irreps2, cue.ir_mul),
-    ]
-    rep_outputs = [cue.IrrepsAndLayout(irreps3, cue.ir_mul)]
-    poly = cue.SegmentedPolynomial.eval_last_operand(d)
-    return cue.EquivariantPolynomial(rep_inputs, rep_outputs, poly)
+    return cue.EquivariantPolynomial(
+        [
+            cue.IrrepsAndLayout(irreps1.new_scalars(d.operands[0].size), cue.ir_mul),
+            cue.IrrepsAndLayout(irreps1, cue.ir_mul),
+            cue.IrrepsAndLayout(irreps2, cue.ir_mul),
+        ],
+        [cue.IrrepsAndLayout(irreps3, cue.ir_mul)],
+        cue.SegmentedPolynomial.eval_last_operand(d),
+    )
 
 
 def _align_two_irreps(
