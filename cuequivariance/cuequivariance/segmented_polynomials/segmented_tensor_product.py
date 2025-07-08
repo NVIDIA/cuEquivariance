@@ -1824,19 +1824,25 @@ class _SegmentSlicer:
         Slice the SegmentedTensorProduct to get a subset by segment indices.
 
         Args:
-            key: A slice, int, or tuple of slices/ints for each operand.
+            key: A tuple of slices for each operand.
 
         Returns:
             SegmentedTensorProduct: A new descriptor with sliced operands and filtered paths.
 
         Examples:
-            >>> # Assuming `d` is a SegmentedTensorProduct with 3 operands:
-            >>> # Slice second operand to segments 1:3, keep others unchanged
-            >>> d_subset = d.slice_by_segment[:, 1:3, :]
-            >>> # Select only segment 0 from first operand
-            >>> d_subset = d.slice_by_segment[0, :, :]
-            >>> # Complex slicing
-            >>> d_subset = d.slice_by_segment[::2, 1:5, -2:]
+            >>> import cuequivariance as cue
+            >>> stp = cue.SegmentedTensorProduct.from_subscripts("u,u")
+            >>> stp.add_segment(0, (2,))
+            0
+            >>> stp.add_segment(0, (2,))
+            1
+            >>> stp.add_segment(1, (2,))
+            0
+            >>> stp.add_path(0, 0, c=1.0)
+            0
+            >>> sliced = stp.slice_by_segment[1:, :]
+            >>> sliced.num_paths
+            0
         """
         if not isinstance(key, tuple):
             key = (key,)
@@ -1853,12 +1859,6 @@ class _SegmentSlicer:
         for slice_obj, (operand, subscripts) in zip(
             key, self.stp.operands_and_subscripts
         ):
-            if isinstance(slice_obj, int):
-                slice_obj = _canonicalize_index(
-                    "slice", slice_obj, len(operand.segments)
-                )
-                slice_obj = slice(slice_obj, slice_obj + 1)
-
             if not isinstance(slice_obj, slice):
                 raise TypeError(f"Invalid slice type: {type(slice_obj)}")
 
@@ -1912,17 +1912,25 @@ class _SizeSlicer:
         Slice the SegmentedTensorProduct to get a subset by flat size/offset.
 
         Args:
-            key: A slice, int, or tuple of slices/ints for each operand.
+            key: A tuple of slices for each operand.
 
         Returns:
             SegmentedTensorProduct: A new descriptor with sliced operands and filtered paths.
 
         Examples:
-            >>> # Assuming `d` is a SegmentedTensorProduct with 3 operands:
-            >>> # Slice second operand by flat size
-            >>> d_subset = d.slice_by_size[:, 10:30, :]
-            >>> # Select by flat offset
-            >>> d_subset = d.slice_by_size[5, :, :]
+            >>> import cuequivariance as cue
+            >>> stp = cue.SegmentedTensorProduct.from_subscripts("u,u")
+            >>> stp.add_segment(0, (2,))
+            0
+            >>> stp.add_segment(0, (2,))
+            1
+            >>> stp.add_segment(1, (2,))
+            0
+            >>> stp.add_path(0, 0, c=1.0)
+            0
+            >>> sliced = stp.slice_by_size[2:, :]
+            >>> sliced.num_paths
+            0
         """
         if not isinstance(key, tuple):
             key = (key,)
@@ -1939,10 +1947,6 @@ class _SizeSlicer:
         for slice_obj, (operand, subscripts) in zip(
             key, self.stp.operands_and_subscripts
         ):
-            if isinstance(slice_obj, int):
-                slice_obj = _canonicalize_index("slice", slice_obj, operand.size)
-                slice_obj = slice(slice_obj, slice_obj + 1)
-
             if not isinstance(slice_obj, slice):
                 raise TypeError(f"Invalid slice type: {type(slice_obj)}")
 

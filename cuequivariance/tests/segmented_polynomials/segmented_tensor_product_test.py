@@ -492,7 +492,7 @@ def test_slice_by_segment():
     assert [len(op) for op in d.operands] == [4, 4, 4]
 
     # Test single integer index, slice objects, and complex slicing
-    d_single = d.slice_by_segment[0, :, :]
+    d_single = d.slice_by_segment[:1, :, :]
     assert (len(d_single.operands[0]), d_single.num_paths) == (1, 1)
     assert d_single.operands[0][0] == (2, 3)
     d_single.assert_valid()
@@ -508,7 +508,7 @@ def test_slice_by_segment():
     d_multi.assert_valid()
 
     # Test negative indexing and empty results
-    d_neg = d.slice_by_segment[-1, :, :]
+    d_neg = d.slice_by_segment[-1:, :, :]
     assert (len(d_neg.operands[0]), d_neg.operands[0][0]) == (1, (3, 4))
     d_neg.assert_valid()
 
@@ -585,9 +585,7 @@ def test_slice_by_size():
     d_size_slice.assert_valid()
 
     # Test integer indexing by size
-    d_single_size = d.slice_by_size[
-        0, :
-    ]  # Should include segment 0 (size 2) from first operand
+    d_single_size = d.slice_by_size[:1, :]
     assert len(d_single_size.operands[0]) == 1
     assert d_single_size.operands[0][0] == (2,)
     d_single_size.assert_valid()

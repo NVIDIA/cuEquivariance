@@ -963,3 +963,135 @@ class SegmentedPolynomial:
             return map2(map1(x))
 
         return p, mapping
+
+    # ------------------------------------------------------------------------
+    # Slicing Methods
+    # ------------------------------------------------------------------------
+
+    @property
+    def slice_by_segment(self) -> "_PolynomialSegmentSlicer":
+        """Return a slicer that allows slicing by segment index."""
+        return _PolynomialSegmentSlicer(self)
+
+    @property
+    def slice_by_size(self) -> "_PolynomialSizeSlicer":
+        """Return a slicer that allows slicing by flat size/offset."""
+        return _PolynomialSizeSlicer(self)
+
+
+class _PolynomialSegmentSlicer:
+    """Helper class for slicing SegmentedPolynomial by segment index."""
+
+    def __init__(self, poly: SegmentedPolynomial):
+        self.poly = poly
+
+    def __getitem__(self, key) -> SegmentedPolynomial:
+        """
+        Slice the SegmentedPolynomial to get a subset by segment indices.
+
+        Args:
+            key: A slice or tuple of slices for each operand.
+
+        Returns:
+            SegmentedPolynomial: A new polynomial with sliced operands and updated operations.
+
+        Examples:
+            >>> import cuequivariance as cue
+            >>> stp = cue.SegmentedTensorProduct.from_subscripts("u,u")
+            >>> stp.add_segment(0, (2,))
+            0
+            >>> stp.add_segment(0, (2,))
+            1
+            >>> stp.add_segment(1, (2,))
+            0
+            >>> stp.add_path(0, 0, c=1.0)
+            0
+            >>> poly = cue.SegmentedPolynomial.eval_last_operand(stp)
+            >>> poly.slice_by_segment[1:, :]
+            ╭ a=[2:1⨯(2)] -> B=[2:1⨯(2)]
+            ╰─ []·a[u]➜B[u] ─ num_paths=0 u=2
+        """
+        if not isinstance(key, tuple):
+            key = (key,)
+
+        if len(key) != self.poly.num_operands:
+            raise ValueError(
+                f"Expected a slice or int for each operand, got {len(key)} keys for {self.poly.num_operands} operands."
+            )
+
+        assert all(isinstance(k, slice) for k in key), "All keys must be slices."
+
+        # Slice all operands
+        new_operands = [
+            op.slice_by_segment[k] for op, k in zip(self.poly.operands, key)
+        ]
+
+        # Update operations
+        new_operations = [
+            (ope, stp.slice_by_segment[tuple(key[bid] for bid in ope.buffers)])
+            for ope, stp in self.poly.operations
+        ]
+
+        return SegmentedPolynomial(
+            new_operands[: self.poly.num_inputs],
+            new_operands[self.poly.num_inputs :],
+            new_operations,
+        )
+
+
+class _PolynomialSizeSlicer:
+    """Helper class for slicing SegmentedPolynomial by flat size/offset."""
+
+    def __init__(self, poly: SegmentedPolynomial):
+        self.poly = poly
+
+    def __getitem__(self, key) -> SegmentedPolynomial:
+        """
+        Slice the SegmentedPolynomial to get a subset by flat size/offset.
+
+        Args:
+            key: A slice or tuple of slices for each operand.
+
+        Returns:
+            SegmentedPolynomial: A new polynomial with sliced operands and updated operations.
+
+        Examples:
+            >>> import cuequivariance as cue
+            >>> stp = cue.SegmentedTensorProduct.from_subscripts("u,u")
+            >>> stp.add_segment(0, (2,))
+            0
+            >>> stp.add_segment(0, (2,))
+            1
+            >>> stp.add_segment(1, (2,))
+            0
+            >>> stp.add_path(0, 0, c=1.0)
+            0
+            >>> poly = cue.SegmentedPolynomial.eval_last_operand(stp)
+            >>> poly.slice_by_size[2:, :]
+            ╭ a=[2:1⨯(2)] -> B=[2:1⨯(2)]
+            ╰─ []·a[u]➜B[u] ─ num_paths=0 u=2
+        """
+        if not isinstance(key, tuple):
+            key = (key,)
+
+        if len(key) != self.poly.num_operands:
+            raise ValueError(
+                f"Expected a slice or int for each operand, got {len(key)} keys for {self.poly.num_operands} operands."
+            )
+
+        assert all(isinstance(k, slice) for k in key), "All keys must be slices."
+
+        # Slice all operands
+        new_operands = [op.slice_by_size[k] for op, k in zip(self.poly.operands, key)]
+
+        # Update operations
+        new_operations = [
+            (ope, stp.slice_by_size[tuple(key[bid] for bid in ope.buffers)])
+            for ope, stp in self.poly.operations
+        ]
+
+        return SegmentedPolynomial(
+            new_operands[: self.poly.num_inputs],
+            new_operands[self.poly.num_inputs :],
+            new_operations,
+        )
