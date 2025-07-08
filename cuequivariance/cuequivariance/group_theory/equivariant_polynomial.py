@@ -423,9 +423,9 @@ class EquivariantPolynomial:
             ... )
             >>> e.split_operand_by_irrep(-1)
             ╭ a=256x0 b=64x0+32x1 c=0+1 -> D=96x0 E=128x1 F=32x2
-            │  []·a[uv]·b[u]·c[v]➜D[uv] ─ num_paths=4 u={32, 64} v=1
-            │  []·a[uv]·b[u]·c[v]➜E[uv] ─ num_paths=12 u={32, 64} v=1
-            ╰─ []·a[uv]·b[u]·c[v]➜F[uv] ─ num_paths=11 u={32, 64} v=1
+            │  []·a[u]·b[u]·c[]➜D[u] ─ num_paths=4 u={32, 64}
+            │  []·a[u]·b[u]·c[]➜E[u] ─ num_paths=12 u={32, 64}
+            ╰─ []·a[u]·b[u]·c[]➜F[u] ─ num_paths=11 u={32, 64}
         """
         operand_id = _canonicalize_index("operand_id", operand_id, self.num_operands)
         operand = self.operands[operand_id]
