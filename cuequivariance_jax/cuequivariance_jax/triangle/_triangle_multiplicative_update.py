@@ -193,7 +193,7 @@ def triangle_multiplicative_update(
         >>> key = jax.random.key(0)
         >>> key, subkey = jax.random.split(key)
         >>> batch_size, seq_len, hidden_dim = 1, 128, 128
-        >>> x = jax.random.normal(subkey, (batch_size, seq_len, seq_len, hidden_dim))
+        >>> x = jax.random.normal(subkey, (batch_size, seq_len, seq_len, hidden_dim), dtype=jnp.float32)
         >>> # Create mask (1 for valid positions, 0 for masked)
         >>> mask = jnp.ones((batch_size, seq_len, seq_len))
         >>> # Create weight parameters (in practice, these would be learned)

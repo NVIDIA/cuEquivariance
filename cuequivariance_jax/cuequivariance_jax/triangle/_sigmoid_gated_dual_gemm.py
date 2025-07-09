@@ -129,6 +129,16 @@ def _triton_forward(
     """Triton implementation of forward pass."""
     from cuequivariance_ops.triton import fused_sigmoid_gated_dual_gemm_forward_kernel
 
+    dtype = x1.dtype
+    assert dtype != jnp.float64
+    x1 = x1.astype(dtype)
+    if x2 is not None:
+        x2 = x2.astype(dtype)
+    w1 = w1.astype(dtype)
+    w2 = w2.astype(dtype)
+    if mask is not None:
+        mask = mask.astype(dtype)
+
     M, K, N = x1.shape[0], x1.shape[1], w1.shape[0]
     assert N % TILE_N == 0 and K % TILE_K == 0
 
@@ -181,6 +191,17 @@ def _triton_backward(
     from cuequivariance_ops.triton import (
         fused_sigmoid_gated_dual_gemm_backward_pregemm_kernel,
     )
+
+    dtype = x1.dtype
+    assert dtype != jnp.float64
+    grad_out = grad_out.astype(dtype)
+    x1 = x1.astype(dtype)
+    if x2 is not None:
+        x2 = x2.astype(dtype)
+    w1 = w1.astype(dtype)
+    w2 = w2.astype(dtype)
+    if mask is not None:
+        mask = mask.astype(dtype)
 
     M, K, N = x1.shape[0], x1.shape[1], w1.shape[0]
     assert N % TILE_N == 0 and K % TILE_K == 0
