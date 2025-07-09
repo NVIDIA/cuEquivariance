@@ -48,7 +48,8 @@ def create_weights(hidden_dim, seed=42, device=None):
         import torch
 
         return {
-            k: torch.tensor(v, torch.float32, "cuda") for k, v in weights_np.items()
+            k: torch.tensor(v, dtype=torch.float32, device="cuda")
+            for k, v in weights_np.items()
         }
     else:
         return {k: jnp.array(v, jnp.float32) for k, v in weights_np.items()}
