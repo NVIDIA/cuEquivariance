@@ -32,13 +32,6 @@ try:
 except ImportError:
     HAS_JAX_TRITON = False
 
-try:
-    import cuequivariance_ops  # noqa: F401
-
-    HAS_CUE_OPS = True
-except ImportError:
-    HAS_CUE_OPS = False
-
 
 class BenchmarkMode(enum.Enum):
     FLUSH_CACHE = 0
@@ -476,7 +469,7 @@ _autotuned_backward = None
 def _impl_dispatcher(platform, is_forward, *args, **kwargs):
     """Implementation dispatcher."""
 
-    if platform == "cuda" and HAS_CUE_OPS:
+    if platform == "cuda":
         if is_forward:
             return _get_autotuned_kernel(True)(*args, **kwargs)
         else:

@@ -212,16 +212,11 @@ def _layer_norm_backward_impl(
 def layer_norm_impl(platform, is_forward, *args, **kwargs):
     """Unified implementation dispatcher."""
     if platform == "cuda":
-        try:
-            import cuequivariance_ops.triton  # noqa: F401
-        except ImportError:
-            pass
-        else:
-            return (
-                _layer_norm_forward_impl(*args, **kwargs)
-                if is_forward
-                else _layer_norm_backward_impl(*args, **kwargs)
-            )
+        return (
+            _layer_norm_forward_impl(*args, **kwargs)
+            if is_forward
+            else _layer_norm_backward_impl(*args, **kwargs)
+        )
 
     if is_forward:
         return layer_norm_transpose_reference_forward(*args, **kwargs)
