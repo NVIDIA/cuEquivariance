@@ -161,7 +161,7 @@ def test_triangle_multiplicative_update_shapes():
     ]
 
     for x_shape, mask_shape, expected_shape in test_cases:
-        x = jnp.ones(x_shape)
+        x = jnp.ones(x_shape, dtype=jnp.float32)
         mask = jnp.ones(mask_shape) if mask_shape is not None else None
 
         # Create dummy weights
