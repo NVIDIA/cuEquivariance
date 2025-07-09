@@ -236,6 +236,13 @@ def triangle_multiplicative_update(
     # Initialize default weights if not provided
     hidden_dim = x.shape[-1]
 
+    # Check hidden dimension constraint for BND_BND layout
+    if hidden_dim % 64 != 0:
+        raise ValueError(
+            f"Hidden dimension must be divisible by 64 for BND_BND layout in layer normalization. "
+            f"Got hidden_dim={hidden_dim}"
+        )
+
     # If we need to initialize weights and no key is provided, raise an error
     needs_init = (
         p_in_weight is None
