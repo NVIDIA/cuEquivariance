@@ -101,9 +101,9 @@ def triangle_attention_fwd_abstract_eval(
     precision: jax.lax.Precision | None = None,
 ) -> tuple[jax.core.ShapedArray, jax.core.ShapedArray, jax.core.ShapedArray]:
     B, N, H, S_qo, D = q.shape
-    a_shape = jax.core.ShapedArray((B, N, H, S_qo, D), v.dtype)
-    lse_shape = jax.core.ShapedArray((B, N, H, S_qo, 1), q.dtype)
-    amax_shape = jax.core.ShapedArray((B, N, H, S_qo, 1), q.dtype)
+    a_shape = jax.core.ShapedArray((B, N, H, S_qo, D), q.dtype)
+    lse_shape = jax.core.ShapedArray((B, N, H, S_qo, 1), jnp.float32)
+    amax_shape = jax.core.ShapedArray((B, N, H, S_qo, 1), jnp.float32)
     return a_shape, lse_shape, amax_shape
 
 

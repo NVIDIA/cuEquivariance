@@ -19,6 +19,8 @@ from jax.test_util import check_grads
 
 import cuequivariance_jax as cuex
 
+jax.config.update("jax_enable_x64", True)
+
 
 def create_test_data(
     platform: str,
@@ -33,15 +35,23 @@ def create_test_data(
     key = jax.random.PRNGKey(42)
     keys = jax.random.split(key, 6)
 
-    q = jax.random.normal(keys[0], (batch_size, n_nodes, n_heads, seq_len_qo, d_model))
-    k = jax.random.normal(keys[1], (batch_size, n_nodes, n_heads, seq_len_kv, d_model))
-    v = jax.random.normal(keys[2], (batch_size, n_nodes, n_heads, seq_len_kv, d_model))
+    q = jax.random.normal(
+        keys[0], (batch_size, n_nodes, n_heads, seq_len_qo, d_model), dtype=jnp.float32
+    )
+    k = jax.random.normal(
+        keys[1], (batch_size, n_nodes, n_heads, seq_len_kv, d_model), dtype=jnp.float32
+    )
+    v = jax.random.normal(
+        keys[2], (batch_size, n_nodes, n_heads, seq_len_kv, d_model), dtype=jnp.float32
+    )
 
     # Create a boolean mask (True means valid)
     mask = jax.random.bernoulli(keys[3], 0.8, (batch_size, n_nodes, 1, 1, seq_len_kv))
 
     bias = (
-        jax.random.normal(keys[4], (batch_size, 1, n_heads, seq_len_qo, seq_len_kv))
+        jax.random.normal(
+            keys[4], (batch_size, 1, n_heads, seq_len_qo, seq_len_kv), dtype=jnp.float32
+        )
         * 0.1
     )
 
