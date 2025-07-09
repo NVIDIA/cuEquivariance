@@ -107,6 +107,8 @@ def _reference_forward(x1, x2, w1, w2, mask, two_inputs, transpose_out, precisio
     if mask is not None:
         output = output * mask[:, None]
 
+    output = output.astype(x1.dtype)
+
     return output.T if transpose_out else output
 
 
