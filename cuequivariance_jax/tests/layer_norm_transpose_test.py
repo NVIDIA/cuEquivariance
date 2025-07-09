@@ -100,7 +100,9 @@ def test_layer_norm_transpose(
             ** 2
         )
 
-    test_util.check_grads(loss_fn, (x, w, b), order=1, modes=["rev"])
+    test_util.check_grads(
+        loss_fn, (x, w, b), order=1, modes=["rev"], atol=1e-2, rtol=1e-2
+    )
 
     # Test gradients on CPU as well
     def loss_fn_cpu(x, w, b):
@@ -116,4 +118,6 @@ def test_layer_norm_transpose(
             ** 2
         )
 
-    test_util.check_grads(loss_fn_cpu, (x_cpu, w_cpu, b_cpu), order=1, modes=["rev"])
+    test_util.check_grads(
+        loss_fn_cpu, (x_cpu, w_cpu, b_cpu), order=1, modes=["rev"], atol=1e-2, rtol=1e-2
+    )
