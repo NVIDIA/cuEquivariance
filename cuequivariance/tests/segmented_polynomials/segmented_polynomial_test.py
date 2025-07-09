@@ -505,66 +505,181 @@ def test_permute_inputs_and_outputs():
     assert np.isclose(y3_out, y3)
 
 
-def test_split_operand_by_size():
-    """Test splitting operands by size in various scenarios."""
+def test_split_operand_by():
+    """Test splitting operands by size and segment."""
 
-    # Test 1: Basic input splitting
-    stp = cue.SegmentedTensorProduct.empty_segments([3, 3, 1])
-    stp.add_path(0, 0, 0, c=1.0)
-    stp.add_path(0, 1, 0, c=1.0)
-    stp.add_path(1, 1, 0, c=1.0)
-    stp.add_path(1, 2, 0, c=1.0)
+    # ========================================
+    # Example 1: Linear polynomial with contractions
+    # ========================================
+
+    # Create a polynomial with 4 segments in first input, 3 in second input
+    stp = cue.SegmentedTensorProduct.from_subscripts("u,u,")
+
+    # First input: 4 segments of shape (16,) each
+    stp.add_segment(0, (16,))  # segment 0
+    stp.add_segment(0, (16,))  # segment 1
+    stp.add_segment(0, (16,))  # segment 2
+    stp.add_segment(0, (16,))  # segment 3
+
+    # Second input: 3 segments of shape (16,) each
+    stp.add_segment(1, (16,))  # segment 0
+    stp.add_segment(1, (16,))  # segment 1
+    stp.add_segment(1, (16,))  # segment 2
+
+    # Output: 1 segment (scalar)
+    stp.add_segment(2, ())
+
+    # Add paths (contractions between segments)
+    stp.add_path(0, 0, 0, c=1.0)  # input0[seg0] * input1[seg0]
+    stp.add_path(1, 0, 0, c=2.0)  # input0[seg1] * input1[seg0]
+    stp.add_path(2, 1, 0, c=3.0)  # input0[seg2] * input1[seg1]
+    stp.add_path(3, 2, 0, c=4.0)  # input0[seg3] * input1[seg2]
 
     poly = cue.SegmentedPolynomial.eval_last_operand(stp)
-    assert (poly.num_inputs, poly.num_outputs) == (2, 1)
 
-    # Split first input into 3 single-element parts
-    split = poly.split_operand_by_size(0, [0, 1, 2, 3])
-    assert (split.num_inputs, split.num_outputs) == (4, 1)
+    # Test data
+    x = np.random.rand(64)  # 4 segments × 16 = 64
+    y = np.random.rand(48)  # 3 segments × 16 = 48
 
-    # Test numerical equivalence
-    x = np.array([1.0, 2.0, 3.0])
-    y = np.array([4.0, 5.0, 6.0])
-    [A] = poly(x, y)
-    [B] = split(np.array([1.0]), np.array([2.0]), np.array([3.0]), y)
-    np.testing.assert_allclose(A, B)
+    # Original evaluation
+    [result_original] = poly(x, y)
 
-    # Test 2: Operand used multiple times (quadratic terms)
-    stp_quad = cue.SegmentedTensorProduct.empty_segments([2, 2, 1])
+    # ========================================
+    # Test 1a: Split by size
+    # ========================================
+
+    # Split first input at every 16 elements (segment boundaries)
+    poly_split_size = poly.split_operand_by_size(0, [0, 16, 32, 48, 64])
+
+    # Now we have 5 inputs: 4 split parts + original second input
+    assert poly_split_size.num_inputs == 5
+
+    # Evaluate with split inputs
+    [result_split_size] = poly_split_size(
+        x[0:16],  # first segment
+        x[16:32],  # second segment
+        x[32:48],  # third segment
+        x[48:64],  # fourth segment
+        y,  # second input unchanged
+    )
+
+    # Results should match
+    np.testing.assert_allclose(result_original, result_split_size)
+
+    # ========================================
+    # Test 1b: Split by segment
+    # ========================================
+
+    # Split first input into two groups: segments [0,1] and segments [2,3]
+    poly_split_seg = poly.split_operand_by_segment(0, [0, 2, 4])
+
+    # Now we have 3 inputs: 2 split parts + original second input
+    assert poly_split_seg.num_inputs == 3
+
+    # Evaluate with split inputs
+    [result_split_seg] = poly_split_seg(
+        x[0:32],  # segments 0 and 1 (2 × 16 = 32)
+        x[32:64],  # segments 2 and 3 (2 × 16 = 32)
+        y,  # second input unchanged
+    )
+
+    # Results should match
+    np.testing.assert_allclose(result_original, result_split_seg)
+
+    # ========================================
+    # Example 2: Quadratic polynomial (x² terms)
+    # ========================================
+
+    # Create a polynomial that computes quadratic terms
+    stp_quad = cue.SegmentedTensorProduct.from_subscripts("u,u,")
+
+    # Input has 2 segments of shape (8,) each
+    stp_quad.add_segment(0, (8,))  # segment 0
+    stp_quad.add_segment(0, (8,))  # segment 1
+
+    # For quadratic terms, we need the same segments again
+    stp_quad.add_segment(1, (8,))  # segment 0
+    stp_quad.add_segment(1, (8,))  # segment 1
+
+    # Output: 1 segment (scalar)
+    stp_quad.add_segment(2, ())
+
+    # Add paths for quadratic terms
     stp_quad.add_path(0, 0, 0, c=1.0)  # x[0] * x[0]
     stp_quad.add_path(1, 1, 0, c=2.0)  # x[1] * x[1]
     stp_quad.add_path(0, 1, 0, c=3.0)  # x[0] * x[1]
     stp_quad.add_path(1, 0, 0, c=4.0)  # x[1] * x[0]
 
+    # Create polynomial where both inputs are the same operand
     poly_quad = cue.SegmentedPolynomial(
-        [stp_quad.operands[0]], [stp_quad.operands[-1]], [((0, 0, 1), stp_quad)]
+        [stp_quad.operands[0]],  # single input
+        [stp_quad.operands[-1]],  # single output
+        [((0, 0, 1), stp_quad)],  # use input 0 for both positions
     )
 
-    # Split into 2 single-element parts
-    split_quad = poly_quad.split_operand_by_size(0, [0, 1, 2])
-    assert (split_quad.num_inputs, split_quad.num_outputs) == (2, 1)
+    # Test data
+    x_quad = np.random.rand(16)  # 2 segments × 8 = 16
 
-    # Test numerical equivalence
-    x_orig = np.array([1.0, 2.0])
-    [result_orig] = poly_quad(x_orig)
-    [result_split] = split_quad(x_orig[:1], x_orig[1:])
-    np.testing.assert_allclose(result_orig, result_split)
+    # Original evaluation
+    [result_quad_original] = poly_quad(x_quad)
 
-    # Test 3: Split output operand
-    stp_out = cue.SegmentedTensorProduct.empty_segments([2, 4])
-    stp_out.add_path(0, 0, c=1.0)
-    stp_out.add_path(0, 1, c=2.0)
-    stp_out.add_path(1, 2, c=3.0)
-    stp_out.add_path(1, 3, c=4.0)
+    # ========================================
+    # Test 2a: Split quadratic by size
+    # ========================================
 
-    poly_out = cue.SegmentedPolynomial.eval_last_operand(stp_out)
+    # Split at segment boundary (size 8)
+    poly_quad_split_size = poly_quad.split_operand_by_size(0, [0, 8, 16])
 
-    # Split output into 2 parts of size 2 each
-    split_out = poly_out.split_operand_by_size(1, [0, 2, 4])
-    assert (split_out.num_inputs, split_out.num_outputs) == (1, 2)
+    # Now we have 2 inputs (the split parts)
+    assert poly_quad_split_size.num_inputs == 2
 
-    # Test numerical equivalence
-    x_test = np.array([1.0, 2.0])
-    [result_orig] = poly_out(x_test)
-    result_split = split_out(x_test)
-    np.testing.assert_allclose(result_orig, np.concatenate(result_split))
+    # Evaluate with split inputs
+    [result_quad_split_size] = poly_quad_split_size(
+        x_quad[0:8],  # first segment
+        x_quad[8:16],  # second segment
+    )
+
+    # Results should match
+    np.testing.assert_allclose(result_quad_original, result_quad_split_size)
+
+    # ========================================
+    # Test 2b: Split quadratic by segment
+    # ========================================
+
+    # Split into individual segments
+    poly_quad_split_seg = poly_quad.split_operand_by_segment(0, [0, 1, 2])
+
+    # Now we have 2 inputs (one per segment)
+    assert poly_quad_split_seg.num_inputs == 2
+
+    # Evaluate with split inputs
+    [result_quad_split_seg] = poly_quad_split_seg(
+        x_quad[0:8],  # segment 0
+        x_quad[8:16],  # segment 1
+    )
+
+    # Results should match
+    np.testing.assert_allclose(result_quad_original, result_quad_split_seg)
+
+    # ========================================
+    # Example 3: Demonstrating alignment of size and segment splits
+    # ========================================
+
+    # When we split at segment boundaries, size and segment methods give same result
+    x_test = np.random.rand(64)
+    y_test = np.random.rand(48)
+
+    # Split at segment boundary (32 = 2 segments × 16)
+    poly_by_size = poly.split_operand_by_size(0, [0, 32, 64])
+    poly_by_segment = poly.split_operand_by_segment(0, [0, 2, 4])
+
+    # Both should produce same structure
+    assert poly_by_size.num_inputs == 3
+    assert poly_by_segment.num_inputs == 3
+
+    # Evaluate both
+    [result_by_size] = poly_by_size(x_test[:32], x_test[32:], y_test)
+    [result_by_segment] = poly_by_segment(x_test[:32], x_test[32:], y_test)
+
+    # Results should be identical
+    np.testing.assert_allclose(result_by_size, result_by_segment)
