@@ -86,7 +86,7 @@ def test_layer_norm_transpose(
     # Compare outputs
     assert jnp.allclose(out, ref_out, rtol=1e-5, atol=1e-6)
 
-    # Test gradients
+    # Test gradients on default device
     def loss_fn(x, w, b):
         return jnp.mean(
             layer_norm_transpose(
@@ -101,3 +101,19 @@ def test_layer_norm_transpose(
         )
 
     test_util.check_grads(loss_fn, (x, w, b), order=1, modes=["rev"])
+
+    # Test gradients on CPU as well
+    def loss_fn_cpu(x, w, b):
+        return jnp.mean(
+            layer_norm_transpose(
+                x,
+                w,
+                b,
+                layout=layout_str,
+                eps=eps,
+                elementwise_affine=elementwise_affine,
+            )
+            ** 2
+        )
+
+    test_util.check_grads(loss_fn_cpu, (x_cpu, w_cpu, b_cpu), order=1, modes=["rev"])

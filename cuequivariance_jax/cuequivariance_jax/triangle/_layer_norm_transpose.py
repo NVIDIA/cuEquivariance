@@ -215,7 +215,10 @@ def layer_norm_impl(platform, is_forward, *args, **kwargs):
         return layer_norm_transpose_reference_forward(*args, **kwargs)
     else:
         # JAX autodiff for backward pass
-        grad_out, x, w, b, mean, rstd, eps, elementwise_affine, layout = args
+        grad_out, x, w, b, mean, rstd = args
+        eps = kwargs["eps"]
+        elementwise_affine = kwargs["elementwise_affine"]
+        layout = kwargs["layout"]
 
         def forward_fn(x, w, b):
             return layer_norm_transpose_reference_forward(
