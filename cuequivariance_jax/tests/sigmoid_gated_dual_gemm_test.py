@@ -193,9 +193,10 @@ def test_sigmoid_gated_dual_gemm_gradients(backend):
     if backend == "cpu":
         device = jax.devices("cpu")[0]
     elif backend == "gpu":
-        if not jax.devices("gpu"):
-            pytest.skip("No GPU available for testing.")
-        device = jax.devices("gpu")[0]
+        try:
+            device = jax.devices("gpu")[0]
+        except RuntimeError:
+            pytest.skip("No GPU available for testing")
 
     [x, x2, w1, w2, mask] = jax.device_put([x, x2, w1, w2, mask], device)
 
