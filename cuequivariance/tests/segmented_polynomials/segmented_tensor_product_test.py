@@ -470,3 +470,130 @@ def test_consolidate_with_optional_argument():
     d.assert_valid()
     d_consol = d.consolidate_modes("ab")
     assert d_consol.subscripts == "a,a"
+
+
+def test_slice_by_segment():
+    """Test the slice_by_segment method for slicing SegmentedTensorProduct operands."""
+    # Create descriptor with multiple segments per operand
+    d = cue.SegmentedTensorProduct.from_subscripts("uv,ui,vj+ij")
+
+    # Add segments with consistent dimensions
+    for i, (u, v) in enumerate([(2, 3), (2, 4), (3, 3), (3, 4)]):
+        d.add_segment(0, (u, v))
+        d.add_segment(1, (u, i + 5))
+        d.add_segment(2, (v, i + 7))
+
+    # Add paths with consistent dimensions
+    for i in range(4):
+        d.add_path(i, i, i, c=make_coeffs((i + 5, i + 7)))
+
+    d.assert_valid()
+    assert (d.num_operands, d.num_paths) == (3, 4)
+    assert [len(op) for op in d.operands] == [4, 4, 4]
+
+    # Test single integer index, slice objects, and complex slicing
+    d_single = d.slice_by_segment[:1, :, :]
+    assert (len(d_single.operands[0]), d_single.num_paths) == (1, 1)
+    assert d_single.operands[0][0] == (2, 3)
+    d_single.assert_valid()
+
+    d_slice = d.slice_by_segment[1:3, :, :]
+    assert ([len(op) for op in d_slice.operands], d_slice.num_paths) == ([2, 4, 4], 2)
+    assert d_slice.operands[0].segments == ((2, 4), (3, 3))
+    d_slice.assert_valid()
+
+    d_multi = d.slice_by_segment[::2, 1:, :2]
+    assert [len(op) for op in d_multi.operands] == [2, 3, 2]
+    assert d_multi.operands[0].segments == ((2, 3), (3, 3))
+    d_multi.assert_valid()
+
+    # Test negative indexing and empty results
+    d_neg = d.slice_by_segment[-1:, :, :]
+    assert (len(d_neg.operands[0]), d_neg.operands[0][0]) == (1, (3, 4))
+    d_neg.assert_valid()
+
+    d_empty = d.slice_by_segment[2:3, 0:1, 0:1]
+    assert d_empty.num_paths == 0
+    d_empty.assert_valid()
+
+    # Test path index remapping
+    d_simple = cue.SegmentedTensorProduct.from_subscripts("i,j+ij")
+    d_simple.add_segments(0, [(2,), (3,), (4,)])
+    d_simple.add_segments(1, [(5,), (6,)])
+    d_simple.add_path(1, 0, c=make_coeffs((3, 5)))
+    d_simple.add_path(2, 1, c=make_coeffs((4, 6)))
+
+    d_sliced = d_simple.slice_by_segment[1:, :]
+    assert d_sliced.operands[0].segments == ((3,), (4,))
+    assert [p.indices for p in d_sliced.paths] == [(0, 0), (1, 1)]
+    d_sliced.assert_valid()
+
+    # Test error conditions
+    with pytest.raises(ValueError, match="Expected a slice or int for each operand"):
+        d.slice_by_segment[0, 1]  # not enough indices
+    with pytest.raises(ValueError, match="Expected a slice or int for each operand"):
+        d.slice_by_segment[0, 1, 2, 3]  # too many indices
+    with pytest.raises(TypeError, match="Invalid slice type"):
+        d.slice_by_segment[0, 1, [2]]  # invalid slice type
+
+    # Test coefficient preservation and computation equivalence
+    d_coeff = cue.SegmentedTensorProduct.from_subscripts("i,j+ij")
+    d_coeff.add_segments(0, [(2,), (3,)])
+    d_coeff.add_segments(1, [(4,), (5,)])
+    original_coeffs = make_coeffs((2, 4))
+    d_coeff.add_path(0, 0, c=original_coeffs)
+    d_coeff.assert_valid()
+
+    d_coeff_sliced = d_coeff.slice_by_segment[:, :]
+    np.testing.assert_allclose(d_coeff_sliced.paths[0].coefficients, original_coeffs)
+
+    x0 = np.random.randn(d_coeff.operands[0].size)
+    result_original = cue.segmented_polynomials.compute_last_operand(d_coeff, x0)
+    result_sliced = cue.segmented_polynomials.compute_last_operand(d_coeff_sliced, x0)
+    np.testing.assert_allclose(result_original, result_sliced)
+
+
+def test_slice_by_size():
+    """Test the slice_by_size method for slicing SegmentedTensorProduct operands by flat size."""
+    # Create descriptor with segments of different sizes
+    d = cue.SegmentedTensorProduct.from_subscripts("i,j+ij")
+
+    # Add segments with different sizes: 2, 6, 12 for first operand
+    d.add_segments(0, [(2,), (6,), (12,)])
+    # Add segments with sizes: 3, 4 for second operand
+    d.add_segments(1, [(3,), (4,)])
+
+    # Add paths
+    d.add_path(0, 0, c=make_coeffs((2, 3)))
+    d.add_path(1, 1, c=make_coeffs((6, 4)))
+    d.add_path(2, 0, c=make_coeffs((12, 3)))
+
+    d.assert_valid()
+    assert d.operands[0].size == 2 + 6 + 12  # 20
+    assert d.operands[1].size == 3 + 4  # 7
+
+    # Test slicing by size - should include segments that overlap with size range
+    d_size_slice = d.slice_by_size[
+        2:8, :
+    ]  # Should include segment 1 (size 6) from first operand
+    assert len(d_size_slice.operands[0]) == 1
+    assert d_size_slice.operands[0][0] == (6,)
+    assert len(d_size_slice.operands[1]) == 2  # All segments from second operand
+    assert (
+        d_size_slice.num_paths == 1
+    )  # Only the path using segment 1 from first operand
+    d_size_slice.assert_valid()
+
+    # Test integer indexing by size
+    d_single_size = d.slice_by_size[:1, :]
+    assert len(d_single_size.operands[0]) == 1
+    assert d_single_size.operands[0][0] == (2,)
+    d_single_size.assert_valid()
+
+    # Test error conditions
+    with pytest.raises(ValueError, match="Expected a slice or int for each operand"):
+        d.slice_by_size[0]  # not enough indices
+    with pytest.raises(ValueError, match="Step sizes other than 1 are not supported"):
+        d.slice_by_size[::2, :]  # step size not supported
+    with pytest.raises(TypeError, match="Invalid slice type"):
+        d.slice_by_size[0, [1]]  # invalid slice type

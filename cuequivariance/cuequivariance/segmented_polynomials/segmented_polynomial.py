@@ -24,6 +24,9 @@ import numpy as np
 import cuequivariance as cue
 from cuequivariance.etc.permutations import inverse_permutation
 from cuequivariance.segmented_polynomials.operation import IVARS, OVARS
+from cuequivariance.segmented_polynomials.segmented_tensor_product import (
+    _canonicalize_index,
+)
 
 from .dimensions_dict import format_dimensions_dict
 
@@ -72,10 +75,11 @@ class SegmentedPolynomial:
             for i, operand in zip(opt.buffers, stp.operands):
                 assert operand == operands[i]
 
-            out_oid, bid = opt.output_operand_buffer(len(inputs))
-            tmp.append(
-                (bid, opt.move_operand_last(out_oid), stp.move_operand_last(out_oid))
-            )
+            bid = opt.output_buffer(len(inputs))
+            perm = list(range(stp.num_operands))
+            perm = sorted(perm, key=lambda i: opt.buffers[i])
+            tmp.append((bid, opt.permute_operands(perm), stp.permute_operands(perm)))
+
         tmp = sorted(tmp)
         operations = [(opt, stp) for _, opt, stp in tmp]
 
@@ -747,6 +751,133 @@ class SegmentedPolynomial:
             return ope, stp
 
         return self.apply_fn(optimize_paths)
+
+    def split_operand_by_segment(
+        self, operand_id: int, segment_splits: list[int]
+    ) -> SegmentedPolynomial:
+        """Split an operand into multiple operands based on segment boundaries.
+
+        Args:
+            operand_id (int): Index of the operand to split.
+            segment_splits (list of int): List of segment indices where to split the operand.
+                                        Must start with 0 and end with the total number of segments.
+
+        Returns:
+            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: Polynomial with the specified operand split.
+        """
+        operand_id = _canonicalize_index("operand_id", operand_id, self.num_operands)
+
+        assert len(segment_splits) > 0
+        assert (
+            segment_splits[0] == 0
+            and segment_splits[-1] == self.operands[operand_id].num_segments
+        )
+
+        # Create splits and new operands
+        splits = [
+            self.operands[operand_id].slice_by_segment[
+                segment_splits[i] : segment_splits[i + 1]
+            ]
+            for i in range(len(segment_splits) - 1)
+        ]
+        new_operands = list(self.operands)
+        new_operands[operand_id : operand_id + 1] = splits
+
+        # Determine new inputs and outputs
+        split_offset = len(splits) - 1
+        if operand_id < self.num_inputs:
+            new_inputs = new_operands[: self.num_inputs + split_offset]
+            new_outputs = new_operands[self.num_inputs + split_offset :]
+        else:
+            new_inputs = new_operands[: self.num_inputs]
+            new_outputs = new_operands[self.num_inputs :]
+
+        # Create new operations
+        import itertools
+
+        new_operations = []
+        for ope, stp in self.operations:
+            positions = [i for i, buf in enumerate(ope.buffers) if buf == operand_id]
+
+            if not positions:
+                # Adjust buffer indices for operands after the split
+                new_buffers = [
+                    buf + split_offset if buf > operand_id else buf
+                    for buf in ope.buffers
+                ]
+                new_operations.append((cue.Operation(new_buffers), stp))
+            else:
+                # Generate all combinations for split positions
+                for combo in itertools.product(
+                    range(len(splits)), repeat=len(positions)
+                ):
+                    new_buffers = list(ope.buffers)
+
+                    # Set split indices and adjust other buffers
+                    for pos, split_idx in zip(positions, combo):
+                        new_buffers[pos] = operand_id + split_idx
+                    for i, buf in enumerate(new_buffers):
+                        if buf > operand_id and i not in positions:
+                            new_buffers[i] = buf + split_offset
+
+                    # Create sliced STP
+                    slices = [slice(None)] * stp.num_operands
+                    for pos, split_idx in zip(positions, combo):
+                        slices[pos] = slice(
+                            segment_splits[split_idx], segment_splits[split_idx + 1]
+                        )
+
+                    sliced_stp = stp.slice_by_segment[tuple(slices)]
+                    if sliced_stp.num_paths > 0:
+                        new_operations.append((cue.Operation(new_buffers), sliced_stp))
+
+        return SegmentedPolynomial(
+            new_inputs, new_outputs, new_operations
+        ).consolidate()
+
+    def split_operand_by_size(
+        self, operand_id: int, offsets: list[int]
+    ) -> SegmentedPolynomial:
+        """Split an operand into multiple operands based on specified offsets.
+
+        Args:
+            operand_id (int): Index of the operand to split.
+            offsets (list of int): List of offsets to split the operand at.
+
+        Returns:
+            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: Polynomial with the specified operand split.
+        """
+        operand_id = _canonicalize_index("operand_id", operand_id, self.num_operands)
+        assert len(offsets) > 0
+        operand = self.operands[operand_id]
+        assert offsets[0] == 0, "Offsets must start at 0"
+        assert offsets[-1] == operand.size, (
+            "Offsets must end at the size of the operand"
+        )
+
+        # Convert size offsets to segment splits
+        segment_slices = operand.segment_slices()
+        segment_splits = []
+
+        for offset in offsets:
+            # Find which segment this offset corresponds to
+            segment_idx = None
+            for i, seg_slice in enumerate(segment_slices):
+                if seg_slice.start == offset:
+                    segment_idx = i
+                    break
+            if offset == operand.size:
+                segment_idx = len(segment_slices)
+
+            if segment_idx is None:
+                raise ValueError(
+                    f"Offset {offset} does not align with segment boundaries. "
+                    f"Valid offsets are: {[seg_slice.start for seg_slice in segment_slices] + [operand.size]}"
+                )
+
+            segment_splits.append(segment_idx)
+
+        return self.split_operand_by_segment(operand_id, segment_splits)
 
     # ------------------------------------------------------------------------
     # Filtering Methods
