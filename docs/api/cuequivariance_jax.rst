@@ -62,6 +62,15 @@ Extra Modules
 
    spherical_harmonics
 
+Triangle
+--------
+
+.. autosummary::
+   :toctree: generated/
+   :template: function_template.rst
+
+   triangle_attention
+
 Experimental
 ------------
 
