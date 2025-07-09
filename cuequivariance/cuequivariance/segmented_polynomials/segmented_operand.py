@@ -211,3 +211,65 @@ class SegmentedOperand:
             segments=self.segments + other.segments,
             _dims={i: self.get_dims(i) | other.get_dims(i) for i in range(self.ndim)},
         )
+
+    @property
+    def slice_by_segment(self) -> _SegmentSlicer:
+        """Return a slicer that allows slicing by segment index."""
+        return _SegmentSlicer(self)
+
+    @property
+    def slice_by_size(self) -> _SizeSlicer:
+        """Return a slicer that allows slicing by flat size/offset."""
+        return _SizeSlicer(self)
+
+
+class _SegmentSlicer:
+    """Helper class for slicing by segment index."""
+
+    def __init__(self, operand: SegmentedOperand):
+        self.operand = operand
+
+    def __getitem__(self, key: slice) -> SegmentedOperand:
+        if not isinstance(key, slice):
+            raise TypeError(f"Only slice objects are supported, got {type(key)}")
+        return SegmentedOperand(
+            ndim=self.operand.ndim, segments=self.operand.segments[key]
+        )
+
+
+class _SizeSlicer:
+    """Helper class for slicing by size/offset."""
+
+    def __init__(self, operand: SegmentedOperand):
+        self.operand = operand
+
+    def __getitem__(self, key: slice) -> SegmentedOperand:
+        if not isinstance(key, slice):
+            raise TypeError(f"Only slice objects are supported, got {type(key)}")
+
+        # Handle slice
+        start, stop, step = key.indices(self.operand.size)
+
+        if step != 1:
+            raise ValueError("Step sizes other than 1 are not supported")
+
+        # Find segments that overlap with [start, stop)
+        segments = []
+        offset = 0
+
+        for segment in self.operand.segments:
+            segment_size = math.prod(segment)
+            segment_start = offset
+            segment_end = offset + segment_size
+
+            # Check if this segment overlaps with [start, stop)
+            if segment_start < stop and segment_end > start:
+                segments.append(segment)
+
+            offset += segment_size
+
+            # If we've passed the stop point, we can break
+            if offset >= stop:
+                break
+
+        return SegmentedOperand(ndim=self.operand.ndim, segments=segments)
