@@ -45,7 +45,15 @@ def ensure_dims(ten: jax.Array, n: int) -> jax.Array:
 
 
 def _calculate_fan(linear_weight_shape, fan="fan_in"):
-    """Calculate fan-in or fan-out for weight initialization."""
+    """Calculate fan-in or fan-out for weight initialization.
+
+    Args:
+        linear_weight_shape: Shape tuple (fan_out, fan_in)
+        fan: One of "fan_in", "fan_out", or "fan_avg"
+
+    Returns:
+        Calculated fan value
+    """
     fan_out, fan_in = linear_weight_shape
     if fan == "fan_in":
         f = fan_in
@@ -54,7 +62,9 @@ def _calculate_fan(linear_weight_shape, fan="fan_in"):
     elif fan == "fan_avg":
         f = (fan_in + fan_out) / 2
     else:
-        raise ValueError("Invalid fan option")
+        raise ValueError(
+            f"Invalid fan option: {fan}. Must be one of 'fan_in', 'fan_out', or 'fan_avg'"
+        )
     return f
 
 
@@ -133,33 +143,33 @@ def triangle_multiplicative_update(
     3. Output normalization and gating
 
     Args:
-        x: Input tensor of shape (B, N, N, D) where:
+        x (jax.Array): Input tensor of shape (B, N, N, D) where:
             - B is the batch size
             - N is the sequence length
             - D is the hidden dimension
             Can also be 3D (N, N, D) which will be expanded to 4D.
-        direction: Direction of the triangular projection. Must be either "outgoing" or "incoming".
-        key: JAX random key for weight initialization. Required if any weights are None.
-        mask: Optional mask tensor of shape (B, N, N) for masking the output.
+        direction (str): Direction of the triangular projection. Must be either "outgoing" or "incoming".
+        key (jax.Array, optional): JAX random key for weight initialization. Required if any weights are None.
+        mask (jax.Array, optional): Optional mask tensor of shape (B, N, N) for masking the output.
             Can also be 2D (N, N) which will be expanded to 3D.
-        norm_in_weight: Weight tensor for input normalization of shape (D,).
+        norm_in_weight (jax.Array, optional): Weight tensor for input normalization of shape (D,).
             If None, initialized to ones.
-        norm_in_bias: Bias tensor for input normalization of shape (D,).
+        norm_in_bias (jax.Array, optional): Bias tensor for input normalization of shape (D,).
             If None, initialized to zeros.
-        p_in_weight: Weight tensor for input projection of shape (2D, D).
+        p_in_weight (jax.Array, optional): Weight tensor for input projection of shape (2D, D).
             If None, initialized with LeCun normal distribution.
-        g_in_weight: Weight tensor for input gating of shape (2D, D).
+        g_in_weight (jax.Array, optional): Weight tensor for input gating of shape (2D, D).
             If None, initialized with LeCun normal distribution.
-        norm_out_weight: Weight tensor for output normalization of shape (D,).
+        norm_out_weight (jax.Array, optional): Weight tensor for output normalization of shape (D,).
             If None, initialized to ones.
-        norm_out_bias: Bias tensor for output normalization of shape (D,).
+        norm_out_bias (jax.Array, optional): Bias tensor for output normalization of shape (D,).
             If None, initialized to zeros.
-        p_out_weight: Weight tensor for output projection of shape (D, D).
+        p_out_weight (jax.Array, optional): Weight tensor for output projection of shape (D, D).
             If None, initialized with LeCun normal distribution.
-        g_out_weight: Weight tensor for output gating of shape (D, D).
+        g_out_weight (jax.Array, optional): Weight tensor for output gating of shape (D, D).
             If None, initialized with LeCun normal distribution.
-        eps: Small constant for numerical stability in normalization. Defaults to 1e-5.
-        precision: Precision mode for matrix multiplications.
+        eps (float): Small constant for numerical stability in normalization. Defaults to 1e-5.
+        precision (Precision): Precision mode for matrix multiplications.
             Available options:
             - DEFAULT: Use default precision setting
             - TF32: Use TensorFloat-32 precision
@@ -167,7 +177,7 @@ def triangle_multiplicative_update(
             - IEEE: Use IEEE 754 precision
 
     Returns:
-        Output tensor of shape (B, N, N, D). Always returns 4D tensor even if input was 3D.
+        jax.Array: Output tensor of shape (B, N, N, D). Always returns 4D tensor even if input was 3D.
 
     Notes:
         - Unlike PyTorch, JAX arrays are immutable, so weight initialization returns new arrays
