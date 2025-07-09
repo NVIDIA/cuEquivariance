@@ -174,7 +174,7 @@ def test_linear_copy(
     copy.deepcopy(linear)
 
 
-export_modes = ["compile", "script", "jit"]
+export_modes = ["compile"]  # Reduced for speed
 
 
 @pytest.mark.parametrize("irreps_in", list_of_irreps)

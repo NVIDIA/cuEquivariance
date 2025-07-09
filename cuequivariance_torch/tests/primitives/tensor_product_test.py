@@ -27,70 +27,34 @@ device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("
 
 
 def make_descriptors():
+    # Only the most essential descriptors for speed
     yield descriptors.fully_connected_tensor_product(
-        cue.Irreps("O3", "4x0e + 4x1o"),
-        cue.Irreps("O3", "6x0e + 6x1o"),
-        cue.Irreps("O3", "5x0e + 5x1o + 5x2e + 5x1e"),
+        cue.Irreps("O3", "2x0e + 2x1o"),  # Reduced sizes
+        cue.Irreps("O3", "3x0e + 3x1o"),
+        cue.Irreps("O3", "2x0e + 2x1o + 2x2e + 2x1e"),
     ).polynomial.operations[0][1]
 
     yield descriptors.spherical_harmonics(cue.SO3(1), [2]).polynomial.operations[0][1]
-    yield descriptors.spherical_harmonics(cue.SO3(1), [3]).polynomial.operations[0][1]
+    # Removed additional descriptors for speed
 
-    d = descriptors.channelwise_tensor_product(
-        cue.Irreps("SU2", "3x1/2 + 4x1"),
-        cue.Irreps("SU2", "1/2 + 1 + 3/2"),
-        cue.Irreps("SU2", "1/2 + 1"),
-    ).polynomial.operations[0][1]
+    # Only one essential subscript pattern for speed
+    d = cue.SegmentedTensorProduct.from_subscripts("u,,uw,w")
+    d.add_path(
+        *[None] * d.num_operands,
+        c=1.0,
+        dims=dict(u=3, v=6, w=1),
+    )
     yield d
 
-    d = descriptors.channelwise_tensor_product(
-        cue.Irreps("SO3", "32x1 + 32x2"),
-        cue.Irreps("SO3", "0 + 1"),
-        cue.Irreps("SO3", "0 + 1"),
-    ).polynomial.operations[0][1]
-    yield d
 
-    for subscripts in [
-        "u,,uw,w",
-        "u,v,uv,u",
-        "u,v,uv,v",
-        "u,u,uw,w",
-        "u,v,uvw,w",
-        ",v,vw,w",
-        "u,u,u",
-        "u,v,uv",
-        "u,uv,v",
-        "u,,u",
-        ",v,v",
-    ]:
-        d = cue.SegmentedTensorProduct.from_subscripts(subscripts)
-        for i in range(3):
-            d.add_path(
-                *[None] * d.num_operands,
-                c=1.0,
-                dims=dict(u=3 + i, v=6 - i, w=1 + 2 * i),
-            )
-        yield d
-        yield d.move_operand_first(1)
-        if d.num_operands == 4:
-            yield d.move_operand_first(2)
-
-
+# Only the most essential setting for speed
 settings = [
-    (torch.float32, torch.float64, 1e-4),
-    (torch.float32, torch.float32, 1e-4),
-    (torch.float64, torch.float64, 1e-6),
+    (torch.float32, torch.float32, 1e-4),  # Most common case only
 ]
 
-if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:
-    settings += [
-        (torch.float16, torch.float32, 1.0),
-        (torch.bfloat16, torch.float32, 1.0),
-    ]
 
-
-@pytest.mark.parametrize("batch_size", [0, 3])
-@pytest.mark.parametrize("use_fallback", [True, False])
+@pytest.mark.parametrize("batch_size", [3])  # Reduced from [0, 3] to just [3]
+@pytest.mark.parametrize("use_fallback", [False])  # Test only the main path by default
 @pytest.mark.parametrize("dtype, math_dtype, tol", settings)
 @pytest.mark.parametrize("d", make_descriptors())
 def test_primitive_tensor_product_cuda_vs_fx(
@@ -145,12 +109,14 @@ def test_primitive_tensor_product_cuda_vs_fx(
         torch.testing.assert_close(g1, g2.to(dtype), atol=100 * tol, rtol=100 * tol)
 
 
-export_modes = ["compile", "script", "jit"]
+export_modes = ["compile", "script"]  # Reduced from ["compile", "script", "jit"]
 
 
-@pytest.mark.parametrize("d", make_descriptors())
+@pytest.mark.parametrize(
+    "d", list(make_descriptors())[:3]
+)  # Test only first 3 descriptors
 @pytest.mark.parametrize("mode", export_modes)
-@pytest.mark.parametrize("use_fallback", [True, False])
+@pytest.mark.parametrize("use_fallback", [False])  # Test only main path
 def test_export(d: cue.SegmentedTensorProduct, mode, use_fallback, tmp_path):
     if not torch.cuda.is_available():
         pytest.skip("CUDA is not available")

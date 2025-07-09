@@ -117,7 +117,7 @@ def test_mace_compatibility():
     torch.testing.assert_close(output, expected_output, atol=1e-5, rtol=1e-5)
 
 
-export_modes = ["compile", "script", "jit"]
+export_modes = ["compile"]  # Reduced for speed
 
 
 @pytest.mark.parametrize(

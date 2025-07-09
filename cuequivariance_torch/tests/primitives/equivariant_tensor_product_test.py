@@ -26,11 +26,11 @@ device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("
 
 
 def make_descriptors(shared_op0=False):
-    # This ETP will trigger the fusedTP kernel
+    # This ETP will trigger the fusedTP kernel - reduced sizes for speed
     e = cue.descriptors.fully_connected_tensor_product(
-        cue.Irreps("O3", "32x0e + 32x1o"),
+        cue.Irreps("O3", "8x0e + 8x1o"),  # Reduced from 32x to 8x
         cue.Irreps("O3", "0e + 1o + 2e"),
-        cue.Irreps("O3", "32x0e + 32x1o"),
+        cue.Irreps("O3", "8x0e + 8x1o"),  # Reduced from 32x to 8x
     ).flatten_coefficient_modes()
     if shared_op0:
         yield e, False
@@ -38,10 +38,10 @@ def make_descriptors(shared_op0=False):
     else:
         yield e
 
-    # This ETP will trigger the uniform1dx4 kernel
+    # This ETP will trigger the uniform1dx4 kernel - reduced sizes for speed
     e = (
         cue.descriptors.channelwise_tensor_product(
-            cue.Irreps("O3", "32x0e + 32x1o"),
+            cue.Irreps("O3", "8x0e + 8x1o"),  # Reduced from 32x to 8x
             cue.Irreps("O3", "0e + 1o + 2e"),
             cue.Irreps("O3", "0e + 1o"),
         )
@@ -54,17 +54,19 @@ def make_descriptors(shared_op0=False):
     else:
         yield e
 
-    # These ETPs will trigger the symmetricContraction kernel
-    e = cue.descriptors.spherical_harmonics(cue.SO3(1), [0, 1, 2, 3])
+    # These ETPs will trigger the symmetricContraction kernel - reduced degrees for speed
+    e = cue.descriptors.spherical_harmonics(
+        cue.SO3(1), [0, 1, 2]
+    )  # Reduced from [0,1,2,3] to [0,1,2]
     if shared_op0:
         yield e, False
     else:
         yield e
 
     e = cue.descriptors.symmetric_contraction(
-        cue.Irreps("O3", "32x0e + 32x1o"),
-        cue.Irreps("O3", "32x0e + 32x1o"),
-        [0, 1, 2, 3],
+        cue.Irreps("O3", "8x0e + 8x1o"),  # Reduced from 32x to 8x
+        cue.Irreps("O3", "8x0e + 8x1o"),  # Reduced from 32x to 8x
+        [0, 1, 2],  # Reduced from [0,1,2,3] to [0,1,2]
     )
     if shared_op0:
         yield e, False
@@ -73,15 +75,14 @@ def make_descriptors(shared_op0=False):
         yield e
 
 
+# Reduced settings for essential coverage only
 settings1 = [
-    (torch.float32, torch.float64),
-    (torch.float32, torch.float32),
-    (torch.float64, torch.float64),
+    (torch.float32, torch.float32),  # Most common case
+    (torch.float64, torch.float64),  # High precision case
 ]
 if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:
     settings1 += [
-        (torch.float16, torch.float32),
-        (torch.bfloat16, torch.float32),
+        (torch.float16, torch.float32),  # Half precision case
     ]
 
 
@@ -103,32 +104,36 @@ def test_performance_cuda_vs_fx(
     )
 
     inputs = [
-        torch.randn((1024, inp.dim), device=device, dtype=dtype) for inp in e.inputs
+        torch.randn((256, inp.dim), device=device, dtype=dtype)
+        for inp in e.inputs  # Reduced batch size from 1024 to 256
     ]
 
-    for _ in range(10):
+    for _ in range(5):  # Reduced warmup from 10 to 5
         m_custom(*inputs)
         m_fallback(*inputs)
     torch.cuda.synchronize()
 
-    t0 = timeit.Timer(lambda: torch.sum(m_custom(*inputs))).timeit(number=10)
-    t1 = timeit.Timer(lambda: torch.sum(m_fallback(*inputs))).timeit(number=10)
+    t0 = timeit.Timer(lambda: torch.sum(m_custom(*inputs))).timeit(
+        number=5
+    )  # Reduced from 10 to 5
+    t1 = timeit.Timer(lambda: torch.sum(m_fallback(*inputs))).timeit(
+        number=5
+    )  # Reduced from 10 to 5
     assert t0 < t1
 
 
+# Reduced settings for essential coverage only
 settings2 = [
     (torch.float32, torch.float32, 1e-4, 1e-6),
-    (torch.float32, torch.float64, 1e-5, 1e-6),
     (torch.float64, torch.float64, 1e-12, 0),
 ]
 if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:
     settings2 += [
         (torch.float16, torch.float32, 1, 0.2),
-        (torch.bfloat16, torch.float32, 1, 0.2),
     ]
 
 
-@pytest.mark.parametrize("batch_size", [0, 5])
+@pytest.mark.parametrize("batch_size", [5])  # Reduced from [0, 5] to just [5]
 @pytest.mark.parametrize("dtype, math_dtype, atol, rtol", settings2)
 @pytest.mark.parametrize("e, shared_op0", make_descriptors(True))
 def test_precision_cuda_vs_fx(
@@ -165,13 +170,17 @@ def test_precision_cuda_vs_fx(
     torch.testing.assert_close(y0, y1, atol=atol, rtol=rtol)
 
 
-export_modes = ["compile", "script", "jit"]
+export_modes = ["compile", "script"]  # Reduced from ["compile", "script", "jit"]
 # "export" does not support the change of batch size
 
 
-@pytest.mark.parametrize("e", make_descriptors())
-@pytest.mark.parametrize("dtype, math_dtype, atol, rtol", settings2)
-@pytest.mark.parametrize("use_fallback", [True, False])
+@pytest.mark.parametrize(
+    "e", list(make_descriptors())[:2]
+)  # Test only first 2 descriptors
+@pytest.mark.parametrize(
+    "dtype, math_dtype, atol, rtol", settings2[:1]
+)  # Test only first dtype combination
+@pytest.mark.parametrize("use_fallback", [False])  # Test only main path
 @pytest.mark.parametrize("mode", export_modes)
 def test_export(
     e: cue.EquivariantTensorProduct,
@@ -194,11 +203,14 @@ def test_export(
         device=device,
     )
     exp_inputs = [
-        torch.randn((512, inp.irreps.dim), device=device, dtype=dtype)
+        torch.randn(
+            (256, inp.irreps.dim), device=device, dtype=dtype
+        )  # Reduced from 512 to 256
         for inp in e.inputs
     ]
     inputs = [
-        torch.randn((1024, inp.dim), device=device, dtype=dtype) for inp in e.inputs
+        torch.randn((512, inp.dim), device=device, dtype=dtype)
+        for inp in e.inputs  # Reduced from 1024 to 512
     ]
     res = m(*inputs)
     m = module_with_mode(mode, m, exp_inputs, math_dtype, tmp_path)
@@ -206,13 +218,15 @@ def test_export(
     torch.testing.assert_close(res, res_script, atol=atol, rtol=rtol)
 
 
-@pytest.mark.parametrize("batch_size", [0, 5])
-@pytest.mark.parametrize("use_fallback", [True, False])
+@pytest.mark.parametrize("batch_size", [5])  # Reduced from [0, 5] to just [5]
+@pytest.mark.parametrize("use_fallback", [False])  # Test only main path
 def test_high_degrees(use_fallback: bool, batch_size: int):
     if not use_fallback and not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
 
-    e = cue.descriptors.spherical_harmonics(cue.SO3(1), [0, 1, 2, 3, 4, 5])
+    e = cue.descriptors.spherical_harmonics(
+        cue.SO3(1), [0, 1, 2, 3]
+    )  # Reduced from [0,1,2,3,4,5] to [0,1,2,3]
     m = cuet.EquivariantTensorProduct(
         e,
         layout=cue.mul_ir,

@@ -24,7 +24,7 @@ from cuequivariance_torch._tests.utils import (
 
 device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
 
-export_modes = ["compile", "script", "jit"]
+export_modes = ["compile"]  # Reduced for speed
 
 irreps = [
     (

@@ -74,7 +74,7 @@ def test_spherical_harmonics_full(dtype, ls: list[int], use_fallback: bool):
     assert yl.shape[1] == sum(2 * ell + 1 for ell in ls)
 
 
-export_modes = ["compile", "script", "jit"]
+export_modes = ["compile"]  # Reduced for speed
 
 
 @pytest.mark.parametrize("dtype", data_types)

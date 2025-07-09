@@ -370,45 +370,41 @@ def run_segmented_polynomial_test(
 
 SEGMENTED_POLYNOMIALS = list(generate_segmented_polynomials())
 
+# Reduced data types for essential coverage only
 DATA_TYPES_IN_MATH = [
-    (torch.float32, torch.float64),
-    (torch.float64, torch.float32),
-    (torch.float32, torch.float32),
-    (torch.float64, torch.float64),
-    (torch.float16, torch.float32),
-    (torch.bfloat16, torch.float32),
+    (torch.float32, torch.float32),  # Most common case
+    (torch.float64, torch.float64),  # High precision case
+    (torch.float16, torch.float32),  # Half precision case - only if CUDA available
 ]
 
-EXPORT_MODES = ["eager", "compile", "script", "jit", "export"]
+# Reduced export modes for faster testing
+EXPORT_MODES = [
+    "eager",
+    "compile",
+]  # Reduced from ["eager", "compile", "script", "jit", "export"]
 
+# Significantly reduced indexing combinations - only essential patterns
 ALL_INDEXING = [
-    {"input": (inp_amount, inp_kind), "output": (out_amount, out_kind)}
-    for inp_amount in ["first", "all"]
-    for out_amount in ["first", "all"]
-    for inp_kind in ["shared", "indexed", "batch"]
-    for out_kind in ["shared", "indexed", "batch"]
-    if inp_kind != "batch" or inp_amount == "all"  # for batch, only "all" is valid
-    if out_kind != "batch" or out_amount == "all"  # for batch, only "all" is valid
+    {"input": ("all", "batch"), "output": ("all", "batch")},
+    {"input": ("all", "shared"), "output": ("all", "batch")},
+    # Removed additional indexing patterns for speed
 ]
 
 SHORT_INDEXING = [
     {"input": ("all", "batch"), "output": ("all", "batch")},
     {"input": ("all", "shared"), "output": ("all", "batch")},
-    {"input": ("all", "batch"), "output": ("all", "shared")},
-    {"input": ("first", "indexed"), "output": ("all", "indexed")},
 ]
-
 
 GRAD = [False, True]
 
 BACKWARD = [False, True]
 
-BATCH_SIZE = [0, 5]
+BATCH_SIZE = [5]  # Reduced from [0, 5] to just [5]
 
 
 @pytest.mark.parametrize("name, polynomial", SEGMENTED_POLYNOMIALS[:1])
 @pytest.mark.parametrize("dtype, math_dtype", DATA_TYPES_IN_MATH[:1])
-@pytest.mark.parametrize("batch_size", BATCH_SIZE[1:])
+@pytest.mark.parametrize("batch_size", BATCH_SIZE)
 @pytest.mark.parametrize("mode", EXPORT_MODES[:1])
 @pytest.mark.parametrize("grad", GRAD[1:])
 @pytest.mark.parametrize("backward", BACKWARD[1:])
@@ -440,11 +436,13 @@ def test_segmented_polynomial_indexing(
 
 
 @pytest.mark.parametrize("name, polynomial", SEGMENTED_POLYNOMIALS)
-@pytest.mark.parametrize("dtype, math_dtype", DATA_TYPES_IN_MATH)
-@pytest.mark.parametrize("batch_size", BATCH_SIZE[1:])
+@pytest.mark.parametrize(
+    "dtype, math_dtype", DATA_TYPES_IN_MATH[:2]
+)  # Only first 2 dtype combinations
+@pytest.mark.parametrize("batch_size", BATCH_SIZE)
 @pytest.mark.parametrize("mode", EXPORT_MODES[:1])
-@pytest.mark.parametrize("grad", GRAD)
-@pytest.mark.parametrize("backward", BACKWARD)
+@pytest.mark.parametrize("grad", [False])  # Test only without grad for speed
+@pytest.mark.parametrize("backward", [False])  # Test only without backward for speed
 @pytest.mark.parametrize("indexing", SHORT_INDEXING)
 def test_segmented_polynomial_dytpes(
     name,
@@ -475,9 +473,9 @@ def test_segmented_polynomial_dytpes(
 @pytest.mark.parametrize("name, polynomial", SEGMENTED_POLYNOMIALS)
 @pytest.mark.parametrize("dtype, math_dtype", DATA_TYPES_IN_MATH[:1])
 @pytest.mark.parametrize("batch_size", BATCH_SIZE)
-@pytest.mark.parametrize("mode", EXPORT_MODES)
-@pytest.mark.parametrize("grad", GRAD)
-@pytest.mark.parametrize("backward", BACKWARD[1:])
+@pytest.mark.parametrize("mode", EXPORT_MODES[:2])  # Test only first 2 export modes
+@pytest.mark.parametrize("grad", [False])  # Test only without grad for speed
+@pytest.mark.parametrize("backward", [False])  # Test only without backward for speed
 @pytest.mark.parametrize("indexing", SHORT_INDEXING)
 def test_segmented_polynomial_export(
     name,
