@@ -238,7 +238,7 @@ def test_triangle_multiplicative_update_initialization():
     batch_size, seq_len, hidden_dim = 1, 4, 64
 
     # Create random input (not all ones to avoid zeros after layer norm)
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     key_x, key_init1, key_init2 = jax.random.split(key, 3)
     x = jax.random.normal(key_x, (batch_size, seq_len, seq_len, hidden_dim))
 
@@ -292,7 +292,7 @@ def test_lecun_normal_init_statistical_comparison():
     # Collect samples from JAX
     jax_samples = []
     for i in range(n_samples):
-        key = jax.random.PRNGKey(i)
+        key = jax.random.key(i)
         weight = lecun_normal_init_jax(shape, key, dtype=jnp.float32)
         jax_samples.append(np.array(weight).flatten())
     jax_samples = np.concatenate(jax_samples)
@@ -384,9 +384,7 @@ def test_triangle_multiplicative_update_precision_modes():
     from cuequivariance_jax.triangle import Precision
 
     batch_size, seq_len, hidden_dim = 1, 8, 64
-    x = jax.random.normal(
-        jax.random.PRNGKey(0), (batch_size, seq_len, seq_len, hidden_dim)
-    )
+    x = jax.random.normal(jax.random.key(0), (batch_size, seq_len, seq_len, hidden_dim))
 
     # Create weights
     weights = {
@@ -446,7 +444,7 @@ def test_triangle_multiplicative_update_gradient_basic():
         return jnp.mean(output**2)
 
     # Initialize inputs and weights
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     keys = jax.random.split(key, 5)
     x = jax.random.normal(keys[0], (batch_size, seq_len, seq_len, hidden_dim)) * 0.1
 
@@ -504,7 +502,7 @@ def test_triangle_multiplicative_update_gradient_numerical():
     batch_size, seq_len, hidden_dim = 1, 8, 64
 
     # Initialize inputs and weights with smaller values for numerical stability
-    key = jax.random.PRNGKey(0)
+    key = jax.random.key(0)
     keys = jax.random.split(key, 5)
     x = jax.random.normal(keys[0], (batch_size, seq_len, seq_len, hidden_dim)) * 0.1
 

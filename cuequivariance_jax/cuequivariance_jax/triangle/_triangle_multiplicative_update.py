@@ -190,7 +190,7 @@ def triangle_multiplicative_update(
         >>> import jax.numpy as jnp
         >>> from cuequivariance_jax import triangle_multiplicative_update
         >>> # Create input tensor
-        >>> key = jax.random.PRNGKey(0)
+        >>> key = jax.random.key(0)
         >>> key, subkey = jax.random.split(key)
         >>> batch_size, seq_len, hidden_dim = 1, 128, 128
         >>> x = jax.random.normal(subkey, (batch_size, seq_len, seq_len, hidden_dim))

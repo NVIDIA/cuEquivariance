@@ -272,3 +272,116 @@ def test_sigmoid_gated_dual_gemm_triton_tuning_modes(tuning_mode, monkeypatch):
         test_data["x"], test_data["x2"], test_data["w1"], test_data["w2"]
     )
     validate_output(output_dual, (M, N), "dual input output")
+
+
+def test_sigmoid_gated_dual_gemm_batched_mask_reshaping():
+    """Test mask reshaping with batched inputs."""
+    B, M, N, K = 2, 64, 64, 64
+    key = jax.random.key(42)
+    x_batch = jax.random.normal(key, (B, M, K), dtype=jnp.float32)
+    x2_batch = jax.random.normal(jax.random.key(1), (B, M, K), dtype=jnp.float32)
+    w1 = jax.random.normal(jax.random.key(2), (N, K), dtype=jnp.float32)
+    w2 = jax.random.normal(jax.random.key(3), (N, K), dtype=jnp.float32)
+    mask_batch = jax.random.uniform(jax.random.key(4), (B, M), dtype=jnp.float32)
+
+    # Test both single and dual input modes
+    output_single = sigmoid_gated_dual_gemm(
+        x_batch, w1, w2, mask=mask_batch, precision=Precision.IEEE
+    )
+    output_dual = sigmoid_gated_dual_gemm_dual_x(
+        x_batch, x2_batch, w1, w2, mask=mask_batch, precision=Precision.IEEE
+    )
+
+    validate_output(output_single, (B, M, N), "batched single input")
+    validate_output(output_dual, (B, M, N), "batched dual input")
+
+    # Verify correctness against manual masking
+    output_no_mask = sigmoid_gated_dual_gemm(x_batch, w1, w2, precision=Precision.IEEE)
+    expected_masked = output_no_mask * mask_batch[..., None]
+    np.testing.assert_allclose(output_single, expected_masked, rtol=1e-5, atol=1e-5)
+
+
+def test_sigmoid_gated_dual_gemm_4d_input_3d_mask():
+    """Test 4D input with 3D mask (original triangle_multiplicative_update bug case)."""
+    B, H, W, D = 1, 32, 32, 64
+    N = 2 * D
+    key = jax.random.key(42)
+    x_4d = jax.random.normal(key, (B, H, W, D), dtype=jnp.float32)
+    w1 = jax.random.normal(jax.random.key(1), (N, D), dtype=jnp.float32)
+    w2 = jax.random.normal(jax.random.key(2), (N, D), dtype=jnp.float32)
+    mask_3d = jnp.ones((B, H, W), dtype=jnp.float32)
+
+    # Test both single and dual input modes with transpose_out=True
+    output_single = sigmoid_gated_dual_gemm(
+        x_4d, w1, w2, mask=mask_3d, transpose_out=True, precision=Precision.IEEE
+    )
+    x2_4d = jax.random.normal(jax.random.key(3), (B, H, W, D), dtype=jnp.float32)
+    output_dual = sigmoid_gated_dual_gemm_dual_x(
+        x_4d, x2_4d, w1, w2, mask=mask_3d, transpose_out=True, precision=Precision.IEEE
+    )
+
+    expected_shape = (N, B, H, W)
+    validate_output(output_single, expected_shape, "4D input with 3D mask (single)")
+    validate_output(output_dual, expected_shape, "4D input with 3D mask (dual)")
+
+    # Verify correctness: mask is all ones so should match unmasked output
+    output_no_mask = sigmoid_gated_dual_gemm(
+        x_4d, w1, w2, transpose_out=True, precision=Precision.IEEE
+    )
+    np.testing.assert_allclose(output_single, output_no_mask, rtol=1e-5, atol=1e-5)
+
+
+def test_sigmoid_gated_dual_gemm_cpu_execution():
+    """Test CPU execution with jax.device_put (verifies _reference_forward path)."""
+    cpu_device = jax.devices("cpu")[0]
+    B, H, W, D = 1, 32, 32, 64
+    N = 128
+
+    # Create test data and move to CPU
+    key = jax.random.key(42)
+    x_cpu = jax.device_put(
+        jax.random.normal(key, (B, H, W, D), dtype=jnp.float32), cpu_device
+    )
+    w1_cpu = jax.device_put(
+        jax.random.normal(jax.random.key(1), (N, D), dtype=jnp.float32), cpu_device
+    )
+    w2_cpu = jax.device_put(
+        jax.random.normal(jax.random.key(2), (N, D), dtype=jnp.float32), cpu_device
+    )
+    mask_cpu = jax.device_put(jnp.ones((B, H, W), dtype=jnp.float32), cpu_device)
+
+    # Test both modes on CPU (this was failing before our fix)
+    output_single = sigmoid_gated_dual_gemm(
+        x_cpu,
+        w1_cpu,
+        w2_cpu,
+        mask=mask_cpu,
+        transpose_out=True,
+        precision=Precision.IEEE,
+    )
+    x2_cpu = jax.device_put(
+        jax.random.normal(jax.random.key(3), (B, H, W, D), dtype=jnp.float32),
+        cpu_device,
+    )
+    output_dual = sigmoid_gated_dual_gemm_dual_x(
+        x_cpu,
+        x2_cpu,
+        w1_cpu,
+        w2_cpu,
+        mask=mask_cpu,
+        transpose_out=True,
+        precision=Precision.IEEE,
+    )
+
+    # Verify outputs are on CPU with correct shapes
+    assert output_single.device == cpu_device
+    assert output_dual.device == cpu_device
+    expected_shape = (N, B, H, W)
+    validate_output(output_single, expected_shape, "CPU single input")
+    validate_output(output_dual, expected_shape, "CPU dual input")
+
+    # Verify correctness: all-ones mask should match unmasked output
+    output_no_mask = sigmoid_gated_dual_gemm(
+        x_cpu, w1_cpu, w2_cpu, transpose_out=True, precision=Precision.IEEE
+    )
+    np.testing.assert_allclose(output_single, output_no_mask, rtol=1e-6, atol=1e-6)

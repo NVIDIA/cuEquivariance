@@ -562,7 +562,7 @@ def _bwd(two_inputs, transpose_out, precision, residuals, grad_out):
 _sigmoid_gated_dual_gemm_core.defvjp(_fwd, _bwd)
 
 
-def _prepare_inputs(x, w1, w2):
+def _prepare_inputs(x, w1, w2, mask=None):
     """Prepare inputs and handle reshaping."""
     x = jnp.asarray(x)
     w1 = jnp.asarray(w1)
@@ -572,7 +572,14 @@ def _prepare_inputs(x, w1, w2):
     if x.ndim > 2:
         x = x.reshape(-1, x.shape[-1])
 
-    return x, w1, w2, original_shape
+    # Reshape mask to match the flattened x tensor if needed
+    if mask is not None:
+        mask = jnp.asarray(mask)
+        if len(original_shape) > 2 and mask.ndim > 1:
+            # If x was reshaped from (..., K) to (M, K), then mask should be reshaped from (...,) to (M,)
+            mask = mask.reshape(-1)
+
+    return x, w1, w2, mask, original_shape
 
 
 def _reshape_output(out, original_shape, w1_shape, transpose_out):
@@ -610,7 +617,7 @@ def sigmoid_gated_dual_gemm(
         Output tensor of shape (M, N) or (..., N) if transpose_out=False,
         (N, M) or (N, ...) if transpose_out=True
     """
-    x, w1, w2, original_shape = _prepare_inputs(x, w1, w2)
+    x, w1, w2, mask, original_shape = _prepare_inputs(x, w1, w2, mask)
     x2 = jnp.zeros_like(x)  # dummy x2 for single input mode
 
     out = _sigmoid_gated_dual_gemm_core(
@@ -653,7 +660,7 @@ def sigmoid_gated_dual_gemm_dual_x(
         Output tensor of shape (M, N) or (..., N) if transpose_out=False,
         (N, M) or (N, ...) if transpose_out=True
     """
-    x1, w1, w2, original_shape = _prepare_inputs(x1, w1, w2)
+    x1, w1, w2, mask, original_shape = _prepare_inputs(x1, w1, w2, mask)
     x2 = jnp.asarray(x2)
     if x2.ndim > 2:
         x2 = x2.reshape(-1, x2.shape[-1])
