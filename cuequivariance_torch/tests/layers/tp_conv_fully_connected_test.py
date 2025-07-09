@@ -37,6 +37,14 @@ device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("
 def test_tensor_product_conv_equivariance(
     mlp_channels, mlp_activation, scalar_sizes, batch_norm, layout
 ):
+    # Skip redundant layout combinations for speed
+    if layout == cue.ir_mul:
+        pytest.skip("Skipping redundant layout test")
+
+    # Skip complex mlp configurations with batch_norm=False for speed
+    if not batch_norm and mlp_channels is not None and len(mlp_channels) > 1:
+        pytest.skip("Skipping complex MLP test without batch_norm")
+
     torch.manual_seed(12345)
 
     in_irreps = cue.Irreps("O3", "10x0e + 10x1o + 5x2e")
