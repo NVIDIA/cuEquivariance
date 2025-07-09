@@ -34,26 +34,24 @@ def create_weights(hidden_dim, seed=42, device=None):
     np.random.seed(seed)
 
     weights_np = {
-        "norm_in_weight": np.ones(hidden_dim, dtype=np.float32),
-        "norm_in_bias": np.zeros(hidden_dim, dtype=np.float32),
-        "norm_out_weight": np.ones(hidden_dim, dtype=np.float32),
-        "norm_out_bias": np.zeros(hidden_dim, dtype=np.float32),
-        "p_in_weight": np.random.randn(2 * hidden_dim, hidden_dim).astype(np.float32)
-        * 0.1,
-        "g_in_weight": np.random.randn(2 * hidden_dim, hidden_dim).astype(np.float32)
-        * 0.1,
-        "p_out_weight": np.random.randn(hidden_dim, hidden_dim).astype(np.float32)
-        * 0.1,
-        "g_out_weight": np.random.randn(hidden_dim, hidden_dim).astype(np.float32)
-        * 0.1,
+        "norm_in_weight": np.ones(hidden_dim),
+        "norm_in_bias": np.zeros(hidden_dim),
+        "norm_out_weight": np.ones(hidden_dim),
+        "norm_out_bias": np.zeros(hidden_dim),
+        "p_in_weight": np.random.randn(2 * hidden_dim, hidden_dim) * 0.1,
+        "g_in_weight": np.random.randn(2 * hidden_dim, hidden_dim) * 0.1,
+        "p_out_weight": np.random.randn(hidden_dim, hidden_dim) * 0.1,
+        "g_out_weight": np.random.randn(hidden_dim, hidden_dim) * 0.1,
     }
 
     if device == "torch":
         import torch
 
-        return {k: torch.tensor(v, device="cuda") for k, v in weights_np.items()}
+        return {
+            k: torch.tensor(v, torch.float32, "cuda") for k, v in weights_np.items()
+        }
     else:
-        return {k: jnp.array(v) for k, v in weights_np.items()}
+        return {k: jnp.array(v, jnp.float32) for k, v in weights_np.items()}
 
 
 @pytest.mark.slow
