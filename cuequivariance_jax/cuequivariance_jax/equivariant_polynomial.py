@@ -27,9 +27,11 @@ def equivariant_polynomial(
     | jax.ShapeDtypeStruct
     | None = None,
     indices: None | list[None | jax.Array | tuple[jax.Array | slice]] = None,
+    *,
+    method: str = "",
     math_dtype: jnp.dtype | None = None,
     name: str | None = None,
-    impl: str = "auto",
+    precision: jax.lax.Precision = jax.lax.Precision.HIGHEST,
 ) -> list[cuex.RepArray] | cuex.RepArray:
     """Compute an equivariant polynomial.
 
@@ -46,12 +48,12 @@ def equivariant_polynomial(
             The last shape dimension can be set to -1 to infer the size from the polynomial descriptor.
         indices: Optional list of indices for inputs and outputs. Length must match
             total number of operands (inputs + outputs). Use None for unindexed
-            operands. Defaults to None.
+            operands. Defaults to None. Note that indices are not supported for all methods.
+        method: Method to use for computation. See :func:`cuex.segmented_polynomial <cuequivariance_jax.segmented_polynomial>` for available methods.
         math_dtype: Data type for computational operations. If None, automatically
             determined from input types. Defaults to None.
         name: Optional name for the operation. Defaults to None.
-        impl: Implementation to use, one of ["auto", "cuda", "jax", "naive_jax"]. If "auto",
-            uses CUDA when available and efficient, falling back to JAX otherwise. Defaults to "auto".
+        precision: The precision to use for the computation. Defaults to HIGHEST. Note that precision is not supported for all methods.
 
     Returns:
         :class:`cuex.RepArray <cuequivariance_jax.RepArray>` or list of :class:`cuex.RepArray <cuequivariance_jax.RepArray>`
@@ -74,7 +76,7 @@ def equivariant_polynomial(
 
         >>> with cue.assume(cue.SO3, cue.ir_mul):
         ...    x = cuex.RepArray("1", jnp.array([0.0, 1.0, 0.0]))
-        >>> cuex.equivariant_polynomial(e, [x])
+        >>> cuex.equivariant_polynomial(e, [x], method="naive")
         {0: 0+1+2}
         [1. ... ]
 
@@ -92,6 +94,7 @@ def equivariant_polynomial(
         ...   [x],
         ...   jax.ShapeDtypeStruct((2, e.outputs[0].dim), jnp.float32),
         ...   indices=[None, i_out],
+        ...   method="naive",
         ... )
         >>> result
         {1: 0+1+2}
@@ -181,7 +184,8 @@ def equivariant_polynomial(
         indices,
         math_dtype=math_dtype,
         name=name,
-        impl=impl,
+        method=method,
+        precision=precision,
     )
     outputs = [cuex.RepArray(rep, x) for rep, x in zip(poly.outputs, outputs)]
 
