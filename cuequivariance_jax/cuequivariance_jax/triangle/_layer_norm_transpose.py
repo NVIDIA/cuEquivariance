@@ -17,10 +17,16 @@ from functools import partial
 
 import jax
 import jax.numpy as jnp
-import jax_triton as jt
-import triton
 from jax import custom_vjp
 from jax.interpreters import mlir, xla
+
+try:
+    import jax_triton as jt
+    import triton
+
+    HAS_JAX_TRITON = True
+except ImportError:
+    HAS_JAX_TRITON = False
 
 
 # copy from cuequivariance_ops to avoid requiring cuequivariance_ops to be installed
@@ -125,6 +131,9 @@ def layer_norm_transpose_reference_forward(x, w, b, eps, elementwise_affine, lay
 
 def _layer_norm_forward_impl(x, w, b, eps, elementwise_affine, layout):
     """Triton implementation of forward pass."""
+    if not HAS_JAX_TRITON:
+        raise ImportError("jax_triton is required for GPU implementation")
+
     from cuequivariance_ops.triton import layer_norm_transpose_forward_kernel
 
     B, N, D, (TILE_N, TILE_D) = get_dims_and_config(x, layout)
@@ -158,6 +167,9 @@ def _layer_norm_backward_impl(
     grad_out, x, w, b, mean, rstd, eps, elementwise_affine, layout
 ):
     """Triton implementation of backward pass."""
+    if not HAS_JAX_TRITON:
+        raise ImportError("jax_triton is required for GPU implementation")
+
     from cuequivariance_ops.triton import layer_norm_transpose_backward_kernel
 
     B, N, D, (TILE_N, TILE_D) = get_dims_and_config(x, layout)

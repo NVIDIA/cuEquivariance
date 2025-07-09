@@ -29,7 +29,6 @@ dependencies = [
     "cuequivariance",
     "jax",
     "packaging",
-    "jax_triton",
 ]
 classifiers = [
     "Intended Audience :: Developers",

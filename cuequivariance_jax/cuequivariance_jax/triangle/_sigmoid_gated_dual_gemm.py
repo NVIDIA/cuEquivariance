@@ -20,11 +20,17 @@ from typing import Optional
 
 import jax
 import jax.numpy as jnp
-import jax_triton as jt
-import triton
 from jax import custom_vjp
 from jax.experimental.mosaic.gpu.profiler import measure
 from jax.interpreters import mlir, xla
+
+try:
+    import jax_triton as jt
+    import triton
+
+    HAS_JAX_TRITON = True
+except ImportError:
+    HAS_JAX_TRITON = False
 
 try:
     import cuequivariance_ops  # noqa: F401
@@ -129,6 +135,9 @@ def _triton_forward(
     num_warps=4,
 ):
     """Triton implementation of forward pass."""
+    if not HAS_JAX_TRITON:
+        raise ImportError("jax_triton is required for GPU implementation")
+
     from cuequivariance_ops.triton import fused_sigmoid_gated_dual_gemm_forward_kernel
 
     dtype = x1.dtype
@@ -190,6 +199,9 @@ def _triton_backward(
     num_warps=4,
 ):
     """Triton implementation of backward pass."""
+    if not HAS_JAX_TRITON:
+        raise ImportError("jax_triton is required for GPU implementation")
+
     from cuequivariance_ops.triton import (
         fused_sigmoid_gated_dual_gemm_backward_pregemm_kernel,
     )
