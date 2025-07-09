@@ -20,6 +20,9 @@ from jax import test_util
 
 from cuequivariance_jax.triangle import layer_norm_transpose
 
+# Enable x64 support but test with fp32
+jax.config.update("jax_enable_x64", True)
+
 
 @pytest.mark.parametrize("elementwise_affine", [True, False])
 @pytest.mark.parametrize(

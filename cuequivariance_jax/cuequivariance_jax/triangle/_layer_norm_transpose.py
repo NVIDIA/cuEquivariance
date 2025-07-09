@@ -116,6 +116,10 @@ def layer_norm_transpose_reference_forward(x, w, b, eps, elementwise_affine, lay
     elif layout == Layout.BND_DBN:
         out = out.transpose(2, 0, 1)
 
+    out = out.astype(x.dtype)
+    mean = mean.astype(x.dtype)
+    rstd = rstd.astype(x.dtype)
+
     return out, mean, rstd
 
 

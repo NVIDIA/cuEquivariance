@@ -28,6 +28,9 @@ from cuequivariance_jax.triangle._sigmoid_gated_dual_gemm import (
     _sigmoid_gated_dual_gemm_reference,
 )
 
+# Enable x64 support but test with fp32
+jax.config.update("jax_enable_x64", True)
+
 
 def create_test_data(M=32, N=64, K=128, include_mask=False, batch_size=None):
     """Create standard test data for sigmoid_gated_dual_gemm tests."""

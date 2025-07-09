@@ -25,6 +25,9 @@ from cuequivariance_jax.triangle import (
     triangle_multiplicative_update as triangle_multiplicative_update_jax,
 )
 
+# Enable x64 support but test with fp32
+jax.config.update("jax_enable_x64", True)
+
 
 @pytest.mark.parametrize("direction", ["outgoing", "incoming"])
 @pytest.mark.parametrize("use_mask", [False, True])
@@ -240,7 +243,9 @@ def test_triangle_multiplicative_update_initialization():
     # Create random input (not all ones to avoid zeros after layer norm)
     key = jax.random.key(0)
     key_x, key_init1, key_init2 = jax.random.split(key, 3)
-    x = jax.random.normal(key_x, (batch_size, seq_len, seq_len, hidden_dim))
+    x = jax.random.normal(
+        key_x, (batch_size, seq_len, seq_len, hidden_dim), dtype=jnp.float32
+    )
 
     # Test that it raises an error without key when weights are None
     with pytest.raises(ValueError, match="Random key is required"):
@@ -384,7 +389,9 @@ def test_triangle_multiplicative_update_precision_modes():
     from cuequivariance_jax.triangle import Precision
 
     batch_size, seq_len, hidden_dim = 1, 8, 64
-    x = jax.random.normal(jax.random.key(0), (batch_size, seq_len, seq_len, hidden_dim))
+    x = jax.random.normal(
+        jax.random.key(0), (batch_size, seq_len, seq_len, hidden_dim), dtype=jnp.float32
+    )
 
     # Create weights
     weights = {
@@ -446,17 +453,34 @@ def test_triangle_multiplicative_update_gradient_basic():
     # Initialize inputs and weights
     key = jax.random.key(0)
     keys = jax.random.split(key, 5)
-    x = jax.random.normal(keys[0], (batch_size, seq_len, seq_len, hidden_dim)) * 0.1
+    x = (
+        jax.random.normal(
+            keys[0], (batch_size, seq_len, seq_len, hidden_dim), dtype=jnp.float32
+        )
+        * 0.1
+    )
 
     weights = {
-        "norm_in_weight": jnp.ones(hidden_dim),
-        "norm_in_bias": jnp.zeros(hidden_dim),
-        "p_in_weight": jax.random.normal(keys[1], (2 * hidden_dim, hidden_dim)) * 0.01,
-        "g_in_weight": jax.random.normal(keys[2], (2 * hidden_dim, hidden_dim)) * 0.01,
-        "norm_out_weight": jnp.ones(hidden_dim),
-        "norm_out_bias": jnp.zeros(hidden_dim),
-        "p_out_weight": jax.random.normal(keys[3], (hidden_dim, hidden_dim)) * 0.01,
-        "g_out_weight": jax.random.normal(keys[4], (hidden_dim, hidden_dim)) * 0.01,
+        "norm_in_weight": jnp.ones(hidden_dim, dtype=jnp.float32),
+        "norm_in_bias": jnp.zeros(hidden_dim, dtype=jnp.float32),
+        "p_in_weight": jax.random.normal(
+            keys[1], (2 * hidden_dim, hidden_dim), dtype=jnp.float32
+        )
+        * 0.01,
+        "g_in_weight": jax.random.normal(
+            keys[2], (2 * hidden_dim, hidden_dim), dtype=jnp.float32
+        )
+        * 0.01,
+        "norm_out_weight": jnp.ones(hidden_dim, dtype=jnp.float32),
+        "norm_out_bias": jnp.zeros(hidden_dim, dtype=jnp.float32),
+        "p_out_weight": jax.random.normal(
+            keys[3], (hidden_dim, hidden_dim), dtype=jnp.float32
+        )
+        * 0.01,
+        "g_out_weight": jax.random.normal(
+            keys[4], (hidden_dim, hidden_dim), dtype=jnp.float32
+        )
+        * 0.01,
     }
 
     # Compute gradients
@@ -504,21 +528,40 @@ def test_triangle_multiplicative_update_gradient_numerical():
     # Initialize inputs and weights with smaller values for numerical stability
     key = jax.random.key(0)
     keys = jax.random.split(key, 5)
-    x = jax.random.normal(keys[0], (batch_size, seq_len, seq_len, hidden_dim)) * 0.1
+    x = (
+        jax.random.normal(
+            keys[0], (batch_size, seq_len, seq_len, hidden_dim), dtype=jnp.float32
+        )
+        * 0.1
+    )
 
     weights = {
-        "norm_in_weight": jnp.ones(hidden_dim),
-        "norm_in_bias": jnp.zeros(hidden_dim),
-        "p_in_weight": jax.random.normal(keys[1], (2 * hidden_dim, hidden_dim)) * 0.01,
-        "g_in_weight": jax.random.normal(keys[2], (2 * hidden_dim, hidden_dim)) * 0.01,
-        "norm_out_weight": jnp.ones(hidden_dim),
-        "norm_out_bias": jnp.zeros(hidden_dim),
-        "p_out_weight": jax.random.normal(keys[3], (hidden_dim, hidden_dim)) * 0.01,
-        "g_out_weight": jax.random.normal(keys[4], (hidden_dim, hidden_dim)) * 0.01,
+        "norm_in_weight": jnp.ones(hidden_dim, dtype=jnp.float32),
+        "norm_in_bias": jnp.zeros(hidden_dim, dtype=jnp.float32),
+        "p_in_weight": jax.random.normal(
+            keys[1], (2 * hidden_dim, hidden_dim), dtype=jnp.float32
+        )
+        * 0.01,
+        "g_in_weight": jax.random.normal(
+            keys[2], (2 * hidden_dim, hidden_dim), dtype=jnp.float32
+        )
+        * 0.01,
+        "norm_out_weight": jnp.ones(hidden_dim, dtype=jnp.float32),
+        "norm_out_bias": jnp.zeros(hidden_dim, dtype=jnp.float32),
+        "p_out_weight": jax.random.normal(
+            keys[3], (hidden_dim, hidden_dim), dtype=jnp.float32
+        )
+        * 0.01,
+        "g_out_weight": jax.random.normal(
+            keys[4], (hidden_dim, hidden_dim), dtype=jnp.float32
+        )
+        * 0.01,
     }
 
     # Test gradient w.r.t input with 20% tolerance
     def f_input(x):
+        # Ensure input stays float32
+        x = x.astype(jnp.float32)
         output = triangle_multiplicative_update_jax(x, direction="outgoing", **weights)
         return jnp.sum(output**2)
 
@@ -536,6 +579,7 @@ def test_triangle_multiplicative_update_gradient_numerical():
     for param_name in test_params:
 
         def f_weight(param_value):
+            param_value = param_value.astype(jnp.float32)
             weights_copy = weights.copy()
             weights_copy[param_name] = param_value
             output = triangle_multiplicative_update_jax(
