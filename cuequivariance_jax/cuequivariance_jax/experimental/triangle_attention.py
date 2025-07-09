@@ -15,13 +15,73 @@
 from functools import partial
 
 import jax
-from cuequivariance_ops_jax import (
-    triangle_attention_cuda_bwd,
-    triangle_attention_cuda_fwd,
-    triangle_attention_jax_fwd,
-)
+import jax.numpy as jnp
 from jax import custom_vjp
 from jax.interpreters import mlir, xla
+
+try:
+    from cuequivariance_ops_jax import (
+        triangle_attention_cuda_bwd,
+        triangle_attention_cuda_fwd,
+    )
+
+    HAS_CUE_OPS_JAX = True
+except ImportError:
+    HAS_CUE_OPS_JAX = False
+
+
+@partial(jax.jit, static_argnames=("scale", "precision"))
+def triangle_attention_jax_fwd(
+    q: jax.Array,  # [B, N, H, S_qo, D]
+    k: jax.Array,  # [B, N, H, S_kv, D]
+    v: jax.Array,  # [B, N, H, S_kv, D]
+    mask: jax.Array,  # [B, N, 1, 1, S_kv] boolean
+    bias: jax.Array,  # [B, 1, H, S_qo, S_kv]
+    scale: float,
+    precision: jax.lax.Precision | None = None,
+) -> jax.Array:  # [B, N, H, S_qo, D]
+    r"""JAX reference implementation for triangle attention.
+
+    Args:
+        q: Query tensor of shape [B, N, H, S_qo, D].
+        k: Key tensor of shape [B, N, H, S_kv, D].
+        v: Value tensor of shape [B, N, H, S_kv, D].
+        mask: Mask tensor of shape [B, N, 1, 1, S_kv] (boolean, True means valid).
+        bias: Bias tensor of shape [B, 1, H, S_qo, S_kv].
+        scale: Scaling factor for the dot product.
+        precision: Precision for the computation (default is None).
+
+    Returns:
+        A tuple containing the attention output, log-sum-exp, and maximum value.
+
+    .. math::
+
+        \text{Attention}_a(Q, K, V, M, T) = \sum_b \text{softmax}_b(M_b ? -10^9 : (Q_a K_b + T_{ab})) V_b
+
+    where :math:`Q`, :math:`K`, and :math:`V` are the query, key, and value tensors,
+    :math:`M` is the mask bias, and :math:`T` is the triangle bias.
+    """
+    dtype = q.dtype
+    assert k.dtype == dtype and v.dtype == dtype
+    assert bias.dtype == jnp.float32 or bias.dtype == jnp.float64
+
+    q = scale * q
+    a = jnp.einsum("...ai,...bi->...ab", q, k, precision=precision)
+    a = a + bias
+    a = jnp.where(mask, a, -1e9)
+
+    a = a.astype(jnp.float32)  # [B, N, H, S_qo, S_kv]
+    amax = jnp.max(a, axis=-1, keepdims=True)
+    lse = jax.scipy.special.logsumexp(a - amax, axis=-1, keepdims=True)
+    a = jnp.exp(a - amax - lse)
+
+    a = a.astype(dtype)
+    a = jnp.einsum(
+        "...ab, ...bi -> ...ai", a, v, precision=precision
+    )  # [B, N, H, S_qo, D]
+
+    return a, lse, amax
+
 
 fwd_p = jax.extend.core.Primitive("triangle_attention_fwd")
 fwd_p.multiple_results = True
@@ -84,6 +144,9 @@ def triangle_attention_fwd_impl(
     precision: jax.lax.Precision | None = None,
 ) -> tuple[jax.Array, jax.Array, jax.Array]:
     if platform == "cuda":
+        assert HAS_CUE_OPS_JAX, (
+            "Please install cuequivariance_ops_jax for CUDA support."
+        )
         return triangle_attention_cuda_fwd(q, k, v, mask, bias, scale, precision)
     else:
         return triangle_attention_jax_fwd(q, k, v, mask, bias, scale, precision)
@@ -104,6 +167,9 @@ def triangle_attention_bwd_impl(
     precision: jax.lax.Precision | None = None,
 ) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
     if platform == "cuda":
+        assert HAS_CUE_OPS_JAX, (
+            "Please install cuequivariance_ops_jax for CUDA support."
+        )
         return triangle_attention_cuda_bwd(
             da, a, lse, q, k, v, mask, bias, scale, precision
         )
