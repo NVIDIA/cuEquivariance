@@ -19,11 +19,13 @@ import numpy as np
 import pytest
 from jax import test_util
 
-from cuequivariance_jax.triangle.sigmoid_gated_dual_gemm import (
+from cuequivariance_jax.triangle import (
     Precision,
-    _sigmoid_gated_dual_gemm_reference,
     sigmoid_gated_dual_gemm,
     sigmoid_gated_dual_gemm_dual_x,
+)
+from cuequivariance_jax.triangle._sigmoid_gated_dual_gemm import (
+    _sigmoid_gated_dual_gemm_reference,
 )
 
 

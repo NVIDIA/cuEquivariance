@@ -18,7 +18,7 @@ import jax.random as random
 import pytest
 from jax import test_util
 
-from cuequivariance_jax.triangle.layer_norm_transpose import layer_norm_transpose
+from cuequivariance_jax.triangle import layer_norm_transpose
 
 
 @pytest.mark.parametrize("elementwise_affine", [True, False])
