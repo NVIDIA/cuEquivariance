@@ -66,7 +66,7 @@ jobs:
         python -m uv pip install nvidia-cusolver-cu12==11.7.3.90
         python -m uv pip uninstall cuequivariance cuequivariance_jax cuequivariance_torch
         python -m uv pip install -e ./cuequivariance 
-        python -m uv pip install --no-deps -e ./cuequivariance_jax 
+        python -m uv pip install -e ./cuequivariance_jax 
         python -c "import cuequivariance; print('cue', cuequivariance.__version__)"
         python -c "import cuequivariance_jax; print('cuex', cuequivariance_jax.__version__)"
     - name: Test with pytest
@@ -98,7 +98,7 @@ jobs:
         python -m uv pip install -U pytest torch e3nn
         python -m uv pip uninstall cuequivariance cuequivariance_jax cuequivariance_torch
         python -m uv pip install -e ./cuequivariance 
-        python -m uv pip install --no-deps -e ./cuequivariance_torch 
+        python -m uv pip install -e ./cuequivariance_torch 
         python -c "import cuequivariance; print('cue', cuequivariance.__version__)"
         python -c "import cuequivariance_torch; print('cuet', cuequivariance_torch.__version__)"
     - name: Test with pytest
