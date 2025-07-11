@@ -20,7 +20,6 @@ from functools import partial
 
 import jax
 import numpy as np
-from cuequivariance_ops_jax import noop, sleep
 from jax.experimental.mosaic.gpu.profiler import _event_elapsed, _event_record
 
 
@@ -47,6 +46,7 @@ def measure_clock_ticks(f, *args, **kwargs) -> float:
         >>> clock_ticks = measure_clock_ticks(my_function, 1, 2)
         >>> print(f"Function took {clock_ticks} clock ticks")
     """
+    from cuequivariance_ops_jax import noop, sleep
 
     def run_func(state):
         """Wrapper function that calls the target function and ensures proper data flow."""
