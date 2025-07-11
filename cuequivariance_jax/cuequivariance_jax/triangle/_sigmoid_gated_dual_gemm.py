@@ -21,8 +21,9 @@ from typing import Optional
 import jax
 import jax.numpy as jnp
 from jax import custom_vjp
-from jax.experimental.mosaic.gpu.profiler import measure
 from jax.interpreters import mlir, xla
+
+from cuequivariance_jax.benchmarking import measure_clock_ticks
 
 try:
     import jax_triton as jt
@@ -281,38 +282,13 @@ def run_decoy(f, input_dict):
 
 def run_bench(f, input_dict):
     with jax.ensure_compile_time_eval():
-        rots = [
-            {
-                k: jax.random.normal(jax.random.key(r), v.shape, dtype=v.dtype)
-                if isinstance(v, jax.Array)
-                else v
-                for k, v in input_dict.items()
-            }
-            for r in range(4)
-        ]
-
-        # Benchmark
-        t0, t1 = float("inf"), float("inf")  # best and second best times
-        for it in range(250):
-            kwargs = rots[it % len(rots)]
-
-            # Split kwargs into static and array arguments
-            is_array = lambda x: hasattr(x, "shape") and hasattr(x, "dtype")  # noqa: E731
-            kwargs_static = {k: v for k, v in kwargs.items() if not is_array(v)}
-            kwargs_arrays = {k: v for k, v in kwargs.items() if is_array(v)}
-
-            _, t = measure(partial(f, **kwargs_static))(**kwargs_arrays)
-            if t < t0:
-                t1 = t0
-                t0 = t
-            elif t < t1:
-                t1 = t
-
-            # if second best is close to best we assume that the GPU is warmed up
-            if t1 < t0 * (1 + 1e-5):
-                break
-
-        return t0
+        kwargs = {
+            k: jax.random.normal(jax.random.key(i), v.shape, dtype=v.dtype)
+            if isinstance(v, jax.Array)
+            else v
+            for i, (k, v) in enumerate(input_dict.items())
+        }
+        return measure_clock_ticks(f, **kwargs)
 
 
 def _generate_inputs(
