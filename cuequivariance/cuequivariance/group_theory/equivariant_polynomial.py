@@ -20,6 +20,9 @@ from typing import Any, Callable
 import numpy as np
 
 import cuequivariance as cue
+from cuequivariance.segmented_polynomials.segmented_tensor_product import (
+    _canonicalize_index,
+)
 
 
 @dataclasses.dataclass(init=False, frozen=True)
@@ -414,6 +417,60 @@ class EquivariantPolynomial:
             self.inputs,
             self.outputs,
             self.polynomial.unsymmetrize_for_identical_operands(),
+        )
+
+    def split_operand_by_irrep(self, operand_id: int) -> EquivariantPolynomial:
+        """Split an irreps operand into separate operands for each (mul, ir) pair.
+
+        Args:
+            operand_id (int): Index of the operand to split.
+
+        Returns:
+            EquivariantPolynomial: New polynomial with the specified operand split by irreps.
+
+        Raises:
+            AssertionError: If the operand is not an IrrepsAndLayout instance.
+
+        Example:
+            >>> e = cue.descriptors.channelwise_tensor_product(
+            ...     cue.Irreps(cue.SO3, "64x0 + 32x1"), cue.Irreps(cue.SO3, "0 + 1"), simplify_irreps3=True
+            ... )
+            >>> e.split_operand_by_irrep(-1)
+            ╭ a=256x0 b=64x0+32x1 c=0+1 -> D=96x0 E=128x1 F=32x2
+            │  []·a[u]·b[u]·c[]➜D[u] ─ num_paths=4 u={32, 64}
+            │  []·a[u]·b[u]·c[]➜E[u] ─ num_paths=12 u={32, 64}
+            ╰─ []·a[u]·b[u]·c[]➜F[u] ─ num_paths=11 u={32, 64}
+        """
+        operand_id = _canonicalize_index("operand_id", operand_id, self.num_operands)
+        operand = self.operands[operand_id]
+        assert isinstance(operand, cue.IrrepsAndLayout)
+
+        # Create polynomial slices for each irrep
+        offsets = [0]
+        i = 0
+        for mul, ir in operand.irreps:
+            i += mul * ir.dim
+            offsets.append(i)
+
+        poly = self.polynomial.split_operand_by_size(operand_id, offsets)
+
+        # # Calculate new operand counts and create mapping function
+        num_new = len(offsets) - 1
+        new_num_inputs = self.num_inputs + (
+            num_new - 1 if operand_id < self.num_inputs else 0
+        )
+
+        # Create final operands structure
+        splits = tuple(
+            cue.IrrepsAndLayout(operand.irreps[i : i + 1], operand.layout)
+            for i in range(len(operand.irreps))
+        )
+        new_operands = (
+            self.operands[:operand_id] + splits + self.operands[operand_id + 1 :]
+        )
+
+        return EquivariantPolynomial(
+            new_operands[:new_num_inputs], new_operands[new_num_inputs:], poly
         )
 
     # ------------------------------------------------------------------------
