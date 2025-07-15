@@ -73,7 +73,7 @@ def test_compare_with_pytorch(direction, use_mask):
     if not torch.cuda.is_available():
         pytest.skip("CUDA not available")
 
-    batch_size, seq_len, hidden_dim = 1, 8, 64
+    batch_size, seq_len, hidden_dim = 1, 128, 64
     eps = 1e-5
 
     # Create test inputs
@@ -88,6 +88,13 @@ def test_compare_with_pytorch(direction, use_mask):
         mask_np = np.random.rand(batch_size, seq_len, seq_len).astype(np.float32)
         mask_torch = torch.tensor(mask_np, dtype=torch.float32, device="cuda")
         mask_jax = jnp.array(mask_np)
+    else:
+        # PyTorch implementation doesn't handle mask=None properly, so provide a mask of ones
+        # This should give equivalent results to no masking
+        mask_torch = torch.ones(
+            batch_size, seq_len, seq_len, dtype=torch.float32, device="cuda"
+        )
+        # For JAX, we keep mask_jax as None to test the proper handling
 
     # Create weights
     weights_torch = create_weights(hidden_dim, device="torch")
