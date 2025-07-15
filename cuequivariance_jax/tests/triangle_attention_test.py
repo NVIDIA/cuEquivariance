@@ -34,27 +34,21 @@ def create_test_data(
     """Create test data for triangle attention."""
     key = jax.random.PRNGKey(42)
     keys = jax.random.split(key, 6)
+    dtype = jnp.float32
 
     q = jax.random.normal(
-        keys[0], (batch_size, n_nodes, n_heads, seq_len_qo, d_model), dtype=jnp.float32
+        keys[0], (batch_size, n_nodes, n_heads, seq_len_qo, d_model), dtype
     )
     k = jax.random.normal(
-        keys[1], (batch_size, n_nodes, n_heads, seq_len_kv, d_model), dtype=jnp.float32
+        keys[1], (batch_size, n_nodes, n_heads, seq_len_kv, d_model), dtype
     )
     v = jax.random.normal(
-        keys[2], (batch_size, n_nodes, n_heads, seq_len_kv, d_model), dtype=jnp.float32
+        keys[2], (batch_size, n_nodes, n_heads, seq_len_kv, d_model), dtype
     )
-
-    # Create a boolean mask (True means valid)
+    bias = jax.random.normal(
+        keys[4], (batch_size, 1, n_heads, seq_len_qo, seq_len_kv), dtype
+    )
     mask = jax.random.bernoulli(keys[3], 0.8, (batch_size, n_nodes, 1, 1, seq_len_kv))
-
-    bias = (
-        jax.random.normal(
-            keys[4], (batch_size, 1, n_heads, seq_len_qo, seq_len_kv), dtype=jnp.float32
-        )
-        * 0.1
-    )
-
     scale = d_model**-0.5
 
     [q, k, v, mask, bias] = jax.tree.map(
@@ -62,7 +56,7 @@ def create_test_data(
         [q, k, v, mask, bias],
     )
 
-    return q, k, v, mask, bias, scale
+    return q, k, v, bias, mask, scale
 
 
 def require_platform(platform: str):
@@ -71,16 +65,35 @@ def require_platform(platform: str):
         pytest.skip("This test requires a CUDA device.")
 
 
+# Test configurations
+SHAPE_CONFIGS = [
+    (2, 4, 2, 8, 6, 32),  # Default
+    (1, 2, 1, 4, 4, 16),  # Small
+    (2, 8, 4, 16, 12, 64),  # Large
+]
+
+PRECISION_CONFIGS = [
+    jax.lax.Precision.DEFAULT,
+    jax.lax.Precision.HIGH,
+    jax.lax.Precision.HIGHEST,
+]
+
+
 @pytest.mark.parametrize("platform", ["cpu", "cuda"])
-def test_gradient_correctness_finite_differences(platform):
+@pytest.mark.parametrize("precision", PRECISION_CONFIGS)
+def test_gradient_correctness_finite_differences(platform, precision):
     """Test gradient correctness using finite differences."""
     require_platform(platform)
 
-    q, k, v, mask, bias, scale = create_test_data(platform)
+    # Skip HIGHEST precision on CUDA due to backward pass limitation
+    if platform == "cuda" and precision == jax.lax.Precision.HIGHEST:
+        pytest.skip("HIGHEST precision not supported for backward pass on CUDA")
+
+    q, k, v, bias, mask, scale = create_test_data(platform)
 
     def fn(q, k, v, bias):
         output, _, _ = cuex.triangle_attention(
-            q, k, v, bias, mask, scale, precision=jax.lax.Precision.HIGH
+            q, k, v, bias, mask, scale, precision=precision
         )
         return jnp.sum(output)
 
@@ -90,18 +103,23 @@ def test_gradient_correctness_finite_differences(platform):
 
 
 @pytest.mark.parametrize("platform", ["cpu", "cuda"])
-def test_basic_functionality(platform):
+@pytest.mark.parametrize(
+    "batch_size, n_nodes, n_heads, seq_len_qo, seq_len_kv, d_model", SHAPE_CONFIGS
+)
+def test_basic_functionality(
+    platform, batch_size, n_nodes, n_heads, seq_len_qo, seq_len_kv, d_model
+):
     """Basic test to ensure the function works."""
     require_platform(platform)
 
-    q, k, v, mask, bias, scale = create_test_data(platform)
+    q, k, v, bias, mask, scale = create_test_data(
+        platform, batch_size, n_nodes, n_heads, seq_len_qo, seq_len_kv, d_model
+    )
 
-    def fn(q, k, v, mask, bias):
+    def fn(q, k, v, bias, mask):
         return cuex.triangle_attention(q, k, v, bias, mask, scale)
 
-    output, lse, amax = fn(q, k, v, mask, bias)
-
-    # Basic shape checks
+    output, lse, amax = fn(q, k, v, bias, mask)
     assert output.shape == q.shape
     assert lse.shape == q.shape[:-1] + (1,)
     assert amax.shape == q.shape[:-1] + (1,)
