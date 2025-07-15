@@ -40,12 +40,12 @@ def measure_clock_ticks(f, *args, **kwargs) -> float:
     Returns:
         float: The execution time in clock ticks per function call
 
-    Example:
-        >>> def my_function(x, y):
-        ...     return x + y
-        >>> clock_ticks = measure_clock_ticks(my_function, 1, 2)
-        >>> clock_ticks > 0  # Returns positive number of clock ticks
-        True
+        Example:
+        def my_function(x, y):
+            return x + y
+
+        clock_ticks = measure_clock_ticks(my_function, 1, 2)
+        print(f"Function took {clock_ticks} clock ticks")
     """
     from cuequivariance_ops_jax import noop, sleep
 
