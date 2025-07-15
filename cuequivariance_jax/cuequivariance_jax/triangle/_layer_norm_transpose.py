@@ -75,7 +75,7 @@ def get_dims_and_config(x, layout):
     return B, N, D, tiles
 
 
-def layer_norm_fwd_abstract_eval(x, w, b, *, eps, elementwise_affine, layout):
+def layer_norm_fwd_abstract_eval(x, w, b, *, eps, elementwise_affine, layout, fallback):
     B, N, D, _ = get_dims_and_config(x, layout)
     out_shape = OUTPUT_SHAPES[layout](B, N, D)
     return (
@@ -86,7 +86,7 @@ def layer_norm_fwd_abstract_eval(x, w, b, *, eps, elementwise_affine, layout):
 
 
 def layer_norm_bwd_abstract_eval(
-    grad_out, x, w, b, mean, rstd, *, eps, elementwise_affine, layout
+    grad_out, x, w, b, mean, rstd, *, eps, elementwise_affine, layout, fallback
 ):
     return (
         jax.core.ShapedArray(x.shape, x.dtype),
@@ -211,7 +211,9 @@ def _layer_norm_backward_impl(
 
 def layer_norm_impl(platform, is_forward, *args, **kwargs):
     """Unified implementation dispatcher."""
-    if platform == "cuda":
+    fallback = kwargs.pop("fallback", False)
+
+    if platform == "cuda" and not fallback:
         return (
             _layer_norm_forward_impl(*args, **kwargs)
             if is_forward
@@ -259,25 +261,41 @@ for platform in ["cuda", None]:
     )
 
 
-@partial(custom_vjp, nondiff_argnames=("eps", "elementwise_affine", "layout"))
-def _layer_norm(x, w, b, eps=1e-5, elementwise_affine=True, layout=Layout.BND_BND):
+@partial(
+    custom_vjp, nondiff_argnames=("eps", "elementwise_affine", "layout", "fallback")
+)
+def _layer_norm(
+    x, w, b, eps=1e-5, elementwise_affine=True, layout=Layout.BND_BND, fallback=False
+):
     """JAX implementation of layer norm with custom VJP."""
     if isinstance(layout, int):
         layout = Layout(layout)
     out, mean, rstd = layer_norm_fwd_p.bind(
-        x, w, b, eps=eps, elementwise_affine=elementwise_affine, layout=layout
+        x,
+        w,
+        b,
+        eps=eps,
+        elementwise_affine=elementwise_affine,
+        layout=layout,
+        fallback=fallback,
     )
     return out
 
 
-def _layer_norm_fwd(x, w, b, eps, elementwise_affine, layout):
+def _layer_norm_fwd(x, w, b, eps, elementwise_affine, layout, fallback):
     out, mean, rstd = layer_norm_fwd_p.bind(
-        x, w, b, eps=eps, elementwise_affine=elementwise_affine, layout=layout
+        x,
+        w,
+        b,
+        eps=eps,
+        elementwise_affine=elementwise_affine,
+        layout=layout,
+        fallback=fallback,
     )
     return out, (x, w, b, mean, rstd)
 
 
-def _layer_norm_bwd(eps, elementwise_affine, layout, residuals, grad_out):
+def _layer_norm_bwd(eps, elementwise_affine, layout, fallback, residuals, grad_out):
     x, w, b, mean, rstd = residuals
     return layer_norm_bwd_p.bind(
         grad_out,
@@ -289,13 +307,16 @@ def _layer_norm_bwd(eps, elementwise_affine, layout, residuals, grad_out):
         eps=eps,
         elementwise_affine=elementwise_affine,
         layout=layout,
+        fallback=fallback,
     )
 
 
 _layer_norm.defvjp(_layer_norm_fwd, _layer_norm_bwd)
 
 
-def layer_norm_transpose(x, w, b, eps=1e-5, elementwise_affine=True, layout="nd->nd"):
+def layer_norm_transpose(
+    x, w, b, eps=1e-5, elementwise_affine=True, layout="nd->nd", fallback=False
+):
     """Apply fused layer normalization with support for various input layouts.
 
     Args:
@@ -305,6 +326,7 @@ def layer_norm_transpose(x, w, b, eps=1e-5, elementwise_affine=True, layout="nd-
         eps: Small constant for numerical stability
         elementwise_affine: Whether to apply elementwise affine transformation
         layout: Input/output layout specification
+        fallback: Whether to force fallback to reference implementation
 
     Returns:
         Normalized tensor with shape determined by the output layout
@@ -368,5 +390,5 @@ def layer_norm_transpose(x, w, b, eps=1e-5, elementwise_affine=True, layout="nd-
 
     shape_fn, layout_enum, reshape_fn = layout_map[layout]
     x_reshaped = x.reshape(shape_fn(x))
-    out = _layer_norm(x_reshaped, w, b, eps, elementwise_affine, layout_enum)
+    out = _layer_norm(x_reshaped, w, b, eps, elementwise_affine, layout_enum, fallback)
     return reshape_fn(out, x)

@@ -14,7 +14,7 @@
 # limitations under the License.
 
 import math
-from typing import Optional
+import os
 
 import jax
 import jax.numpy as jnp
@@ -26,6 +26,10 @@ from cuequivariance_jax.triangle._sigmoid_gated_dual_gemm import (
     Precision,
     sigmoid_gated_dual_gemm,
     sigmoid_gated_dual_gemm_dual_x,
+)
+
+CUEQ_TRIMUL_FALLBACK_THRESHOLD: int = int(
+    os.getenv("CUEQ_TRIMUL_FALLBACK_THRESHOLD", "100")
 )
 
 
@@ -120,16 +124,16 @@ def bias_init_one(shape, dtype=jnp.float32):
 def triangle_multiplicative_update(
     x: jax.Array,
     direction: str = "outgoing",
-    key: Optional[jax.Array] = None,
-    mask: Optional[jax.Array] = None,
-    norm_in_weight: Optional[jax.Array] = None,
-    norm_in_bias: Optional[jax.Array] = None,
-    p_in_weight: Optional[jax.Array] = None,
-    g_in_weight: Optional[jax.Array] = None,
-    norm_out_weight: Optional[jax.Array] = None,
-    norm_out_bias: Optional[jax.Array] = None,
-    p_out_weight: Optional[jax.Array] = None,
-    g_out_weight: Optional[jax.Array] = None,
+    key: jax.Array | None = None,
+    mask: jax.Array | None = None,
+    norm_in_weight: jax.Array | None = None,
+    norm_in_bias: jax.Array | None = None,
+    p_in_weight: jax.Array | None = None,
+    g_in_weight: jax.Array | None = None,
+    norm_out_weight: jax.Array | None = None,
+    norm_out_bias: jax.Array | None = None,
+    p_out_weight: jax.Array | None = None,
+    g_out_weight: jax.Array | None = None,
     eps: float = 1e-5,
     precision: Precision = Precision.DEFAULT,
 ) -> jax.Array:
@@ -283,15 +287,23 @@ def triangle_multiplicative_update(
             (hidden_dim, hidden_dim), key_g_out, dtype=x.dtype
         )
 
+    fallback = x.shape[-2] <= CUEQ_TRIMUL_FALLBACK_THRESHOLD
+
     # Input normalization
     x = layer_norm_transpose(
-        x, norm_in_weight, norm_in_bias, eps=eps, layout="bijd->bijd"
+        x, norm_in_weight, norm_in_bias, eps=eps, layout="bijd->bijd", fallback=fallback
     )
     x_in = x
 
     # Gated dual gemm
     ab = sigmoid_gated_dual_gemm(
-        x, g_in_weight, p_in_weight, mask, transpose_out=True, precision=precision
+        x,
+        g_in_weight,
+        p_in_weight,
+        mask,
+        transpose_out=True,
+        precision=precision,
+        fallback=fallback,
     )
     a, b = jnp.split(ab, 2, axis=0)
 
@@ -303,12 +315,17 @@ def triangle_multiplicative_update(
 
     # Output normalization
     x_out = layer_norm_transpose(
-        x, norm_out_weight, norm_out_bias, eps=eps, layout="dbij->bijd"
+        x,
+        norm_out_weight,
+        norm_out_bias,
+        eps=eps,
+        layout="dbij->bijd",
+        fallback=fallback,
     )
 
     # Output gating
     x = sigmoid_gated_dual_gemm_dual_x(
-        x_in, x_out, g_out_weight, p_out_weight, precision=precision
+        x_in, x_out, g_out_weight, p_out_weight, precision=precision, fallback=fallback
     )
 
     return x

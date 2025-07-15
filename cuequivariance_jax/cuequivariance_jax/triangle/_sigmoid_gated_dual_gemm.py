@@ -66,7 +66,9 @@ sigmoid_gated_dual_gemm_bwd_p = jax.extend.core.Primitive("sigmoid_gated_dual_ge
 sigmoid_gated_dual_gemm_bwd_p.multiple_results = True
 
 
-def _abstract_eval_fwd(x1, x2, w1, w2, mask, *, two_inputs, transpose_out, precision):
+def _abstract_eval_fwd(
+    x1, x2, w1, w2, mask, *, two_inputs, transpose_out, precision, fallback
+):
     """Abstract evaluation for forward pass."""
     M, N = x1.shape[0], w1.shape[0]
     out_shape = (N, M) if transpose_out else (M, N)
@@ -74,7 +76,7 @@ def _abstract_eval_fwd(x1, x2, w1, w2, mask, *, two_inputs, transpose_out, preci
 
 
 def _abstract_eval_bwd(
-    grad_out, x1, x2, w1, w2, mask, *, two_inputs, transpose_out, precision
+    grad_out, x1, x2, w1, w2, mask, *, two_inputs, transpose_out, precision, fallback
 ):
     """Abstract evaluation for backward pass."""
     return (
@@ -315,6 +317,7 @@ def _generate_inputs(
         "two_inputs": two_inputs,
         "transpose_out": False,
         "precision": precision,
+        "fallback": False,
     }
 
     if include_grad:
@@ -444,8 +447,9 @@ _autotuned_backward = None
 
 def _impl_dispatcher(platform, is_forward, *args, **kwargs):
     """Implementation dispatcher."""
+    fallback = kwargs.pop("fallback", False)
 
-    if platform == "cuda":
+    if platform == "cuda" and not fallback:
         if is_forward:
             return _get_autotuned_kernel(True)(*args, **kwargs)
         else:
@@ -490,9 +494,12 @@ for platform in ["cuda", None]:
     )
 
 
-@partial(custom_vjp, nondiff_argnames=("two_inputs", "transpose_out", "precision"))
+@partial(
+    custom_vjp,
+    nondiff_argnames=("two_inputs", "transpose_out", "precision", "fallback"),
+)
 def _sigmoid_gated_dual_gemm_core(
-    x1, x2, w1, w2, mask, two_inputs, transpose_out, precision
+    x1, x2, w1, w2, mask, two_inputs, transpose_out, precision, fallback=False
 ):
     """Core implementation with custom VJP."""
     if isinstance(precision, int):
@@ -510,10 +517,11 @@ def _sigmoid_gated_dual_gemm_core(
         two_inputs=two_inputs,
         transpose_out=transpose_out,
         precision=precision,
+        fallback=fallback,
     )
 
 
-def _fwd(x1, x2, w1, w2, mask, two_inputs, transpose_out, precision):
+def _fwd(x1, x2, w1, w2, mask, two_inputs, transpose_out, precision, fallback):
     original_mask = mask
     if mask is None:
         mask = jnp.ones(x1.shape[0], dtype=x1.dtype)
@@ -527,12 +535,13 @@ def _fwd(x1, x2, w1, w2, mask, two_inputs, transpose_out, precision):
         two_inputs=two_inputs,
         transpose_out=transpose_out,
         precision=precision,
+        fallback=fallback,
     )
 
     return result, (x1, x2, w1, w2, original_mask)
 
 
-def _bwd(two_inputs, transpose_out, precision, residuals, grad_out):
+def _bwd(two_inputs, transpose_out, precision, fallback, residuals, grad_out):
     x1, x2, w1, w2, original_mask = residuals
     mask = (
         original_mask
@@ -550,6 +559,7 @@ def _bwd(two_inputs, transpose_out, precision, residuals, grad_out):
         two_inputs=two_inputs,
         transpose_out=transpose_out,
         precision=precision,
+        fallback=fallback,
     )
 
     # grads is always (grad_x1, grad_x2, grad_w1, grad_w2, grad_mask)
@@ -604,6 +614,7 @@ def sigmoid_gated_dual_gemm(
     mask: Optional[jnp.ndarray] = None,
     transpose_out: bool = False,
     precision: Precision = Precision.DEFAULT,
+    fallback: bool = False,
 ):
     """Apply fused sigmoid-gated dual GEMM operation with single input.
 
@@ -616,6 +627,7 @@ def sigmoid_gated_dual_gemm(
         mask: Optional mask tensor of shape (M,) or (...,)
         transpose_out: Whether to transpose the output
         precision: Precision mode for matrix multiplication
+        fallback: Whether to force fallback to reference implementation
 
     Returns:
         Output tensor of shape (M, N) or (..., N) if transpose_out=False,
@@ -633,6 +645,7 @@ def sigmoid_gated_dual_gemm(
         two_inputs=False,
         transpose_out=transpose_out,
         precision=precision,
+        fallback=fallback,
     )
 
     return _reshape_output(out, original_shape, w1.shape, transpose_out)
@@ -646,6 +659,7 @@ def sigmoid_gated_dual_gemm_dual_x(
     mask: Optional[jnp.ndarray] = None,
     transpose_out: bool = False,
     precision: Precision = Precision.DEFAULT,
+    fallback: bool = False,
 ):
     """Apply fused sigmoid-gated dual GEMM operation with two inputs.
 
@@ -659,6 +673,7 @@ def sigmoid_gated_dual_gemm_dual_x(
         mask: Optional mask tensor of shape (M,) or (...,)
         transpose_out: Whether to transpose the output
         precision: Precision mode for matrix multiplication
+        fallback: Whether to force fallback to reference implementation
 
     Returns:
         Output tensor of shape (M, N) or (..., N) if transpose_out=False,
@@ -678,6 +693,7 @@ def sigmoid_gated_dual_gemm_dual_x(
         two_inputs=True,
         transpose_out=transpose_out,
         precision=precision,
+        fallback=fallback,
     )
 
     return _reshape_output(out, original_shape, w1.shape, transpose_out)
