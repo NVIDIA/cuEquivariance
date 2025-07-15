@@ -44,7 +44,8 @@ def measure_clock_ticks(f, *args, **kwargs) -> float:
         >>> def my_function(x, y):
         ...     return x + y
         >>> clock_ticks = measure_clock_ticks(my_function, 1, 2)
-        >>> print(f"Function took {clock_ticks} clock ticks")
+        >>> clock_ticks > 0  # Returns positive number of clock ticks
+        True
     """
     from cuequivariance_ops_jax import noop, sleep
 
