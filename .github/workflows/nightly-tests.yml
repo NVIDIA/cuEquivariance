@@ -1,0 +1,141 @@
+name: Nightly Full Tests
+
+on:
+  schedule:
+    # Run every night at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  check-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch full history to check for recent commits
+    - name: Check for recent changes
+      id: check
+      run: |
+        # Check if there are any commits in the last 24 hours
+        RECENT_COMMITS=$(git log --since="24 hours ago" --oneline | wc -l)
+        echo "Recent commits in last 24h: $RECENT_COMMITS"
+        
+        if [ "$RECENT_COMMITS" -gt 0 ]; then
+          echo "should_run=true" >> $GITHUB_OUTPUT
+          echo "Found recent changes, will run full tests"
+        else
+          echo "should_run=false" >> $GITHUB_OUTPUT
+          echo "No recent changes, skipping tests"
+        fi
+
+  cuequivariance-full:
+    needs: check-changes
+    if: needs.check-changes.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install --upgrade uv
+        python -m uv pip install pytest
+        python -m uv pip install -e ./cuequivariance 
+    - name: Test with pytest (including slow tests)
+      run: |
+        pytest --doctest-modules -x cuequivariance
+    - name: Downgrade numpy
+      run: |
+        python -m uv pip install -U "numpy==1.26.*"
+    - name: Test with pytest (numpy 1.26, including slow tests)
+      run: |
+        pytest --doctest-modules -x cuequivariance
+
+  cuequivariance-jax-full:
+    needs: check-changes
+    if: needs.check-changes.outputs.should_run == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: "ubuntu-latest"
+            python-version: "3.10"
+          - runner: "self-hosted"
+            python-version: "3.12"
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install --upgrade uv
+        python -m uv pip install -U pytest "jax[cuda12]"
+        python -m uv pip install nvidia-cusolver-cu12==11.7.3.90
+        python -m uv pip uninstall cuequivariance cuequivariance_jax cuequivariance_torch
+        python -m uv pip install -e ./cuequivariance 
+        python -m uv pip install -e ./cuequivariance_jax 
+        python -c "import cuequivariance; print('cue', cuequivariance.__version__)"
+        python -c "import cuequivariance_jax; print('cuex', cuequivariance_jax.__version__)"
+    - name: Test with pytest (including slow tests)
+      run: |
+        pytest --doctest-modules -x cuequivariance_jax
+
+  cuequivariance-torch-full:
+    needs: check-changes
+    if: needs.check-changes.outputs.should_run == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: "ubuntu-latest"
+            python-version: "3.10"
+          - runner: "self-hosted"
+            python-version: "3.12"
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install --upgrade uv
+        python -m uv pip install -U pytest torch e3nn
+        python -m uv pip uninstall cuequivariance cuequivariance_jax cuequivariance_torch
+        python -m uv pip install -e ./cuequivariance 
+        python -m uv pip install -e ./cuequivariance_torch 
+        python -c "import cuequivariance; print('cue', cuequivariance.__version__)"
+        python -c "import cuequivariance_torch; print('cuet', cuequivariance_torch.__version__)"
+    - name: Test with pytest (including slow tests)
+      run: |
+        pytest --doctest-modules -x cuequivariance_torch
+
+  notify-on-failure:
+    needs: [check-changes, cuequivariance-full, cuequivariance-jax-full, cuequivariance-torch-full]
+    if: always() && needs.check-changes.outputs.should_run == 'true' && (needs.cuequivariance-full.result == 'failure' || needs.cuequivariance-jax-full.result == 'failure' || needs.cuequivariance-torch-full.result == 'failure')
+    runs-on: ubuntu-latest
+    steps:
+    - name: Report failure
+      run: |
+        echo "❌ Nightly full tests failed!"
+        echo "Check the workflow run for details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" 
