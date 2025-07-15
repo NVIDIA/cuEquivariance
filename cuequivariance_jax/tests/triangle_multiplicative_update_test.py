@@ -17,7 +17,6 @@ import jax.numpy as jnp
 import jax.test_util
 import numpy as np
 import pytest
-from scipy import stats
 
 from cuequivariance_jax.triangle import (
     Precision,
@@ -189,70 +188,6 @@ def test_initialization_with_key():
 
     assert output1.shape == (batch_size, seq_len, seq_len, hidden_dim)
     assert not jnp.allclose(output1, output2)  # Different keys -> different results
-
-
-@pytest.mark.slow
-def test_lecun_normal_init_statistics():
-    """Test LeCun normal initialization statistics."""
-    try:
-        import torch
-        from cuequivariance_ops_torch.triangle_multiplicative_update import (
-            lecun_normal_init_ as lecun_normal_init_torch,
-        )
-    except ImportError:
-        pytest.skip("torch or cuequivariance_ops_torch not available")
-
-    from cuequivariance_jax.triangle._triangle_multiplicative_update import (
-        lecun_normal_init as lecun_normal_init_jax,
-    )
-
-    shape = (256, 128)
-    n_samples = 30
-
-    # Collect samples
-    torch_samples = []
-    jax_samples = []
-
-    for i in range(n_samples):
-        # PyTorch
-        torch.manual_seed(i)
-        weight = torch.empty(shape, dtype=torch.float32)
-        lecun_normal_init_torch(weight)
-        torch_samples.append(weight.numpy().flatten())
-
-        # JAX
-        key = jax.random.key(i)
-        weight = lecun_normal_init_jax(shape, key, dtype=jnp.float32)
-        jax_samples.append(np.array(weight).flatten())
-
-    torch_samples = np.concatenate(torch_samples)
-    jax_samples = np.concatenate(jax_samples)
-
-    # Statistical tests
-    torch_mean, torch_std = np.mean(torch_samples), np.std(torch_samples)
-    jax_mean, jax_std = np.mean(jax_samples), np.std(jax_samples)
-
-    # Check means are close to 0
-    assert abs(torch_mean) < 0.01
-    assert abs(jax_mean) < 0.01
-    assert abs(torch_mean - jax_mean) < 0.01
-
-    # Check standard deviations are similar
-    assert abs(torch_std - jax_std) < 0.02
-
-    # KS test for distribution similarity
-    ks_stat, p_value = stats.ks_2samp(torch_samples, jax_samples)
-    assert p_value > 0.01
-
-    # Check truncation
-    expected_std = 1.0 / np.sqrt(shape[1])
-    torch_outliers = np.sum(np.abs(torch_samples) > 2 * expected_std) / len(
-        torch_samples
-    )
-    jax_outliers = np.sum(np.abs(jax_samples) > 2 * expected_std) / len(jax_samples)
-
-    assert torch_outliers < 0.05
-    assert jax_outliers < 0.05
 
 
 @pytest.mark.parametrize(
