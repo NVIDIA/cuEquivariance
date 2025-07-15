@@ -12,15 +12,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import warnings
 from itertools import accumulate
 from typing import Dict, List, Optional
-import warnings
 
 import torch
 import torch.nn as nn
 
 import cuequivariance as cue
-
 from cuequivariance_torch.primitives.tensor_product import _tensor_product_fx
 
 try:
@@ -95,11 +94,10 @@ class SegmentedPolynomialNaive(nn.Module):
         math_dtype: torch.dtype = torch.float32,
         output_dtype_map: List[int] = None,
         name: str = "segmented_polynomial",
+        optimize_einsums: bool = True,
     ):
         super().__init__()
-
-        # TODO: Add a bunch of checks?
-
+        self.polynomial = polynomial
         self.num_inputs = polynomial.num_inputs
         self.num_outputs = polynomial.num_outputs
         self.name = name
@@ -111,19 +109,22 @@ class SegmentedPolynomialNaive(nn.Module):
         self.dtypes = list(range(self.num_inputs)) + (
             default_dtype_map if output_dtype_map is None else output_dtype_map
         )
-        
-        self.graphs = []
+
+        # Build the graph
+        self.graphs = torch.nn.ModuleList()
         self.b_outs = []
         self.input_inds = []
         for operation, d in polynomial.operations:
             ope_out, b_out = operation.output_operand_buffer(self.num_inputs)
-            self.graphs.append(_tensor_product_fx(
-                d.move_operand_last(ope_out),
-                device="cuda", # TODO: Handle this?
-                math_dtype=self.math_dtype,
-                optimize_einsums=True, # TODO: Handle this?
-            ))
-            self.b_outs.append(b_out-self.num_inputs)
+            self.graphs.append(
+                _tensor_product_fx(
+                    d.move_operand_last(ope_out),
+                    device=None,
+                    math_dtype=self.math_dtype,
+                    optimize_einsums=optimize_einsums,
+                )
+            )
+            self.b_outs.append(b_out - self.num_inputs)
             self.input_inds.append(operation.input_buffers(self.num_inputs))
 
     def forward(
@@ -133,8 +134,14 @@ class SegmentedPolynomialNaive(nn.Module):
         output_shapes: Optional[Dict[int, torch.Tensor]] = None,
         output_indices: Optional[Dict[int, torch.Tensor]] = None,
     ):
-        # TODO: more checks
-        
+        for i, x, ope in zip(range(self.num_inputs), inputs, self.polynomial.inputs):
+            if x.ndim == 0:
+                raise ValueError(f"Input {i} has no dimensions")
+            if x.shape[-1] != ope.size:
+                raise ValueError(
+                    f"Input {i} has shape {x.shape} but expected shape {ope.size} for polynomial:\n{self.polynomial}"
+                )
+
         # Input indexing
         for k, v in input_indices.items():
             inputs[k] = inputs[k][v]
@@ -144,32 +151,36 @@ class SegmentedPolynomialNaive(nn.Module):
         for k, v in output_indices.items():
             out_indices[k] = v
 
-        # Check: we're always assuming a single batch axis
-        batch_dim = max(t.shape[0] for t in inputs)
+        input_batch_dims = [t.shape[0] for t in inputs]
+        batch_dim = max(input_batch_dims)
+        # Check: Is this a possible case?
+        if batch_dim == 1 and 0 in input_batch_dims:
+            batch_dim = 0
         outputs_dims = [
-            (batch_dim, shape) if i not in output_shapes.keys() 
-            else (output_shapes[i].shape[0], shape) 
-            for i,shape in enumerate(self.out_size)
-        ] # TODO: more general version?
+            (batch_dim, shape)
+            if i not in output_shapes.keys()
+            else (output_shapes[i].shape[0], shape)
+            for i, shape in enumerate(self.out_size)
+        ]  # Check: Are there cases where we need to do something different? A reshape?
         out_buffers = [
-            torch.zeros(out_shape, dtype=inputs[out_dtype_ind].dtype, device="cuda") 
+            torch.zeros(
+                out_shape, dtype=inputs[out_dtype_ind].dtype, device=inputs[0].device
+            )
             for (out_shape, out_dtype_ind) in zip(outputs_dims, self.dtypes)
-        ] # TODO: Handle device
-        
+        ]
+
         # Apply TPs
-        for graph, input_inds, b_out, out_inds in zip(self.graphs, self.input_inds, self.b_outs, out_indices):
+        for graph, input_inds, b_out in zip(self.graphs, self.input_inds, self.b_outs):
             out = graph(*[inputs[i] for i in input_inds])
-            if out_inds is not None:
-                # TODO: Handle more complex indexing
-                out_inds = out_inds.unsqueeze(-1).expand_as(out)
-                out_buffers[b_out].scatter_add_(0, out_inds, out)
+            if out_indices[b_out] is not None:
+                # Check: are there more complex cases (more dimensions)?
+                inds = out_indices[b_out].unsqueeze(-1).expand_as(out)
+                out_buffers[b_out].scatter_add_(0, inds, out)
             else:
                 out_buffers[b_out] += out
-        
+
         return out_buffers
 
-
-        
 
 class SegmentedPolynomialFromUniform1dJit(nn.Module):
     def __init__(
@@ -185,7 +196,7 @@ class SegmentedPolynomialFromUniform1dJit(nn.Module):
             raise ImportError(
                 "The cuequivariance_ops_torch.tensor_product_uniform_1d_jit module is not available."
             )
-        
+
         try:
             polynomial = polynomial.flatten_coefficient_modes()
         except ValueError as e:
@@ -396,6 +407,8 @@ class SegmentedPolynomial(nn.Module):
             -1 means the math_dtype is used.
             Default 0 if there are input tensors, otherwise -1.
         name: Optional name for the operation. Defaults to "segmented_polynomial".
+        optimize_einsums: Optional for the naive method, whether to optimize the einsums.
+            Defaults to True.
     """
 
     def __init__(
@@ -405,6 +418,7 @@ class SegmentedPolynomial(nn.Module):
         math_dtype: torch.dtype = torch.float32,
         output_dtype_map: List[int] = None,
         name: str = "segmented_polynomial",
+        optimize_einsums: bool = True,
     ):
         super().__init__()
 
@@ -429,7 +443,9 @@ class SegmentedPolynomial(nn.Module):
                 polynomial, math_dtype, output_dtype_map, name
             )
         elif method == "naive":
-            self.m = SegmentedPolynomialNaive(polynomial, math_dtype, output_dtype_map, name)
+            self.m = SegmentedPolynomialNaive(
+                polynomial, math_dtype, output_dtype_map, name, optimize_einsums
+            )
         elif method == "gemm_grouped":
             raise NotImplementedError(f"Not implemented: {method}")
         elif method == "indexed_linear":
