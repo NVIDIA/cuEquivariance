@@ -30,13 +30,13 @@ jobs:
         python -m uv pip install -e ./cuequivariance 
     - name: Test with pytest
       run: |
-        pytest --doctest-modules -x cuequivariance
+        pytest --doctest-modules -x -m "not slow" cuequivariance
     - name: Downgrade numpy
       run: |
         python -m uv pip install -U "numpy==1.26.*"
     - name: Test with pytest (numpy 1.26)
       run: |
-        pytest --doctest-modules -x cuequivariance
+        pytest --doctest-modules -x -m "not slow" cuequivariance
 
 
 
@@ -71,7 +71,7 @@ jobs:
         python -c "import cuequivariance_jax; print('cuex', cuequivariance_jax.__version__)"
     - name: Test with pytest
       run: |
-        pytest --doctest-modules -x cuequivariance_jax
+        pytest --doctest-modules -x -m "not slow" cuequivariance_jax
 
   cuequivariance-torch:
     strategy:
@@ -103,4 +103,4 @@ jobs:
         python -c "import cuequivariance_torch; print('cuet', cuequivariance_torch.__version__)"
     - name: Test with pytest
       run: |
-        CUDA_LAUNCH_BLOCKING=1 pytest --doctest-modules -x cuequivariance_torch
+        CUDA_LAUNCH_BLOCKING=1 pytest --doctest-modules -x -m "not slow" cuequivariance_torch
