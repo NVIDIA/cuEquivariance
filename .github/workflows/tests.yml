@@ -103,4 +103,4 @@ jobs:
         python -c "import cuequivariance_torch; print('cuet', cuequivariance_torch.__version__)"
     - name: Test with pytest
       run: |
-        CUDA_LAUNCH_BLOCKING=1 pytest --doctest-modules -x -m "not slow" cuequivariance_torch
+        pytest --doctest-modules -x -m "not slow" cuequivariance_torch
