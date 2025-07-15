@@ -80,7 +80,7 @@ def test_gradient_correctness_finite_differences(platform):
 
     def fn(q, k, v, bias):
         output, _, _ = cuex.triangle_attention(
-            q, k, v, mask, bias, scale, precision=jax.lax.Precision.HIGH
+            q, k, v, bias, mask, scale, precision=jax.lax.Precision.HIGH
         )
         return jnp.sum(output)
 
@@ -97,7 +97,7 @@ def test_basic_functionality(platform):
     q, k, v, mask, bias, scale = create_test_data(platform)
 
     def fn(q, k, v, mask, bias):
-        return cuex.triangle_attention(q, k, v, mask, bias, scale)
+        return cuex.triangle_attention(q, k, v, bias, mask, scale)
 
     output, lse, amax = fn(q, k, v, mask, bias)
 

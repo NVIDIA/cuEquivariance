@@ -35,8 +35,8 @@ def triangle_attention_jax_fwd(
     q: jax.Array,  # [B, N, H, S_qo, D]
     k: jax.Array,  # [B, N, H, S_kv, D]
     v: jax.Array,  # [B, N, H, S_kv, D]
-    mask: jax.Array,  # [B, N, 1, 1, S_kv] boolean
     bias: jax.Array,  # [B, 1, H, S_qo, S_kv]
+    mask: jax.Array,  # [B, N, 1, 1, S_kv] boolean
     scale: float,
     precision: jax.lax.Precision | None = None,
 ) -> jax.Array:  # [B, N, H, S_qo, D]
@@ -46,8 +46,8 @@ def triangle_attention_jax_fwd(
         q: Query tensor of shape [B, N, H, S_qo, D].
         k: Key tensor of shape [B, N, H, S_kv, D].
         v: Value tensor of shape [B, N, H, S_kv, D].
-        mask: Mask tensor of shape [B, N, 1, 1, S_kv] (boolean, True means valid).
         bias: Bias tensor of shape [B, 1, H, S_qo, S_kv].
+        mask: Mask tensor of shape [B, N, 1, 1, S_kv] (boolean, True means valid).
         scale: Scaling factor for the dot product.
         precision: Precision for the computation (default is None).
 
@@ -94,8 +94,8 @@ def triangle_attention_fwd_abstract_eval(
     q: jax.core.ShapedArray,  # [B, N, H, S_qo, D]
     k: jax.core.ShapedArray,  # [B, N, H, S_kv, D]
     v: jax.core.ShapedArray,  # [B, N, H, S_kv, D]
-    mask: jax.core.ShapedArray,  # [B, N, 1, 1, S_kv] boolean
     bias: jax.core.ShapedArray,  # [B, 1, H, S_qo, S_kv]
+    mask: jax.core.ShapedArray,  # [B, N, 1, 1, S_kv] boolean
     *,
     scale: float,
     precision: jax.lax.Precision | None = None,
@@ -114,8 +114,8 @@ def triangle_attention_bwd_abstract_eval(
     q: jax.core.ShapedArray,  # [B, N, H, S_qo, D]
     k: jax.core.ShapedArray,  # [B, N, H, S_kv, D]
     v: jax.core.ShapedArray,  # [B, N, H, S_kv, D]
-    mask: jax.core.ShapedArray,  # [B, N, 1, 1, S_kv] boolean
     bias: jax.core.ShapedArray,  # [B, 1, H, S_qo, S_kv]
+    mask: jax.core.ShapedArray,  # [B, N, 1, 1, S_kv] boolean
     *,
     scale: float,
     precision: jax.lax.Precision | None = None,
@@ -137,8 +137,8 @@ def triangle_attention_fwd_impl(
     q: jax.Array,  # [B, N, H, S_qo, D]
     k: jax.Array,  # [B, N, H, S_kv, D]
     v: jax.Array,  # [B, N, H, S_kv, D]
-    mask: jax.Array,  # [B, N, 1, 1, S_kv] boolean
     bias: jax.Array,  # [B, 1, H, S_qo, S_kv]
+    mask: jax.Array,  # [B, N, 1, 1, S_kv] boolean
     *,
     scale: float,
     precision: jax.lax.Precision | None = None,
@@ -149,7 +149,7 @@ def triangle_attention_fwd_impl(
         )
         return triangle_attention_cuda_fwd(q, k, v, mask, bias, scale, precision)
     else:
-        return triangle_attention_jax_fwd(q, k, v, mask, bias, scale, precision)
+        return triangle_attention_jax_fwd(q, k, v, bias, mask, scale, precision)
 
 
 def triangle_attention_bwd_impl(
@@ -160,8 +160,8 @@ def triangle_attention_bwd_impl(
     q: jax.Array,  # [B, N, H, S_qo, D]
     k: jax.Array,  # [B, N, H, S_kv, D]
     v: jax.Array,  # [B, N, H, S_kv, D]
-    mask: jax.Array,  # [B, N, 1, 1, S_kv] boolean
     bias: jax.Array,  # [B, 1, H, S_qo, S_kv]
+    mask: jax.Array,  # [B, N, 1, 1, S_kv] boolean
     *,
     scale: float,
     precision: jax.lax.Precision | None = None,
@@ -177,7 +177,7 @@ def triangle_attention_bwd_impl(
         # Use JAX autodiff for backward pass
         def forward_fn(q, k, v, bias):
             a, lse, amax = triangle_attention_jax_fwd(
-                q, k, v, mask, bias, scale, precision
+                q, k, v, bias, mask, scale, precision
             )
             return a
 
@@ -210,15 +210,15 @@ for platform in ["cuda", None]:
 
 
 @partial(custom_vjp, nondiff_argnames=("scale", "precision"))
-def triangle_attention(q, k, v, mask, bias, scale, precision=None):
+def triangle_attention(q, k, v, bias, mask, scale, precision=None):
     r"""triangle attention
 
     Args:
         q: Query tensor of shape [B, N, H, S_qo, D].
         k: Key tensor of shape [B, N, H, S_kv, D].
         v: Value tensor of shape [B, N, H, S_kv, D].
-        mask: Mask tensor of shape [B, N, 1, 1, S_kv] (boolean, True means valid).
         bias: Bias tensor of shape [B, 1, H, S_qo, S_kv].
+        mask: Mask tensor of shape [B, N, 1, 1, S_kv] (boolean, True means valid).
         scale: Scaling factor for the dot product.
         precision: Precision for the computation (default is None).
 
@@ -242,23 +242,23 @@ def triangle_attention(q, k, v, mask, bias, scale, precision=None):
     if precision is None:
         precision = jax.lax.Precision.DEFAULT
 
-    return fwd_p.bind(q, k, v, mask, bias, scale=scale, precision=precision)
+    return fwd_p.bind(q, k, v, bias, mask, scale=scale, precision=precision)
 
 
-def triangle_attention_fwd(q, k, v, mask, bias, scale, precision=None):
-    a, lse, amax = fwd_p.bind(q, k, v, mask, bias, scale=scale, precision=precision)
-    residuals = (a, lse, q, k, v, mask, bias)
+def triangle_attention_fwd(q, k, v, bias, mask, scale, precision=None):
+    a, lse, amax = fwd_p.bind(q, k, v, bias, mask, scale=scale, precision=precision)
+    residuals = (a, lse, q, k, v, bias, mask)
     return (a, lse, amax), residuals
 
 
 def triangle_attention_bwd(scale, precision, residuals, cotangents):
-    a, lse, q, k, v, mask, bias = residuals
+    a, lse, q, k, v, bias, mask = residuals
     da, dlse, damax = cotangents
 
     dq, dk, dv, dbias = bwd_p.bind(
-        da, a, lse, q, k, v, mask, bias, scale=scale, precision=precision
+        da, a, lse, q, k, v, bias, mask, scale=scale, precision=precision
     )
-    return (dq, dk, dv, None, dbias)
+    return (dq, dk, dv, dbias, None)
 
 
 triangle_attention.defvjp(triangle_attention_fwd, triangle_attention_bwd)
