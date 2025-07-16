@@ -21,6 +21,7 @@ from ._sigmoid_gated_dual_gemm import (
 from ._triangle_multiplicative_update import (
     triangle_multiplicative_update,
 )
+from ._triangle_attention import triangle_attention
 
 __all__ = [
     "layer_norm_transpose",
@@ -28,4 +29,5 @@ __all__ = [
     "sigmoid_gated_dual_gemm",
     "sigmoid_gated_dual_gemm_dual_x",
     "triangle_multiplicative_update",
+    "triangle_attention",
 ]
