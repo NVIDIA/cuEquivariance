@@ -524,7 +524,7 @@ def segmented_polynomial_impl(
     if any(mode == IndexingMode.REPEATED for modes in index_mode for mode in modes):
         if method not in ("naive", "indexed_linear"):
             raise ValueError(
-                "IdexingMode.REPEATED is only supported with 'naive' or 'indexed_linear' methods."
+                "IndexingMode.REPEATED is only supported with 'naive' or 'indexed_linear' methods."
             )
     if precision != jax.lax.Precision.HIGHEST:
         if method not in ("naive", "gemm_grouped"):
