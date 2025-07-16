@@ -29,9 +29,6 @@ from jax.interpreters import ad, batching, mlir, partial_eval, xla
 import cuequivariance as cue
 import cuequivariance_jax as cuex  # noqa: F401
 from cuequivariance_jax.segmented_polynomials.indexing_mode import IndexingMode
-from cuequivariance_jax.segmented_polynomials.segmented_polynomial_gemm_grouped import (
-    execute_gemm_grouped,
-)
 from cuequivariance_jax.segmented_polynomials.segmented_polynomial_indexed_linear import (
     execute_indexed_linear,
 )
@@ -77,7 +74,6 @@ def segmented_polynomial(
         method: Specifies the implementation method to use. Options are:
             - "naive": Uses a naive JAX implementation. It always works but is not optimized.
             - "uniform_1d": Uses a CUDA implementation for polynomials with a single uniform mode.
-            - "gemm_grouped": Uses a CUDA implementation for polynomials mappable to matrix multiplications.
             - "indexed_linear": Uses a CUDA implementation for linear layers with indexed weights.
         math_dtype: Data type for computational operations. If None, automatically
             determined from input types, defaulting to float32 if no float64 inputs
@@ -123,22 +119,6 @@ def segmented_polynomial(
         >>> D.shape
         (11, 12, 1056)
 
-        Example computing a linear layer using the "gemm_grouped" method:
-
-        >>> input_irreps = cue.Irreps(cue.O3, f"10x0e + 10x1o")
-        >>> output_irreps = cue.Irreps(cue.O3, f"20x0e + 20x1o")
-        >>> poly = cue.descriptors.linear(input_irreps, output_irreps).polynomial
-        >>> w = jax.random.normal(jax.random.key(0), (poly.inputs[0].size,), dtype=jnp.float32)
-        >>> x = jax.random.normal(jax.random.key(1), (10, poly.inputs[1].size), dtype=jnp.float32)
-        >>> y = jax.ShapeDtypeStruct((10, poly.outputs[0].size), jnp.float32)
-        >>> [y] = cuex.segmented_polynomial(
-        ...     poly,
-        ...     [w, x], [y],
-        ...     method="gemm_grouped",
-        ... )
-        >>> y.shape
-        (10, 80)
-
         Example computing a linear layer with indexed weights using the "indexed_linear" method:
 
         >>> input_irreps = cue.Irreps(cue.O3, f"10x0e + 10x1o")
@@ -165,7 +145,6 @@ def segmented_polynomial(
             "To fix this, simply add a `method` parameter to your function call. Here are the available options:\n"
             "• 'naive' - Works everywhere but not optimized (good for testing)\n"
             "• 'uniform_1d' - Fast CUDA implementation for single uniform mode polynomials\n"
-            "• 'gemm_grouped' - Fast CUDA implementation for matrix multiplication patterns\n"
             "• 'indexed_linear' - Fast CUDA implementation for linear layers with indexed weights\n\n"
             "Example: outputs = segmented_polynomial(poly, inputs, outputs, method='naive')"
         )
@@ -502,7 +481,7 @@ def segmented_polynomial_impl(
             f"{name}: {fl / 1e9:.2f} GFLOP, {mem / 1e9:.2f} GB, arithmetic intensity: {fl / mem:.2f} FLOP/byte"
         )
 
-    assert method in ("naive", "uniform_1d", "gemm_grouped", "indexed_linear")
+    assert method in ("naive", "uniform_1d", "indexed_linear")
     if platform != "cuda" and method != "naive":
         warnings.warn(
             f"Method '{method}' requires CUDA, but platform is '{platform}'. "
@@ -527,9 +506,9 @@ def segmented_polynomial_impl(
                 "IdexingMode.REPEATED is only supported with 'naive' or 'indexed_linear' methods."
             )
     if precision != jax.lax.Precision.HIGHEST:
-        if method not in ("naive", "gemm_grouped"):
+        if method not in ("naive",):
             raise ValueError(
-                f"Precision {precision} is only supported with 'naive' or 'gemm_grouped' methods."
+                f"Precision {precision} is only supported with 'naive' method."
             )
 
     match method:
@@ -537,8 +516,6 @@ def segmented_polynomial_impl(
             return execute_naive(**kwargs, index_mode=index_mode, precision=precision)
         case "uniform_1d":
             return execute_uniform_1d(**kwargs)
-        case "gemm_grouped":
-            return execute_gemm_grouped(**kwargs, precision=precision)
         case "indexed_linear":
             return execute_indexed_linear(
                 **kwargs, index_mode=index_mode, precision=precision
