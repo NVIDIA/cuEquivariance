@@ -53,7 +53,7 @@ class Subscripts(str):
         """
         if not isinstance(subscripts, str):
             return False
-        mode = r"[a-zA-Z*]"
+        mode = r"[a-z*]"
         if re.match(rf"^{mode}*({SEP}{mode}*)*(\+{mode}*)?$", subscripts) is None:
             return False
         operands_and_coefficients = re.split(rf"[{SEP}+]", subscripts)
