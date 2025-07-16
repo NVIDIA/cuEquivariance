@@ -210,7 +210,15 @@ for platform in ["cuda", None]:
 
 
 @partial(custom_vjp, nondiff_argnames=("scale", "precision"))
-def triangle_attention(q, k, v, bias, mask, scale, precision=None):
+def triangle_attention(
+    q: jax.Array,  # [B, N, H, S_qo, D]
+    k: jax.Array,  # [B, N, H, S_kv, D]
+    v: jax.Array,  # [B, N, H, S_kv, D]
+    bias: jax.Array,  # [B, 1, H, S_qo, S_kv]
+    mask: jax.Array,  # [B, N, 1, 1, S_kv] boolean
+    scale: float,
+    precision: jax.lax.Precision | None = None,
+):
     r"""triangle attention
 
     Args:
