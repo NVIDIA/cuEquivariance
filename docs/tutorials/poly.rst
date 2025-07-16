@@ -93,7 +93,7 @@ Execution on JAX
     w = cuex.randn(jax.random.key(0), e.inputs[0])
     x = cuex.randn(jax.random.key(1), e.inputs[1])
 
-    cuex.equivariant_polynomial(e, [w, x])
+    cuex.equivariant_polynomial(e, [w, x], method="uniform_1d")
 
 The function :func:`cuex.randn <cuequivariance_jax.randn>` generates random :class:`cuex.RepArray <cuequivariance_jax.RepArray>` objects.
 The function :func:`cuex.equivariant_polynomial <cuequivariance_jax.equivariant_polynomial>` executes the tensor product.

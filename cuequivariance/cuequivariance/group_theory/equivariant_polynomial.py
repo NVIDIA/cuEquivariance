@@ -367,6 +367,20 @@ class EquivariantPolynomial:
             self.inputs, self.outputs, self.polynomial.squeeze_modes(modes)
         )
 
+    def split_mode(self, mode: str, size: int) -> EquivariantPolynomial:
+        """Split specified mode in the polynomial.
+
+        Args:
+            mode (str): Mode to split.
+            size (int): Size to split the mode into.
+
+        Returns:
+            :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: Polynomial with split mode.
+        """
+        return EquivariantPolynomial(
+            self.inputs, self.outputs, self.polynomial.split_mode(mode, size)
+        )
+
     def flatten_coefficient_modes(self) -> EquivariantPolynomial:
         """Flatten the coefficient modes of the segmented tensor products.
 

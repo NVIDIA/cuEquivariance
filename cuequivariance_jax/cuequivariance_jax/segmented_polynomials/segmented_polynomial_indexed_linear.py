@@ -35,29 +35,32 @@ class Buffer:
     mode: list[IndexingMode]
 
 
-def segmented_polynomial_hybrid_impl(
+def execute_indexed_linear(
     inputs: list[jax.Array],  # shape (*batch_sizes, operand_size)
     outputs_shape_dtype: tuple[jax.ShapeDtypeStruct, ...],
     indices: list[jax.Array],
-    buffer_index: tuple[tuple[int, ...], ...],
+    index_configuration: tuple[tuple[int, ...], ...],
     index_mode: tuple[tuple[IndexingMode, ...], ...],
     polynomial: cue.SegmentedPolynomial,
     math_dtype: jnp.dtype,
-    impl: str,
+    precision: jax.lax.Precision,
     name: str,
+    run_kernel: bool = True,
 ) -> list[jax.Array]:  # output buffers
-    assert impl in ("cuda", "auto", "jax")
-
-    num_inputs = len(buffer_index) - len(outputs_shape_dtype)
+    num_inputs = len(index_configuration) - len(outputs_shape_dtype)
 
     io_buffers = list(inputs) + [
         jnp.zeros(out.shape, out.dtype) for out in outputs_shape_dtype
     ]
-    buffer_index = np.array(buffer_index, dtype=np.int32)
-    num_batch_axes = buffer_index.shape[1]
+    index_configuration = np.array(index_configuration, dtype=np.int32)
+    num_batch_axes = index_configuration.shape[1]
     batch_sizes = [
         batch_size(
-            [x.shape[i] for x, idx in zip(io_buffers, buffer_index[:, i]) if idx < 0],
+            [
+                x.shape[i]
+                for x, idx in zip(io_buffers, index_configuration[:, i])
+                if idx < 0
+            ],
         )
         for i in range(num_batch_axes)
     ]
@@ -69,16 +72,16 @@ def segmented_polynomial_hybrid_impl(
 
         output_segments: list[list[jax.Array]] = tp_list_list(
             [
-                Buffer(inputs[i], buffer_index[i], index_mode[i])
+                Buffer(inputs[i], index_configuration[i], index_mode[i])
                 for i in operation.input_buffers(num_inputs)
             ],
-            Buffer(out, buffer_index[b_out], index_mode[b_out]),
+            Buffer(out, index_configuration[b_out], index_mode[b_out]),
             indices,
             batch_sizes=batch_sizes,
             d=d.move_operand_last(ope_out),
             math_dtype=math_dtype,
-            precision=jax.lax.Precision.HIGHEST,
-            impl=impl,
+            precision=precision,
+            run_kernel=run_kernel,
         )
         out = sum_cat_list_list(
             d.operands[ope_out],
@@ -137,7 +140,7 @@ def tp_list_list(
     d: cue.SegmentedTensorProduct,
     math_dtype: jnp.dtype,
     precision: jax.lax.Precision,
-    impl: str,
+    run_kernel: bool,
 ) -> list[list[jax.Array]]:
     num_batch_axes = len(batch_sizes)
 
@@ -183,7 +186,7 @@ def tp_list_list(
                 batch_sizes,
                 precision,
                 math_dtype,
-                impl=impl,
+                run_kernel=run_kernel,
             )
             for path in d.paths[pid_start:pid_end]
         ]
@@ -201,7 +204,7 @@ def ein(
     batch_sizes: list[int],
     precision: jax.lax.Precision,
     math_dtype: jnp.dtype,
-    impl: str,
+    run_kernel: bool,
 ) -> jax.Array:
     num_batch_axes = len(batch_sizes)
     batch_modes = "ABCDEFGHIJKLMNOQRSTUVWXYZ"[:num_batch_axes]
@@ -214,14 +217,11 @@ def ein(
     formula = ",".join(terms[:-1]) + "->" + terms[-1]
     modes = tuple([x.mode for x in segments] + [output.mode])
 
-    if impl == "auto":
-        try:
-            from cuequivariance_ops_jax import indexed_linear
-        except ImportError:
-            impl = "jax"
+    if run_kernel:
+        assert precision == jax.lax.Precision.HIGHEST
 
     if (
-        impl != "jax"
+        run_kernel
         and formula in (",Auv,Au->Av", ",Auv,Av->Au")
         and modes
         == (
@@ -251,7 +251,7 @@ def ein(
         )
 
     elif (
-        impl != "jax"
+        run_kernel
         and formula in (",Auv,Awu->Awv", ",Auv,Awv->Awu")
         and modes
         == (
@@ -283,7 +283,7 @@ def ein(
         )
 
     elif (
-        impl != "jax"
+        run_kernel
         and formula in (",Au,Auv->Av", ",Au,Avu->Av")
         and modes
         == (
@@ -314,7 +314,7 @@ def ein(
         )
 
     elif (
-        impl != "jax"
+        run_kernel
         and formula in (",Auv,Awv->Auw", ",Auv,Avw->Auw")
         and modes
         == (
@@ -347,7 +347,7 @@ def ein(
         )
 
     elif (
-        impl != "jax"
+        run_kernel
         and formula in (",Au,Av->Avu", ",Au,Av->Auv")
         and modes
         == (
@@ -378,7 +378,7 @@ def ein(
         )
 
     elif (
-        impl != "jax"
+        run_kernel
         and formula in (",Auv,Auw->Awv", ",Auv,Auw->Avw")
         and modes
         == (
@@ -410,10 +410,8 @@ def ein(
             math_dtype,
         )
 
-    if impl == "cuda":
-        raise NotImplementedError(
-            "It was not possible to execute this operation on a custom CUDA kernel."
-        )
+    if run_kernel:
+        raise ValueError("It was not possible to execute the method indexed_linear.")
 
     segments_data = [
         scatter(x.data, x.bi, x.mode, indices, batch_sizes) for x in segments
