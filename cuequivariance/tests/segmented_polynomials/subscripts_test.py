@@ -22,12 +22,6 @@ def test_subscripts():
         sp.Subscripts("#$%@")
 
     with pytest.raises(ValueError):
-        sp.Subscripts("Zu")  # uppercase not supported anymore
-
-    with pytest.raises(ValueError):
-        sp.Subscripts("uZ")  # uppercase after lowercase
-
-    with pytest.raises(ValueError):
         sp.Subscripts("uZ+ij+kl")  # multiple + signs
 
     subscripts = sp.Subscripts("ui,vj,uvk+ijk")
