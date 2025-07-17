@@ -32,31 +32,35 @@ def segmented_polynomial_vanilla_impl(
     inputs: list[jax.Array],  # shape (*batch_sizes, operand_size)
     outputs_shape_dtype: tuple[jax.ShapeDtypeStruct, ...],
     indices: list[jax.Array],
-    buffer_index: tuple[tuple[int, ...], ...],
+    index_configuration: tuple[tuple[int, ...], ...],
     polynomial: cue.SegmentedPolynomial,
     math_dtype: jnp.dtype,
     name: str,
 ) -> list[jax.Array]:  # output buffers
-    num_inputs = len(buffer_index) - len(outputs_shape_dtype)
+    num_inputs = len(index_configuration) - len(outputs_shape_dtype)
 
     io_buffers = list(inputs) + [
         jnp.zeros(out.shape, out.dtype) for out in outputs_shape_dtype
     ]
-    buffer_index = np.array(buffer_index, dtype=np.int32)
-    num_batch_axes = buffer_index.shape[1]
+    index_configuration = np.array(index_configuration, dtype=np.int32)
+    num_batch_axes = index_configuration.shape[1]
     batch_sizes = [
         batch_size(
-            [x.shape[i] for x, idx in zip(io_buffers, buffer_index[:, i]) if idx < 0],
+            [
+                x.shape[i]
+                for x, idx in zip(io_buffers, index_configuration[:, i])
+                if idx < 0
+            ],
         )
         for i in range(num_batch_axes)
     ]
 
     def scatter(i: int) -> jax.Array:
-        idx = indexing(buffer_index[i], io_buffers[i].shape, indices)
+        idx = indexing(index_configuration[i], io_buffers[i].shape, indices)
         return inputs[i][idx]
 
     def gather(i: int, x: jax.Array) -> jax.Array:
-        idx = indexing(buffer_index[i], io_buffers[i].shape, indices)
+        idx = indexing(index_configuration[i], io_buffers[i].shape, indices)
         return io_buffers[i].at[idx].add(x)
 
     for operation, d in polynomial.operations:
@@ -66,7 +70,7 @@ def segmented_polynomial_vanilla_impl(
         out = jax.ShapeDtypeStruct(
             tuple(
                 b if i >= 0 else s
-                for i, b, s in zip(buffer_index[b_out], batch_sizes, out.shape)
+                for i, b, s in zip(index_configuration[b_out], batch_sizes, out.shape)
             )
             + out.shape[-1:],
             out.dtype,
