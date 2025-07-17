@@ -26,7 +26,7 @@ def indexed_linear(
     w: jax.Array,
     x: jax.Array,
     math_dtype: jnp.dtype | None = None,
-    impl: str = "auto",
+    method: str = "indexed_linear",
 ) -> jax.Array:
     """Linear layer with different weights for different parts of the input.
 
@@ -37,9 +37,6 @@ def indexed_linear(
         x: Input data. Shape (Z, num_inputs). Z is equal to the sum of counts.
         math_dtype: Data type for computational operations. If
             None, automatically determined from input types. Defaults to None.
-        impl: Implementation to use, one of ["auto", "cuda", "jax", "naive_jax"].
-            See :func:`cuex.segmented_polynomial <cuequivariance_jax.segmented_polynomial>` for more details.
-            Defaults to "auto".
     Returns:
         Output data. Shape (Z, num_outputs).
 
@@ -95,6 +92,6 @@ def indexed_linear(
         [y],
         [cuex.Repeats(counts), None, None],
         math_dtype=math_dtype,
-        impl=impl,
+        method=method,
     )
     return y

@@ -23,20 +23,40 @@ import jax.numpy as jnp
 import numpy as np
 
 import cuequivariance as cue
+from cuequivariance_jax.segmented_polynomials.indexing_mode import IndexingMode
+from cuequivariance_jax.segmented_polynomials.segmented_polynomial_indexed_linear import (
+    execute_indexed_linear,
+)
 from cuequivariance_jax.segmented_polynomials.utils import batch_size, indexing
 
 logger = logging.getLogger(__name__)
 
 
-def segmented_polynomial_vanilla_impl(
+def execute_naive(
     inputs: list[jax.Array],  # shape (*batch_sizes, operand_size)
     outputs_shape_dtype: tuple[jax.ShapeDtypeStruct, ...],
     indices: list[jax.Array],
     index_configuration: tuple[tuple[int, ...], ...],
+    index_mode: tuple[tuple[IndexingMode, ...], ...],
     polynomial: cue.SegmentedPolynomial,
     math_dtype: jnp.dtype,
+    precision: jax.lax.Precision,
     name: str,
 ) -> list[jax.Array]:  # output buffers
+    if any(mode == IndexingMode.REPEATED for modes in index_mode for mode in modes):
+        return execute_indexed_linear(
+            inputs,
+            outputs_shape_dtype,
+            indices,
+            index_configuration,
+            index_mode,
+            polynomial,
+            math_dtype,
+            precision,
+            name,
+            run_kernel=False,
+        )
+
     num_inputs = len(index_configuration) - len(outputs_shape_dtype)
 
     io_buffers = list(inputs) + [
@@ -82,7 +102,7 @@ def segmented_polynomial_vanilla_impl(
             d=d.move_operand_last(ope_out),
             output_dtype=out.dtype,
             math_dtype=math_dtype,
-            precision=jax.lax.Precision.HIGHEST,
+            precision=precision,
             algorithm="compact_stacked" if d.all_same_segment_shape() else "sliced",
         )
         out = sum_cat_list_list(
