@@ -69,6 +69,7 @@ Triangle
    :toctree: generated/
    :template: function_template.rst
 
+   triangle_multiplicative_update
    triangle_attention
 
 Experimental
