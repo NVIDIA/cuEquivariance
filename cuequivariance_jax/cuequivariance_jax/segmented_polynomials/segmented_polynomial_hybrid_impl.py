@@ -39,7 +39,7 @@ def segmented_polynomial_hybrid_impl(
     inputs: list[jax.Array],  # shape (*batch_sizes, operand_size)
     outputs_shape_dtype: tuple[jax.ShapeDtypeStruct, ...],
     indices: list[jax.Array],
-    buffer_index: tuple[tuple[int, ...], ...],
+    index_configuration: tuple[tuple[int, ...], ...],
     index_mode: tuple[tuple[IndexingMode, ...], ...],
     polynomial: cue.SegmentedPolynomial,
     math_dtype: jnp.dtype,
@@ -48,16 +48,20 @@ def segmented_polynomial_hybrid_impl(
 ) -> list[jax.Array]:  # output buffers
     assert impl in ("cuda", "auto", "jax")
 
-    num_inputs = len(buffer_index) - len(outputs_shape_dtype)
+    num_inputs = len(index_configuration) - len(outputs_shape_dtype)
 
     io_buffers = list(inputs) + [
         jnp.zeros(out.shape, out.dtype) for out in outputs_shape_dtype
     ]
-    buffer_index = np.array(buffer_index, dtype=np.int32)
-    num_batch_axes = buffer_index.shape[1]
+    index_configuration = np.array(index_configuration, dtype=np.int32)
+    num_batch_axes = index_configuration.shape[1]
     batch_sizes = [
         batch_size(
-            [x.shape[i] for x, idx in zip(io_buffers, buffer_index[:, i]) if idx < 0],
+            [
+                x.shape[i]
+                for x, idx in zip(io_buffers, index_configuration[:, i])
+                if idx < 0
+            ],
         )
         for i in range(num_batch_axes)
     ]
@@ -69,10 +73,10 @@ def segmented_polynomial_hybrid_impl(
 
         output_segments: list[list[jax.Array]] = tp_list_list(
             [
-                Buffer(inputs[i], buffer_index[i], index_mode[i])
+                Buffer(inputs[i], index_configuration[i], index_mode[i])
                 for i in operation.input_buffers(num_inputs)
             ],
-            Buffer(out, buffer_index[b_out], index_mode[b_out]),
+            Buffer(out, index_configuration[b_out], index_mode[b_out]),
             indices,
             batch_sizes=batch_sizes,
             d=d.move_operand_last(ope_out),

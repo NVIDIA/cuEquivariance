@@ -70,7 +70,7 @@ def segmented_polynomial_ops_impl(
     inputs: list[jax.Array],  # shape (*batch_sizes, operand_size)
     outputs_shape_dtype: tuple[jax.ShapeDtypeStruct, ...],
     indices: list[jax.Array],
-    buffer_index: tuple[tuple[int, ...], ...],
+    index_configuration: tuple[tuple[int, ...], ...],
     polynomial: cue.SegmentedPolynomial,
     math_dtype: jnp.dtype,
     name: str,
@@ -79,9 +79,11 @@ def segmented_polynomial_ops_impl(
         logger.info(f"[{name}] {msg}")
         return Err(msg)
 
-    buffer_index = np.array(buffer_index)
-    num_batch_axes = buffer_index.shape[1]
-    assert polynomial.num_inputs + len(outputs_shape_dtype) == buffer_index.shape[0]
+    index_configuration = np.array(index_configuration)
+    num_batch_axes = index_configuration.shape[1]
+    assert (
+        polynomial.num_inputs + len(outputs_shape_dtype) == index_configuration.shape[0]
+    )
     assert polynomial.num_outputs == len(outputs_shape_dtype)
 
     polynomial = polynomial.flatten_coefficient_modes()
@@ -97,8 +99,8 @@ def segmented_polynomial_ops_impl(
     # polynomial = polynomial.map_tensor_products(fn)
 
     # We don't use the feature that indices can index themselves
-    buffer_index = np.concatenate(
-        [buffer_index, np.full((len(indices), num_batch_axes), -1, np.int32)]
+    index_configuration = np.concatenate(
+        [index_configuration, np.full((len(indices), num_batch_axes), -1, np.int32)]
     )
 
     buffers = list(inputs) + list(outputs_shape_dtype)
@@ -116,7 +118,7 @@ def segmented_polynomial_ops_impl(
         num_batch_axes = 1
         buffers = [reshape(b, (1, *b.shape)) for b in buffers]
         indices = [reshape(i, (1, *i.shape)) for i in indices]
-        buffer_index = np.full((buffer_index.shape[0], 1), -1, np.int32)
+        index_configuration = np.full((index_configuration.shape[0], 1), -1, np.int32)
 
     # Reshape buffers to 3D by using the STP informations
     for ope, stp in polynomial.operations:
@@ -183,7 +185,7 @@ def segmented_polynomial_ops_impl(
         buffers[: polynomial.num_inputs],
         buffers[polynomial.num_inputs :],
         list(indices),
-        buffer_index,
+        index_configuration,
         operations=operations,
         paths=paths,
         math_dtype=math_dtype,
