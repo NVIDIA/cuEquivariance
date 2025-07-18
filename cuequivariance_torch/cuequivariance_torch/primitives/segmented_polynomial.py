@@ -84,6 +84,12 @@ class SegmentedPolynomial(nn.Module):
         else:
             raise ValueError(f"Invalid method: {method}")
 
+    # For torch.jit.trace, we cannot pass explicit optionals,
+    # so these must be passed as kwargs then.
+    # List[Optional[Tensor]] does not work for similar reasons, hence, Dict
+    # is the only option.
+    # Also, shapes cannot be passed as integers, so they are passed via a
+    # (potentially small-strided) tensor with the right shape.
     def forward(
         self,
         inputs: List[torch.Tensor],
@@ -128,6 +134,7 @@ class SegmentedPolynomial(nn.Module):
         if output_indices is None:
             output_indices = dict(empty_dict)
 
+        inputs = list(inputs)
         torch._assert(
             len(inputs) == self.num_inputs,
             "the number of inputs must match the number of inputs of the polynomial",

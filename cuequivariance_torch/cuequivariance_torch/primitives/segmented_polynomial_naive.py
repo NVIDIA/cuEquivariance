@@ -192,10 +192,10 @@ def _tensor_product_fx(
                     dtype=math_dtype,
                 )
                 for pid in range(descriptor.num_paths):
-                    output += torch.einsum(
+                    output[descriptor.paths[pid].indices[-1]] += torch.einsum(
                         descriptor.coefficient_subscripts
                         + "->"
-                        + descriptor.subscripts.operands[0],
+                        + descriptor.subscripts.operands[-1],
                         getattr(self, f"c{pid}"),
                     )
                 return output
@@ -219,9 +219,9 @@ class SegmentedPolynomialNaive(nn.Module):
         name: str = "segmented_polynomial",
     ):
         super().__init__()
-        self.polynomial = polynomial
         self.num_inputs = polynomial.num_inputs
         self.num_outputs = polynomial.num_outputs
+        self.input_sizes = [o.size for o in polynomial.inputs]
         self.name = name
         self.math_dtype = math_dtype
         self.out_size = [o.size for o in polynomial.outputs]
@@ -252,16 +252,16 @@ class SegmentedPolynomialNaive(nn.Module):
     def forward(
         self,
         inputs: List[torch.Tensor],
-        input_indices: Optional[Dict[int, torch.Tensor]] = None,
-        output_shapes: Optional[Dict[int, torch.Tensor]] = None,
-        output_indices: Optional[Dict[int, torch.Tensor]] = None,
+        input_indices: Dict[int, torch.Tensor],
+        output_shapes: Dict[int, torch.Tensor],
+        output_indices: Dict[int, torch.Tensor],
     ):
-        for i, x, ope in zip(range(self.num_inputs), inputs, self.polynomial.inputs):
+        for i, x, size in zip(range(self.num_inputs), inputs, self.input_sizes):
             if x.ndim == 0:
                 raise ValueError(f"Input {i} has no dimensions")
-            if x.shape[-1] != ope.size:
+            if x.shape[-1] != size:
                 raise ValueError(
-                    f"Input {i} has shape {x.shape} but expected shape {ope.size} for polynomial:\n{self.polynomial}"
+                    f"Input {i} has shape {x.shape} but expected shape {size}."
                 )
 
         # Input indexing
@@ -269,7 +269,7 @@ class SegmentedPolynomialNaive(nn.Module):
             inputs[k] = inputs[k][v]
 
         # Output indices:
-        out_indices = [None for _ in range(self.num_outputs)]
+        out_indices = [torch.empty(0) for _ in range(self.num_outputs)]
         for k, v in output_indices.items():
             out_indices[k] = v
             assert k in output_shapes.keys(), (
@@ -280,14 +280,14 @@ class SegmentedPolynomialNaive(nn.Module):
         batch_size = 1
         for size in input_batch_sizes:
             if size != 1:
-                assert batch_size in {1, size}
+                assert batch_size in [1, size]
             batch_size = size
         outputs_dims = [
             (batch_size, shape)
-            if i not in output_indices.keys()
+            if i not in output_shapes.keys()
             else (output_shapes[i].shape[0], shape)
             for i, shape in enumerate(self.out_size)
-        ]  # Check: Are there cases where we need to do something different? A reshape?
+        ]
         out_buffers = [
             torch.zeros(
                 out_shape, dtype=inputs[out_dtype_ind].dtype, device=inputs[0].device
@@ -296,13 +296,29 @@ class SegmentedPolynomialNaive(nn.Module):
         ]
 
         # Apply TPs
-        for graph, input_inds, b_out in zip(self.graphs, self.input_inds, self.b_outs):
-            out = graph(*[inputs[i] for i in input_inds])
-            if out_indices[b_out] is not None:
-                # Check: are there more complex cases (more dimensions)?
+        for i, graph in enumerate(self.graphs):
+            b_out = self.b_outs[i]
+            input_list = [inputs[j] for j in self.input_inds[i]]
+            out = graph(*input_list)
+            # For 0 inputs case:
+            if len(input_list) == 0:
+                out = out.unsqueeze(0)
+            if out_indices[b_out].size() != torch.Size([0]):
+                # In case we need to replicate before scattering:
+                if out.shape[0] == 1 and out_indices[b_out].shape[0] > 1:
+                    out = out.expand(out_indices[b_out].shape[0], *out.shape[1:])
                 inds = out_indices[b_out].unsqueeze(-1).expand_as(out)
                 out_buffers[b_out].scatter_add_(0, inds, out)
             else:
-                out_buffers[b_out] += out
+                if out_buffers[b_out].shape[0] == out.shape[0]:
+                    out_buffers[b_out] += out
+                elif out_buffers[b_out].shape[0] == 1:
+                    out_buffers[b_out] += out.sum(dim=0)
+                elif out.shape[0] == 1:
+                    out_buffers[b_out] += out.expand_as(out_buffers[b_out])
+                else:
+                    raise ValueError(
+                        f"Input/output batch size mismatch {out_buffers[b_out].shape} vs {out.shape}."
+                    )
 
         return out_buffers

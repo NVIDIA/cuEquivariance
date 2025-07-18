@@ -14,7 +14,7 @@
 # limitations under the License.
 
 from itertools import accumulate
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import torch
 import torch.nn as nn
@@ -101,12 +101,13 @@ class SegmentedPolynomialFromUniform1dJit(nn.Module):
                 "The cuequivariance_ops_torch.tensor_product_uniform_1d_jit module is not available."
             )
 
-        try:
-            polynomial = polynomial.flatten_coefficient_modes()
-        except ValueError as e:
-            raise ValueError(
-                f"This method does not support coefficient modes. Flattening them failed:\n{e}"
-            ) from e
+        # Removing this try for script compatibility
+        # try:
+        polynomial = polynomial.flatten_coefficient_modes()
+        # except ValueError as e:
+        #     raise ValueError(
+        #         f"This method does not support coefficient modes. Flattening them failed:\n{e}"
+        #     ) from e
 
         polynomial = polynomial.squeeze_modes()
 
@@ -185,18 +186,12 @@ class SegmentedPolynomialFromUniform1dJit(nn.Module):
         self.BATCH_DIM_BATCHED = BATCH_DIM_BATCHED
         self.BATCH_DIM_INDEXED = BATCH_DIM_INDEXED
 
-    # For torch.jit.trace, we cannot pass explicit optionals,
-    # so these must be passed as kwargs then.
-    # List[Optional[Tensor]] does not work for similar reasons, hence, Dict
-    # is the only option.
-    # Also, shapes cannot be passed as integers, so they are passed via a
-    # (potentially small-strided) tensor with the right shape.
     def forward(
         self,
         inputs: List[torch.Tensor],
-        input_indices: Optional[Dict[int, torch.Tensor]] = None,
-        output_shapes: Optional[Dict[int, torch.Tensor]] = None,
-        output_indices: Optional[Dict[int, torch.Tensor]] = None,
+        input_indices: Dict[int, torch.Tensor],
+        output_shapes: Dict[int, torch.Tensor],
+        output_indices: Dict[int, torch.Tensor],
     ):
         num_index = 0
         batch_dim = [self.BATCH_DIM_AUTO] * (self.num_inputs + self.num_outputs)
