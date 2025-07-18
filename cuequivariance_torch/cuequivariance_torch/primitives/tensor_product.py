@@ -326,13 +326,15 @@ def _tensor_product_fx(
 
             def forward(self):
                 output = torch.zeros(
-                    (descriptor.operands[-1].size,), device=device, dtype=math_dtype
+                    (descriptor.operands[-1].size,),
+                    device=self.c0.device,
+                    dtype=math_dtype,
                 )
                 for pid in range(descriptor.num_paths):
                     output += torch.einsum(
                         descriptor.coefficient_subscripts
                         + "->"
-                        + descriptor.operands[0].subscripts,
+                        + descriptor.subscripts.operands[0],
                         getattr(self, f"c{pid}"),
                     )
                 return output
