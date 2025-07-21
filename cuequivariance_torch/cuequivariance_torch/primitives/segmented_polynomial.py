@@ -44,7 +44,17 @@ class SegmentedPolynomial(nn.Module):
         method: Specifies the implementation method to use. Options are:
             - "naive": Uses a naive PyTorch implementation. It always works but is not optimized.
             - "uniform_1d": Uses a CUDA implementation for polynomials with a single uniform mode.
-        math_dtype: Data type for computational operations, defaulting to float32.
+            - "fused_tp": Uses a CUDA implementation for polynomials with 3 and 4 operands contractions.
+        math_dtype: Data type for computational operations.
+            If specified, internal buffers will be of this dtype,
+            and operands will be converted to this type for all computations
+            (please note that this will not be affected by changes to the module dtype,
+            and that not all methods support all dtypes).
+            If math_dtype is not specified:
+                - For method "naive", the dtype of the input tensors will be used
+                - For method "uniform_1d", the dtype of the input tensors will be used if allowed
+                  (FP32 or FP64), otherwise float32 will be used.
+                - For method "fused_tp", the default dtype (FP32) will be used.
         output_dtype_map: Optional list that, for each output buffer, specifies
             the index of the input buffer from which it inherits its data type.
             -1 means the math_dtype is used.
@@ -56,7 +66,7 @@ class SegmentedPolynomial(nn.Module):
         self,
         polynomial: cue.SegmentedPolynomial,
         method: str = "",
-        math_dtype: torch.dtype = torch.float32,
+        math_dtype: torch.dtype = None,
         output_dtype_map: List[int] = None,
         name: str = "segmented_polynomial",
     ):

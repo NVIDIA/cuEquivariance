@@ -61,7 +61,7 @@ def disable_type_conv(t):
 def _tensor_product_fx(
     descriptor: cue.SegmentedTensorProduct,
     device: Optional[torch.device],
-    math_dtype: torch.dtype,
+    math_dtype: Optional[torch.dtype],
     optimize_einsums: bool,
 ) -> torch.nn.Module:
     """
@@ -104,16 +104,27 @@ def _tensor_product_fx(
                 else:
                     inp = inp.reshape(inputs[oid].shape[:-1])
 
-                segments.append(inp.to(dtype=math_dtype))
+                if math_dtype is not None:
+                    segments.append(inp.to(dtype=math_dtype))
+                else:
+                    segments.append(inp)
 
-            c_tensor = disable_type_conv(
-                torch.tensor(path.coefficients, dtype=math_dtype, device=device)
-            )
+            if math_dtype is not None:
+                c_tensor = disable_type_conv(
+                    torch.tensor(path.coefficients, dtype=math_dtype, device=device)
+                )
+            else:
+                c_tensor = torch.tensor(
+                    path.coefficients, dtype=torch.float64, device=device
+                )
             constants[f"c{path_idx}"] = c_tensor
 
             c = torch.fx.Proxy(graph.get_attr(f"c{path_idx}"), tracer=tracer).clone()
+            if math_dtype is None:
+                c = c.to(inputs[0].dtype)
             out = torch.einsum(formula, c, *segments)
-            out = out.to(dtype=inputs[0].dtype)
+            if math_dtype is not None:
+                out = out.to(inputs[0].dtype)
 
             seg_shape = descriptor.get_segment_shape(-1, path)
             outputs += [
@@ -178,19 +189,34 @@ def _tensor_product_fx(
                 super().__init__()
 
                 for pid, path in enumerate(descriptor.paths):
-                    self.register_buffer(
-                        f"c{pid}",
-                        torch.tensor(
-                            path.coefficients, dtype=math_dtype, device=device
-                        ),
-                    )
+                    if math_dtype is not None:
+                        self.register_buffer(
+                            f"c{pid}",
+                            torch.tensor(
+                                path.coefficients, dtype=math_dtype, device=device
+                            ),
+                        )
+                    else:
+                        self.register_buffer(
+                            f"c{pid}",
+                            torch.tensor(
+                                path.coefficients, dtype=torch.float64, device=device
+                            ),
+                        )
 
             def forward(self):
-                output = torch.zeros(
-                    (descriptor.operands[-1].size,),
-                    device=self.c0.device,
-                    dtype=math_dtype,
-                )
+                if math_dtype is not None:
+                    output = torch.zeros(
+                        (descriptor.operands[-1].size,),
+                        device=self.c0.device,
+                        dtype=math_dtype,
+                    )
+                else:
+                    output = torch.zeros(
+                        (descriptor.operands[-1].size,),
+                        device=self.c0.device,
+                        dtype=self.c0.dtype,
+                    )
                 for pid in range(descriptor.num_paths):
                     output[descriptor.paths[pid].indices[-1]] += torch.einsum(
                         descriptor.coefficient_subscripts
@@ -306,7 +332,7 @@ class SegmentedPolynomialNaive(nn.Module):
     def __init__(
         self,
         polynomial: cue.SegmentedPolynomial,
-        math_dtype: torch.dtype = torch.float32,
+        math_dtype: Optional[torch.dtype] = None,
         output_dtype_map: List[int] = None,
         name: str = "segmented_polynomial",
     ):
@@ -412,7 +438,7 @@ class SegmentedPolynomialNaive(nn.Module):
             out = graph(input_list)
             # For 0 inputs case:
             if len(input_list) == 0:
-                out = out.unsqueeze(0)
+                out = out.unsqueeze(0).to(inputs[0].dtype)
             if out_indices[b_out].size() != torch.Size([0]):
                 # In case we need to replicate before scattering:
                 if out.shape[0] == 1 and out_indices[b_out].shape[0] > 1:

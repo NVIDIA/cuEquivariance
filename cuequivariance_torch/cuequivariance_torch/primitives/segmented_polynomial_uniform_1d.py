@@ -14,7 +14,7 @@
 # limitations under the License.
 
 from itertools import accumulate
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import torch
 import torch.nn as nn
@@ -90,7 +90,7 @@ class SegmentedPolynomialFromUniform1dJit(nn.Module):
     def __init__(
         self,
         polynomial: cue.SegmentedPolynomial,
-        math_dtype: torch.dtype = torch.float32,
+        math_dtype: Optional[torch.dtype] = torch.float32,
         output_dtype_map: List[int] = None,
         name: str = "segmented_polynomial",
     ):
@@ -101,13 +101,15 @@ class SegmentedPolynomialFromUniform1dJit(nn.Module):
                 "The cuequivariance_ops_torch.tensor_product_uniform_1d_jit module is not available."
             )
 
-        # Removing this try for script compatibility
-        # try:
-        polynomial = polynomial.flatten_coefficient_modes()
-        # except ValueError as e:
-        #     raise ValueError(
-        #         f"This method does not support coefficient modes. Flattening them failed:\n{e}"
-        #     ) from e
+        if not torch.jit.is_scripting():
+            try:
+                polynomial = polynomial.flatten_coefficient_modes()
+            except ValueError as e:
+                raise ValueError(
+                    f"This method does not support coefficient modes. Flattening them failed:\n{e}"
+                ) from e
+        else:
+            polynomial = polynomial.flatten_coefficient_modes()
 
         polynomial = polynomial.squeeze_modes()
 
@@ -148,6 +150,10 @@ class SegmentedPolynomialFromUniform1dJit(nn.Module):
         self.num_inputs = polynomial.num_inputs
         self.num_outputs = polynomial.num_outputs
         self.name = name
+        if math_dtype not in [None, torch.float32, torch.float64]:
+            raise ValueError(
+                f"For method 'uniform_1d', math_dtype must be float32 or float64, got {math_dtype}"
+            )
         self.math_dtype = math_dtype
         self.operand_extent = operand_extent
         self.buffer_dim = [o.ndim for o in polynomial.operands]
@@ -198,6 +204,14 @@ class SegmentedPolynomialFromUniform1dJit(nn.Module):
         index_buffer = [-1] * (self.num_inputs + self.num_outputs)
         tensors = list(inputs)
 
+        if self.math_dtype is None:
+            if inputs[0].dtype in [torch.float32, torch.float64]:
+                math_dtype = inputs[0].dtype
+            else:
+                math_dtype = torch.float32
+        else:
+            math_dtype = self.math_dtype
+
         for idx_pos, idx_tensor in input_indices.items():
             batch_dim[idx_pos] = self.BATCH_DIM_INDEXED
             tensors.append(idx_tensor)
@@ -232,7 +246,7 @@ class SegmentedPolynomialFromUniform1dJit(nn.Module):
 
         return tensor_product_uniform_1d_jit(
             self.name,
-            self.math_dtype,
+            math_dtype,
             self.operand_extent,
             self.num_inputs,
             self.num_outputs,
