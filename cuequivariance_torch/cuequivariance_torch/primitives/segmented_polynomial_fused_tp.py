@@ -23,6 +23,43 @@ import torch.nn as nn
 import cuequivariance as cue
 
 
+# Single classes for each number of inputs for scripting purposes
+class FusedTP3(nn.Module):
+    def __init__(self, d: cue.SegmentedTensorProduct, math_dtype: torch.dtype):
+        super().__init__()
+        self.tp = ops.FusedTensorProductOp3(
+            operand_segment_modes=d.subscripts.operands,
+            operand_segment_offsets=[
+                [s.start for s in ope.segment_slices()] for ope in d.operands
+            ],
+            operand_segment_shapes=[ope.segments for ope in d.operands],
+            path_indices=d.indices,
+            path_coefficients=d.stacked_coefficients,
+            math_dtype=math_dtype,
+        )
+
+    def forward(self, inputs: List[torch.Tensor]):
+        return self.tp(inputs[0], inputs[1])
+
+
+class FusedTP4(nn.Module):
+    def __init__(self, d: cue.SegmentedTensorProduct, math_dtype: torch.dtype):
+        super().__init__()
+        self.tp = ops.FusedTensorProductOp4(
+            operand_segment_modes=d.subscripts.operands,
+            operand_segment_offsets=[
+                [s.start for s in ope.segment_slices()] for ope in d.operands
+            ],
+            operand_segment_shapes=[ope.segments for ope in d.operands],
+            path_indices=d.indices,
+            path_coefficients=d.stacked_coefficients,
+            math_dtype=math_dtype,
+        )
+
+    def forward(self, inputs: List[torch.Tensor]):
+        return self.tp(inputs[0], inputs[1], inputs[2])
+
+
 class SegmentedPolynomialFusedTP(nn.Module):
     def __init__(
         self,
@@ -94,33 +131,9 @@ class SegmentedPolynomialFusedTP(nn.Module):
                 )
 
             if d.num_operands == 3:
-                self.tps.append(
-                    ops.FusedTensorProductOp3(
-                        operand_segment_modes=d.subscripts.operands,
-                        operand_segment_offsets=[
-                            [s.start for s in ope.segment_slices()]
-                            for ope in d.operands
-                        ],
-                        operand_segment_shapes=[ope.segments for ope in d.operands],
-                        path_indices=d.indices,
-                        path_coefficients=d.stacked_coefficients,
-                        math_dtype=self.math_dtype,
-                    )
-                )
+                self.tps.append(FusedTP3(d, self.math_dtype))
             elif d.num_operands == 4:
-                self.tps.append(
-                    ops.FusedTensorProductOp4(
-                        operand_segment_modes=d.subscripts.operands,
-                        operand_segment_offsets=[
-                            [s.start for s in ope.segment_slices()]
-                            for ope in d.operands
-                        ],
-                        operand_segment_shapes=[ope.segments for ope in d.operands],
-                        path_indices=d.indices,
-                        path_coefficients=d.stacked_coefficients,
-                        math_dtype=self.math_dtype,
-                    )
-                )
+                self.tps.append(FusedTP4(d, self.math_dtype))
 
             self.input_inds.append(
                 [perm[i] for i in operation.input_buffers(self.num_inputs)]
@@ -185,14 +198,11 @@ class SegmentedPolynomialFusedTP(nn.Module):
         for i, tp in enumerate(self.tps):
             b_out = self.b_outs[i]
             input_list = [inputs[j] for j in self.input_inds[i]]
-            if len(input_list) == 2:
-                out = tp(input_list[0], input_list[1])
-            elif len(input_list) == 3:
-                out = tp(input_list[0], input_list[1], input_list[2])
+            out = tp(input_list)
             if out_indices[b_out].size() != torch.Size([0]):
                 # In case we need to replicate before scattering:
                 if out.shape[0] == 1 and out_indices[b_out].shape[0] > 1:
-                    out = out.expand(out_indices[b_out].shape[0], *out.shape[1:])
+                    out = out.expand(out_indices[b_out].shape[0], out.shape[1])
                 inds = out_indices[b_out].unsqueeze(-1).expand_as(out)
                 out_buffers[b_out].scatter_add_(0, inds, out)
             else:

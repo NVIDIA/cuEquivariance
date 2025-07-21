@@ -398,12 +398,6 @@ def test_segmented_polynomial_export(
     indexing,
     tmp_path,
 ):
-    # Skip script mode for naive method as it is not supported
-    if method == "naive" and mode == "script":
-        pytest.skip("Skipping script mode for naive method")
-    # Skip script mode for fused_tp method as it is not supported
-    if method == "fused_tp" and mode == "script":
-        pytest.skip("Skipping script mode for fused_tp method")
     # Skip export mode for naive method for issues with testing
     if method == "naive" and mode == "export":
         pytest.skip("Skipping export mode for naive method")

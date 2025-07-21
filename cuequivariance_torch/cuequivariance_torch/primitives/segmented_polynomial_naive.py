@@ -210,6 +210,70 @@ def _tensor_product_fx(
     return graphmod
 
 
+# Single classes for each number of inputs for scripting purposes
+class graph_inputs0(nn.Module):
+    def __init__(self, graph: torch.fx.GraphModule):
+        super().__init__()
+        self.graph = graph
+
+    def forward(self, inputs: List[torch.Tensor]):
+        return self.graph()
+
+
+class graph_inputs1(nn.Module):
+    def __init__(self, graph: torch.fx.GraphModule):
+        super().__init__()
+        self.graph = graph
+
+    def forward(self, inp: torch.Tensor):
+        return self.graph(inp)
+
+
+class graph_inputs2(nn.Module):
+    def __init__(self, graph: torch.fx.GraphModule):
+        super().__init__()
+        self.graph = graph
+
+    def forward(self, inp: List[torch.Tensor]):
+        return self.graph(inp[0], inp[1])
+
+
+class graph_inputs3(nn.Module):
+    def __init__(self, graph: torch.fx.GraphModule):
+        super().__init__()
+        self.graph = graph
+
+    def forward(self, inp: List[torch.Tensor]):
+        return self.graph(inp[0], inp[1], inp[2])
+
+
+class graph_inputs4(nn.Module):
+    def __init__(self, graph: torch.fx.GraphModule):
+        super().__init__()
+        self.graph = graph
+
+    def forward(self, inp: List[torch.Tensor]):
+        return self.graph(inp[0], inp[1], inp[2], inp[3])
+
+
+class graph_inputs5(nn.Module):
+    def __init__(self, graph: torch.fx.GraphModule):
+        super().__init__()
+        self.graph = graph
+
+    def forward(self, inp: List[torch.Tensor]):
+        return self.graph(inp[0], inp[1], inp[2], inp[3], inp[4])
+
+
+class graph_inputs6(nn.Module):
+    def __init__(self, graph: torch.fx.GraphModule):
+        super().__init__()
+        self.graph = graph
+
+    def forward(self, inp: List[torch.Tensor]):
+        return self.graph(inp[0], inp[1], inp[2], inp[3], inp[4], inp[5])
+
+
 class SegmentedPolynomialNaive(nn.Module):
     def __init__(
         self,
@@ -238,16 +302,34 @@ class SegmentedPolynomialNaive(nn.Module):
         self.input_inds = []
         for operation, d in polynomial.operations:
             ope_out, b_out = operation.output_operand_buffer(self.num_inputs)
-            self.graphs.append(
-                _tensor_product_fx(
-                    d.move_operand_last(ope_out),
-                    device=None,
-                    math_dtype=self.math_dtype,
-                    optimize_einsums=True,
-                )
-            )
             self.b_outs.append(b_out - self.num_inputs)
             self.input_inds.append(operation.input_buffers(self.num_inputs))
+            # self.graphs.append(
+            gr = _tensor_product_fx(
+                d.move_operand_last(ope_out),
+                device=None,
+                math_dtype=self.math_dtype,
+                optimize_einsums=True,
+            )
+            # )
+            if len(self.input_inds[-1]) == 0:
+                self.graphs.append(graph_inputs0(gr))
+            elif len(self.input_inds[-1]) == 1:
+                self.graphs.append(graph_inputs1(gr))
+            elif len(self.input_inds[-1]) == 2:
+                self.graphs.append(graph_inputs2(gr))
+            elif len(self.input_inds[-1]) == 3:
+                self.graphs.append(graph_inputs3(gr))
+            elif len(self.input_inds[-1]) == 4:
+                self.graphs.append(graph_inputs4(gr))
+            elif len(self.input_inds[-1]) == 5:
+                self.graphs.append(graph_inputs5(gr))
+            elif len(self.input_inds[-1]) == 6:
+                self.graphs.append(graph_inputs6(gr))
+            else:
+                raise ValueError(
+                    f"Unsupported number of inputs: {len(self.input_inds[-1])}"
+                )
 
     def forward(
         self,
@@ -299,14 +381,14 @@ class SegmentedPolynomialNaive(nn.Module):
         for i, graph in enumerate(self.graphs):
             b_out = self.b_outs[i]
             input_list = [inputs[j] for j in self.input_inds[i]]
-            out = graph(*input_list)
+            out = graph(input_list)
             # For 0 inputs case:
             if len(input_list) == 0:
                 out = out.unsqueeze(0)
             if out_indices[b_out].size() != torch.Size([0]):
                 # In case we need to replicate before scattering:
                 if out.shape[0] == 1 and out_indices[b_out].shape[0] > 1:
-                    out = out.expand(out_indices[b_out].shape[0], *out.shape[1:])
+                    out = out.expand(out_indices[b_out].shape[0], out.shape[1])
                 inds = out_indices[b_out].unsqueeze(-1).expand_as(out)
                 out_buffers[b_out].scatter_add_(0, inds, out)
             else:
