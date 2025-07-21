@@ -20,6 +20,9 @@ import torch
 import torch.nn as nn
 
 import cuequivariance as cue
+from cuequivariance_torch.primitives.segmented_polynomial_fused_tp import (
+    SegmentedPolynomialFusedTP,
+)
 from cuequivariance_torch.primitives.segmented_polynomial_naive import (
     SegmentedPolynomialNaive,
 )
@@ -71,6 +74,7 @@ class SegmentedPolynomial(nn.Module):
                 "To remove this warning, add a `method` parameter to your function call. Here are the available options:\n"
                 "• 'naive' - Works everywhere but not optimized (good for testing)\n"
                 "• 'uniform_1d' - Fast CUDA implementation for single uniform mode polynomials\n"
+                "• 'fused_tp' - A more general CUDA implementation, supporting many 3 and 4 operands contractions.\n"
             )
             method = "uniform_1d"
         if method == "uniform_1d":
@@ -79,6 +83,10 @@ class SegmentedPolynomial(nn.Module):
             )
         elif method == "naive":
             self.m = SegmentedPolynomialNaive(
+                polynomial, math_dtype, output_dtype_map, name
+            )
+        elif method == "fused_tp":
+            self.m = SegmentedPolynomialFusedTP(
                 polynomial, math_dtype, output_dtype_map, name
             )
         else:

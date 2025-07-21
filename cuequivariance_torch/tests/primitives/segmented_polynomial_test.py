@@ -253,7 +253,7 @@ DATA_TYPES_IN_MATH = [
     (torch.bfloat16, torch.float32),
 ]
 
-METHODS = ["uniform_1d"]
+METHODS = ["uniform_1d", "fused_tp"]
 
 EXPORT_MODES = ["eager", "compile", "script", "jit", "export"]
 
@@ -354,6 +354,12 @@ def test_segmented_polynomial_dytpes(
     if complexity > 2:
         pytest.skip("Skipping tests with many options that are not default")
 
+    # Unsupported combinations
+    if method == "fused_tp" and name == "symmetric_contraction":
+        pytest.skip("Skipping fused TP for symmetric contraction")
+    if method == "fused_tp" and math_dtype == torch.float32 and dtype == torch.float64:
+        pytest.skip("Skipping fused TP for float32 math_dtype with float64 inputs")
+
     run_segmented_polynomial_test(
         name,
         polynomial,
@@ -395,6 +401,9 @@ def test_segmented_polynomial_export(
     # Skip script mode for naive method as it is not supported
     if method == "naive" and mode == "script":
         pytest.skip("Skipping script mode for naive method")
+    # Skip script mode for fused_tp method as it is not supported
+    if method == "fused_tp" and mode == "script":
+        pytest.skip("Skipping script mode for fused_tp method")
     # Skip export mode for naive method for issues with testing
     if method == "naive" and mode == "export":
         pytest.skip("Skipping export mode for naive method")
