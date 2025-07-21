@@ -264,12 +264,6 @@ def segmented_polynomial(
     # Set default math_dtype
     if math_dtype is None:
         math_dtype = jnp.result_type(*io_buffers)
-        if math_dtype not in (jnp.float32, jnp.float64):
-            math_dtype = jnp.float32
-
-    assert math_dtype in (jnp.float32, jnp.float64), (
-        f"math_dtype must be float32 or float64, got {math_dtype}"
-    )
 
     # Execute the polynomial
     kwargs = dict(

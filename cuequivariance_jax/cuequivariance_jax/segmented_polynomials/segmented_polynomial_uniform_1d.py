@@ -55,7 +55,7 @@ def execute_uniform_1d(
     except ValueError as e:
         raise ValueError(
             error_message
-            + f"This method do not support coefficient modes. Flattening them failed:\n{e}"
+            + f"This method does not support coefficient modes. Flattening them failed:\n{e}"
         ) from e
     assert all(d.coefficient_subscripts == "" for _, d in polynomial.operations)
 
