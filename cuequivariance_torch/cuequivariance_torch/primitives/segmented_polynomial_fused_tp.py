@@ -37,6 +37,10 @@ class FusedTP3(nn.Module):
             path_coefficients=d.stacked_coefficients,
             math_dtype=math_dtype,
         )
+        self.repr = d.__repr__()
+
+    def __repr__(self):
+        return self.repr
 
     def forward(self, inputs: List[torch.Tensor]):
         return self.tp(inputs[0], inputs[1])
@@ -55,6 +59,10 @@ class FusedTP4(nn.Module):
             path_coefficients=d.stacked_coefficients,
             math_dtype=math_dtype,
         )
+        self.repr = d.__repr__()
+
+    def __repr__(self):
+        return self.repr
 
     def forward(self, inputs: List[torch.Tensor]):
         return self.tp(inputs[0], inputs[1], inputs[2])

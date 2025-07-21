@@ -212,63 +212,91 @@ def _tensor_product_fx(
 
 # Single classes for each number of inputs for scripting purposes
 class graph_inputs0(nn.Module):
-    def __init__(self, graph: torch.fx.GraphModule):
+    def __init__(self, graph: torch.fx.GraphModule, repr: str):
         super().__init__()
         self.graph = graph
+        self.repr = repr
+
+    def __repr__(self):
+        return self.repr
 
     def forward(self, inputs: List[torch.Tensor]):
         return self.graph()
 
 
 class graph_inputs1(nn.Module):
-    def __init__(self, graph: torch.fx.GraphModule):
+    def __init__(self, graph: torch.fx.GraphModule, repr: str):
         super().__init__()
         self.graph = graph
+        self.repr = repr
+
+    def __repr__(self):
+        return self.repr
 
     def forward(self, inp: torch.Tensor):
-        return self.graph(inp)
+        return self.graph(inp[0])
 
 
 class graph_inputs2(nn.Module):
-    def __init__(self, graph: torch.fx.GraphModule):
+    def __init__(self, graph: torch.fx.GraphModule, repr: str):
         super().__init__()
         self.graph = graph
+        self.repr = repr
+
+    def __repr__(self):
+        return self.repr
 
     def forward(self, inp: List[torch.Tensor]):
         return self.graph(inp[0], inp[1])
 
 
 class graph_inputs3(nn.Module):
-    def __init__(self, graph: torch.fx.GraphModule):
+    def __init__(self, graph: torch.fx.GraphModule, repr: str):
         super().__init__()
         self.graph = graph
+        self.repr = repr
+
+    def __repr__(self):
+        return self.repr
 
     def forward(self, inp: List[torch.Tensor]):
         return self.graph(inp[0], inp[1], inp[2])
 
 
 class graph_inputs4(nn.Module):
-    def __init__(self, graph: torch.fx.GraphModule):
+    def __init__(self, graph: torch.fx.GraphModule, repr: str):
         super().__init__()
         self.graph = graph
+        self.repr = repr
+
+    def __repr__(self):
+        return self.repr
 
     def forward(self, inp: List[torch.Tensor]):
         return self.graph(inp[0], inp[1], inp[2], inp[3])
 
 
 class graph_inputs5(nn.Module):
-    def __init__(self, graph: torch.fx.GraphModule):
+    def __init__(self, graph: torch.fx.GraphModule, repr: str):
         super().__init__()
         self.graph = graph
+        self.repr = repr
+
+    def __repr__(self):
+        return self.repr
 
     def forward(self, inp: List[torch.Tensor]):
         return self.graph(inp[0], inp[1], inp[2], inp[3], inp[4])
 
 
 class graph_inputs6(nn.Module):
-    def __init__(self, graph: torch.fx.GraphModule):
+    def __init__(self, graph: torch.fx.GraphModule, repr: str):
         super().__init__()
         self.graph = graph
+        self.repr = repr
+
+    def __repr__(self):
+        return self.repr
 
     def forward(self, inp: List[torch.Tensor]):
         return self.graph(inp[0], inp[1], inp[2], inp[3], inp[4], inp[5])
@@ -313,19 +341,19 @@ class SegmentedPolynomialNaive(nn.Module):
             )
             # )
             if len(self.input_inds[-1]) == 0:
-                self.graphs.append(graph_inputs0(gr))
+                self.graphs.append(graph_inputs0(gr, d.__repr__()))
             elif len(self.input_inds[-1]) == 1:
-                self.graphs.append(graph_inputs1(gr))
+                self.graphs.append(graph_inputs1(gr, d.__repr__()))
             elif len(self.input_inds[-1]) == 2:
-                self.graphs.append(graph_inputs2(gr))
+                self.graphs.append(graph_inputs2(gr, d.__repr__()))
             elif len(self.input_inds[-1]) == 3:
-                self.graphs.append(graph_inputs3(gr))
+                self.graphs.append(graph_inputs3(gr, d.__repr__()))
             elif len(self.input_inds[-1]) == 4:
-                self.graphs.append(graph_inputs4(gr))
+                self.graphs.append(graph_inputs4(gr, d.__repr__()))
             elif len(self.input_inds[-1]) == 5:
-                self.graphs.append(graph_inputs5(gr))
+                self.graphs.append(graph_inputs5(gr, d.__repr__()))
             elif len(self.input_inds[-1]) == 6:
-                self.graphs.append(graph_inputs6(gr))
+                self.graphs.append(graph_inputs6(gr, d.__repr__()))
             else:
                 raise ValueError(
                     f"Unsupported number of inputs: {len(self.input_inds[-1])}"

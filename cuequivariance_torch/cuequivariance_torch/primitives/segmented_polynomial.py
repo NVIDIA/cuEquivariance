@@ -65,6 +65,8 @@ class SegmentedPolynomial(nn.Module):
         self.num_inputs = polynomial.num_inputs
         self.num_outputs = polynomial.num_outputs
 
+        self.repr = polynomial.__repr__()
+
         if method == "":
             warnings.warn(
                 "Hello! It looks like you're using code that was written for an older version of this library.\n"
@@ -91,6 +93,9 @@ class SegmentedPolynomial(nn.Module):
             )
         else:
             raise ValueError(f"Invalid method: {method}")
+
+    def __repr__(self):
+        return self.repr + f"\n{super().__repr__()}"
 
     # For torch.jit.trace, we cannot pass explicit optionals,
     # so these must be passed as kwargs then.
