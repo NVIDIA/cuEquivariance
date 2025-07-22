@@ -106,7 +106,12 @@ def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
         avg_rate = (rate_before + rate_after) / 2
 
         # print(
-        #     f"DEBUG: Attempt {attempt + 1}, n_iter={n_iter}, sleep_time={sleep_time * 1e6:.1f}us, sync_time={sync_time * 1e6:.1f}us, avg_time={avg_time * 1e6:.1f}us, rate_before={rate_before / 1e9:.2f} GHz, rate_after={rate_after / 1e9:.2f} GHz"
+        #     f"DEBUG: Attempt {attempt + 1}, n_iter={n_iter}, "
+        #     f"sleep_time={sleep_time * 1e6:.1f}us, "
+        #     f"sync_time={sync_time * 1e6:.1f}us, "
+        #     f"avg_time={avg_time * 1e6:.1f}us, "
+        #     f"rate_before={rate_before / 1e9:.2f} GHz, "
+        #     f"rate_after={rate_after / 1e9:.2f} GHz"
         # )
 
         # If synchronization time is small, it indicates the CPU is lagging behind the GPU
