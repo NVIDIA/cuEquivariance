@@ -101,7 +101,10 @@ def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
             )
             continue
 
-        diff, max_tol = abs(rate_before - rate_after), 0.02 * max(rate_before, rate_after)
+        diff, max_tol = (
+            abs(rate_before - rate_after),
+            0.02 * max(rate_before, rate_after),
+        )
         if diff > max_tol:
             # If the clock rate varies too much, simply retry
             rejections.append(
