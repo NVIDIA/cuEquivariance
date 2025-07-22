@@ -19,11 +19,10 @@ import warnings
 from functools import partial
 
 import jax
-import numpy as np
 from jax.experimental.mosaic.gpu.profiler import _event_elapsed, _event_record
 
 
-def measure_clock_ticks(f, *args, **kwargs) -> float:
+def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
     """Measure the execution time of a function in clock ticks.
 
     The measurement process:
@@ -38,13 +37,14 @@ def measure_clock_ticks(f, *args, **kwargs) -> float:
         **kwargs: Keyword arguments to pass to the function
 
     Returns:
-        float: The execution time in clock ticks per function call
+        tuple: A tuple containing the average clock rate in Hz and the average time per function call in seconds.
 
         Example:
         def my_function(x, y):
             return x + y
 
-        clock_ticks = measure_clock_ticks(my_function, 1, 2)
+        rate, time = measure_clock_ticks(my_function, 1, 2)
+        clock_ticks = rate * time
         print(f"Function took {clock_ticks} clock ticks")
     """
     from cuequivariance_ops_jax import noop, sleep
@@ -98,7 +98,7 @@ def measure_clock_ticks(f, *args, **kwargs) -> float:
 
     for attempt in range(max_tries):
         avg_time, rate_before, rate_after = jax.tree.map(
-            np.array, run_bench(n_iter, (args, kwargs))
+            float, run_bench(n_iter, (args, kwargs))
         )
 
         # Check if clock rates are consistent (within 1% tolerance)
@@ -122,8 +122,5 @@ def measure_clock_ticks(f, *args, **kwargs) -> float:
     if not success:
         warnings.warn(f"Potentially bad measurement of clock ticks for {f.__name__}.")
 
-    # Convert seconds to clock ticks using average of before/after rates
     avg_rate = (rate_before + rate_after) / 2
-    ticks_per_call = avg_time * avg_rate
-
-    return ticks_per_call
+    return avg_rate, avg_time
