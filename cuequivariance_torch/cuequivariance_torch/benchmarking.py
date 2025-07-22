@@ -42,6 +42,7 @@ def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
 
     t_sleep_before = 200e-6  # 200 microseconds
     n_iter = 1
+    rejections: list[str] = []
 
     for attempt in range(10):
         sleep_before_time = torch.tensor(30e-6 * n_iter + t_sleep_before, device="cuda")
@@ -81,23 +82,40 @@ def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
 
         if attempt == 0:
             # Always skip the first iteration to allow for JIT compilation
+            rejections.append("First iteration (always skipped)")
             continue
 
         if sync_time < 50e-6:
             # If synchronization is too fast, it may indicate that the CPU is lagging behind the GPU.
-            t_sleep_before += 50e-6 - sync_time + 50e-6
+            t_sleep_before += 50e-6 - sync_time + 500e-6
+            rejections.append(
+                f"CPU lagging behind GPU (will sleep {t_sleep_before * 1e3:.1f} ms)"
+            )
             continue
 
         if n_iter * avg_time < 20e-6:
             # Avoid measurement overheads by measuring for at least 20 microseconds
             n_iter = int(100e-6 / avg_time)
+            rejections.append(
+                f"Too short measurement time (will measure {n_iter} iterations)"
+            )
             continue
 
         if abs(rate_before - rate_after) > 0.01 * max(rate_before, rate_after):
             # If the clock rate varies too much, simply retry
+            rejections.append(
+                f"Clock rate variation too high "
+                f"({abs(rate_before - rate_after) / 1e6:.2f} MHz variation)"
+            )
             continue
 
         return avg_clock_rate, avg_time
 
-    warnings.warn("Potentially bad measurement in measure_clock_ticks.")
+    rejection_details = "\n".join(
+        f"  Attempt #{i + 1}: {reason}" for i, reason in enumerate(rejections)
+    )
+    warnings.warn(
+        f"Was not able to reach a satisfying measurement in {len(rejections)} attempts. "
+        f"Rejection reasons:\n{rejection_details}"
+    )
     return avg_clock_rate, avg_time
