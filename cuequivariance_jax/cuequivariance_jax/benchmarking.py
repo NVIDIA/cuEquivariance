@@ -47,7 +47,7 @@ def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
         clock_ticks = rate * time
         print(f"Function took {clock_ticks} clock ticks")
     """
-    from cuequivariance_ops_jax import noop, sleep
+    from cuequivariance_ops_jax import noop, sleep, synchronize
 
     def run_func(state):
         """Wrapper function that calls the target function and ensures proper data flow."""
@@ -57,8 +57,10 @@ def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
         args, kwargs, _ = noop((args, kwargs, outputs))
         return (args, kwargs)
 
-    @partial(jax.jit, static_argnums=(0,))
-    def run_bench(n_iter: int, state):
+    second_sleep_time: float = 30e-6
+
+    @partial(jax.jit, static_argnums=(0, 1))
+    def run_bench(n_iter: int, sleep_time: float, state):
         # Warmup phase: execute once to trigger potential JIT compilation or library loading
         _, state = _event_record(state, copy_before=True)
         state = run_func(state)
@@ -66,8 +68,8 @@ def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
 
         # Pre-measurement clock rate calibration
         # Sleep to fill the CUDA stream and measure clock rate
-        # Assumption: each operation takes less than 10us, add 100us buffer
-        sleep_time = 10e-6 * n_iter + 100e-6
+        # Assumption: each operation takes less than 10us
+        sleep_time = sleep_time + 10e-6 * n_iter
         ticks_before, state = sleep(sleep_time, state)
         rate_before = ticks_before / sleep_time
 
@@ -79,33 +81,38 @@ def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
 
         # Post-measurement clock rate calibration
         # Use 30us as a reasonable time to measure clock ticks
-        calib_time = 30e-6
-        ticks_after, state = sleep(calib_time, state)
-        rate_after = ticks_after / calib_time
+        ticks_after, state = sleep(second_sleep_time, state)
+        rate_after = ticks_after / second_sleep_time
+
+        # Synchronize to check if the CPU lags behind the GPU or not
+        sync_time, state = synchronize(state)
 
         # Calculate average time per function call using GPU events
-        # Call noop to ensure sleep is executed before event_elapsed
+        # Call noop to ensure sleep+sync is executed before event_elapsed
         end_event, state = noop((end_event, state))
         total_time = 1e-3 * _event_elapsed(start_event, end_event)
         avg_time = total_time / n_iter
 
-        return avg_time, rate_before, rate_after
+        return avg_time, rate_before, rate_after, sync_time
 
     # Adaptive iteration counting to find optimal measurement parameters
-    success = False
     n_iter = 1
-    max_tries = 5
+    sleep_time = 50e-6
 
-    for attempt in range(max_tries):
-        avg_time, rate_before, rate_after = jax.tree.map(
-            float, run_bench(n_iter, (args, kwargs))
+    for attempt in range(10):
+        avg_time, rate_before, rate_after, sync_time = jax.tree.map(
+            float, run_bench(n_iter, sleep_time, (args, kwargs))
         )
+        avg_rate = (rate_before + rate_after) / 2
 
-        # Check if clock rates are consistent (within 1% tolerance)
-        # Inconsistent rates indicate timing measurement issues
-        tolerance = 0.01
-        max_rate = max(rate_before, rate_after)
-        if abs(rate_before - rate_after) > tolerance * max_rate:
+        # print(
+        #     f"DEBUG: Attempt {attempt + 1}, n_iter={n_iter}, sleep_time={sleep_time * 1e6:.1f}us, sync_time={sync_time * 1e6:.1f}us, avg_time={avg_time * 1e6:.1f}us, rate_before={rate_before / 1e9:.2f} GHz, rate_after={rate_after / 1e9:.2f} GHz"
+        # )
+
+        # If synchronization time is small, it indicates the CPU is lagging behind the GPU
+        target_sync_time = second_sleep_time + 20e-6
+        if sync_time < target_sync_time:
+            sleep_time += (target_sync_time - sync_time) + 50e-6
             continue
 
         # Ensure measurement duration is long enough for accuracy (at least 20us total)
@@ -116,11 +123,14 @@ def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
             n_iter = int(target / avg_time)
             continue
 
-        success = True
-        break
+        # Check if clock rates are consistent (within 1% tolerance)
+        # Inconsistent rates indicate timing measurement issues
+        tolerance = 0.01
+        max_rate = max(rate_before, rate_after)
+        if abs(rate_before - rate_after) > tolerance * max_rate:
+            continue
 
-    if not success:
-        warnings.warn(f"Potentially bad measurement of clock ticks for {f.__name__}.")
+        return avg_rate, avg_time
 
-    avg_rate = (rate_before + rate_after) / 2
+    warnings.warn("Potentially bad measurement in measure_clock_ticks.")
     return avg_rate, avg_time

@@ -90,5 +90,5 @@ def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
 
         return avg_clock_rate, avg_time
 
-    warnings.warn(f"Potentially bad measurement of clock ticks for {f.__name__}.")
+    warnings.warn("Potentially bad measurement in measure_clock_ticks.")
     return avg_clock_rate, avg_time
