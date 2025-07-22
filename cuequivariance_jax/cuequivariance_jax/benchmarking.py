@@ -100,7 +100,7 @@ def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
     sleep_time = 50e-6
     rejections: list[str] = []
 
-    for attempt in range(10):
+    for attempt in range(20):
         avg_time, rate_before, rate_after, sync_time = jax.tree.map(
             float, run_bench(n_iter, sleep_time, (args, kwargs))
         )
@@ -137,12 +137,11 @@ def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
 
         # Check if clock rates are consistent (within 1% tolerance)
         # Inconsistent rates indicate timing measurement issues
-        tolerance = 0.01
-        max_rate = max(rate_before, rate_after)
-        if abs(rate_before - rate_after) > tolerance * max_rate:
+        diff, max_tol = abs(rate_before - rate_after), 0.02 * max(rate_before, rate_after)
+        if diff > max_tol:
             rejections.append(
                 f"Clock rate variation too high "
-                f"({abs(rate_before - rate_after) / 1e6:.2f} MHz variation)"
+                f"({diff / 1e6:.2f} MHz variation > {max_tol / 1e6:.2f} MHz)"
             )
             continue
 

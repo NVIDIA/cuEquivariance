@@ -44,7 +44,7 @@ def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
     n_iter = 1
     rejections: list[str] = []
 
-    for attempt in range(10):
+    for attempt in range(20):
         sleep_before_time = torch.tensor(30e-6 * n_iter + t_sleep_before, device="cuda")
         sleep_after_time = torch.tensor(30e-6, device="cuda")
         start_event = torch.cuda.Event(enable_timing=True)
@@ -101,11 +101,12 @@ def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
             )
             continue
 
-        if abs(rate_before - rate_after) > 0.01 * max(rate_before, rate_after):
+        diff, max_tol = abs(rate_before - rate_after), 0.02 * max(rate_before, rate_after)
+        if diff > max_tol:
             # If the clock rate varies too much, simply retry
             rejections.append(
                 f"Clock rate variation too high "
-                f"({abs(rate_before - rate_after) / 1e6:.2f} MHz variation)"
+                f"({diff / 1e6:.2f} MHz variation is bigger than {max_tol / 1e6:.2f} MHz)"
             )
             continue
 
