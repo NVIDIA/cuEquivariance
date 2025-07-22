@@ -702,6 +702,22 @@ class SegmentedPolynomial:
             [(ope, stp.squeeze_modes(modes)) for ope, stp in self.operations],
         )
 
+    def split_mode(self, mode: str, size: int) -> SegmentedPolynomial:
+        """Split specified mode in the polynomial.
+
+        Args:
+            mode (str): Mode to split.
+            size (int): Size to split the mode into.
+
+        Returns:
+            :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: Polynomial with split mode.
+        """
+        return SegmentedPolynomial._from_default_operands(
+            self.inputs,
+            self.outputs,
+            [(ope, stp.split_mode(mode, size)) for ope, stp in self.operations],
+        )
+
     def flatten_coefficient_modes(self) -> SegmentedPolynomial:
         """Flatten the coefficient modes of the segmented tensor products.
 

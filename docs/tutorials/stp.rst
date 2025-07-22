@@ -186,6 +186,7 @@ In JAX, we can use the :func:`cuex.segmented_polynomial <cuequivariance_jax.segm
       cue.SegmentedPolynomial.eval_last_operand(d),
       [w, x1],
       [jax.ShapeDtypeStruct((3000, irreps2.dim), jnp.float32)],
+      method="naive",
    )
 
    assert x2.shape == (3000, irreps2.dim)

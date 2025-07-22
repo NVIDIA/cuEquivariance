@@ -29,14 +29,14 @@ from jax.interpreters import ad, batching, mlir, partial_eval, xla
 import cuequivariance as cue
 import cuequivariance_jax as cuex  # noqa: F401
 from cuequivariance_jax.segmented_polynomials.indexing_mode import IndexingMode
-from cuequivariance_jax.segmented_polynomials.segmented_polynomial_hybrid_impl import (
-    segmented_polynomial_hybrid_impl,
+from cuequivariance_jax.segmented_polynomials.segmented_polynomial_indexed_linear import (
+    execute_indexed_linear,
 )
-from cuequivariance_jax.segmented_polynomials.segmented_polynomial_ops_impl import (
-    segmented_polynomial_ops_impl,
+from cuequivariance_jax.segmented_polynomials.segmented_polynomial_naive import (
+    execute_naive,
 )
-from cuequivariance_jax.segmented_polynomials.segmented_polynomial_vanilla_impl import (
-    segmented_polynomial_vanilla_impl,
+from cuequivariance_jax.segmented_polynomials.segmented_polynomial_uniform_1d import (
+    execute_uniform_1d,
 )
 from cuequivariance_jax.segmented_polynomials.utils import (
     batch_size,
@@ -53,9 +53,10 @@ def segmented_polynomial(
     outputs_shape_dtype: list[jax.ShapeDtypeStruct],
     indices: None | list[None | jax.Array | tuple[jax.Array | slice]] = None,
     *,
+    method: str = "",
     math_dtype: jnp.dtype | None = None,
     name: str | None = None,
-    impl: str = "auto",
+    precision: jax.lax.Precision = jax.lax.Precision.HIGHEST,
 ) -> list[jax.Array]:
     """Compute a segmented polynomial.
 
@@ -69,69 +70,84 @@ def segmented_polynomial(
         outputs_shape_dtype: List of output shapes and dtypes specifications.
             The last shape dimension can be set to -1 to infer the size from the polynomial descriptor.
         indices: Optional list of indices for inputs and outputs. If None, no indexing
-            is applied. Defaults to None.
+            is applied. Defaults to None. Note that indices are not supported for all methods.
+        method: Specifies the implementation method to use. Options are:
+            - "naive": Uses a naive JAX implementation. It always works but is not optimized.
+            - "uniform_1d": Uses a CUDA implementation for polynomials with a single uniform mode.
+            - "indexed_linear": Uses a CUDA implementation for linear layers with indexed weights.
         math_dtype: Data type for computational operations. If None, automatically
             determined from input types, defaulting to float32 if no float64 inputs
             are present. Defaults to None.
         name: Optional name for the operation. Defaults to None.
-        impl: Implementation to use, one of ["auto", "cuda", "jax", "naive_jax"]. If "auto",
-            uses CUDA when available and efficient, falling back to JAX otherwise. Defaults to "auto".
+        precision: The precision to use for the computation. Defaults to HIGHEST. Note that precision is not supported for all methods.
 
     Returns:
         List of JAX arrays containing the computed polynomial outputs.
-
-    Performance Considerations:
-        - CUDA acceleration requirements:
-            - STPs have a single mode (e.g. channelwise tensor product with subscripts ``u,u,,u``)
-            - Math data type is float32 or float64
-            - Input/output data types are float32, float64, float16, or bfloat16
-        - Automatic optimizations:
-            - Based on STP symmetries
-            - Based on input buffer repetition patterns
-            - Automatic pruning of unused buffers and indices
 
     Implementation Details:
         - Supports JAX transformations: jit, grad, jvp, vmap
             - Supports infinite derivatives through JVP and transpose rules
             - Full batching support
 
-    Note:
-        For maximum performance with CUDA-capable hardware, ensure inputs match the
-        CUDA kernel activation conditions listed above. To verify wether the CUDA
-        implementation is used, set ``impl="cuda"`` or set ``logging.basicConfig(level=logging.INFO)``.
-
     Examples:
-        Simple example with spherical harmonics:
+        Simple example computing the spherical harmonics:
 
         >>> p = cue.descriptors.spherical_harmonics(cue.SO3(1), [0, 1, 2]).polynomial
         >>> cuex.segmented_polynomial(
-        ...     p, [jnp.array([0.0, 1.0, 0.0])], [jax.ShapeDtypeStruct((-1,), jnp.float32)]
+        ...     p, [jnp.array([0.0, 1.0, 0.0])], [jax.ShapeDtypeStruct((-1,), jnp.float32)], method="naive"
         ... )
         [Array([1.       , 0.       , 1.7320508, 0.       , 0.       , 0.       ,
                2.236068 , 0.       , 0.       ], dtype=float32)]
 
-        Advanced example with tensor product and indexing:
+        Example computing a tensor product with indexing using the "uniform_1d" method:
 
         >>> poly: cue.SegmentedPolynomial = cue.descriptors.channelwise_tensor_product(
         ...     cue.Irreps(cue.O3, "32x0e + 32x1o + 32x1e + 32x2o"),
         ...     cue.Irreps(cue.O3, "0e + 1o + 1e"),
         ...     cue.Irreps(cue.O3, "32x0e + 32x1o + 32x1e"),
-        ... ).polynomial.flatten_coefficient_modes().squeeze_modes()
+        ... ).polynomial
         >>> a = np.random.randn(1, 50, poly.inputs[0].size)
         >>> b = np.random.randn(10, 50, poly.inputs[1].size)
         >>> c = np.random.randn(100, 1, poly.inputs[2].size)
         >>> i = np.random.randint(0, 10, (100, 50))
-        >>> D = jax.ShapeDtypeStruct(shape=(11, 12, poly.outputs[0].size), dtype=np.float32)
+        >>> D = jax.ShapeDtypeStruct(shape=(11, 12, poly.outputs[0].size), dtype=jnp.float32)
         >>> j1 = np.random.randint(0, 11, (100, 50))
         >>> j2 = np.random.randint(0, 12, (100, 1))
         >>> [D] = cuex.segmented_polynomial(
-        ...     poly, [a, b, c], [D], [None, np.s_[i, :], None, np.s_[j1, j2]]
+        ...     poly, [a, b, c], [D], [None, np.s_[i, :], None, np.s_[j1, j2]], method="uniform_1d"
         ... )
         >>> D.shape
         (11, 12, 1056)
+
+        Example computing a linear layer with indexed weights using the "indexed_linear" method:
+
+        >>> input_irreps = cue.Irreps(cue.O3, f"10x0e + 10x1o")
+        >>> output_irreps = cue.Irreps(cue.O3, f"20x0e + 20x1o")
+        >>> poly = cue.descriptors.linear(input_irreps, output_irreps).polynomial
+        >>> counts = jnp.array([3, 4, 3], dtype=jnp.int32)  # Number of elements in each partition
+        >>> w = jax.random.normal(jax.random.key(0), (3, poly.inputs[0].size), dtype=jnp.float32)
+        >>> x = jax.random.normal(jax.random.key(1), (10, poly.inputs[1].size), dtype=jnp.float32)
+        >>> y = jax.ShapeDtypeStruct((10, poly.outputs[0].size), jnp.float32)
+        >>> [y] = cuex.segmented_polynomial(
+        ...     poly,
+        ...     [w, x], [y], [cuex.Repeats(counts), None, None],
+        ...     method="indexed_linear"
+        ... )
+        >>> y.shape
+        (10, 80)
     """
-    # TODO: Using cue.Repeats in the indices arguments is purpusfully not documented
-    # because this API is not settled yet. This is why we have a dedicated indexed_linear function
+
+    if method == "":
+        raise ValueError(
+            "Hello! It looks like you're using code that was written for an older version of this library. "
+            "Starting in v0.6.0, the `method` argument is now required for `segmented_polynomial()`. "
+            "This change helps ensure you get optimal performance by explicitly choosing the computation method.\n\n"
+            "To fix this, simply add a `method` parameter to your function call. Here are the available options:\n"
+            "• 'naive' - Works everywhere but not optimized (good for testing)\n"
+            "• 'uniform_1d' - Fast CUDA implementation for single uniform mode polynomials\n"
+            "• 'indexed_linear' - Fast CUDA implementation for linear layers with indexed weights\n\n"
+            "Example: outputs = segmented_polynomial(poly, inputs, outputs, method='naive')"
+        )
 
     if name is None:
         name = "segmented_polynomial"
@@ -248,12 +264,6 @@ def segmented_polynomial(
     # Set default math_dtype
     if math_dtype is None:
         math_dtype = jnp.result_type(*io_buffers)
-        if math_dtype not in (jnp.float32, jnp.float64):
-            math_dtype = jnp.float32
-
-    assert math_dtype in (jnp.float32, jnp.float64), (
-        f"math_dtype must be float32 or float64, got {math_dtype}"
-    )
 
     # Execute the polynomial
     kwargs = dict(
@@ -265,12 +275,10 @@ def segmented_polynomial(
         polynomial=polynomial,
         math_dtype=math_dtype,
         name=name,
+        precision=precision,
     )
 
-    if impl == "naive_jax":
-        outputs = segmented_polynomial_vanilla_impl(**kwargs)
-    else:
-        outputs = segmented_polynomial_prim(**kwargs, impl=impl)
+    outputs = segmented_polynomial_prim(**kwargs, method=method)
 
     # Reshape the outputs to the original requested shapes
     def fn(x: jax.Array, shape: tuple[int, ...]) -> jax.Array:
@@ -331,7 +339,8 @@ def segmented_polynomial_prim(
     polynomial: cue.SegmentedPolynomial,
     math_dtype: jnp.dtype,
     name: str,
-    impl: str = "auto",
+    method: str,
+    precision: jax.lax.Precision,
     return_none_if_empty: bool = False,
 ) -> tuple[jax.Array, ...]:  # output buffers
     """
@@ -362,7 +371,8 @@ def segmented_polynomial_prim(
         polynomial=polynomial.filter_keep_operands(used_inputs + used_outputs),
         math_dtype=jnp.dtype(math_dtype),
         name=str(name),
-        impl=impl,
+        method=method,
+        precision=precision,
     )
 
     if return_none_if_empty:
@@ -379,7 +389,7 @@ def segmented_polynomial_prim(
     return tuple(old_outputs)
 
 
-def _remap_indices_and_index_configuration(
+def _remap_indices_and_config(
     old_indices: list[jax.Array],
     old_index_configuration: tuple[tuple[int, ...], ...],
     old_index_mode: tuple[tuple[IndexingMode, ...], ...],
@@ -420,7 +430,8 @@ def segmented_polynomial_abstract_eval(
     polynomial: cue.SegmentedPolynomial,
     math_dtype: jnp.dtype,
     name: str,
-    impl: str,
+    method: str,
+    precision: jax.lax.Precision,
 ) -> tuple[jax.core.ShapedArray, ...]:
     return tuple(
         jax.core.ShapedArray(out.shape, out.dtype) for out in outputs_shape_dtype
@@ -436,7 +447,8 @@ def segmented_polynomial_impl(
     polynomial: cue.SegmentedPolynomial,
     math_dtype: jnp.dtype,
     name: str,
-    impl: str,
+    method: str,
+    precision: jax.lax.Precision,
 ) -> tuple[jax.Array, ...]:
     num_inputs = len(index_configuration) - len(outputs_shape_dtype)
     inputs, indices = inputs_and_indices[:num_inputs], inputs_and_indices[num_inputs:]
@@ -449,17 +461,6 @@ def segmented_polynomial_impl(
         polynomial = polynomial.unsymmetrize_for_identical_operands()
     except NotImplementedError:
         pass
-
-    outputs = None
-    kwargs = dict(
-        inputs=inputs,
-        outputs_shape_dtype=outputs_shape_dtype,
-        indices=indices,
-        index_configuration=index_configuration,
-        polynomial=polynomial,
-        math_dtype=math_dtype,
-        name=name,
-    )
 
     if os.environ.get("CUE_PRINT_STATS"):
         bi = np.array(index_configuration, dtype=np.int32)
@@ -474,39 +475,45 @@ def segmented_polynomial_impl(
             f"{name}: {fl / 1e9:.2f} GFLOP, {mem / 1e9:.2f} GB, arithmetic intensity: {fl / mem:.2f} FLOP/byte"
         )
 
-    assert impl in ("auto", "cuda", "jax")
-
-    if any(mode == IndexingMode.REPEATED for modes in index_mode for mode in modes):
-        return segmented_polynomial_hybrid_impl(
-            **kwargs,
-            index_mode=index_mode,
-            impl=impl,
+    assert method in ("naive", "uniform_1d", "indexed_linear")
+    if platform != "cuda" and method != "naive":
+        warnings.warn(
+            f"Method '{method}' requires CUDA, but platform is '{platform}'. "
+            "Falling back to 'naive' implementation.",
+            stacklevel=2,
         )
+        method = "naive"
 
-    assert all(
-        all(
-            mode in (IndexingMode.BATCHED_OR_SHARED, IndexingMode.INDEXED)
-            for mode in modes
-        )
-        for modes in index_mode
+    kwargs = dict(
+        inputs=inputs,
+        outputs_shape_dtype=outputs_shape_dtype,
+        indices=indices,
+        index_configuration=index_configuration,
+        polynomial=polynomial,
+        math_dtype=math_dtype,
+        name=name,
     )
 
-    outputs = None
-    if platform == "cuda":
-        if impl in ("auto", "cuda"):
-            outputs = segmented_polynomial_ops_impl(**kwargs)
-            if impl == "cuda" and not outputs.is_ok():
-                raise RuntimeError(f"Failed to use CUDA implementation: {outputs.msg}")
-            outputs = outputs.unwrap_or(None)
-    else:
-        if impl == "cuda":
-            raise RuntimeError(f"{impl=} but platform is {platform}")
+    if any(mode == IndexingMode.REPEATED for modes in index_mode for mode in modes):
+        if method not in ("naive", "indexed_linear"):
+            raise ValueError(
+                "IndexingMode.REPEATED is only supported with 'naive' or 'indexed_linear' methods."
+            )
+    if precision != jax.lax.Precision.HIGHEST:
+        if method not in ("naive",):
+            raise ValueError(
+                f"Precision {precision} is only supported with 'naive' method."
+            )
 
-    if outputs is None:
-        outputs = segmented_polynomial_vanilla_impl(**kwargs)
-
-    assert outputs is not None
-    return outputs
+    match method:
+        case "naive":
+            return execute_naive(**kwargs, index_mode=index_mode, precision=precision)
+        case "uniform_1d":
+            return execute_uniform_1d(**kwargs)
+        case "indexed_linear":
+            return execute_indexed_linear(
+                **kwargs, index_mode=index_mode, precision=precision
+            )
 
 
 def segmented_polynomial_jvp(
@@ -519,7 +526,8 @@ def segmented_polynomial_jvp(
     polynomial: cue.SegmentedPolynomial,
     math_dtype: jnp.dtype,
     name: str,
-    impl: str,
+    method: str,
+    precision: jax.lax.Precision,
 ) -> tuple[tuple[jax.Array, ...], tuple[jax.Array | ad.Zero, ...]]:
     num_inputs = len(index_configuration) - len(outputs_shape_dtype)
 
@@ -540,19 +548,18 @@ def segmented_polynomial_jvp(
         polynomial,
         math_dtype,
         name,
-        impl=impl,
+        method=method,
+        precision=precision,
     )
 
     jvp_poly, _ = polynomial.jvp([not isinstance(t, ad.Zero) for t in tangents])
-    jvp_indices, jvp_index_configuration, jvp_index_mode = (
-        _remap_indices_and_index_configuration(
-            indices,
-            index_configuration,
-            index_mode,
-            [i for i, x in enumerate(primals)]
-            + [i for i, x in enumerate(tangents) if not isinstance(x, ad.Zero)]
-            + [num_inputs + i for i, x in enumerate(outputs_shape_dtype)],
-        )
+    jvp_indices, jvp_index_configuration, jvp_index_mode = _remap_indices_and_config(
+        indices,
+        index_configuration,
+        index_mode,
+        [i for i, x in enumerate(primals)]
+        + [i for i, x in enumerate(tangents) if not isinstance(x, ad.Zero)]
+        + [num_inputs + i for i, x in enumerate(outputs_shape_dtype)],
     )
 
     out_tangents = segmented_polynomial_prim(
@@ -566,7 +573,8 @@ def segmented_polynomial_jvp(
         name
         + "_jvp"
         + "".join("0" if isinstance(t, ad.Zero) else "1" for t in tangents),
-        impl=impl,
+        method=method,
+        precision=precision,
     )
 
     return out_primals, out_tangents
@@ -581,7 +589,8 @@ def segmented_polynomial_transpose(
     polynomial: cue.SegmentedPolynomial,
     math_dtype: jnp.dtype,
     name: str,
-    impl: str,
+    method: str,
+    precision: jax.lax.Precision,
 ) -> tuple[jax.Array | ad.Zero | None, ...]:
     num_inputs = len(index_configuration) - len(outputs_shape_dtype)
     inputs, indices = inputs_and_indices[:num_inputs], inputs_and_indices[num_inputs:]
@@ -595,19 +604,17 @@ def segmented_polynomial_transpose(
         [ad.is_undefined_primal(x) for x in inputs],
         [not isinstance(x, ad.Zero) for x in cotangents],
     )
-    tr_indices, tr_index_configuration, tr_index_mode = (
-        _remap_indices_and_index_configuration(
-            indices,
-            index_configuration,
-            index_mode,
-            [i for i, x in enumerate(inputs) if not ad.is_undefined_primal(x)]
-            + [
-                num_inputs + i
-                for i, x in enumerate(cotangents)
-                if not isinstance(x, ad.Zero)
-            ]
-            + [i for i, x in enumerate(inputs) if ad.is_undefined_primal(x)],
-        )
+    tr_indices, tr_index_configuration, tr_index_mode = _remap_indices_and_config(
+        indices,
+        index_configuration,
+        index_mode,
+        [i for i, x in enumerate(inputs) if not ad.is_undefined_primal(x)]
+        + [
+            num_inputs + i
+            for i, x in enumerate(cotangents)
+            if not isinstance(x, ad.Zero)
+        ]
+        + [i for i, x in enumerate(inputs) if ad.is_undefined_primal(x)],
     )
 
     tmp = segmented_polynomial_prim(
@@ -624,7 +631,8 @@ def segmented_polynomial_transpose(
         tr_poly,
         math_dtype,
         name + "_T",
-        impl=impl,
+        method=method,
+        precision=precision,
         return_none_if_empty=True,
     )
 
@@ -647,7 +655,8 @@ def segmented_polynomial_batching(
     polynomial: cue.SegmentedPolynomial,
     math_dtype: jnp.dtype,
     name: str,
-    impl: str,
+    method: str,
+    precision: jax.lax.Precision,
 ) -> tuple[tuple[jax.Array, ...], tuple[int, ...]]:
     # Add a new batch axis in the first dimension
     def prepare(input: jax.Array, axis: int | None) -> jax.Array:
@@ -687,7 +696,8 @@ def segmented_polynomial_batching(
         polynomial=polynomial,
         math_dtype=math_dtype,
         name=name + "_batching",
-        impl=impl,
+        method=method,
+        precision=precision,
     )
     return outputs, (0,) * len(outputs)
 

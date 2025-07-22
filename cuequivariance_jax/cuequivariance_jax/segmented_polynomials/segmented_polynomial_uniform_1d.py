@@ -12,10 +12,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import logging
+import math
 import re
 import warnings
-from dataclasses import dataclass
 
 import jax
 import jax.numpy as jnp
@@ -25,39 +24,6 @@ from packaging import version
 import cuequivariance as cue
 from cuequivariance_jax.segmented_polynomials.utils import reshape
 
-logger = logging.getLogger(__name__)
-
-
-@dataclass
-class Ok:
-    outputs: list[jax.Array]
-
-    def unwrap(self) -> list[jax.Array]:
-        return self.outputs
-
-    def unwrap_or(self, default):
-        return self.outputs
-
-    def is_ok(self) -> bool:
-        return True
-
-
-@dataclass
-class Err:
-    msg: str
-
-    def unwrap(self):
-        raise ValueError(self.msg)
-
-    def unwrap_or(self, default):
-        return default
-
-    def is_ok(self) -> bool:
-        return False
-
-
-Result = Ok | Err
-
 
 def sanitize_string(s):
     s = re.sub(r"[^A-Za-z0-9_]", "", s)
@@ -66,7 +32,7 @@ def sanitize_string(s):
     return s
 
 
-def segmented_polynomial_ops_impl(
+def execute_uniform_1d(
     inputs: list[jax.Array],  # shape (*batch_sizes, operand_size)
     outputs_shape_dtype: tuple[jax.ShapeDtypeStruct, ...],
     indices: list[jax.Array],
@@ -74,10 +40,8 @@ def segmented_polynomial_ops_impl(
     polynomial: cue.SegmentedPolynomial,
     math_dtype: jnp.dtype,
     name: str,
-) -> Result:
-    def make_error(msg: str) -> Err:
-        logger.info(f"[{name}] {msg}")
-        return Err(msg)
+) -> list[jax.Array]:
+    error_message = f"Failed to execute 'uniform_1d' method for the following polynomial:\n{polynomial}\n"
 
     index_configuration = np.array(index_configuration)
     num_batch_axes = index_configuration.shape[1]
@@ -86,17 +50,24 @@ def segmented_polynomial_ops_impl(
     )
     assert polynomial.num_outputs == len(outputs_shape_dtype)
 
-    polynomial = polynomial.flatten_coefficient_modes()
-    if any(d.coefficient_subscripts != "" for _, d in polynomial.operations):
-        return make_error("Non-scalar coefficients are not supported")
+    try:
+        polynomial = polynomial.flatten_coefficient_modes()
+    except ValueError as e:
+        raise ValueError(
+            error_message
+            + f"This method does not support coefficient modes. Flattening them failed:\n{e}"
+        ) from e
+    assert all(d.coefficient_subscripts == "" for _, d in polynomial.operations)
 
-    # TODO: consider enabling the u=1 case
-    # def fn(op, d: cue.SegmentedTensorProduct):
-    #     if d.subscripts.modes() == []:
-    #         d = d.append_modes_to_all_operands("u", dict(u=1))
-    #     return op, d
+    polynomial = polynomial.squeeze_modes()
+    polynomial = polynomial.canonicalize_subscripts()
 
-    # polynomial = polynomial.map_tensor_products(fn)
+    def fn(op, d: cue.SegmentedTensorProduct):
+        if d.subscripts.modes() == []:
+            d = d.append_modes_to_all_operands("u", dict(u=1))
+        return op, d
+
+    polynomial = polynomial.apply_fn(fn)
 
     # We don't use the feature that indices can index themselves
     index_configuration = np.concatenate(
@@ -121,13 +92,34 @@ def segmented_polynomial_ops_impl(
         index_configuration = np.full((index_configuration.shape[0], 1), -1, np.int32)
 
     # Reshape buffers to 3D by using the STP informations
+    extents = set()
     for ope, stp in polynomial.operations:
         if len(stp.subscripts.modes()) != 1:
-            return make_error(f"Unsupported STP: {stp}")
+            raise ValueError(
+                error_message
+                + f"The 'uniform_1d' method requires exactly one mode, but {len(stp.subscripts.modes())} modes were found in subscripts: {stp.subscripts}.\n"
+                + "Resolution: Consider applying 'flatten_modes()' to the polynomial to eliminate a mode by increasing the number of segments and paths. "
+                + "Please note that flattening modes with large extents may negatively impact performance."
+            )
+        assert stp.subscripts.modes() == ["u"], (
+            "Should be the case after canonicalization"
+        )
         if not stp.all_same_segment_shape():
-            return make_error(f"Unsupported STP: {stp}")
+            dims = stp.get_dims("u")
+            gcd = math.gcd(*stp.get_dims("u"))
+            suggestion = stp.split_mode("u", gcd)
+            raise ValueError(
+                error_message
+                + "The 'uniform_1d' method requires all segments to have uniform shapes within each operand.\n"
+                + f"Current configuration: {stp}\n"
+                + "Resolution: If your mode extents share a common divisor, consider applying 'split_mode()' to create uniform segment extents. "
+                + f"For mode u={dims}, the greatest common divisor is {gcd}. Applying 'split_mode()' would result in: {suggestion}"
+            )
 
         for i, operand in zip(ope.buffers, stp.operands):
+            if operand.ndim == 1:
+                extents.add(operand.segment_shape[0])
+
             b = buffers[i]
             shape = b.shape[:num_batch_axes] + (
                 operand.num_segments,
@@ -136,27 +128,32 @@ def segmented_polynomial_ops_impl(
             if b.ndim == num_batch_axes + 1:
                 b = buffers[i] = reshape(b, shape)
             if b.shape != shape:
-                return make_error(
+                raise ValueError(
                     f"Shape mismatch: {b.shape} != {shape} for {i} {stp} {ope}"
                 )
 
+    if len(extents) != 1:
+        raise ValueError(
+            f"The 'uniform_1d' method requires a single uniform mode among all the STPs of the polynomial, got u={extents}."
+        )
+
     if not all(b.ndim == num_batch_axes + 2 for b in buffers):
-        return make_error("All buffers must be used")
+        raise ValueError("All buffers must be used")
 
     for b in buffers:
         if b.dtype.type not in {jnp.float32, jnp.float64, jnp.float16, jnp.bfloat16}:
-            return make_error(f"Unsupported buffer type: {b.dtype}")
+            raise ValueError(f"Unsupported buffer type: {b.dtype}")
 
     for i in indices:
         if i.dtype.type not in {jnp.int32, jnp.int64}:
-            return make_error(f"Unsupported index type: {i.dtype}")
+            raise ValueError(f"Unsupported index type: {i.dtype}")
 
     if len({b.shape[-1] for b in buffers}.union({1})) > 2:
-        return make_error(f"Buffer shapes not compatible {[b.shape for b in buffers]}")
+        raise ValueError(f"Buffer shapes not compatible {[b.shape for b in buffers]}")
 
     math_dtype = jnp.dtype(math_dtype)
     if math_dtype.type not in {jnp.float32, jnp.float64}:
-        return make_error(f"Unsupported math_dtype: {math_dtype}")
+        raise ValueError(f"Unsupported math_dtype: {math_dtype}")
 
     try:
         from cuequivariance_ops_jax import (
@@ -166,12 +163,12 @@ def segmented_polynomial_ops_impl(
             tensor_product_uniform_1d_jit,
         )
     except ImportError as e:
-        return make_error(f"cuequivariance_ops_jax is not installed: {e}")
+        raise ValueError(f"cuequivariance_ops_jax is not installed: {e}")
 
     if version.parse(__version__) < version.parse("0.4.0.dev"):
         message = f"cuequivariance_ops_jax version {__version__} is too old, need at least 0.4.0"
         warnings.warn(message)
-        return make_error(message)
+        raise ValueError(message)
 
     operations = []
     paths = []
@@ -180,7 +177,6 @@ def segmented_polynomial_ops_impl(
         for path in stp.paths:
             paths.append(Path(path.indices, path.coefficients.item()))
 
-    logger.info(f"Using the uniform 1d kernel for '{name}' 🚀\n" + str(polynomial))
     outputs = tensor_product_uniform_1d_jit(
         buffers[: polynomial.num_inputs],
         buffers[polynomial.num_inputs :],
@@ -191,4 +187,4 @@ def segmented_polynomial_ops_impl(
         math_dtype=math_dtype,
         name=sanitize_string(name),
     )
-    return Ok([jnp.reshape(x, y.shape) for x, y in zip(outputs, outputs_shape_dtype)])
+    return [jnp.reshape(x, y.shape) for x, y in zip(outputs, outputs_shape_dtype)]
