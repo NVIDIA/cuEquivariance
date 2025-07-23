@@ -67,7 +67,20 @@ sigmoid_gated_dual_gemm_bwd_p.multiple_results = True
 
 
 def _abstract_eval_fwd(
-    x1, x2, w1, w2, mask, *, two_inputs, transpose_out, precision, fallback
+    x1,
+    x2,
+    w1,
+    w2,
+    b1,
+    b2,
+    mask,
+    *,
+    two_inputs,
+    transpose_out,
+    precision,
+    fallback,
+    has_b1,
+    has_b2,
 ):
     """Abstract evaluation for forward pass."""
     M, N = x1.shape[0], w1.shape[0]
@@ -76,7 +89,21 @@ def _abstract_eval_fwd(
 
 
 def _abstract_eval_bwd(
-    grad_out, x1, x2, w1, w2, mask, *, two_inputs, transpose_out, precision, fallback
+    grad_out,
+    x1,
+    x2,
+    w1,
+    w2,
+    b1,
+    b2,
+    mask,
+    *,
+    two_inputs,
+    transpose_out,
+    precision,
+    fallback,
+    has_b1,
+    has_b2,
 ):
     """Abstract evaluation for backward pass."""
     return (
@@ -84,16 +111,33 @@ def _abstract_eval_bwd(
         jax.core.ShapedArray(x2.shape, x2.dtype),  # grad_x2
         jax.core.ShapedArray(w1.shape, w1.dtype),  # grad_w1
         jax.core.ShapedArray(w2.shape, w2.dtype),  # grad_w2
+        jax.core.ShapedArray(b1.shape, b1.dtype),  # grad_b1
+        jax.core.ShapedArray(b2.shape, b2.dtype),  # grad_b2
         jax.core.ShapedArray(mask.shape, mask.dtype),  # grad_mask
     )
 
 
-def _reference_forward(x1, x2, w1, w2, mask, two_inputs, transpose_out, precision):
+def _reference_forward(
+    x1,
+    x2,
+    w1,
+    w2,
+    b1,
+    b2,
+    mask,
+    two_inputs,
+    transpose_out,
+    precision,
+    has_b1=True,
+    has_b2=True,
+):
     """Pure JAX reference implementation."""
     # x1: (M, K)
     # x2: (M, K)
     # w1: (N, K)
     # w2: (N, K)
+    # b1: (N,) or None
+    # b2: (N,) or None
     # mask: (M,) or None
     # returns: (M, N) or (N, M) if transpose_out=True
     precision = precision._to_jax()
@@ -103,6 +147,14 @@ def _reference_forward(x1, x2, w1, w2, mask, two_inputs, transpose_out, precisio
     else:
         acc_1 = jnp.dot(x1, w1.T, precision=precision)
         acc_2 = jnp.dot(x1, w2.T, precision=precision)
+
+    # Add bias if provided (handle both None and array cases)
+    # Note: when called from primitives, b1/b2 are always arrays (possibly zero arrays)
+    # when called from tests, b1/b2 can be None
+    if b1 is not None:
+        acc_1 = acc_1 + b1[None, :]
+    if b2 is not None:
+        acc_2 = acc_2 + b2[None, :]
 
     output = jax.nn.sigmoid(acc_1) * acc_2
 
@@ -119,11 +171,15 @@ def _triton_forward(
     x2,
     w1,
     w2,
+    b1,
+    b2,
     mask,
     *,
     two_inputs,
     transpose_out,
     precision,
+    has_b1,
+    has_b2,
     TILE_M=64,
     TILE_N=32,
     TILE_K=32,
@@ -138,11 +194,13 @@ def _triton_forward(
 
     dtype = x1.dtype
     assert dtype != jnp.float64
+    # x1, x2, b1, b2 are always arrays (possibly zero arrays) by this point
     x1 = x1.astype(dtype)
-    if x2 is not None:
-        x2 = x2.astype(dtype)
+    x2 = x2.astype(dtype)
     w1 = w1.astype(dtype)
     w2 = w2.astype(dtype)
+    b1 = b1.astype(dtype)
+    b2 = b2.astype(dtype)
     if mask is not None:
         mask = mask.astype(dtype)
 
@@ -157,6 +215,8 @@ def _triton_forward(
         x2,
         w1,
         w2,
+        b1,
+        b2,
         mask,
         M,
         N,
@@ -173,6 +233,8 @@ def _triton_forward(
         APPLY_MASK=mask is not None,
         TRANSPOSE_OUT=transpose_out,
         TWO_INPUTS=two_inputs,
+        HAS_B1=has_b1,
+        HAS_B2=has_b2,
     )
 
     return results[0]
@@ -184,10 +246,14 @@ def _triton_backward(
     x2,
     w1,
     w2,
+    b1,
+    b2,
     mask,
     two_inputs,
     transpose_out,
     precision,
+    has_b1,
+    has_b2,
     TILE_M=64,
     TILE_N=32,
     TILE_K=32,
@@ -204,12 +270,14 @@ def _triton_backward(
 
     dtype = x1.dtype
     assert dtype != jnp.float64
+    # grad_out, x1, x2, b1, b2 are always arrays (possibly zero arrays) by this point
     grad_out = grad_out.astype(dtype)
     x1 = x1.astype(dtype)
-    if x2 is not None:
-        x2 = x2.astype(dtype)
+    x2 = x2.astype(dtype)
     w1 = w1.astype(dtype)
     w2 = w2.astype(dtype)
+    b1 = b1.astype(dtype)
+    b2 = b2.astype(dtype)
     if mask is not None:
         mask = mask.astype(dtype)
 
@@ -232,6 +300,8 @@ def _triton_backward(
         x2,
         w1,
         w2,
+        b1,
+        b2,
         mask,
         M,
         N,
@@ -248,6 +318,8 @@ def _triton_backward(
         APPLY_MASK=mask is not None,
         TRANSPOSE_OUT=transpose_out,
         TWO_INPUTS=two_inputs,
+        HAS_B1=has_b1,
+        HAS_B2=has_b2,
     )
 
     grad_xw1, grad_xw2 = results[0], results[1]
@@ -264,12 +336,16 @@ def _triton_backward(
         grad_x1 += jnp.dot(grad_xw2, w2, precision=precision)
         grad_x2 = jnp.zeros_like(x2)
 
+    # Compute bias gradients
+    grad_b1 = jnp.sum(grad_xw1, axis=0)
+    grad_b2 = jnp.sum(grad_xw2, axis=0)
+
     if grad_mask is not None:
         grad_mask = jnp.sum(grad_mask, axis=0)
     else:
         grad_mask = jnp.zeros(x1.shape[0], dtype=x1.dtype)
 
-    return grad_x1, grad_x2, grad_w1, grad_w2, grad_mask
+    return grad_x1, grad_x2, grad_w1, grad_w2, grad_b1, grad_b2, grad_mask
 
 
 def run_decoy(f, input_dict):
@@ -284,49 +360,42 @@ def run_decoy(f, input_dict):
 
 def run_bench(f, input_dict):
     with jax.ensure_compile_time_eval():
-        kwargs = {
+        arrays = {
             k: jax.random.normal(jax.random.key(i), v.shape, dtype=v.dtype)
-            if isinstance(v, jax.Array)
-            else v
             for i, (k, v) in enumerate(input_dict.items())
+            if isinstance(v, jax.Array)
         }
-        return measure_clock_ticks(f, **kwargs)
+        options = {k: v for k, v in input_dict.items() if not isinstance(v, jax.Array)}
+        return measure_clock_ticks(lambda **kw: f(**kw, **options), **arrays)
 
 
-def _generate_inputs(
-    M,
-    N,
-    K,
-    dtype_input,
-    two_inputs,
-    precision,
-    include_grad=False,
-):
+def _generate_inputs(M, N, K, dtype_input, two_inputs, precision, include_grad: bool):
     """Generate inputs for kernel autotuning."""
     key = jax.random.key(42)
-    keys = jax.random.split(key, 7 if include_grad else 6)
+    keys = jax.random.split(key, 9)
 
     inputs = {
         "x1": jax.random.normal(keys[0], (M, K), dtype=dtype_input),
-        "x2": jax.random.normal(keys[1], (M, K), dtype=dtype_input)
-        if two_inputs
-        else None,
+        "x2": jax.random.normal(keys[1], (M, K), dtype=dtype_input),
         "w1": jax.random.normal(keys[2], (N, K), dtype=dtype_input),
         "w2": jax.random.normal(keys[3], (N, K), dtype=dtype_input),
-        "mask": jax.random.normal(keys[4], (M,), dtype=dtype_input),
+        "b1": jax.random.normal(keys[4], (N,), dtype=dtype_input),
+        "b2": jax.random.normal(keys[5], (N,), dtype=dtype_input),
+        "mask": jax.random.normal(keys[6], (M,), dtype=dtype_input),
         "two_inputs": two_inputs,
         "transpose_out": False,
         "precision": precision,
-        "fallback": False,
+        "has_b1": True,
+        "has_b2": True,
     }
-
     if include_grad:
-        inputs["grad_out"] = jax.random.normal(keys[5], (M, N), dtype=dtype_input)
-
+        inputs["grad_out"] = jax.random.normal(keys[7], (M, N), dtype=dtype_input)
     return inputs
 
 
-def _input_to_key(x1, x2, w1, w2, mask, two_inputs, precision, **unused_kwargs):
+def _input_to_key(
+    x1, x2, w1, w2, b1, b2, mask, two_inputs, precision, has_b1, has_b2, **unused_kwargs
+):
     """Generate cache key from inputs."""
     M, K, N = x1.shape[0], x1.shape[1], w1.shape[0]
 
@@ -344,7 +413,7 @@ def _input_to_key(x1, x2, w1, w2, mask, two_inputs, precision, **unused_kwargs):
     # Normalize dtypes
     dtypes = [
         str(t.dtype if t.dtype != jnp.bfloat16 else jnp.dtype(jnp.float16))
-        for t in [x1, x2, w1, w2, mask]
+        for t in [x1, x2, w1, w2, b1, b2, mask]
         if t is not None
     ]
 
@@ -358,17 +427,18 @@ def _input_to_key(x1, x2, w1, w2, mask, two_inputs, precision, **unused_kwargs):
         case _:
             precision_key = "default"
 
-    return f"{key_m}_{key_k}_{key_n}_{'_'.join(dtypes)}_{two_inputs}_{precision_key}"
+    has_bias = f"{has_b1}_{has_b2}"
+    return f"{key_m}_{key_k}_{key_n}_{'_'.join(dtypes)}_{two_inputs}_{has_bias}_{precision_key}"
 
 
-def _get_autotuned_kernel(is_forward=True):
+def _get_autotuned_kernel(is_forward: bool):
     """Get or create autotuned kernel."""
     global _autotuned_forward, _autotuned_backward
     from cuequivariance_ops.triton import autotune_aot
 
     if is_forward and _autotuned_forward is None:
         _autotuned_forward = autotune_aot(
-            input_generator=lambda **k: _generate_inputs(**k),
+            input_generator=lambda **k: _generate_inputs(**k, include_grad=False),
             input_to_key=_input_to_key,
             input_configs=[
                 {
@@ -412,11 +482,22 @@ def _get_autotuned_kernel(is_forward=True):
             input_generator=lambda **k: _generate_inputs(**k, include_grad=True),
             input_to_key=lambda grad_out, **k: _input_to_key(**k),
             input_configs=[
-                {"M": m, "N": n, "K": 128, "dtype_input": dt, "two_inputs": ti}
+                {
+                    "M": m,
+                    "N": n,
+                    "K": 128,
+                    "dtype_input": dt,
+                    "two_inputs": ti,
+                    "precision": p,
+                }
                 for n in (128, 256)
                 for ti in (True, False)
                 for m in range(32, 2048, 32)
-                for dt in (jnp.bfloat16, jnp.float32)
+                for dt, p in [
+                    (jnp.bfloat16, Precision.DEFAULT),
+                    (jnp.float32, Precision.TF32),
+                    (jnp.float32, Precision.TF32x3),
+                ]
             ],
             tunable_configs=[
                 {
@@ -450,10 +531,7 @@ def _impl_dispatcher(platform, is_forward, *args, **kwargs):
     fallback = kwargs.pop("fallback", False)
 
     if platform == "cuda" and not fallback:
-        if is_forward:
-            return _get_autotuned_kernel(True)(*args, **kwargs)
-        else:
-            return _get_autotuned_kernel(False)(*args, **kwargs)
+        return _get_autotuned_kernel(is_forward)(*args, **kwargs)
 
     # Fallback to reference implementation
     if is_forward:
@@ -461,12 +539,12 @@ def _impl_dispatcher(platform, is_forward, *args, **kwargs):
     else:
         # Use JAX autodiff for backward pass
         grad_out = args[0]
-        x1, x2, w1, w2, mask = args[1:]
+        x1, x2, w1, w2, b1, b2, mask = args[1:]
 
-        def forward_fn(x1, x2, w1, w2, mask):
-            return _reference_forward(x1, x2, w1, w2, mask, **kwargs)
+        def forward_fn(x1, x2, w1, w2, b1, b2, mask):
+            return _reference_forward(x1, x2, w1, w2, b1, b2, mask, **kwargs)
 
-        _, vjp_fn = jax.vjp(forward_fn, x1, x2, w1, w2, mask)
+        _, vjp_fn = jax.vjp(forward_fn, x1, x2, w1, w2, b1, b2, mask)
         return vjp_fn(grad_out)
 
 
@@ -496,10 +574,29 @@ for platform in ["cuda", None]:
 
 @partial(
     custom_vjp,
-    nondiff_argnames=("two_inputs", "transpose_out", "precision", "fallback"),
+    nondiff_argnames=(
+        "two_inputs",
+        "transpose_out",
+        "precision",
+        "fallback",
+        "has_b1",
+        "has_b2",
+    ),
 )
 def _sigmoid_gated_dual_gemm_core(
-    x1, x2, w1, w2, mask, two_inputs, transpose_out, precision, fallback=False
+    x1,
+    x2,
+    w1,
+    w2,
+    b1,
+    b2,
+    mask,
+    two_inputs,
+    transpose_out,
+    precision,
+    fallback=False,
+    has_b1=True,
+    has_b2=True,
 ):
     """Core implementation with custom VJP."""
     if isinstance(precision, int):
@@ -508,21 +605,43 @@ def _sigmoid_gated_dual_gemm_core(
     if mask is None:
         mask = jnp.ones(x1.shape[0], dtype=x1.dtype)
 
+    # Note: b1 and b2 are always arrays (possibly zero arrays) at this point
+    # has_b1 and has_b2 tell us whether the user originally provided bias
+
     return sigmoid_gated_dual_gemm_fwd_p.bind(
         x1,
         x2,
         w1,
         w2,
+        b1,
+        b2,
         mask,
         two_inputs=two_inputs,
         transpose_out=transpose_out,
         precision=precision,
         fallback=fallback,
+        has_b1=has_b1,
+        has_b2=has_b2,
     )
 
 
-def _fwd(x1, x2, w1, w2, mask, two_inputs, transpose_out, precision, fallback):
+def _fwd(
+    x1,
+    x2,
+    w1,
+    w2,
+    b1,
+    b2,
+    mask,
+    two_inputs,
+    transpose_out,
+    precision,
+    fallback,
+    has_b1,
+    has_b2,
+):
     original_mask = mask
+
     if mask is None:
         mask = jnp.ones(x1.shape[0], dtype=x1.dtype)
 
@@ -531,18 +650,24 @@ def _fwd(x1, x2, w1, w2, mask, two_inputs, transpose_out, precision, fallback):
         x2,
         w1,
         w2,
+        b1,
+        b2,
         mask,
         two_inputs=two_inputs,
         transpose_out=transpose_out,
         precision=precision,
         fallback=fallback,
+        has_b1=has_b1,
+        has_b2=has_b2,
     )
 
-    return result, (x1, x2, w1, w2, original_mask)
+    return result, (x1, x2, w1, w2, b1, b2, original_mask)
 
 
-def _bwd(two_inputs, transpose_out, precision, fallback, residuals, grad_out):
-    x1, x2, w1, w2, original_mask = residuals
+def _bwd(
+    two_inputs, transpose_out, precision, fallback, has_b1, has_b2, residuals, grad_out
+):
+    x1, x2, w1, w2, b1, b2, original_mask = residuals
     mask = (
         original_mask
         if original_mask is not None
@@ -555,32 +680,57 @@ def _bwd(two_inputs, transpose_out, precision, fallback, residuals, grad_out):
         x2,
         w1,
         w2,
+        b1,
+        b2,
         mask,
         two_inputs=two_inputs,
         transpose_out=transpose_out,
         precision=precision,
         fallback=fallback,
+        has_b1=has_b1,
+        has_b2=has_b2,
     )
 
-    # grads is always (grad_x1, grad_x2, grad_w1, grad_w2, grad_mask)
-    grad_x1, grad_x2, grad_w1, grad_w2, grad_mask = grads
+    # grads is always (grad_x1, grad_x2, grad_w1, grad_w2, grad_b1, grad_b2, grad_mask)
+    grad_x1, grad_x2, grad_w1, grad_w2, grad_b1, grad_b2, grad_mask = grads
 
     if original_mask is None:
         # Replace mask gradient with zeros
         grad_mask = jnp.zeros_like(mask)
 
-    # Always return 5 gradients to match the core function signature
-    return (grad_x1, grad_x2, grad_w1, grad_w2, grad_mask)
+    # Handle None bias gradients based on has_b1 and has_b2
+    if not has_b1:
+        grad_b1 = None
+    if not has_b2:
+        grad_b2 = None
+
+    # Always return 7 gradients to match the core function signature
+    return (grad_x1, grad_x2, grad_w1, grad_w2, grad_b1, grad_b2, grad_mask)
 
 
 _sigmoid_gated_dual_gemm_core.defvjp(_fwd, _bwd)
 
 
-def _prepare_inputs(x, w1, w2, mask=None):
+def _prepare_inputs(x, w1, w2, b1=None, b2=None, mask=None):
     """Prepare inputs and handle reshaping."""
     x = jnp.asarray(x)
     w1 = jnp.asarray(w1)
     w2 = jnp.asarray(w2)
+
+    # Track whether bias was originally provided
+    has_b1 = b1 is not None
+    has_b2 = b2 is not None
+
+    # Convert None bias to zero arrays
+    N = w1.shape[0]
+    if b1 is not None:
+        b1 = jnp.asarray(b1)
+    else:
+        b1 = jnp.zeros(N, dtype=x.dtype)
+    if b2 is not None:
+        b2 = jnp.asarray(b2)
+    else:
+        b2 = jnp.zeros(N, dtype=x.dtype)
 
     original_shape = x.shape
     if x.ndim > 2:
@@ -593,7 +743,7 @@ def _prepare_inputs(x, w1, w2, mask=None):
             # If x was reshaped from (..., K) to (M, K), then mask should be reshaped from (...,) to (M,)
             mask = mask.reshape(-1)
 
-    return x, w1, w2, mask, original_shape
+    return x, w1, w2, b1, b2, mask, original_shape, has_b1, has_b2
 
 
 def _reshape_output(out, original_shape, w1_shape, transpose_out):
@@ -611,6 +761,8 @@ def sigmoid_gated_dual_gemm(
     x,
     w1,
     w2,
+    b1: Optional[jnp.ndarray] = None,
+    b2: Optional[jnp.ndarray] = None,
     mask: Optional[jnp.ndarray] = None,
     transpose_out: bool = False,
     precision: Precision = Precision.DEFAULT,
@@ -618,12 +770,14 @@ def sigmoid_gated_dual_gemm(
 ):
     """Apply fused sigmoid-gated dual GEMM operation with single input.
 
-    Performs: sigmoid(x @ w1) * (x @ w2) with optional masking.
+    Performs: sigmoid(x @ w1 + b1) * (x @ w2 + b2) with optional masking.
 
     Args:
         x: Input tensor of shape (M, K) or (..., K)
         w1: First weight matrix of shape (N, K)
         w2: Second weight matrix of shape (N, K)
+        b1: Optional bias tensor for first projection of shape (N,)
+        b2: Optional bias tensor for second projection of shape (N,)
         mask: Optional mask tensor of shape (M,) or (...,)
         transpose_out: Whether to transpose the output
         precision: Precision mode for matrix multiplication
@@ -633,7 +787,9 @@ def sigmoid_gated_dual_gemm(
         Output tensor of shape (M, N) or (..., N) if transpose_out=False,
         (N, M) or (N, ...) if transpose_out=True
     """
-    x, w1, w2, mask, original_shape = _prepare_inputs(x, w1, w2, mask)
+    x, w1, w2, b1, b2, mask, original_shape, has_b1, has_b2 = _prepare_inputs(
+        x, w1, w2, b1, b2, mask
+    )
     x2 = jnp.zeros_like(x)  # dummy x2 for single input mode
 
     out = _sigmoid_gated_dual_gemm_core(
@@ -641,11 +797,15 @@ def sigmoid_gated_dual_gemm(
         x2,
         w1,
         w2,
+        b1,
+        b2,
         mask,
         two_inputs=False,
         transpose_out=transpose_out,
         precision=precision,
         fallback=fallback,
+        has_b1=has_b1,
+        has_b2=has_b2,
     )
 
     return _reshape_output(out, original_shape, w1.shape, transpose_out)
@@ -656,6 +816,8 @@ def sigmoid_gated_dual_gemm_dual_x(
     x2,
     w1,
     w2,
+    b1: Optional[jnp.ndarray] = None,
+    b2: Optional[jnp.ndarray] = None,
     mask: Optional[jnp.ndarray] = None,
     transpose_out: bool = False,
     precision: Precision = Precision.DEFAULT,
@@ -663,13 +825,15 @@ def sigmoid_gated_dual_gemm_dual_x(
 ):
     """Apply fused sigmoid-gated dual GEMM operation with two inputs.
 
-    Performs: sigmoid(x1 @ w1) * (x2 @ w2) with optional masking.
+    Performs: sigmoid(x1 @ w1 + b1) * (x2 @ w2 + b2) with optional masking.
 
     Args:
         x1: First input tensor of shape (M, K) or (..., K)
         x2: Second input tensor of shape (M, K) or (..., K)
         w1: First weight matrix of shape (N, K)
         w2: Second weight matrix of shape (N, K)
+        b1: Optional bias tensor for first projection of shape (N,)
+        b2: Optional bias tensor for second projection of shape (N,)
         mask: Optional mask tensor of shape (M,) or (...,)
         transpose_out: Whether to transpose the output
         precision: Precision mode for matrix multiplication
@@ -679,7 +843,9 @@ def sigmoid_gated_dual_gemm_dual_x(
         Output tensor of shape (M, N) or (..., N) if transpose_out=False,
         (N, M) or (N, ...) if transpose_out=True
     """
-    x1, w1, w2, mask, original_shape = _prepare_inputs(x1, w1, w2, mask)
+    x1, w1, w2, b1, b2, mask, original_shape, has_b1, has_b2 = _prepare_inputs(
+        x1, w1, w2, b1, b2, mask
+    )
     x2 = jnp.asarray(x2)
     if x2.ndim > 2:
         x2 = x2.reshape(-1, x2.shape[-1])
@@ -689,11 +855,15 @@ def sigmoid_gated_dual_gemm_dual_x(
         x2,
         w1,
         w2,
+        b1,
+        b2,
         mask,
         two_inputs=True,
         transpose_out=transpose_out,
         precision=precision,
         fallback=fallback,
+        has_b1=has_b1,
+        has_b2=has_b2,
     )
 
     return _reshape_output(out, original_shape, w1.shape, transpose_out)
@@ -701,9 +871,23 @@ def sigmoid_gated_dual_gemm_dual_x(
 
 # Export reference function for tests
 def _sigmoid_gated_dual_gemm_reference(
-    x1, x2, w1, w2, mask, two_inputs, transpose_out, precision
+    x1, x2, w1, w2, b1, b2, mask, two_inputs, transpose_out, precision
 ):
     """Reference implementation for testing - matches original function signature."""
+    # For test calls, b1 and b2 can be None, so we determine has_b1 and has_b2
+    has_b1 = b1 is not None
+    has_b2 = b2 is not None
     return _reference_forward(
-        x1, x2, w1, w2, mask, two_inputs, transpose_out, precision
+        x1,
+        x2,
+        w1,
+        w2,
+        b1,
+        b2,
+        mask,
+        two_inputs,
+        transpose_out,
+        precision,
+        has_b1,
+        has_b2,
     )
