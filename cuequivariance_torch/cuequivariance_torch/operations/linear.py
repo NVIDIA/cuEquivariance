@@ -12,6 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import warnings
 from typing import Optional
 
 import torch
@@ -22,6 +23,7 @@ from cuequivariance import descriptors
 from cuequivariance.group_theory.irreps_array.misc_ui import (
     assert_same_group,
     default_irreps,
+    default_layout,
 )
 
 
@@ -35,9 +37,10 @@ class Linear(torch.nn.Module):
         layout (IrrepsLayout, optional): The layout of the irreducible representations, by default ``cue.mul_ir``. This is the layout used in the e3nn library.
         shared_weights (bool, optional): Whether to use shared weights, by default True.
         internal_weights (bool, optional): Whether to use internal weights, by default True if shared_weights is True, otherwise False.
-        use_fallback (bool, optional): If `None` (default), a CUDA kernel will be used if available.
-                If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
-                If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
+        method (str, optional): The method to use for the linear layer, by default "naive" uses a PyTorch implementation.
+        use_fallback (bool, optional, deprecated): Whether to use a "fallback" implementation, now maps to method:
+            If `True` or `None` (default), the "naive" method is used.
+            If `False`, the "fused_tp" method is used.
     """
 
     def __init__(
@@ -54,6 +57,7 @@ class Linear(torch.nn.Module):
         dtype: Optional[torch.dtype] = None,
         math_dtype: Optional[torch.dtype] = None,
         use_fallback: Optional[bool] = None,
+        method: Optional[str] = None,
     ):
         super().__init__()
         irreps_in, irreps_out = default_irreps(irreps_in, irreps_out)
@@ -83,15 +87,53 @@ class Linear(torch.nn.Module):
         else:
             self.weight = None
 
-        self.f = cuet.EquivariantTensorProduct(
-            e,
-            layout=layout,
-            layout_in=layout_in,
-            layout_out=layout_out,
+        # Just leaving this here for reference
+        # self.f = cuet.EquivariantTensorProduct(
+        #     e,
+        #     layout=layout,
+        #     layout_in=layout_in,
+        #     layout_out=layout_out,
+        #     device=device,
+        #     math_dtype=math_dtype,
+        #     use_fallback=use_fallback,
+        # )
+
+        layout_in = default_layout(layout_in or layout)
+        self.transpose_in = cuet.TransposeIrrepsLayout(
+            e.inputs[1].irreps,
+            source=layout_in,
+            target=e.inputs[1].layout,
             device=device,
-            math_dtype=math_dtype,
             use_fallback=use_fallback,
         )
+
+        layout_out = default_layout(layout_out or layout)
+        self.transpose_out = cuet.TransposeIrrepsLayout(
+            e.outputs[0].irreps,
+            source=e.outputs[0].layout,
+            target=layout_out,
+            device=device,
+            use_fallback=use_fallback,
+        )
+
+        if method is None:
+            if use_fallback is None:
+                # No warning here as it's the default behavior
+                self.method = "naive"
+            else:
+                warnings.warn(
+                    "Use fallback is deprecated, please use method instead",
+                    DeprecationWarning,
+                )
+                self.method = "naive" if use_fallback else "fused_tp"
+        else:
+            self.method = method
+
+        self.f = cuet.SegmentedPolynomial(
+            e.polynomial,
+            method=self.method,
+            math_dtype=math_dtype,
+        ).to(device)
 
     def extra_repr(self) -> str:
         return f"shared_weights={self.shared_weights}, internal_weights={self.internal_weights}, weight_numel={self.weight_numel}"
@@ -125,4 +167,6 @@ class Linear(torch.nn.Module):
         if weight is None:
             raise ValueError("Weights should not be None")
 
-        return self.f(weight, x)
+        # return self.f(weight, x)
+        [output] = self.f([weight, self.transpose_in(x)])
+        return self.transpose_out(output)
