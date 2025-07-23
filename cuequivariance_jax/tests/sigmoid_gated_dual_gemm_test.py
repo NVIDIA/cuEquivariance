@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -25,11 +27,14 @@ from cuequivariance_jax.triangle import (
     sigmoid_gated_dual_gemm_dual_x,
 )
 from cuequivariance_jax.triangle._sigmoid_gated_dual_gemm import (
-    _reference_forward as _sigmoid_gated_dual_gemm_reference,
+    sigmoid_gated_dual_gemm_reference,
 )
 
 # Enable x64 support but test with fp32
 jax.config.update("jax_enable_x64", True)
+os.environ["CUEQ_TRITON_IGNORE_EXISTING_CACHE"] = (
+    "1"  # needed to be set before the first call to the API
+)
 
 
 def create_test_data(
@@ -152,7 +157,7 @@ def test_sigmoid_gated_dual_gemm_comprehensive():
     assert output_dual_batch_bias.shape == (B, M, N)
 
     # Test reference implementation
-    output_ref = _sigmoid_gated_dual_gemm_reference(
+    output_ref = sigmoid_gated_dual_gemm_reference(
         x,
         None,
         w1,
@@ -160,14 +165,13 @@ def test_sigmoid_gated_dual_gemm_comprehensive():
         None,
         None,
         None,
-        two_inputs=False,
         transpose_out=False,
         precision=Precision.DEFAULT,
     )
     assert output_ref.shape == (M, N)
 
     # Test reference implementation with bias
-    output_ref_bias = _sigmoid_gated_dual_gemm_reference(
+    output_ref_bias = sigmoid_gated_dual_gemm_reference(
         x,
         None,
         w1,
@@ -175,13 +179,12 @@ def test_sigmoid_gated_dual_gemm_comprehensive():
         b1,
         b2,
         None,
-        two_inputs=False,
         transpose_out=False,
         precision=Precision.DEFAULT,
     )
     assert output_ref_bias.shape == (M, N)
 
-    output_ref_dual = _sigmoid_gated_dual_gemm_reference(
+    output_ref_dual = sigmoid_gated_dual_gemm_reference(
         x,
         x2,
         w1,
@@ -189,14 +192,13 @@ def test_sigmoid_gated_dual_gemm_comprehensive():
         None,
         None,
         None,
-        two_inputs=True,
         transpose_out=False,
         precision=Precision.DEFAULT,
     )
     assert output_ref_dual.shape == (M, N)
 
     # Test reference implementation dual with bias
-    output_ref_dual_bias = _sigmoid_gated_dual_gemm_reference(
+    output_ref_dual_bias = sigmoid_gated_dual_gemm_reference(
         x,
         x2,
         w1,
@@ -204,7 +206,6 @@ def test_sigmoid_gated_dual_gemm_comprehensive():
         b1,
         b2,
         None,
-        two_inputs=True,
         transpose_out=False,
         precision=Precision.DEFAULT,
     )
@@ -229,15 +230,15 @@ def test_sigmoid_gated_dual_gemm_correctness():
     tol = 1e-5
 
     # Test single input correctness without bias
-    expected_single = _sigmoid_gated_dual_gemm_reference(
-        x, None, w1, w2, None, None, None, False, False, Precision.IEEE
+    expected_single = sigmoid_gated_dual_gemm_reference(
+        x, None, w1, w2, None, None, None, transpose_out=False, precision=Precision.IEEE
     )
     output_single = sigmoid_gated_dual_gemm(x, w1, w2, precision=Precision.IEEE)
     np.testing.assert_allclose(output_single, expected_single, rtol=tol, atol=tol)
 
     # Test single input correctness with bias
-    expected_single_bias = _sigmoid_gated_dual_gemm_reference(
-        x, None, w1, w2, b1, b2, None, False, False, Precision.IEEE
+    expected_single_bias = sigmoid_gated_dual_gemm_reference(
+        x, None, w1, w2, b1, b2, None, transpose_out=False, precision=Precision.IEEE
     )
     output_single_bias = sigmoid_gated_dual_gemm(
         x, w1, w2, b1=b1, b2=b2, precision=Precision.IEEE
@@ -263,8 +264,8 @@ def test_sigmoid_gated_dual_gemm_correctness():
     )
 
     # Test dual input correctness without bias
-    expected_dual = _sigmoid_gated_dual_gemm_reference(
-        x, x2, w1, w2, None, None, None, True, False, Precision.IEEE
+    expected_dual = sigmoid_gated_dual_gemm_reference(
+        x, x2, w1, w2, None, None, None, transpose_out=False, precision=Precision.IEEE
     )
     output_dual = sigmoid_gated_dual_gemm_dual_x(
         x, x2, w1, w2, precision=Precision.IEEE
@@ -272,8 +273,8 @@ def test_sigmoid_gated_dual_gemm_correctness():
     np.testing.assert_allclose(output_dual, expected_dual, rtol=tol, atol=tol)
 
     # Test dual input correctness with bias
-    expected_dual_bias = _sigmoid_gated_dual_gemm_reference(
-        x, x2, w1, w2, b1, b2, None, True, False, Precision.IEEE
+    expected_dual_bias = sigmoid_gated_dual_gemm_reference(
+        x, x2, w1, w2, b1, b2, None, transpose_out=False, precision=Precision.IEEE
     )
     output_dual_bias = sigmoid_gated_dual_gemm_dual_x(
         x, x2, w1, w2, b1=b1, b2=b2, precision=Precision.IEEE
@@ -427,23 +428,16 @@ def test_sigmoid_gated_dual_gemm_precision_modes(precision):
     assert output_dual_bias.shape == (M, N)
 
 
-@pytest.mark.parametrize(
-    "tuning_mode",
-    [
-        # "AOT",
-        "ONDEMAND",
-        None,
-    ],
-)
+@pytest.mark.parametrize("tuning_mode", ["ONDEMAND", None])  # "AOT" is too slow to test
 def test_sigmoid_gated_dual_gemm_triton_tuning_modes(tuning_mode, monkeypatch):
     """Test sigmoid_gated_dual_gemm with different CUEQ_TRITON_TUNING environment variable values."""
+    assert os.environ["CUEQ_TRITON_IGNORE_EXISTING_CACHE"] == "1"
 
     # Configure environment variables using pytest's monkeypatch fixture
     if tuning_mode is None:
         monkeypatch.delenv("CUEQ_TRITON_TUNING", raising=False)
     else:
         monkeypatch.setenv("CUEQ_TRITON_TUNING", tuning_mode)
-    monkeypatch.setenv("CUEQ_TRITON_IGNORE_EXISTING_CACHE", "1")
 
     # Create test data
     M, N, K = 32, 64, 128
