@@ -94,7 +94,8 @@ def make_inputs_for_operands(
             index_size = ceil_div(batch_size, 4)
             if index_size == 0:
                 index_size = 1
-            indices[i] = torch.randint(0, index_size, (batch_size,), device=device)
+            inds = torch.randint(0, index_size, (batch_size,), device=device)
+            indices[i], _ = torch.sort(inds)
             local_batch = index_size
         tensors.append(tensor_init_fn(local_batch, x.size))
     return tensors, indices
@@ -401,6 +402,57 @@ def test_segmented_polynomial_export(
     # Skip export mode for naive method for issues with testing
     if method == "naive" and mode == "export":
         pytest.skip("Skipping export mode for naive method")
+
+    run_segmented_polynomial_test(
+        name,
+        polynomial,
+        method,
+        dtype,
+        math_dtype,
+        batch_size,
+        mode,
+        grad,
+        backward,
+        indexing,
+        tmp_path,
+    )
+
+
+@pytest.mark.parametrize("method", METHODS + ["indexed_linear"])
+@pytest.mark.parametrize("dtype, math_dtype", DATA_TYPES_IN_MATH[2:4])
+@pytest.mark.parametrize("batch_size", BATCH_SIZE[1:])
+@pytest.mark.parametrize("mode", EXPORT_MODES[:1])
+@pytest.mark.parametrize("grad", GRAD)
+@pytest.mark.parametrize("backward", BACKWARD)
+def test_segmented_polynomial_indexed_linear(
+    method,
+    dtype,
+    math_dtype,
+    batch_size,
+    mode,
+    grad,
+    backward,
+    tmp_path,
+):
+    name = "indexed_linear"
+    polynomial = cue.descriptors.linear(
+        cue.Irreps("O3", "16x0e + 16x1o + 16x2e"),
+        cue.Irreps("O3", "16x0e + 16x1o + 16x2e"),
+    ).polynomial
+
+    indexing = {"input": ("first", "indexed"), "output": ("all", "batch")}
+
+    # Uncomment this to run indexed_linear test locally
+    if method == "indexed_linear":
+        pytest.skip("Skipping for now because of missing backend")
+
+    # Unsupported combinations
+    if method == "uniform_1d":
+        pytest.skip("Linear is not supported for uniform_1d")
+    if method == "indexed_linear" and (grad or backward):
+        pytest.skip("Skipping for now because of faulty backward")
+    if method == "fused_tp" and math_dtype == torch.float32 and dtype == torch.float64:
+        pytest.skip("Skipping fused TP for float32 math_dtype with float64 inputs")
 
     run_segmented_polynomial_test(
         name,

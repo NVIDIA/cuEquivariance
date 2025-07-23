@@ -358,14 +358,12 @@ class SegmentedPolynomialNaive(nn.Module):
             ope_out, b_out = operation.output_operand_buffer(self.num_inputs)
             self.b_outs.append(b_out - self.num_inputs)
             self.input_inds.append(operation.input_buffers(self.num_inputs))
-            # self.graphs.append(
             gr = _tensor_product_fx(
                 d.move_operand_last(ope_out),
                 device=None,
                 math_dtype=self.math_dtype,
                 optimize_einsums=True,
             )
-            # )
             if len(self.input_inds[-1]) == 0:
                 self.graphs.append(graph_inputs0(gr, d.__repr__()))
             elif len(self.input_inds[-1]) == 1:

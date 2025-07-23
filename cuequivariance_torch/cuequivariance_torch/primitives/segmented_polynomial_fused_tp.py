@@ -15,7 +15,6 @@
 
 from typing import Dict, List, Optional
 
-import cuequivariance_ops_torch as ops
 import torch
 import torch.fx
 import torch.nn as nn
@@ -27,6 +26,8 @@ import cuequivariance as cue
 class FusedTP3(nn.Module):
     def __init__(self, d: cue.SegmentedTensorProduct, math_dtype: torch.dtype):
         super().__init__()
+        import cuequivariance_ops_torch as ops
+
         self.tp = ops.FusedTensorProductOp3(
             operand_segment_modes=d.subscripts.operands,
             operand_segment_offsets=[
@@ -49,6 +50,8 @@ class FusedTP3(nn.Module):
 class FusedTP4(nn.Module):
     def __init__(self, d: cue.SegmentedTensorProduct, math_dtype: torch.dtype):
         super().__init__()
+        import cuequivariance_ops_torch as ops
+
         self.tp = ops.FusedTensorProductOp4(
             operand_segment_modes=d.subscripts.operands,
             operand_segment_offsets=[

@@ -23,6 +23,9 @@ import cuequivariance as cue
 from cuequivariance_torch.primitives.segmented_polynomial_fused_tp import (
     SegmentedPolynomialFusedTP,
 )
+from cuequivariance_torch.primitives.segmented_polynomial_indexed_linear import (
+    SegmentedPolynomialIndexedLinear,
+)
 from cuequivariance_torch.primitives.segmented_polynomial_naive import (
     SegmentedPolynomialNaive,
 )
@@ -45,6 +48,7 @@ class SegmentedPolynomial(nn.Module):
             - "naive": Uses a naive PyTorch implementation. It always works but is not optimized.
             - "uniform_1d": Uses a CUDA implementation for polynomials with a single uniform mode.
             - "fused_tp": Uses a CUDA implementation for polynomials with 3 and 4 operands contractions.
+            - "indexed_linear": Uses a CUDA implementation for linear layers with indexed weights.
         math_dtype: Data type for computational operations.
             If specified, internal buffers will be of this dtype,
             and operands will be converted to this type for all computations
@@ -87,6 +91,7 @@ class SegmentedPolynomial(nn.Module):
                 "• 'naive' - Works everywhere but not optimized (good for testing)\n"
                 "• 'uniform_1d' - Fast CUDA implementation for single uniform mode polynomials\n"
                 "• 'fused_tp' - A more general CUDA implementation, supporting many 3 and 4 operands contractions.\n"
+                "• 'indexed_linear' - A CUDA implementation for linear layers with indexed weights.\n"
             )
             method = "uniform_1d"
         if method == "uniform_1d":
@@ -99,6 +104,10 @@ class SegmentedPolynomial(nn.Module):
             )
         elif method == "fused_tp":
             self.m = SegmentedPolynomialFusedTP(
+                polynomial, math_dtype, output_dtype_map, name
+            )
+        elif method == "indexed_linear":
+            self.m = SegmentedPolynomialIndexedLinear(
                 polynomial, math_dtype, output_dtype_map, name
             )
         else:
