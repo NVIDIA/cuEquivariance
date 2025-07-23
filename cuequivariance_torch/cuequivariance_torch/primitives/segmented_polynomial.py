@@ -78,7 +78,7 @@ class SegmentedPolynomial(nn.Module):
 
         self.num_inputs = polynomial.num_inputs
         self.num_outputs = polynomial.num_outputs
-
+        self.method = method
         self.repr = polynomial.__repr__()
 
         if method == "":
@@ -94,22 +94,29 @@ class SegmentedPolynomial(nn.Module):
                 "• 'indexed_linear' - A CUDA implementation for linear layers with indexed weights.\n"
             )
             method = "uniform_1d"
+
         if method == "uniform_1d":
             self.m = SegmentedPolynomialFromUniform1dJit(
                 polynomial, math_dtype, output_dtype_map, name
             )
+            self.fallback = self.m
         elif method == "naive":
             self.m = SegmentedPolynomialNaive(
                 polynomial, math_dtype, output_dtype_map, name
             )
+            self.fallback = self.m
         elif method == "fused_tp":
             self.m = SegmentedPolynomialFusedTP(
+                polynomial, math_dtype, output_dtype_map, name
+            )
+            self.fallback = SegmentedPolynomialNaive(
                 polynomial, math_dtype, output_dtype_map, name
             )
         elif method == "indexed_linear":
             self.m = SegmentedPolynomialIndexedLinear(
                 polynomial, math_dtype, output_dtype_map, name
             )
+            self.fallback = self.m
         else:
             raise ValueError(f"Invalid method: {method}")
 
@@ -187,5 +194,12 @@ class SegmentedPolynomial(nn.Module):
         for k, v in output_shapes.items():
             torch._assert(0 <= k < self.num_outputs, "output index must be in range")
             torch._assert(v.ndim == 2, "output shape must be two-dimensional")
+
+        # If the input is on the CPU and we're using fused_tp, we need to fall back to naive
+        if inputs[0].device == torch.device("cpu") and self.method == "fused_tp":
+            warnings.warn(
+                "Fused TP is not supported on CPU. Falling back to naive implementation."
+            )
+            return self.fallback(inputs, input_indices, output_shapes, output_indices)
 
         return self.m(inputs, input_indices, output_shapes, output_indices)

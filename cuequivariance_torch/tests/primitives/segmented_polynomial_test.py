@@ -21,7 +21,9 @@ import cuequivariance as cue
 import cuequivariance_torch as cuet
 from cuequivariance_torch._tests.utils import module_with_mode, tol_dict
 
-device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
+global_device = (
+    torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
+)
 
 
 def generate_segmented_polynomials():
@@ -79,7 +81,7 @@ def ceil_div(a: int, b: int) -> int:
 
 
 def make_inputs_for_operands(
-    operands, dtype, idx_amount, idx_kind, batch_size, tensor_init_fn
+    operands, dtype, idx_amount, idx_kind, batch_size, tensor_init_fn, device
 ):
     tensors = []
     indices = {}
@@ -101,14 +103,19 @@ def make_inputs_for_operands(
     return tensors, indices
 
 
-def make_inputs(polynomial, dtype, indexing, batch_size):
+def make_inputs(polynomial, dtype, indexing, batch_size, device):
     def tensor_init_inputs(batch_size, size):
         return torch.randn(
             (batch_size, size), device=device, dtype=dtype, requires_grad=True
         )
 
     inputs, input_indices = make_inputs_for_operands(
-        polynomial.inputs, dtype, *indexing["input"], batch_size, tensor_init_inputs
+        polynomial.inputs,
+        dtype,
+        *indexing["input"],
+        batch_size,
+        tensor_init_inputs,
+        device,
     )
 
     def tensor_init_outputs(batch_size, size):
@@ -117,7 +124,12 @@ def make_inputs(polynomial, dtype, indexing, batch_size):
         ).broadcast_to(batch_size, size)
 
     outputs, output_indices = make_inputs_for_operands(
-        polynomial.outputs, dtype, *indexing["output"], batch_size, tensor_init_outputs
+        polynomial.outputs,
+        dtype,
+        *indexing["output"],
+        batch_size,
+        tensor_init_outputs,
+        device,
     )
     outputs = {i: o for i, o in enumerate(outputs)}
     result = {"inputs": inputs}
@@ -205,6 +217,7 @@ def run_segmented_polynomial_test(
     backward,
     indexing,
     tmp_path,
+    device=global_device,
 ):
     if not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
@@ -227,8 +240,9 @@ def run_segmented_polynomial_test(
         m = Grad(m)
         test_tol_dict = tol_dict_grad(test_tol_dict)
 
-    inp = make_inputs(polynomial, dtype, indexing, batch_size)
+    inp = make_inputs(polynomial, dtype, indexing, batch_size, device)
     m = module_with_mode(mode, m, inp, math_dtype, tmp_path)
+    m.to(device)
 
     inp_ref = clone_input(inp)
 
@@ -282,6 +296,12 @@ BACKWARD = [False, True]
 
 BATCH_SIZE = [0, 5]
 
+DEVICES = (
+    [torch.device("cuda:0"), torch.device("cpu")]
+    if torch.cuda.is_available()
+    else [torch.device("cpu")]
+)
+
 
 @pytest.mark.parametrize("name, polynomial", SEGMENTED_POLYNOMIALS[:1])
 @pytest.mark.parametrize("method", METHODS)
@@ -327,6 +347,7 @@ def test_segmented_polynomial_indexing(
 @pytest.mark.parametrize("grad", GRAD)
 @pytest.mark.parametrize("backward", BACKWARD)
 @pytest.mark.parametrize("indexing", SHORT_INDEXING)
+@pytest.mark.parametrize("device", DEVICES)
 def test_segmented_polynomial_dytpes(
     name,
     polynomial,
@@ -339,6 +360,7 @@ def test_segmented_polynomial_dytpes(
     backward,
     indexing,
     tmp_path,
+    device,
 ):
     # Skipping all tests that have many options that are not default
     complexity = 0
@@ -352,12 +374,14 @@ def test_segmented_polynomial_dytpes(
         complexity += 2
     if indexing != SHORT_INDEXING[0]:
         complexity += 1
+    if device == torch.device("cpu"):
+        complexity += 2
     if complexity > 2:
         pytest.skip("Skipping tests with many options that are not default")
 
     # Unsupported combinations
     if method == "fused_tp" and name == "symmetric_contraction":
-        pytest.skip("Skipping fused TP for symmetric contraction")
+        pytest.skip("Skipping fused TP for symmetric contraction: unsupported")
     if method == "fused_tp" and math_dtype == torch.float32 and dtype == torch.float64:
         pytest.skip("Skipping fused TP for float32 math_dtype with float64 inputs")
 
@@ -373,6 +397,7 @@ def test_segmented_polynomial_dytpes(
         backward,
         indexing,
         tmp_path,
+        device,
     )
 
 
