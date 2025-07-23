@@ -19,6 +19,10 @@ import torch
 from cuequivariance_torch.benchmarking import measure_clock_ticks
 
 
+@pytest.mark.skipif(
+    not torch.cuda.is_available(),
+    reason="CUDA is not available",
+)
 @pytest.mark.parametrize("size", [4, 64, 1024])
 def test_benchmarking(size):
     x = torch.ones((size, 32), dtype=torch.float32, device="cuda")

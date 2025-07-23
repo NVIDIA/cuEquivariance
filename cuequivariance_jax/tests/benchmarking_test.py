@@ -13,12 +13,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import importlib.util
+
 import jax.numpy as jnp
 import pytest
 
 from cuequivariance_jax.benchmarking import measure_clock_ticks
 
 
+@pytest.mark.skipif(
+    not importlib.util.find_spec("cuequivariance_ops_jax"),
+    reason="cuequivariance_ops_jax is not installed",
+)
 @pytest.mark.parametrize("size", [4, 64, 1024])
 def test_benchmarking(size):
     x = jnp.ones((size, 32), dtype=jnp.float32)
