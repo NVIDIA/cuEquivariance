@@ -300,7 +300,7 @@ def triangle_multiplicative_update(
         x,
         g_in_weight,
         p_in_weight,
-        mask,
+        mask=mask,
         transpose_out=True,
         precision=precision,
         fallback=fallback,

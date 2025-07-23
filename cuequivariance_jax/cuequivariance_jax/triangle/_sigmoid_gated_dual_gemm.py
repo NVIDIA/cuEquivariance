@@ -761,6 +761,7 @@ def sigmoid_gated_dual_gemm(
     x,
     w1,
     w2,
+    *,
     b1: Optional[jnp.ndarray] = None,
     b2: Optional[jnp.ndarray] = None,
     mask: Optional[jnp.ndarray] = None,
