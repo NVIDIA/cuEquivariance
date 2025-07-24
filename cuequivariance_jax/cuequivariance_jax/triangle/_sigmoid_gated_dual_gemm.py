@@ -290,7 +290,8 @@ def run_bench(f, input_dict):
             else v
             for i, (k, v) in enumerate(input_dict.items())
         }
-        return measure_clock_ticks(f, **kwargs)
+        rate, time = measure_clock_ticks(f, **kwargs)
+        return rate * time
 
 
 def _generate_inputs(
