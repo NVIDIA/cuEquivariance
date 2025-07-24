@@ -37,6 +37,7 @@ class IndexedLinear(nn.Module):
         self.uind = dim_indices[2]
         self.vind = dim_indices[3]
         self.wind = dim_indices[4]
+        self.reshape_inputs = dim_indices[5]
 
         d = d.sort_paths(-1)
         pids = d.compressed_path_segment(-1)
@@ -92,6 +93,7 @@ class IndexedLinear(nn.Module):
                     self.uind,
                     self.vind,
                     self.wind,
+                    self.reshape_inputs,
                     counts,
                     self.subscripts,
                     self.coefficients[coef],
@@ -115,6 +117,7 @@ def apply_linear(
     uind: List[int],
     vind: List[int],
     wind: List[int],
+    reshape_inputs: List[int],
     counts: torch.Tensor,
     subscripts: Tuple[str],
     coefficients: torch.Tensor,
@@ -125,9 +128,19 @@ def apply_linear(
     u = shape_list[uind[0]][uind[1]]
     v = shape_list[vind[0]][vind[1]]
     w = shape_list[wind[0]][wind[1]]
-    return indexed_linear(
+    outsh = None
+    if reshape_inputs[0]:
+        outsh = input1.shape[:-1]
+        input1 = input1.reshape(-1, input1.shape[-1])
+    if reshape_inputs[1]:
+        outsh = input2.shape[:-1]
+        input2 = input2.reshape(-1, input2.shape[-1])
+    output = indexed_linear(
         input1, input2, counts * w, u, v, C, Z * w, subscripts, coefficients
     )
+    if outsh is not None:
+        output = output.reshape(outsh + output.shape[1:])
+    return output
 
 
 # Simple code to count the number of occurrences of each index
@@ -177,21 +190,117 @@ class SegmentedPolynomialIndexedLinear(nn.Module):
             default_dtype_map if output_dtype_map is None else output_dtype_map
         )
         # Dict of subscripts to
-        # [canonicalized subscripts, indices of Z, C, u, v, w]
+        # [canonicalized subscripts, indices of Z, C, u, v, w, whether to reshape each input]
         # indices in a list [input1.shape, input2.shape, output.shape, [1]]
         subdict = {
-            "uv,u,v": [("uv", "u", "v"), [1, 0], [0, 0], [0, 1], [0, 2], [3, 0]],
-            "uv,v,u": [("uv", "v", "u"), [1, 0], [0, 0], [0, 1], [0, 2], [3, 0]],
-            "uv,wu,wv": [("uv", "u", "v"), [1, 0], [0, 0], [0, 1], [0, 2], [1, 1]],
-            "uv,wv,wu": [("uv", "v", "u"), [1, 0], [0, 0], [0, 1], [0, 2], [1, 1]],
-            "u,uv,v": [("u", "uv", "v"), [0, 0], [1, 0], [0, 1], [1, 2], [3, 0]],
-            "u,vu,v": [("u", "vu", "v"), [0, 0], [1, 0], [0, 1], [1, 1], [3, 0]],
-            "uv,wv,uw": [("u", "vu", "v"), [0, 0], [1, 0], [0, 2], [1, 1], [0, 1]],
-            "uv,vw,uw": [("u", "uv", "v"), [0, 0], [1, 0], [0, 2], [1, 2], [0, 1]],
-            "u,v,vu": [("u", "v", "vu"), [0, 0], [2, 0], [0, 1], [1, 1], [3, 0]],
-            "u,v,uv": [("u", "v", "uv"), [0, 0], [2, 0], [0, 1], [1, 1], [3, 0]],
-            "uv,uw,wv": [("u", "v", "vu"), [0, 0], [2, 0], [0, 2], [1, 2], [0, 1]],
-            "uv,uw,vw": [("u", "v", "uv"), [0, 0], [2, 0], [0, 2], [1, 2], [0, 1]],
+            "uv,u,v": [
+                ("uv", "u", "v"),
+                [1, 0],
+                [0, 0],
+                [0, 1],
+                [0, 2],
+                [3, 0],
+                [0, 0],
+            ],
+            "uv,v,u": [
+                ("uv", "v", "u"),
+                [1, 0],
+                [0, 0],
+                [0, 1],
+                [0, 2],
+                [3, 0],
+                [0, 0],
+            ],
+            "uv,wu,wv": [
+                ("uv", "u", "v"),
+                [1, 0],
+                [0, 0],
+                [0, 1],
+                [0, 2],
+                [1, 1],
+                [0, 1],
+            ],
+            "uv,wv,wu": [
+                ("uv", "v", "u"),
+                [1, 0],
+                [0, 0],
+                [0, 1],
+                [0, 2],
+                [1, 1],
+                [0, 1],
+            ],
+            "u,uv,v": [
+                ("u", "uv", "v"),
+                [0, 0],
+                [1, 0],
+                [0, 1],
+                [1, 2],
+                [3, 0],
+                [0, 0],
+            ],
+            "u,vu,v": [
+                ("u", "vu", "v"),
+                [0, 0],
+                [1, 0],
+                [0, 1],
+                [1, 1],
+                [3, 0],
+                [0, 0],
+            ],
+            "uv,wv,uw": [
+                ("u", "vu", "v"),
+                [0, 0],
+                [1, 0],
+                [0, 2],
+                [1, 1],
+                [0, 1],
+                [1, 0],
+            ],
+            "uv,vw,uw": [
+                ("u", "uv", "v"),
+                [0, 0],
+                [1, 0],
+                [0, 2],
+                [1, 2],
+                [0, 1],
+                [1, 0],
+            ],
+            "u,v,vu": [
+                ("u", "v", "vu"),
+                [0, 0],
+                [2, 0],
+                [0, 1],
+                [1, 1],
+                [3, 0],
+                [0, 0],
+            ],
+            "u,v,uv": [
+                ("u", "v", "uv"),
+                [0, 0],
+                [2, 0],
+                [0, 1],
+                [1, 1],
+                [3, 0],
+                [0, 0],
+            ],
+            "uv,uw,wv": [
+                ("u", "v", "vu"),
+                [0, 0],
+                [2, 0],
+                [0, 2],
+                [1, 2],
+                [0, 1],
+                [1, 1],
+            ],
+            "uv,uw,vw": [
+                ("u", "v", "uv"),
+                [0, 0],
+                [2, 0],
+                [0, 2],
+                [1, 2],
+                [0, 1],
+                [1, 1],
+            ],
         }
 
         # Build the TPs
