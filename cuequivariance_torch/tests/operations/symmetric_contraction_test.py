@@ -74,7 +74,7 @@ def from64(shape: tuple[int, ...], data: str) -> torch.Tensor:
 
 def test_mace_compatibility():
     # Skip MACE compatibility test for speed - it takes 1+ seconds
-    pytest.skip("Skipping MACE compatibility test for speed - takes 1+ seconds")
+    # pytest.skip("Skipping MACE compatibility test for speed - takes 1+ seconds")
 
     """Test compatibility with the original MACE implementation.
     To avoid the need to install the original MACE implementation, we use the

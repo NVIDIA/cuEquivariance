@@ -35,9 +35,9 @@ class Rotation(torch.nn.Module):
         layout (IrrepsLayout, optional): The memory layout of the tensor, ``cue.ir_mul`` is preferred.
         layout_in (IrrepsLayout, optional): The layout of the input irreducible representations, by default ``layout``.
         layout_out (IrrepsLayout, optional): The layout of the output irreducible representations, by default ``layout``.
-        device (torch.device, optional): The device to use for the linear layer.
+        device (torch.device, optional): The device to use for the operation.
         math_dtype (torch.dtype, optional): The dtype to use for the math operations, by default ``torch.float32``.
-        method (str, optional): The method to use for the linear layer, by default "uniform_1d" (using a CUDA kernel)
+        method (str, optional): The method to use for the operation, by default "uniform_1d" (using a CUDA kernel)
             if all segments have the same shape, otherwise "naive" (using a PyTorch implementation).
         use_fallback (bool, optional, deprecated): Whether to use a "fallback" implementation, now maps to method:
             If `True` the "naive" method is used.

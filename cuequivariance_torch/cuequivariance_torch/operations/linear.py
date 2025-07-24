@@ -39,7 +39,7 @@ class Linear(torch.nn.Module):
         layout_out (IrrepsLayout, optional): The layout of the output irreducible representations, by default ``layout``.
         shared_weights (bool, optional): Whether to use shared weights, by default True.
         device (torch.device, optional): The device to use for the linear layer.
-        dtype (torch.dtype, optional): The dtype to use for the linear layer, by default ``torch.float32``.
+        dtype (torch.dtype, optional): The dtype to use for the linear layer weights, by default ``torch.float32``.
         math_dtype (torch.dtype, optional): The dtype to use for the math operations, by default ``torch.float32``.
         internal_weights (bool, optional): Whether to use internal weights, by default True if shared_weights is True, otherwise False.
         method (str, optional): The method to use for the linear layer, by default "naive" (using a PyTorch implementation).
