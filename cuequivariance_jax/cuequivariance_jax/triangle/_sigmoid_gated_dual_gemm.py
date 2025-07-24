@@ -577,10 +577,10 @@ def _sigmoid_gated_dual_gemm_core(
     two_inputs: bool,
     transpose_out: bool,
     precision: Precision,
-    fallback: bool = False,
-    has_b1: bool = True,
-    has_b2: bool = True,
-    has_mask: bool = True,
+    fallback: bool,
+    has_b1: bool,
+    has_b2: bool,
+    has_mask: bool,
 ):
     """Core implementation with custom VJP."""
     if isinstance(precision, int):
