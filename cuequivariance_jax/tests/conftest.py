@@ -26,5 +26,5 @@ def check_jax_memory():
         assert usage_gib <= limit, (
             f"JAX peak memory usage {usage_gib:.2f}GiB exceeds {limit}GiB limit!"
         )
-    except (IndexError, KeyError):
+    except (IndexError, KeyError, RuntimeError):
         pass  # No GPU available
