@@ -456,7 +456,7 @@ def _get_autotuned_kernel(is_forward: bool):
         }
         for n in (128, 256)
         for ti in (True, False)
-        for m in range(32, 2048, 32)
+        for m in range(32, 2048 * 2048 + 1, 32)
         for dt, p in [
             (jnp.bfloat16, Precision.DEFAULT),
             (jnp.float32, Precision.TF32),
