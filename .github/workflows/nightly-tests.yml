@@ -1,15 +1,38 @@
-name: Run Tests
+name: Nightly Full Tests
 
 on:
-  push:
-    branches: [ "main", "release" ]
-  pull_request:
-    branches: [ "main", "release" ]
-
+  schedule:
+    # Run every night at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:  # Allow manual triggering
 
 jobs:
-  cuequivariance:
+  check-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch full history to check for recent commits
+    - name: Check for recent changes
+      id: check
+      run: |
+        # Check if there are any commits in the last 24 hours
+        RECENT_COMMITS=$(git log --since="24 hours ago" --oneline | wc -l)
+        echo "Recent commits in last 24h: $RECENT_COMMITS"
+        
+        if [ "$RECENT_COMMITS" -gt 0 ]; then
+          echo "should_run=true" >> $GITHUB_OUTPUT
+          echo "Found recent changes, will run full tests"
+        else
+          echo "should_run=false" >> $GITHUB_OUTPUT
+          echo "No recent changes, skipping tests"
+        fi
 
+  cuequivariance-full:
+    needs: check-changes
+    if: needs.check-changes.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -28,19 +51,19 @@ jobs:
         python -m pip install --upgrade uv
         python -m uv pip install pytest
         python -m uv pip install -e ./cuequivariance 
-    - name: Test with pytest
+    - name: Test with pytest (including slow tests)
       run: |
-        pytest --doctest-modules -x -m "not slow" cuequivariance
+        pytest --doctest-modules -x cuequivariance
     - name: Downgrade numpy
       run: |
         python -m uv pip install -U "numpy==1.26.*"
-    - name: Test with pytest (numpy 1.26)
+    - name: Test with pytest (numpy 1.26, including slow tests)
       run: |
-        pytest --doctest-modules -x -m "not slow" cuequivariance
+        pytest --doctest-modules -x cuequivariance
 
-
-
-  cuequivariance-jax:
+  cuequivariance-jax-full:
+    needs: check-changes
+    if: needs.check-changes.outputs.should_run == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -69,11 +92,13 @@ jobs:
         python -m uv pip install -e ./cuequivariance_jax 
         python -c "import cuequivariance; print('cue', cuequivariance.__version__)"
         python -c "import cuequivariance_jax; print('cuex', cuequivariance_jax.__version__)"
-    - name: Test with pytest
+    - name: Test with pytest (including slow tests)
       run: |
-        pytest --doctest-modules -x -m "not slow" cuequivariance_jax
+        pytest --doctest-modules -x cuequivariance_jax
 
-  cuequivariance-torch:
+  cuequivariance-torch-full:
+    needs: check-changes
+    if: needs.check-changes.outputs.should_run == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -101,6 +126,16 @@ jobs:
         python -m uv pip install -e ./cuequivariance_torch 
         python -c "import cuequivariance; print('cue', cuequivariance.__version__)"
         python -c "import cuequivariance_torch; print('cuet', cuequivariance_torch.__version__)"
-    - name: Test with pytest
+    - name: Test with pytest (including slow tests)
       run: |
-        pytest --doctest-modules -x -m "not slow" cuequivariance_torch
+        pytest --doctest-modules -x cuequivariance_torch
+
+  notify-on-failure:
+    needs: [check-changes, cuequivariance-full, cuequivariance-jax-full, cuequivariance-torch-full]
+    if: always() && needs.check-changes.outputs.should_run == 'true' && (needs.cuequivariance-full.result == 'failure' || needs.cuequivariance-jax-full.result == 'failure' || needs.cuequivariance-torch-full.result == 'failure')
+    runs-on: ubuntu-latest
+    steps:
+    - name: Report failure
+      run: |
+        echo "❌ Nightly full tests failed!"
+        echo "Check the workflow run for details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" 

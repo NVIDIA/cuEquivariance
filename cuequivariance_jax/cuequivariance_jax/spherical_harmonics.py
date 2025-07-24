@@ -59,6 +59,7 @@ def spherical_harmonics(
         descriptors.spherical_harmonics(ir, ls, vector.layout),
         [vector],
         name="spherical_harmonics",
+        method="naive",
     )
 
 

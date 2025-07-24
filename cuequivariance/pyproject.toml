@@ -43,3 +43,8 @@ classifiers = [
 [tool.hatch.version]
 path = "cuequivariance/VERSION"
 pattern = "(?P<version>\\d+\\.\\d+\\.\\d+(?:[a-z]+\\d+)?)"
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
