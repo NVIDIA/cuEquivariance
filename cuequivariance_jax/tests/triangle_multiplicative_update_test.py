@@ -28,7 +28,7 @@ from cuequivariance_jax.triangle import (
 jax.config.update("jax_enable_x64", True)
 
 
-def create_weights(hidden_dim, seed=42, device=None):
+def create_weights(hidden_dim, seed=42, device=None, include_bias=False):
     """Helper function to create test weights."""
     np.random.seed(seed)
 
@@ -42,6 +42,16 @@ def create_weights(hidden_dim, seed=42, device=None):
         "p_out_weight": np.random.randn(hidden_dim, hidden_dim) * 0.1,
         "g_out_weight": np.random.randn(hidden_dim, hidden_dim) * 0.1,
     }
+
+    if include_bias:
+        weights_np.update(
+            {
+                "p_in_bias": np.random.randn(2 * hidden_dim) * 0.1,
+                "g_in_bias": np.random.randn(2 * hidden_dim) * 0.1,
+                "p_out_bias": np.random.randn(hidden_dim) * 0.1,
+                "g_out_bias": np.random.randn(hidden_dim) * 0.1,
+            }
+        )
 
     if device == "torch":
         import torch
@@ -85,13 +95,6 @@ def test_compare_with_pytorch(direction, use_mask):
         mask_np = np.random.rand(batch_size, seq_len, seq_len).astype(np.float32)
         mask_torch = torch.tensor(mask_np, dtype=torch.float32, device="cuda")
         mask_jax = jnp.array(mask_np)
-    else:
-        # PyTorch implementation doesn't handle mask=None properly, so provide a mask of ones
-        # This should give equivalent results to no masking
-        mask_torch = torch.ones(
-            batch_size, seq_len, seq_len, dtype=torch.float32, device="cuda"
-        )
-        # For JAX, we keep mask_jax as None to test the proper handling
 
     # Create weights
     weights_torch = create_weights(hidden_dim, device="torch")
@@ -266,4 +269,219 @@ def test_gradients(direction):
 
     jax.test_util.check_grads(
         f_input, (x,), order=1, eps=1e-2, modes="rev", atol=0.2, rtol=0.2
+    )
+
+
+def test_bias_functionality():
+    """Test that bias parameters change the output when provided."""
+    batch_size, seq_len, hidden_dim = 1, 4, 64
+    x = jax.random.normal(
+        jax.random.key(0), (batch_size, seq_len, seq_len, hidden_dim), dtype=jnp.float32
+    )
+    weights_no_bias = create_weights(hidden_dim)
+    weights_with_bias = create_weights(hidden_dim, include_bias=True)
+
+    # Test without bias
+    output_no_bias = triangle_multiplicative_update_jax(
+        x, direction="outgoing", **weights_no_bias
+    )
+
+    # Test with bias
+    output_with_bias = triangle_multiplicative_update_jax(
+        x, direction="outgoing", **weights_with_bias
+    )
+
+    # Outputs should be different when bias is added
+    assert not jnp.allclose(output_no_bias, output_with_bias, atol=1e-6)
+
+    # Test individual bias effects
+    # Only p_in_bias
+    output_p_in_only = triangle_multiplicative_update_jax(
+        x,
+        direction="outgoing",
+        p_in_bias=weights_with_bias["p_in_bias"],
+        **weights_no_bias,
+    )
+    assert not jnp.allclose(output_no_bias, output_p_in_only, atol=1e-6)
+
+    # Only g_in_bias
+    output_g_in_only = triangle_multiplicative_update_jax(
+        x,
+        direction="outgoing",
+        g_in_bias=weights_with_bias["g_in_bias"],
+        **weights_no_bias,
+    )
+    assert not jnp.allclose(output_no_bias, output_g_in_only, atol=1e-6)
+
+    # Only p_out_bias
+    output_p_out_only = triangle_multiplicative_update_jax(
+        x,
+        direction="outgoing",
+        p_out_bias=weights_with_bias["p_out_bias"],
+        **weights_no_bias,
+    )
+    assert not jnp.allclose(output_no_bias, output_p_out_only, atol=1e-6)
+
+    # Only g_out_bias
+    output_g_out_only = triangle_multiplicative_update_jax(
+        x,
+        direction="outgoing",
+        g_out_bias=weights_with_bias["g_out_bias"],
+        **weights_no_bias,
+    )
+    assert not jnp.allclose(output_no_bias, output_g_out_only, atol=1e-6)
+
+
+def test_none_bias_parameters():
+    """Test that None bias parameters work correctly."""
+    batch_size, seq_len, hidden_dim = 1, 4, 64
+    x = jax.random.normal(
+        jax.random.key(0), (batch_size, seq_len, seq_len, hidden_dim), dtype=jnp.float32
+    )
+    weights = create_weights(hidden_dim)
+
+    # Test with explicit None bias parameters
+    output = triangle_multiplicative_update_jax(
+        x,
+        direction="outgoing",
+        p_in_bias=None,
+        g_in_bias=None,
+        p_out_bias=None,
+        g_out_bias=None,
+        **weights,
+    )
+
+    # Should work without error
+    assert output.shape == x.shape
+
+    # Test mixed None and provided bias
+    bias_value = jnp.ones(2 * hidden_dim) * 0.1
+    output_mixed = triangle_multiplicative_update_jax(
+        x,
+        direction="outgoing",
+        p_in_bias=bias_value,  # provided
+        g_in_bias=None,  # None
+        p_out_bias=None,  # None
+        g_out_bias=jnp.ones(hidden_dim) * 0.1,  # provided
+        **weights,
+    )
+
+    assert output_mixed.shape == x.shape
+    assert not jnp.allclose(output, output_mixed, atol=1e-6)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("direction", ["outgoing", "incoming"])
+@pytest.mark.parametrize("include_bias", [False, True])
+def test_gradients_with_bias(direction, include_bias):
+    """Test gradient computation with bias parameters."""
+    batch_size, seq_len, hidden_dim = 1, 4, 64
+    x = jax.random.normal(
+        jax.random.key(0), (batch_size, seq_len, seq_len, hidden_dim), dtype=jnp.float32
+    )
+    weights = create_weights(hidden_dim, include_bias=include_bias)
+
+    def f_with_all_params(**kwargs):
+        output = triangle_multiplicative_update_jax(x, direction=direction, **kwargs)
+        return jnp.sum(output**2)
+
+    # Test gradients with respect to all parameters
+    if include_bias:
+        # Test bias gradients specifically
+        def f_bias_only(p_in_bias, g_in_bias, p_out_bias, g_out_bias):
+            weights_no_bias = {
+                k: v
+                for k, v in weights.items()
+                if not k.endswith("_bias") or k in ["norm_in_bias", "norm_out_bias"]
+            }
+            return f_with_all_params(
+                p_in_bias=p_in_bias,
+                g_in_bias=g_in_bias,
+                p_out_bias=p_out_bias,
+                g_out_bias=g_out_bias,
+                **weights_no_bias,
+            )
+
+        jax.test_util.check_grads(
+            f_bias_only,
+            (
+                weights["p_in_bias"],
+                weights["g_in_bias"],
+                weights["p_out_bias"],
+                weights["g_out_bias"],
+            ),
+            order=1,
+            eps=1e-2,
+            modes="rev",
+            atol=0.2,
+            rtol=0.2,
+        )
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("direction", ["outgoing", "incoming"])
+@pytest.mark.parametrize("use_mask", [False, True])
+@pytest.mark.parametrize("include_bias", [False, True])
+def test_compare_with_pytorch_bias(direction, use_mask, include_bias):
+    """Compare JAX and PyTorch implementations with bias parameters."""
+    try:
+        import torch
+        from cuequivariance_ops_torch import (
+            triangle_multiplicative_update as triangle_multiplicative_update_torch,
+        )
+    except ImportError:
+        pytest.skip("torch or cuequivariance_ops_torch not available")
+
+    if not torch.cuda.is_available():
+        pytest.skip("CUDA not available")
+
+    batch_size, seq_len, hidden_dim = 1, 128, 64
+    eps = 1e-5
+
+    # Create test inputs
+    np.random.seed(42)
+    x_np = np.random.randn(batch_size, seq_len, seq_len, hidden_dim).astype(np.float32)
+    x_torch = torch.tensor(x_np, dtype=torch.float32, device="cuda")
+    x_jax = jnp.array(x_np)
+
+    mask_torch = None
+    mask_jax = None
+    if use_mask:
+        mask_np = np.random.rand(batch_size, seq_len, seq_len).astype(np.float32)
+        mask_torch = torch.tensor(mask_np, dtype=torch.float32, device="cuda")
+        mask_jax = jnp.array(mask_np)
+
+    # Create weights with or without bias
+    weights_torch = create_weights(
+        hidden_dim, device="torch", include_bias=include_bias
+    )
+    weights_jax = create_weights(hidden_dim, include_bias=include_bias)
+
+    # Run both versions
+    with torch.no_grad():
+        out_torch = triangle_multiplicative_update_torch(
+            x_torch,
+            direction=direction,
+            mask=mask_torch,
+            **weights_torch,
+            eps=eps,
+            precision="IEEE",
+        )
+
+    out_jax = triangle_multiplicative_update_jax(
+        x_jax,
+        direction=direction,
+        mask=mask_jax,
+        **weights_jax,
+        eps=eps,
+        precision=Precision.IEEE,
+    )
+
+    # Compare outputs
+    np.testing.assert_allclose(
+        out_torch.cpu().numpy(),
+        np.array(out_jax),
+        rtol=5e-3,
+        atol=5e-3,
+        err_msg=f"Outputs differ for direction={direction}, use_mask={use_mask}, include_bias={include_bias}",
     )

@@ -129,11 +129,15 @@ def triangle_multiplicative_update(
     norm_in_weight: jax.Array | None = None,
     norm_in_bias: jax.Array | None = None,
     p_in_weight: jax.Array | None = None,
+    p_in_bias: jax.Array | None = None,
     g_in_weight: jax.Array | None = None,
+    g_in_bias: jax.Array | None = None,
     norm_out_weight: jax.Array | None = None,
     norm_out_bias: jax.Array | None = None,
     p_out_weight: jax.Array | None = None,
+    p_out_bias: jax.Array | None = None,
     g_out_weight: jax.Array | None = None,
+    g_out_bias: jax.Array | None = None,
     eps: float = 1e-5,
     precision: Precision = Precision.DEFAULT,
 ) -> jax.Array:
@@ -162,16 +166,24 @@ def triangle_multiplicative_update(
             If None, initialized to zeros.
         p_in_weight (jax.Array, optional): Weight tensor for input projection of shape (2D, D).
             If None, initialized with LeCun normal distribution.
+        p_in_bias (jax.Array, optional): Bias tensor for input projection of shape (2D,).
+            If None, no bias is applied to the input projection.
         g_in_weight (jax.Array, optional): Weight tensor for input gating of shape (2D, D).
             If None, initialized with LeCun normal distribution.
+        g_in_bias (jax.Array, optional): Bias tensor for input gating of shape (2D,).
+            If None, no bias is applied to the input gating.
         norm_out_weight (jax.Array, optional): Weight tensor for output normalization of shape (D,).
             If None, initialized to ones.
         norm_out_bias (jax.Array, optional): Bias tensor for output normalization of shape (D,).
             If None, initialized to zeros.
         p_out_weight (jax.Array, optional): Weight tensor for output projection of shape (D, D).
             If None, initialized with LeCun normal distribution.
+        p_out_bias (jax.Array, optional): Bias tensor for output projection of shape (D,).
+            If None, no bias is applied to the output projection.
         g_out_weight (jax.Array, optional): Weight tensor for output gating of shape (D, D).
             If None, initialized with LeCun normal distribution.
+        g_out_bias (jax.Array, optional): Bias tensor for output gating of shape (D,).
+            If None, no bias is applied to the output gating.
         eps (float): Small constant for numerical stability in normalization. Defaults to 1e-5.
         precision (Precision): Precision mode for matrix multiplications.
             Available options:
@@ -203,6 +215,11 @@ def triangle_multiplicative_update(
         >>> # Create weight parameters (in practice, these would be learned)
         >>> norm_in_weight = jnp.ones(hidden_dim)
         >>> norm_in_bias = jnp.zeros(hidden_dim)
+        >>> # Optional bias parameters for projection and gating layers
+        >>> p_in_bias = jnp.zeros(2 * hidden_dim)  # Optional input projection bias
+        >>> g_in_bias = jnp.zeros(2 * hidden_dim)  # Optional input gating bias
+        >>> p_out_bias = jnp.zeros(hidden_dim)     # Optional output projection bias
+        >>> g_out_bias = jnp.zeros(hidden_dim)     # Optional output gating bias
         >>> # Initialize other weights using the key
         >>> key, subkey = jax.random.split(key)
         >>> # Perform triangular multiplication
@@ -213,6 +230,10 @@ def triangle_multiplicative_update(
         ...     mask=mask,
         ...     norm_in_weight=norm_in_weight,
         ...     norm_in_bias=norm_in_bias,
+        ...     p_in_bias=p_in_bias,  # Can be None to skip bias
+        ...     g_in_bias=g_in_bias,  # Can be None to skip bias
+        ...     p_out_bias=p_out_bias,  # Can be None to skip bias
+        ...     g_out_bias=g_out_bias,  # Can be None to skip bias
         ...     # ... pass other weights or let them initialize ...
         ... )
         >>> print(output.shape)
@@ -300,6 +321,8 @@ def triangle_multiplicative_update(
         x,
         g_in_weight,
         p_in_weight,
+        b1=g_in_bias,
+        b2=p_in_bias,
         mask=mask,
         transpose_out=True,
         precision=precision,
@@ -325,7 +348,14 @@ def triangle_multiplicative_update(
 
     # Output gating
     x = sigmoid_gated_dual_gemm_dual_x(
-        x_in, x_out, g_out_weight, p_out_weight, precision=precision, fallback=fallback
+        x_in,
+        x_out,
+        g_out_weight,
+        p_out_weight,
+        b1=g_out_bias,
+        b2=p_out_bias,
+        precision=precision,
+        fallback=fallback,
     )
 
     return x
