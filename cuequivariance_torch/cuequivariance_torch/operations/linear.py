@@ -35,9 +35,14 @@ class Linear(torch.nn.Module):
         irreps_in (Irreps): The input irreducible representations.
         irreps_out (Irreps): The output irreducible representations.
         layout (IrrepsLayout, optional): The layout of the irreducible representations, by default ``cue.mul_ir``. This is the layout used in the e3nn library.
+        layout_in (IrrepsLayout, optional): The layout of the input irreducible representations, by default ``layout``.
+        layout_out (IrrepsLayout, optional): The layout of the output irreducible representations, by default ``layout``.
         shared_weights (bool, optional): Whether to use shared weights, by default True.
+        device (torch.device, optional): The device to use for the linear layer.
+        dtype (torch.dtype, optional): The dtype to use for the linear layer, by default ``torch.float32``.
+        math_dtype (torch.dtype, optional): The dtype to use for the math operations, by default ``torch.float32``.
         internal_weights (bool, optional): Whether to use internal weights, by default True if shared_weights is True, otherwise False.
-        method (str, optional): The method to use for the linear layer, by default "naive" uses a PyTorch implementation.
+        method (str, optional): The method to use for the linear layer, by default "naive" (using a PyTorch implementation).
         use_fallback (bool, optional, deprecated): Whether to use a "fallback" implementation, now maps to method:
             If `True` or `None` (default), the "naive" method is used.
             If `False`, the "fused_tp" method is used.
@@ -87,17 +92,6 @@ class Linear(torch.nn.Module):
         else:
             self.weight = None
 
-        # Just leaving this here for reference
-        # self.f = cuet.EquivariantTensorProduct(
-        #     e,
-        #     layout=layout,
-        #     layout_in=layout_in,
-        #     layout_out=layout_out,
-        #     device=device,
-        #     math_dtype=math_dtype,
-        #     use_fallback=use_fallback,
-        # )
-
         layout_in = default_layout(layout_in or layout)
         self.transpose_in = cuet.TransposeIrrepsLayout(
             e.inputs[1].irreps,
@@ -122,7 +116,7 @@ class Linear(torch.nn.Module):
                 self.method = "naive"
             else:
                 warnings.warn(
-                    "Use fallback is deprecated, please use method instead",
+                    "`use_fallback` is deprecated, please use `method` instead",
                     DeprecationWarning,
                 )
                 self.method = "naive" if use_fallback else "fused_tp"
@@ -167,6 +161,5 @@ class Linear(torch.nn.Module):
         if weight is None:
             raise ValueError("Weights should not be None")
 
-        # return self.f(weight, x)
         [output] = self.f([weight, self.transpose_in(x)])
         return self.transpose_out(output)
