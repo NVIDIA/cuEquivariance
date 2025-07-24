@@ -263,6 +263,19 @@ def test_bias_functionality():
     )
     assert not jnp.allclose(output_no_bias, output_mixed, atol=1e-6)
 
+    # Test only output bias (input biases set to None)
+    output_only_out_bias = triangle_multiplicative_update_jax(
+        x,
+        direction="outgoing",
+        p_in_bias=None,
+        g_in_bias=None,
+        p_out_bias=weights_with_bias["p_out_bias"],
+        g_out_bias=weights_with_bias["g_out_bias"],
+        **weights_no_bias,
+    )
+    assert not jnp.allclose(output_no_bias, output_only_out_bias, atol=1e-6)
+    assert not jnp.allclose(output_with_bias, output_only_out_bias, atol=1e-6)
+
 
 @pytest.mark.slow
 @pytest.mark.parametrize("direction", ["outgoing", "incoming"])
