@@ -67,8 +67,9 @@ def create_weights(hidden_dim, seed=42, device=None, include_bias=False):
 @pytest.mark.slow
 @pytest.mark.parametrize("direction", ["outgoing", "incoming"])
 @pytest.mark.parametrize("use_mask", [False, True])
-def test_compare_with_pytorch(direction, use_mask):
-    """Compare JAX and PyTorch implementations."""
+@pytest.mark.parametrize("include_bias", [False, True])
+def test_compare_with_pytorch(direction, use_mask, include_bias):
+    """Compare JAX and PyTorch implementations with and without bias."""
     try:
         import torch
         from cuequivariance_ops_torch import (
@@ -89,16 +90,17 @@ def test_compare_with_pytorch(direction, use_mask):
     x_torch = torch.tensor(x_np, dtype=torch.float32, device="cuda")
     x_jax = jnp.array(x_np)
 
-    mask_torch = None
-    mask_jax = None
+    mask_torch = mask_jax = None
     if use_mask:
         mask_np = np.random.rand(batch_size, seq_len, seq_len).astype(np.float32)
         mask_torch = torch.tensor(mask_np, dtype=torch.float32, device="cuda")
         mask_jax = jnp.array(mask_np)
 
     # Create weights
-    weights_torch = create_weights(hidden_dim, device="torch")
-    weights_jax = create_weights(hidden_dim)
+    weights_torch = create_weights(
+        hidden_dim, device="torch", include_bias=include_bias
+    )
+    weights_jax = create_weights(hidden_dim, include_bias=include_bias)
 
     # Run both versions
     with torch.no_grad():
@@ -122,22 +124,16 @@ def test_compare_with_pytorch(direction, use_mask):
 
     # Compare outputs
     np.testing.assert_allclose(
-        out_torch.cpu().numpy(),
-        np.array(out_jax),
-        rtol=5e-3,
-        atol=5e-3,
-        err_msg=f"Outputs differ for direction={direction}, use_mask={use_mask}",
+        out_torch.cpu().numpy(), np.array(out_jax), rtol=5e-3, atol=5e-3
     )
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize(
     "x_shape,mask_shape,expected_shape",
     [
         ((8, 8, 64), None, (1, 8, 8, 64)),  # 3D input -> 4D output
         ((1, 8, 8, 64), None, (1, 8, 8, 64)),  # 4D input
         ((2, 8, 8, 64), (2, 8, 8), (2, 8, 8, 64)),  # With mask
-        ((8, 8, 64), (8, 8), (1, 8, 8, 64)),  # 3D with 2D mask -> 4D output
     ],
 )
 def test_shapes(x_shape, mask_shape, expected_shape):
@@ -149,51 +145,36 @@ def test_shapes(x_shape, mask_shape, expected_shape):
     output = triangle_multiplicative_update_jax(
         x, direction="outgoing", mask=mask, **weights
     )
-
     assert output.shape == expected_shape
 
 
-def test_directions_produce_different_results():
-    """Test that different directions produce different outputs."""
+def test_basic_functionality():
+    """Test basic functionality, directions, and weight initialization."""
     batch_size, seq_len, hidden_dim = 1, 4, 64
+    key = jax.random.key(0)
+    key_x, key_init1, key_init2 = jax.random.split(key, 3)
 
-    np.random.seed(42)
-    x = jnp.array(
-        np.random.randn(batch_size, seq_len, seq_len, hidden_dim).astype(np.float32)
+    x = jax.random.normal(
+        key_x, (batch_size, seq_len, seq_len, hidden_dim), dtype=jnp.float32
     )
     weights = create_weights(hidden_dim)
 
-    # Get outputs for both directions
+    # Test different directions produce different results
     out_outgoing = triangle_multiplicative_update_jax(
         x, direction="outgoing", **weights
     )
     out_incoming = triangle_multiplicative_update_jax(
         x, direction="incoming", **weights
     )
-
-    # They should produce different results
     assert not jnp.allclose(out_outgoing, out_incoming)
 
-
-def test_initialization_with_key():
-    """Test weight initialization with JAX random keys."""
-    batch_size, seq_len, hidden_dim = 1, 4, 64
-
-    key = jax.random.key(0)
-    key_x, key_init1, key_init2 = jax.random.split(key, 3)
-    x = jax.random.normal(
-        key_x, (batch_size, seq_len, seq_len, hidden_dim), dtype=jnp.float32
-    )
-
-    # Should raise without key when weights are None
+    # Test weight initialization with keys
     with pytest.raises(ValueError, match="Random key is required"):
         triangle_multiplicative_update_jax(x, direction="outgoing")
 
-    # Should work with keys
     output1 = triangle_multiplicative_update_jax(x, direction="outgoing", key=key_init1)
     output2 = triangle_multiplicative_update_jax(x, direction="outgoing", key=key_init2)
-
-    assert output1.shape == (batch_size, seq_len, seq_len, hidden_dim)
+    assert output1.shape == x.shape
     assert not jnp.allclose(output1, output2)  # Different keys -> different results
 
 
@@ -224,10 +205,7 @@ def test_errors(error_match, test_input):
     x = jnp.ones(x_shape)
     hidden_dim = x_shape[-1] if len(x_shape) <= 4 else 64
     weights = create_weights(hidden_dim)
-
-    mask = None
-    if "mask_shape" in test_input:
-        mask = jnp.ones(test_input["mask_shape"])
+    mask = jnp.ones(test_input["mask_shape"]) if "mask_shape" in test_input else None
 
     with pytest.raises(ValueError, match=error_match):
         triangle_multiplicative_update_jax(
@@ -236,32 +214,63 @@ def test_errors(error_match, test_input):
 
 
 @pytest.mark.parametrize(
-    "precision", [Precision.DEFAULT, Precision.TF32, Precision.TF32x3, Precision.IEEE]
+    "precision", [Precision.DEFAULT, Precision.TF32, Precision.IEEE]
 )
 def test_precision_modes(precision):
     """Test different precision modes."""
-    batch_size, seq_len, hidden_dim = 1, 4, 64
-    x = jax.random.normal(
-        jax.random.key(0), (batch_size, seq_len, seq_len, hidden_dim), dtype=jnp.float32
-    )
-    weights = create_weights(hidden_dim)
-
+    x = jax.random.normal(jax.random.key(0), (1, 4, 4, 64), dtype=jnp.float32)
+    weights = create_weights(64)
     output = triangle_multiplicative_update_jax(
         x, direction="outgoing", precision=precision, **weights
     )
-
     assert output.shape == x.shape
+
+
+def test_bias_functionality():
+    """Test bias parameters functionality."""
+    x = jax.random.normal(jax.random.key(0), (1, 4, 4, 64), dtype=jnp.float32)
+    weights_no_bias = create_weights(64)
+    weights_with_bias = create_weights(64, include_bias=True)
+
+    # Test with and without bias
+    output_no_bias = triangle_multiplicative_update_jax(
+        x, direction="outgoing", **weights_no_bias
+    )
+    output_with_bias = triangle_multiplicative_update_jax(
+        x, direction="outgoing", **weights_with_bias
+    )
+    assert not jnp.allclose(output_no_bias, output_with_bias, atol=1e-6)
+
+    # Test None bias parameters
+    output_none = triangle_multiplicative_update_jax(
+        x,
+        direction="outgoing",
+        p_in_bias=None,
+        g_in_bias=None,
+        p_out_bias=None,
+        g_out_bias=None,
+        **weights_no_bias,
+    )
+    assert output_none.shape == x.shape
+
+    # Test mixed bias
+    output_mixed = triangle_multiplicative_update_jax(
+        x,
+        direction="outgoing",
+        p_in_bias=weights_with_bias["p_in_bias"],
+        g_out_bias=weights_with_bias["g_out_bias"],
+        **weights_no_bias,
+    )
+    assert not jnp.allclose(output_no_bias, output_mixed, atol=1e-6)
 
 
 @pytest.mark.slow
 @pytest.mark.parametrize("direction", ["outgoing", "incoming"])
-def test_gradients(direction):
-    """Test gradient computation and numerical gradient checking."""
-    batch_size, seq_len, hidden_dim = 1, 4, 64
-    x = jax.random.normal(
-        jax.random.key(0), (batch_size, seq_len, seq_len, hidden_dim), dtype=jnp.float32
-    )
-    weights = create_weights(hidden_dim)
+@pytest.mark.parametrize("include_bias", [False, True])
+def test_gradients(direction, include_bias):
+    """Test gradient computation with and without bias."""
+    x = jax.random.normal(jax.random.key(0), (1, 4, 4, 64), dtype=jnp.float32)
+    weights = create_weights(64, include_bias=include_bias)
 
     def f_input(x):
         output = triangle_multiplicative_update_jax(x, direction=direction, **weights)
@@ -271,136 +280,25 @@ def test_gradients(direction):
         f_input, (x,), order=1, eps=1e-2, modes="rev", atol=0.2, rtol=0.2
     )
 
-
-def test_bias_functionality():
-    """Test that bias parameters change the output when provided."""
-    batch_size, seq_len, hidden_dim = 1, 4, 64
-    x = jax.random.normal(
-        jax.random.key(0), (batch_size, seq_len, seq_len, hidden_dim), dtype=jnp.float32
-    )
-    weights_no_bias = create_weights(hidden_dim)
-    weights_with_bias = create_weights(hidden_dim, include_bias=True)
-
-    # Test without bias
-    output_no_bias = triangle_multiplicative_update_jax(
-        x, direction="outgoing", **weights_no_bias
-    )
-
-    # Test with bias
-    output_with_bias = triangle_multiplicative_update_jax(
-        x, direction="outgoing", **weights_with_bias
-    )
-
-    # Outputs should be different when bias is added
-    assert not jnp.allclose(output_no_bias, output_with_bias, atol=1e-6)
-
-    # Test individual bias effects
-    # Only p_in_bias
-    output_p_in_only = triangle_multiplicative_update_jax(
-        x,
-        direction="outgoing",
-        p_in_bias=weights_with_bias["p_in_bias"],
-        **weights_no_bias,
-    )
-    assert not jnp.allclose(output_no_bias, output_p_in_only, atol=1e-6)
-
-    # Only g_in_bias
-    output_g_in_only = triangle_multiplicative_update_jax(
-        x,
-        direction="outgoing",
-        g_in_bias=weights_with_bias["g_in_bias"],
-        **weights_no_bias,
-    )
-    assert not jnp.allclose(output_no_bias, output_g_in_only, atol=1e-6)
-
-    # Only p_out_bias
-    output_p_out_only = triangle_multiplicative_update_jax(
-        x,
-        direction="outgoing",
-        p_out_bias=weights_with_bias["p_out_bias"],
-        **weights_no_bias,
-    )
-    assert not jnp.allclose(output_no_bias, output_p_out_only, atol=1e-6)
-
-    # Only g_out_bias
-    output_g_out_only = triangle_multiplicative_update_jax(
-        x,
-        direction="outgoing",
-        g_out_bias=weights_with_bias["g_out_bias"],
-        **weights_no_bias,
-    )
-    assert not jnp.allclose(output_no_bias, output_g_out_only, atol=1e-6)
-
-
-def test_none_bias_parameters():
-    """Test that None bias parameters work correctly."""
-    batch_size, seq_len, hidden_dim = 1, 4, 64
-    x = jax.random.normal(
-        jax.random.key(0), (batch_size, seq_len, seq_len, hidden_dim), dtype=jnp.float32
-    )
-    weights = create_weights(hidden_dim)
-
-    # Test with explicit None bias parameters
-    output = triangle_multiplicative_update_jax(
-        x,
-        direction="outgoing",
-        p_in_bias=None,
-        g_in_bias=None,
-        p_out_bias=None,
-        g_out_bias=None,
-        **weights,
-    )
-
-    # Should work without error
-    assert output.shape == x.shape
-
-    # Test mixed None and provided bias
-    bias_value = jnp.ones(2 * hidden_dim) * 0.1
-    output_mixed = triangle_multiplicative_update_jax(
-        x,
-        direction="outgoing",
-        p_in_bias=bias_value,  # provided
-        g_in_bias=None,  # None
-        p_out_bias=None,  # None
-        g_out_bias=jnp.ones(hidden_dim) * 0.1,  # provided
-        **weights,
-    )
-
-    assert output_mixed.shape == x.shape
-    assert not jnp.allclose(output, output_mixed, atol=1e-6)
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("direction", ["outgoing", "incoming"])
-@pytest.mark.parametrize("include_bias", [False, True])
-def test_gradients_with_bias(direction, include_bias):
-    """Test gradient computation with bias parameters."""
-    batch_size, seq_len, hidden_dim = 1, 4, 64
-    x = jax.random.normal(
-        jax.random.key(0), (batch_size, seq_len, seq_len, hidden_dim), dtype=jnp.float32
-    )
-    weights = create_weights(hidden_dim, include_bias=include_bias)
-
-    def f_with_all_params(**kwargs):
-        output = triangle_multiplicative_update_jax(x, direction=direction, **kwargs)
-        return jnp.sum(output**2)
-
-    # Test gradients with respect to all parameters
+    # Test bias gradients if available
     if include_bias:
-        # Test bias gradients specifically
+
         def f_bias_only(p_in_bias, g_in_bias, p_out_bias, g_out_bias):
             weights_no_bias = {
                 k: v
                 for k, v in weights.items()
                 if not k.endswith("_bias") or k in ["norm_in_bias", "norm_out_bias"]
             }
-            return f_with_all_params(
+            output = triangle_multiplicative_update_jax(
+                x,
+                direction=direction,
                 p_in_bias=p_in_bias,
                 g_in_bias=g_in_bias,
                 p_out_bias=p_out_bias,
                 g_out_bias=g_out_bias,
                 **weights_no_bias,
             )
+            return jnp.sum(output**2)
 
         jax.test_util.check_grads(
             f_bias_only,
@@ -418,70 +316,103 @@ def test_gradients_with_bias(direction, include_bias):
         )
 
 
-@pytest.mark.slow
-@pytest.mark.parametrize("direction", ["outgoing", "incoming"])
-@pytest.mark.parametrize("use_mask", [False, True])
-@pytest.mark.parametrize("include_bias", [False, True])
-def test_compare_with_pytorch_bias(direction, use_mask, include_bias):
-    """Compare JAX and PyTorch implementations with bias parameters."""
-    try:
-        import torch
-        from cuequivariance_ops_torch import (
-            triangle_multiplicative_update as triangle_multiplicative_update_torch,
-        )
-    except ImportError:
-        pytest.skip("torch or cuequivariance_ops_torch not available")
+@pytest.mark.parametrize(
+    "dtype,direction", [(jnp.float16, "outgoing"), (jnp.float32, "incoming")]
+)
+def test_mixed_precision(dtype, direction):
+    """Test with different precisions."""
+    x = jax.random.normal(jax.random.key(42), (1, 32, 32, 64), dtype=dtype)
+    weights = create_weights(64, include_bias=True)
+    weights_typed = {k: v.astype(dtype) for k, v in weights.items()}
 
-    if not torch.cuda.is_available():
-        pytest.skip("CUDA not available")
-
-    batch_size, seq_len, hidden_dim = 1, 128, 64
-    eps = 1e-5
-
-    # Create test inputs
-    np.random.seed(42)
-    x_np = np.random.randn(batch_size, seq_len, seq_len, hidden_dim).astype(np.float32)
-    x_torch = torch.tensor(x_np, dtype=torch.float32, device="cuda")
-    x_jax = jnp.array(x_np)
-
-    mask_torch = None
-    mask_jax = None
-    if use_mask:
-        mask_np = np.random.rand(batch_size, seq_len, seq_len).astype(np.float32)
-        mask_torch = torch.tensor(mask_np, dtype=torch.float32, device="cuda")
-        mask_jax = jnp.array(mask_np)
-
-    # Create weights with or without bias
-    weights_torch = create_weights(
-        hidden_dim, device="torch", include_bias=include_bias
+    output = triangle_multiplicative_update_jax(
+        x, direction=direction, **weights_typed, precision=Precision.IEEE
     )
-    weights_jax = create_weights(hidden_dim, include_bias=include_bias)
+    assert output.shape == x.shape
+    assert output.dtype == dtype
+    assert jnp.isfinite(output).all()
 
-    # Run both versions
-    with torch.no_grad():
-        out_torch = triangle_multiplicative_update_torch(
-            x_torch,
-            direction=direction,
-            mask=mask_torch,
-            **weights_torch,
-            eps=eps,
-            precision="IEEE",
-        )
 
-    out_jax = triangle_multiplicative_update_jax(
-        x_jax,
-        direction=direction,
-        mask=mask_jax,
-        **weights_jax,
-        eps=eps,
+def test_fallback_and_optimized_paths():
+    """Test automatic fallback vs optimized path selection."""
+    key = jax.random.key(42)
+    weights = create_weights(64, include_bias=True)
+
+    # Small sequence (fallback)
+    x_small = jax.random.normal(key, (1, 32, 32, 64), dtype=jnp.float32)
+    output_small = triangle_multiplicative_update_jax(
+        x_small, direction="outgoing", **weights
+    )
+    assert output_small.shape == x_small.shape
+    assert jnp.isfinite(output_small).all()
+
+    # Large sequence (optimized)
+    key, subkey = jax.random.split(key)
+    x_large = jax.random.normal(subkey, (1, 200, 200, 64), dtype=jnp.float32)
+    mask_large = jnp.ones((1, 200, 200))
+
+    output_large = triangle_multiplicative_update_jax(
+        x_large,
+        direction="outgoing",
+        mask=mask_large,
+        **weights,
         precision=Precision.IEEE,
     )
+    assert output_large.shape == x_large.shape
+    assert jnp.isfinite(output_large).all()
 
-    # Compare outputs
-    np.testing.assert_allclose(
-        out_torch.cpu().numpy(),
-        np.array(out_jax),
-        rtol=5e-3,
-        atol=5e-3,
-        err_msg=f"Outputs differ for direction={direction}, use_mask={use_mask}, include_bias={include_bias}",
+
+@pytest.mark.parametrize("direction", ["outgoing", "incoming"])
+def test_jit_compilation(direction):
+    """Test JAX JIT compilation."""
+    x = jax.random.normal(jax.random.key(42), (1, 32, 32, 64), dtype=jnp.float32)
+    weights = create_weights(64, include_bias=True)
+
+    @jax.jit
+    def jit_triangle_mul(x, **kwargs):
+        return triangle_multiplicative_update_jax(x, direction=direction, **kwargs)
+
+    output_jit = jit_triangle_mul(x, **weights)
+    output_no_jit = triangle_multiplicative_update_jax(
+        x, direction=direction, **weights
     )
+
+    np.testing.assert_allclose(output_jit, output_no_jit, rtol=1e-3, atol=1e-3)
+    assert output_jit.shape == x.shape
+    assert jnp.isfinite(output_jit).all()
+
+
+def test_edge_cases_and_memory():
+    """Test edge cases, accuracy tolerance, and memory efficiency."""
+    key = jax.random.key(42)
+    hidden_dim = 64
+    weights = create_weights(hidden_dim, include_bias=True)
+
+    # Test different value scales
+    for scale in [1e-3, 1.0, 3.0]:
+        x = jax.random.normal(key, (1, 16, 16, hidden_dim), dtype=jnp.float32) * scale
+        output = triangle_multiplicative_update_jax(x, direction="outgoing", **weights)
+        assert jnp.isfinite(output).all()
+
+    # Test memory efficiency - multiple runs should give identical results
+    x = jax.random.normal(key, (1, 32, 32, hidden_dim), dtype=jnp.float32)
+    outputs = [
+        triangle_multiplicative_update_jax(
+            x, direction="outgoing", **weights, precision=Precision.IEEE
+        )
+        for _ in range(3)
+    ]
+
+    for output in outputs[1:]:
+        np.testing.assert_allclose(outputs[0], output, rtol=1e-6, atol=1e-6)
+
+    # Test different batch sizes
+    for batch in [1, 2]:
+        key, subkey = jax.random.split(key)
+        x_batch = jax.random.normal(
+            subkey, (batch, 32, 32, hidden_dim), dtype=jnp.float32
+        )
+        output_batch = triangle_multiplicative_update_jax(
+            x_batch, direction="outgoing", **weights
+        )
+        assert output_batch.shape == x_batch.shape

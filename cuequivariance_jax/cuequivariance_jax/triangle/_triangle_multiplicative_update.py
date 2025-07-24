@@ -268,6 +268,58 @@ def triangle_multiplicative_update(
             f"Got hidden_dim={hidden_dim}"
         )
 
+    # Validate weight dimensions if provided
+    if norm_in_weight is not None and norm_in_weight.shape != (hidden_dim,):
+        raise ValueError(
+            f"norm_in_weight must have shape ({hidden_dim},), got {norm_in_weight.shape}"
+        )
+    if norm_in_bias is not None and norm_in_bias.shape != (hidden_dim,):
+        raise ValueError(
+            f"norm_in_bias must have shape ({hidden_dim},), got {norm_in_bias.shape}"
+        )
+    if p_in_weight is not None and p_in_weight.shape != (2 * hidden_dim, hidden_dim):
+        raise ValueError(
+            f"p_in_weight must have shape ({2 * hidden_dim}, {hidden_dim}), got {p_in_weight.shape}"
+        )
+    if g_in_weight is not None and g_in_weight.shape != (2 * hidden_dim, hidden_dim):
+        raise ValueError(
+            f"g_in_weight must have shape ({2 * hidden_dim}, {hidden_dim}), got {g_in_weight.shape}"
+        )
+    if norm_out_weight is not None and norm_out_weight.shape != (hidden_dim,):
+        raise ValueError(
+            f"norm_out_weight must have shape ({hidden_dim},), got {norm_out_weight.shape}"
+        )
+    if norm_out_bias is not None and norm_out_bias.shape != (hidden_dim,):
+        raise ValueError(
+            f"norm_out_bias must have shape ({hidden_dim},), got {norm_out_bias.shape}"
+        )
+    if p_out_weight is not None and p_out_weight.shape != (hidden_dim, hidden_dim):
+        raise ValueError(
+            f"p_out_weight must have shape ({hidden_dim}, {hidden_dim}), got {p_out_weight.shape}"
+        )
+    if g_out_weight is not None and g_out_weight.shape != (hidden_dim, hidden_dim):
+        raise ValueError(
+            f"g_out_weight must have shape ({hidden_dim}, {hidden_dim}), got {g_out_weight.shape}"
+        )
+
+    # Validate bias dimensions if provided
+    if p_in_bias is not None and p_in_bias.shape != (2 * hidden_dim,):
+        raise ValueError(
+            f"p_in_bias must have shape ({2 * hidden_dim},), got {p_in_bias.shape}"
+        )
+    if g_in_bias is not None and g_in_bias.shape != (2 * hidden_dim,):
+        raise ValueError(
+            f"g_in_bias must have shape ({2 * hidden_dim},), got {g_in_bias.shape}"
+        )
+    if p_out_bias is not None and p_out_bias.shape != (hidden_dim,):
+        raise ValueError(
+            f"p_out_bias must have shape ({hidden_dim},), got {p_out_bias.shape}"
+        )
+    if g_out_bias is not None and g_out_bias.shape != (hidden_dim,):
+        raise ValueError(
+            f"g_out_bias must have shape ({hidden_dim},), got {g_out_bias.shape}"
+        )
+
     # If we need to initialize weights and no key is provided, raise an error
     needs_init = (
         p_in_weight is None
