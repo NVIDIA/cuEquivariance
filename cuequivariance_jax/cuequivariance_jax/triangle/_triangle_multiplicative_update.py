@@ -140,6 +140,7 @@ def triangle_multiplicative_update(
     g_out_bias: jax.Array | None = None,
     eps: float = 1e-5,
     precision: Precision = Precision.DEFAULT,
+    fallback: bool | None = None,
 ) -> jax.Array:
     """Apply triangle multiplicative update operation.
 
@@ -262,9 +263,9 @@ def triangle_multiplicative_update(
     hidden_dim = x.shape[-1]
 
     # Check hidden dimension constraint for BND_BND layout
-    if hidden_dim % 64 != 0:
+    if hidden_dim % 32 != 0:
         raise ValueError(
-            f"Hidden dimension must be divisible by 64 for BND_BND layout in layer normalization. "
+            f"Hidden dimension must be divisible by 32 for BND_BND layout in layer normalization. "
             f"Got hidden_dim={hidden_dim}"
         )
 
@@ -360,7 +361,8 @@ def triangle_multiplicative_update(
             (hidden_dim, hidden_dim), key_g_out, dtype=x.dtype
         )
 
-    fallback = x.shape[-2] <= CUEQ_TRIMUL_FALLBACK_THRESHOLD
+    if fallback is None:
+        fallback = x.shape[-2] <= CUEQ_TRIMUL_FALLBACK_THRESHOLD
 
     # Input normalization
     x = layer_norm_transpose(
