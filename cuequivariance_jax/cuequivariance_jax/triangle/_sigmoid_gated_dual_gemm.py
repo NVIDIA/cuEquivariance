@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import enum
 import math
 from functools import partial
 
@@ -24,6 +23,8 @@ from jax.interpreters import mlir, xla
 
 from cuequivariance_jax.benchmarking import measure_clock_ticks
 
+from ._utils import Precision
+
 try:
     import jax_triton as jt
     import triton
@@ -31,32 +32,6 @@ try:
     HAS_JAX_TRITON = True
 except ImportError:
     HAS_JAX_TRITON = False
-
-
-class BenchmarkMode(enum.Enum):
-    FLUSH_CACHE = 0
-    FLUSH_CACHE_PEAK_PROXY = 1
-    ROT_BUFFER = 2
-    ROT_BUFFER_PEAK_PROXY = 3
-
-
-# Precision modes matching cuequivariance_ops
-class Precision(enum.IntEnum):
-    DEFAULT = 0
-    TF32 = 1
-    TF32x3 = 2
-    IEEE = 3
-
-    def _to_jax(self) -> jax.lax.Precision:
-        """Convert Precision enum to JAX precision."""
-        if self == Precision.DEFAULT:
-            return jax.lax.Precision.DEFAULT
-        elif self == Precision.TF32:
-            return jax.lax.Precision.HIGH
-        elif self == Precision.TF32x3:
-            return jax.lax.Precision.HIGHEST
-        elif self == Precision.IEEE:
-            return jax.lax.Precision.HIGHEST
 
 
 # Unified JAX primitives

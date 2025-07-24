@@ -23,10 +23,10 @@ from cuequivariance_jax.triangle._layer_norm_transpose import (
     layer_norm_transpose,
 )
 from cuequivariance_jax.triangle._sigmoid_gated_dual_gemm import (
-    Precision,
     sigmoid_gated_dual_gemm,
     sigmoid_gated_dual_gemm_dual_x,
 )
+from cuequivariance_jax.triangle._utils import Precision
 
 CUEQ_TRIMUL_FALLBACK_THRESHOLD: int = int(
     os.getenv("CUEQ_TRIMUL_FALLBACK_THRESHOLD", "100")
