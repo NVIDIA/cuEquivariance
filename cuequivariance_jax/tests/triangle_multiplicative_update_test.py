@@ -64,9 +64,6 @@ def test_compare_with_pytorch(direction, use_mask):
         from cuequivariance_ops_torch import (
             triangle_multiplicative_update as triangle_multiplicative_update_torch,
         )
-        from cuequivariance_ops_torch.triangle_multiplicative_update import (
-            Precision as PrecisionTorch,
-        )
     except ImportError:
         pytest.skip("torch or cuequivariance_ops_torch not available")
 
@@ -108,7 +105,7 @@ def test_compare_with_pytorch(direction, use_mask):
             mask=mask_torch,
             **weights_torch,
             eps=eps,
-            precision=PrecisionTorch.DEFAULT,
+            precision="IEEE",
         )
 
     out_jax = triangle_multiplicative_update_jax(
@@ -117,7 +114,7 @@ def test_compare_with_pytorch(direction, use_mask):
         mask=mask_jax,
         **weights_jax,
         eps=eps,
-        precision=Precision.DEFAULT,
+        precision=Precision.IEEE,
     )
 
     # Compare outputs
