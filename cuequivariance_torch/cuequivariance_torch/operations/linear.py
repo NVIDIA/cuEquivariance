@@ -161,5 +161,5 @@ class Linear(torch.nn.Module):
         if weight is None:
             raise ValueError("Weights should not be None")
 
-        [output] = self.f([weight, self.transpose_in(x)])
-        return self.transpose_out(output)
+        output = self.f([weight, self.transpose_in(x)])
+        return self.transpose_out(output[0])
