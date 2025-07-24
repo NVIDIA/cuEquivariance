@@ -381,7 +381,8 @@ def run_bench(f, input_dict):
             if isinstance(v, jax.Array)
         }
         options = {k: v for k, v in input_dict.items() if not isinstance(v, jax.Array)}
-        return measure_clock_ticks(lambda **kw: f(**kw, **options), **arrays)
+        rate, time = measure_clock_ticks(lambda **kw: f(**kw, **options), **arrays)
+        return rate * time
 
 
 def _generate_inputs(
