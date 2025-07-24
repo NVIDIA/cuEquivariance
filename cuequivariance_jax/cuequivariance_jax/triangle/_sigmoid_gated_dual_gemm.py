@@ -43,7 +43,7 @@ sigmoid_gated_dual_gemm_bwd_p.multiple_results = True
 #
 # This implementation uses a uniform approach to handle optional parameters (bias tensors and mask)
 # while maintaining compatibility with JAX primitives and optimal performance with Triton kernels.
-#
+
 # Key Design Principles:
 # 1. JAX primitives (.bind() calls) don't support None/optional arguments - they require concrete arrays
 # 2. We convert None values to appropriate defaults (zeros for bias, ones for mask) early in _prepare_inputs()
@@ -221,8 +221,6 @@ def _triton_forward(
         kernel=fused_sigmoid_gated_dual_gemm_forward_kernel,
         out_shape=out_shapes,
         grid=(triton.cdiv(M, TILE_M), triton.cdiv(N, TILE_N), 1),
-        num_stages=num_stages,
-        num_warps=num_warps,
         TILE_M=TILE_M,
         TILE_N=TILE_N,
         TILE_K=TILE_K,
@@ -232,6 +230,8 @@ def _triton_forward(
         TWO_INPUTS=two_inputs,
         HAS_B1=has_b1,
         HAS_B2=has_b2,
+        num_stages=num_stages,
+        num_warps=num_warps,
     )
 
     return results[0]
@@ -304,15 +304,15 @@ def _triton_backward(
         kernel=fused_sigmoid_gated_dual_gemm_backward_pregemm_kernel,
         out_shape=out_shapes,
         grid=(triton.cdiv(M, TILE_M), triton.cdiv(N, TILE_N), 1),
-        num_stages=num_stages,
-        num_warps=num_warps,
         TILE_M=TILE_M,
         TILE_N=TILE_N,
         TILE_K=TILE_K,
-        PRECISION=precision,
         APPLY_MASK=has_mask,
         TRANSPOSE_OUT=transpose_out,
+        PRECISION=precision,
         TWO_INPUTS=two_inputs,
+        num_stages=num_stages,
+        num_warps=num_warps,
         HAS_B1=has_b1,
         HAS_B2=has_b2,
     )
