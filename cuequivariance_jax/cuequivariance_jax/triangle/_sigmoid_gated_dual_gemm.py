@@ -206,14 +206,15 @@ def _triton_forward(
     out_shape = (N, M) if transpose_out else (M, N)
     out_shapes = [jax.ShapeDtypeStruct(shape=out_shape, dtype=x1.dtype)]
 
+    dummy = jnp.zeros((), dtype=dtype)
     results = jt.triton_call(
         x1,
-        x2,
+        x2 if two_inputs else dummy,
         w1,
         w2,
-        b1,
-        b2,
-        mask,
+        b1 if has_b1 else dummy,
+        b2 if has_b2 else dummy,
+        mask if has_mask else dummy,
         M,
         N,
         K,
@@ -287,15 +288,16 @@ def _triton_backward(
     num_tiles_n = triton.cdiv(N, TILE_N)
     out_shapes.append(jax.ShapeDtypeStruct(shape=(num_tiles_n, M), dtype=mask.dtype))
 
+    dummy = jnp.zeros((), dtype=dtype)
     results = jt.triton_call(
         grad_out,
         x1,
-        x2,
+        x2 if two_inputs else dummy,
         w1,
         w2,
-        b1,
-        b2,
-        mask,
+        b1 if has_b1 else dummy,
+        b2 if has_b2 else dummy,
+        mask if has_mask else dummy,
         M,
         N,
         K,
