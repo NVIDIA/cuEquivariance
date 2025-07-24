@@ -189,119 +189,6 @@ class SegmentedPolynomialIndexedLinear(nn.Module):
         self.dtypes = list(range(self.num_inputs)) + (
             default_dtype_map if output_dtype_map is None else output_dtype_map
         )
-        # Dict of subscripts to
-        # [canonicalized subscripts, indices of Z, C, u, v, w, whether to reshape each input]
-        # indices in a list [input1.shape, input2.shape, output.shape, [1]]
-        subdict = {
-            "uv,u,v": [
-                ("uv", "u", "v"),
-                [1, 0],
-                [0, 0],
-                [0, 1],
-                [0, 2],
-                [3, 0],
-                [0, 0],
-            ],
-            "uv,v,u": [
-                ("uv", "v", "u"),
-                [1, 0],
-                [0, 0],
-                [0, 1],
-                [0, 2],
-                [3, 0],
-                [0, 0],
-            ],
-            "uv,wu,wv": [
-                ("uv", "u", "v"),
-                [1, 0],
-                [0, 0],
-                [0, 1],
-                [0, 2],
-                [1, 1],
-                [0, 1],
-            ],
-            "uv,wv,wu": [
-                ("uv", "v", "u"),
-                [1, 0],
-                [0, 0],
-                [0, 1],
-                [0, 2],
-                [1, 1],
-                [0, 1],
-            ],
-            "u,uv,v": [
-                ("u", "uv", "v"),
-                [0, 0],
-                [1, 0],
-                [0, 1],
-                [1, 2],
-                [3, 0],
-                [0, 0],
-            ],
-            "u,vu,v": [
-                ("u", "vu", "v"),
-                [0, 0],
-                [1, 0],
-                [0, 1],
-                [1, 1],
-                [3, 0],
-                [0, 0],
-            ],
-            "uv,wv,uw": [
-                ("u", "vu", "v"),
-                [0, 0],
-                [1, 0],
-                [0, 2],
-                [1, 1],
-                [0, 1],
-                [1, 0],
-            ],
-            "uv,vw,uw": [
-                ("u", "uv", "v"),
-                [0, 0],
-                [1, 0],
-                [0, 2],
-                [1, 2],
-                [0, 1],
-                [1, 0],
-            ],
-            "u,v,vu": [
-                ("u", "v", "vu"),
-                [0, 0],
-                [2, 0],
-                [0, 1],
-                [1, 1],
-                [3, 0],
-                [0, 0],
-            ],
-            "u,v,uv": [
-                ("u", "v", "uv"),
-                [0, 0],
-                [2, 0],
-                [0, 1],
-                [1, 1],
-                [3, 0],
-                [0, 0],
-            ],
-            "uv,uw,wv": [
-                ("u", "v", "vu"),
-                [0, 0],
-                [2, 0],
-                [0, 2],
-                [1, 2],
-                [0, 1],
-                [1, 1],
-            ],
-            "uv,uw,vw": [
-                ("u", "v", "uv"),
-                [0, 0],
-                [2, 0],
-                [0, 2],
-                [1, 2],
-                [0, 1],
-                [1, 1],
-            ],
-        }
 
         # Build the TPs
         self.tps = torch.nn.ModuleList()
@@ -315,12 +202,12 @@ class SegmentedPolynomialIndexedLinear(nn.Module):
             d = d.move_operand_last(ope_out)
             subscripts = d.canonicalize_subscripts().subscripts
 
-            if subscripts not in subdict.keys():
+            if subscripts not in SUBDICT.keys():
                 raise NotImplementedError(
                     f"Indexed_linear does not support the operation {subscripts}."
                 )
 
-            signature = subdict[subscripts]
+            signature = SUBDICT[subscripts]
             # Each input has to be either indexed or not
             C_index = signature[2][0]
             if C_index < 2:
@@ -439,3 +326,78 @@ class SegmentedPolynomialIndexedLinear(nn.Module):
                     )
 
         return out_buffers
+
+
+# Dict of subscripts to
+# [canonicalized subscripts, indices of Z, C, u, v, w, whether to reshape each input]
+# indices in a list [input1.shape, input2.shape, output.shape, [1]]
+SUBDICT = {
+    "uv,u,v": [("uv", "u", "v"), [1, 0], [0, 0], [0, 1], [0, 2], [3, 0], [0, 0]],
+    "uv,v,u": [("uv", "v", "u"), [1, 0], [0, 0], [0, 1], [0, 2], [3, 0], [0, 0]],
+    "uv,wu,wv": [("uv", "u", "v"), [1, 0], [0, 0], [0, 1], [0, 2], [1, 1], [0, 1]],
+    "uv,wv,wu": [("uv", "v", "u"), [1, 0], [0, 0], [0, 1], [0, 2], [1, 1], [0, 1]],
+    "u,uv,v": [("u", "uv", "v"), [0, 0], [1, 0], [0, 1], [1, 2], [3, 0], [0, 0]],
+    "u,vu,v": [
+        ("u", "vu", "v"),
+        [0, 0],
+        [1, 0],
+        [0, 1],
+        [1, 1],
+        [3, 0],
+        [0, 0],
+    ],
+    "uv,wv,uw": [
+        ("u", "vu", "v"),
+        [0, 0],
+        [1, 0],
+        [0, 2],
+        [1, 1],
+        [0, 1],
+        [1, 0],
+    ],
+    "uv,vw,uw": [
+        ("u", "uv", "v"),
+        [0, 0],
+        [1, 0],
+        [0, 2],
+        [1, 2],
+        [0, 1],
+        [1, 0],
+    ],
+    "u,v,vu": [
+        ("u", "v", "vu"),
+        [0, 0],
+        [2, 0],
+        [0, 1],
+        [1, 1],
+        [3, 0],
+        [0, 0],
+    ],
+    "u,v,uv": [
+        ("u", "v", "uv"),
+        [0, 0],
+        [2, 0],
+        [0, 1],
+        [1, 1],
+        [3, 0],
+        [0, 0],
+    ],
+    "uv,uw,wv": [
+        ("u", "v", "vu"),
+        [0, 0],
+        [2, 0],
+        [0, 2],
+        [1, 2],
+        [0, 1],
+        [1, 1],
+    ],
+    "uv,uw,vw": [
+        ("u", "v", "uv"),
+        [0, 0],
+        [2, 0],
+        [0, 2],
+        [1, 2],
+        [0, 1],
+        [1, 1],
+    ],
+}

@@ -467,17 +467,13 @@ def test_segmented_polynomial_indexed_linear(
 
     indexing = {"input": ("first", "indexed"), "output": ("all", "batch")}
 
-    # Uncomment this to run indexed_linear test locally
+    # Comment this to run indexed_linear test locally
     if method == "indexed_linear":
         pytest.skip("Skipping for now because of missing backend")
 
     # Unsupported combinations
     if method == "uniform_1d":
         pytest.skip("Linear is not supported for uniform_1d")
-    if method == "indexed_linear" and (grad or backward):
-        pytest.skip("Skipping for now because of faulty backward")
-    if method == "fused_tp" and math_dtype == torch.float32 and dtype == torch.float64:
-        pytest.skip("Skipping fused TP for float32 math_dtype with float64 inputs")
 
     run_segmented_polynomial_test(
         name,
