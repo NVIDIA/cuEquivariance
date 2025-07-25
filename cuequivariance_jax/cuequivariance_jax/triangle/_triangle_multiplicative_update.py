@@ -29,7 +29,7 @@ from cuequivariance_jax.triangle._sigmoid_gated_dual_gemm import (
 from cuequivariance_jax.triangle._utils import Precision
 
 CUEQ_TRIMUL_FALLBACK_THRESHOLD: int = int(
-    os.getenv("CUEQ_TRIMUL_FALLBACK_THRESHOLD", "100")
+    os.getenv("CUEQ_TRIMUL_FALLBACK_THRESHOLD", "50")
 )
 
 
