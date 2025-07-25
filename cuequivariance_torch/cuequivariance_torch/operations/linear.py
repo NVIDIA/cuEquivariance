@@ -40,7 +40,8 @@ class Linear(torch.nn.Module):
         shared_weights (bool, optional): Whether to use shared weights, by default True.
         device (torch.device, optional): The device to use for the linear layer.
         dtype (torch.dtype, optional): The dtype to use for the linear layer weights, by default ``torch.float32``.
-        math_dtype (torch.dtype, optional): The dtype to use for the math operations, by default ``torch.float32``.
+        math_dtype (torch.dtype, optional): The dtype to use for the math operations, by default it follows the dtype of the input tensors,
+            if possible, or the torch default dtype.
         internal_weights (bool, optional): Whether to use internal weights, by default True if shared_weights is True, otherwise False.
         method (str, optional): The method to use for the linear layer, by default "naive" (using a PyTorch implementation).
         use_fallback (bool, optional, deprecated): Whether to use a "fallback" implementation, now maps to method:
@@ -67,8 +68,6 @@ class Linear(torch.nn.Module):
         super().__init__()
         irreps_in, irreps_out = default_irreps(irreps_in, irreps_out)
         assert_same_group(irreps_in, irreps_out)
-
-        math_dtype = math_dtype or dtype
 
         e = descriptors.linear(irreps_in, irreps_out)
         assert e.polynomial.operations[0][1].subscripts == "uv,iu,iv"
@@ -122,6 +121,10 @@ class Linear(torch.nn.Module):
                 self.method = "naive" if use_fallback else "fused_tp"
         else:
             self.method = method
+
+        # For fused_tp we have to specify the math_dtype
+        if self.method == "fused_tp" and math_dtype is None:
+            math_dtype = dtype if dtype is not None else torch.get_default_dtype()
 
         self.f = cuet.SegmentedPolynomial(
             e.polynomial,

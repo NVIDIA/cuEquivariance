@@ -43,7 +43,7 @@ class ChannelWiseTensorProduct(torch.nn.Module):
         internal_weights (bool, optional): Whether to create module parameters for weights. Default is None.
         device (torch.device, optional): The device to use for the operation.
         dtype (torch.dtype, optional): The dtype to use for the operation weights, by default ``torch.float32``.
-        math_dtype (torch.dtype, optional): The dtype to use for the math operations, by default ``torch.float32``.
+        math_dtype (torch.dtype, optional): The dtype to use for the math operations, by default it follows the dtype of the input tensors.
         method (str, optional): The method to use for the operation, by default "uniform_1d" (using a CUDA kernel)
             if all segments have the same shape, otherwise "naive" (using a PyTorch implementation).
         use_fallback (bool, optional, deprecated): Whether to use a "fallback" implementation, now maps to method:
@@ -76,8 +76,6 @@ class ChannelWiseTensorProduct(torch.nn.Module):
         super().__init__()
         irreps_in1, irreps_in2 = default_irreps(irreps_in1, irreps_in2)
         assert_same_group(irreps_in1, irreps_in2)
-
-        math_dtype = math_dtype or dtype
 
         e = descriptors.channelwise_tensor_product(
             irreps_in1, irreps_in2, filter_irreps_out

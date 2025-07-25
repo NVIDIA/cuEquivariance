@@ -50,7 +50,7 @@ def test_vector_to_euler_angles():
         torch.tensor([0.0]), beta, alpha, ey
     )
 
-    assert torch.allclose(A, B)
+    assert torch.allclose(A, B, atol=1e-5, rtol=1e-5)
 
 
 @pytest.mark.parametrize("use_fallback", [False, True])

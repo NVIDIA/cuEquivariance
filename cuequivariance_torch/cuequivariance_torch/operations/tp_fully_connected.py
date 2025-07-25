@@ -42,8 +42,8 @@ class FullyConnectedTensorProduct(torch.nn.Module):
         shared_weights (bool, optional): Whether to share weights across the batch dimension. Default is True.
         internal_weights (bool, optional): Whether to create module parameters for weights. Default is None.
         device (torch.device, optional): The device to use for the operation.
-        dtype (torch.dtype, optional): The dtype to use for the operation weights, by default ``torch.float32``.
-        math_dtype (torch.dtype, optional): The dtype to use for the math operations, by default ``torch.float32``.
+        dtype (torch.dtype, optional): The dtype to use for the operation weights, by default the torch default dtype.
+        math_dtype (torch.dtype, optional): The dtype to use for the math operations, by default `dtype`.
         method (str, optional): The method to use for the linear layer, by default "fused_tp" (using a CUDA kernel).
         use_fallback (bool, optional, deprecated): Whether to use a "fallback" implementation, now maps to method:
             If `True`, the "naive" method is used.
@@ -78,6 +78,8 @@ class FullyConnectedTensorProduct(torch.nn.Module):
         )
         assert_same_group(irreps_in1, irreps_in2, irreps_out)
 
+        if dtype is None:
+            dtype = torch.get_default_dtype()
         math_dtype = math_dtype or dtype
 
         e = descriptors.fully_connected_tensor_product(
