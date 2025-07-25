@@ -12,6 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import warnings
 from typing import Optional, Sequence
 
 import torch
@@ -22,6 +23,7 @@ from cuequivariance import descriptors
 from cuequivariance.group_theory.irreps_array.misc_ui import (
     assert_same_group,
     default_irreps,
+    default_layout,
 )
 
 
@@ -34,11 +36,19 @@ class ChannelWiseTensorProduct(torch.nn.Module):
         irreps_in2 (Irreps): Input irreps for the second operand.
         filter_irreps_out (Sequence of Irrep, optional): Filter for the output irreps. Default is None.
         layout (IrrepsLayout, optional): The layout of the input and output irreps. Default is ``cue.mul_ir`` which is the layout corresponding to e3nn.
+        layout_in1 (IrrepsLayout, optional): The layout of the first input irreducible representations, by default ``layout``.
+        layout_in2 (IrrepsLayout, optional): The layout of the second input irreducible representations, by default ``layout``.
+        layout_out (IrrepsLayout, optional): The layout of the output irreducible representations, by default ``layout``.
         shared_weights (bool, optional): Whether to share weights across the batch dimension. Default is True.
         internal_weights (bool, optional): Whether to create module parameters for weights. Default is None.
-        use_fallback (bool, optional): If `None` (default), a CUDA kernel will be used if available.
-                If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
-                If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
+        device (torch.device, optional): The device to use for the operation.
+        dtype (torch.dtype, optional): The dtype to use for the operation weights, by default ``torch.float32``.
+        math_dtype (torch.dtype, optional): The dtype to use for the math operations, by default ``torch.float32``.
+        method (str, optional): The method to use for the operation, by default "uniform_1d" (using a CUDA kernel)
+            if all segments have the same shape, otherwise "naive" (using a PyTorch implementation).
+        use_fallback (bool, optional, deprecated): Whether to use a "fallback" implementation, now maps to method:
+            If `True` the "naive" method is used.
+            If `False` the "uniform_1d" method is used (make sure all segments have the same shape).
 
     Note:
         In e3nn there was a irrep_normalization and path_normalization parameters.
@@ -61,6 +71,7 @@ class ChannelWiseTensorProduct(torch.nn.Module):
         dtype: Optional[torch.dtype] = None,
         math_dtype: Optional[torch.dtype] = None,
         use_fallback: Optional[bool] = None,
+        method: Optional[str] = None,
     ):
         super().__init__()
         irreps_in1, irreps_in2 = default_irreps(irreps_in1, irreps_in2)
@@ -76,6 +87,7 @@ class ChannelWiseTensorProduct(torch.nn.Module):
             e.operands[-1].irreps,
         )
         assert descriptor.subscripts == "uv,iu,jv,kuv+ijk"
+        same_shape = e.flatten_coefficient_modes().all_same_segment_shape()
 
         self.irreps_in1 = irreps_in1
         self.irreps_in2 = irreps_in2
@@ -97,15 +109,68 @@ class ChannelWiseTensorProduct(torch.nn.Module):
         else:
             self.weight = None
 
-        self.f = cuet.EquivariantTensorProduct(
-            e,
-            layout=layout,
-            layout_in=(cue.ir_mul, layout_in1, layout_in2),
-            layout_out=layout_out,
+        layout_in1 = default_layout(layout_in1 or layout)
+        self.transpose_in1 = cuet.TransposeIrrepsLayout(
+            e.inputs[1].irreps,
+            source=layout_in1,
+            target=e.inputs[1].layout,
             device=device,
-            math_dtype=math_dtype,
             use_fallback=use_fallback,
         )
+
+        layout_in2 = default_layout(layout_in2 or layout)
+        self.transpose_in2 = cuet.TransposeIrrepsLayout(
+            e.inputs[2].irreps,
+            source=layout_in2,
+            target=e.inputs[2].layout,
+            device=device,
+            use_fallback=use_fallback,
+        )
+
+        layout_out = default_layout(layout_out or layout)
+        self.transpose_out = cuet.TransposeIrrepsLayout(
+            e.outputs[0].irreps,
+            source=e.outputs[0].layout,
+            target=layout_out,
+            device=device,
+            use_fallback=use_fallback,
+        )
+
+        if method is None:
+            if use_fallback is None:
+                if same_shape:
+                    # No warning here as it's the default behavior
+                    self.method = "uniform_1d"
+                else:
+                    warnings.warn(
+                        "Segments are not the same shape, falling back to `naive` method\n"
+                        "You can consider reshaping your input to have the same shape"
+                    )
+                    self.method = "naive"
+            else:
+                warnings.warn(
+                    "`use_fallback` is deprecated, please use `method` instead",
+                    DeprecationWarning,
+                )
+                if not same_shape and not use_fallback:
+                    raise ValueError(
+                        "`uniform_1d` method requires segments to be the same shape\n"
+                        "You can consider reshaping your input to have the same shape"
+                    )
+                self.method = "naive" if use_fallback else "uniform_1d"
+        else:
+            if method == "uniform_1d" and not same_shape:
+                raise ValueError(
+                    "`uniform_1d` method requires segments to be the same shape\n"
+                    "You can consider reshaping your input to have the same shape"
+                )
+            self.method = method
+
+        self.f = cuet.SegmentedPolynomial(
+            e.polynomial,
+            method=self.method,
+            math_dtype=math_dtype,
+        ).to(device)
 
     @torch.jit.ignore
     def extra_repr(self) -> str:
@@ -120,36 +185,70 @@ class ChannelWiseTensorProduct(torch.nn.Module):
         x1: torch.Tensor,
         x2: torch.Tensor,
         weight: Optional[torch.Tensor] = None,
+        indices_1: Optional[torch.Tensor] = None,
+        indices_2: Optional[torch.Tensor] = None,
+        indices_out: Optional[torch.Tensor] = None,
+        size_out: Optional[int] = None,
     ) -> torch.Tensor:
         """
-        Perform the forward pass of the fully connected tensor product operation.
+        Perform the forward pass of the channel-wise tensor product operation.
 
         Args:
-            x1 (torch.Tensor): Input tensor for the first operand. It should have the shape (batch_size, irreps_in1.dim).
-            x2 (torch.Tensor):  Input tensor for the second operand. It should have the shape (batch_size, irreps_in2.dim).
+            x1 (torch.Tensor): Input tensor for the first operand. It should have the shape (:, irreps_in1.dim).
+            x2 (torch.Tensor):  Input tensor for the second operand. It should have the shape (:, irreps_in2.dim).
             weight (torch.Tensor, optional): Weights for the tensor product. It should have the shape (batch_size, weight_numel)
-                if shared_weights is False, or (weight_numel,) if shared_weights is True.
+                if shared_weights is False, or (1, weight_numel) if shared_weights is True.
                 If None, the internal weights are used.
+            indices_1 (torch.Tensor, optional): Indices to gather elements for the first operand.
+            indices_2 (torch.Tensor, optional): Indices to gather elements for the second operand.
+            indices_out (torch.Tensor, optional): Indices to scatter elements for the output.
+            size_out (int, optional): Batch dimension of the output. Needed if indices_out are provided.
 
         Returns:
             torch.Tensor:
-                Output tensor resulting from the fully connected tensor product operation.
+                Output tensor resulting from the channel-wise tensor product operation.
                 It will have the shape (batch_size, irreps_out.dim).
 
         Raises:
             ValueError: If internal weights are used and weight is not None,
                 or if shared weights are used and weight is not a 1D tensor,
                 or if shared weights are not used and weight is not a 2D tensor.
+                or if size_out is not provided and indices_out is provided.
         """
+        x1 = self.transpose_in1(x1)
+        x2 = self.transpose_in2(x2)
+
+        indices_in = {}
+        if indices_1 is not None:
+            indices_in[1] = indices_1
+        if indices_2 is not None:
+            indices_in[2] = indices_2
+        if indices_out is not None:
+            indices_out = {0: indices_out}
+            if size_out is None:
+                raise ValueError(
+                    "size_out should be provided if indices_out is provided"
+                )
+            else:
+                sizes_out = {0: torch.empty(size_out, 1).to(x1.device)}
+        else:
+            sizes_out = {}
+
         if self.weight is not None:
             if weight is not None:
                 raise ValueError("Internal weights are used, weight should be None")
             else:
-                return self.f(self.weight, x1, x2)
+                weight = self.weight
         else:
             if weight is None:
                 raise ValueError(
                     "Internal weights are not used, weight should not be None"
                 )
-            else:
-                return self.f(weight, x1, x2)
+
+        output = self.f(
+            [weight, x1, x2],
+            input_indices=indices_in,
+            output_shapes=sizes_out,
+            output_indices=indices_out,
+        )
+        return self.transpose_out(output[0])
