@@ -84,10 +84,10 @@ class IndexedLinear(nn.Module):
                 apply_linear(
                     input1[
                         :, self.slices[0][i[0]].start : self.slices[0][i[0]].stop
-                    ].reshape((-1,) + shape[0]),
+                    ].reshape((input1.shape[0],) + shape[0]),
                     input2[
                         :, self.slices[1][i[1]].start : self.slices[1][i[1]].stop
-                    ].reshape((-1,) + shape[1]),
+                    ].reshape((input2.shape[0],) + shape[1]),
                     Z,
                     C,
                     self.uind,

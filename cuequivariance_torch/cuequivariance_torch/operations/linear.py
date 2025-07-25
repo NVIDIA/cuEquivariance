@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import warnings
-from typing import Optional
+from typing import Dict, Optional
 
 import torch
 
@@ -38,11 +38,13 @@ class Linear(torch.nn.Module):
         layout_in (IrrepsLayout, optional): The layout of the input irreducible representations, by default ``layout``.
         layout_out (IrrepsLayout, optional): The layout of the output irreducible representations, by default ``layout``.
         shared_weights (bool, optional): Whether to use shared weights, by default True.
+        internal_weights (bool, optional): Whether to use internal weights, by default True if shared_weights is True, otherwise False.
+        weight_classes (int, optional): If provided, the weight tensor will have this as a batch dimension (expected if using external weights).
+            If this is specified and >1, at forward time each batch element will use a slice of the weight tensor as indexed by the weight_indices.
         device (torch.device, optional): The device to use for the linear layer.
         dtype (torch.dtype, optional): The dtype to use for the linear layer weights, by default ``torch.float32``.
         math_dtype (torch.dtype, optional): The dtype to use for the math operations, by default it follows the dtype of the input tensors,
             if possible, or the torch default dtype.
-        internal_weights (bool, optional): Whether to use internal weights, by default True if shared_weights is True, otherwise False.
         method (str, optional): The method to use for the linear layer, by default "naive" (using a PyTorch implementation).
         use_fallback (bool, optional, deprecated): Whether to use a "fallback" implementation, now maps to method:
             If `True` or `None` (default), the "naive" method is used.
@@ -59,6 +61,7 @@ class Linear(torch.nn.Module):
         layout_out: Optional[cue.IrrepsLayout] = None,
         shared_weights: bool = True,
         internal_weights: bool = None,
+        weight_classes: Optional[int] = 1,
         device: Optional[torch.device] = None,
         dtype: Optional[torch.dtype] = None,
         math_dtype: Optional[torch.dtype] = None,
@@ -77,7 +80,10 @@ class Linear(torch.nn.Module):
 
         self.weight_numel = e.inputs[0].dim
 
+        self.weight_classes = weight_classes
         self.shared_weights = shared_weights
+        if weight_classes > 1 and not shared_weights:
+            raise ValueError("Weight classes require shared weights.")
         self.internal_weights = (
             internal_weights if internal_weights is not None else shared_weights
         )
@@ -86,7 +92,9 @@ class Linear(torch.nn.Module):
             if not self.shared_weights:
                 raise ValueError("Internal weights should be shared")
             self.weight = torch.nn.Parameter(
-                torch.randn(1, self.weight_numel, device=device, dtype=dtype)
+                torch.randn(
+                    weight_classes, self.weight_numel, device=device, dtype=dtype
+                )
             )
         else:
             self.weight = None
@@ -139,13 +147,20 @@ class Linear(torch.nn.Module):
         self,
         x: torch.Tensor,
         weight: Optional[torch.Tensor] = None,
+        weight_indices: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         """
         Forward pass of the linear layer.
 
         Args:
             x (torch.Tensor): The input tensor.
-            weight (torch.Tensor, optional): The weight tensor. If None, the internal weight tensor is used.
+            weight (torch.Tensor, optional): The weight tensor. If None, the internal weight tensor is used, otherwise:
+               If weights are not shared, this should be a tensor of shape (batch_size, weight_numel).
+               If weights are shared, this should be a tensor of shape (weight_classes, weight_numel)
+               (where weight_classes is 1 if unspecified).
+            weight_indices (torch.Tensor, optional): The indices of the weight tensor:
+               if weight_classes > 1, this is an integer tensor of shape (batch_size,),
+               indicating which weight slice to use for each batch element.
 
         Returns:
             torch.Tensor: The output tensor after applying the linear transformation.
@@ -158,11 +173,19 @@ class Linear(torch.nn.Module):
         if self.internal_weights:
             if weight is not None:
                 raise ValueError("Internal weights are used, weight should be None")
-
             weight = self.weight
+
+        input_indices: Dict[int, torch.Tensor] = {}
+        if self.weight_classes > 1:
+            if weight_indices is None:
+                raise ValueError(
+                    "weight_indices should be provided if weight_classes > 1"
+                )
+            else:
+                input_indices[0] = weight_indices
 
         if weight is None:
             raise ValueError("Weights should not be None")
 
-        output = self.f([weight, self.transpose_in(x)])
+        output = self.f([weight, self.transpose_in(x)], input_indices=input_indices)
         return self.transpose_out(output[0])

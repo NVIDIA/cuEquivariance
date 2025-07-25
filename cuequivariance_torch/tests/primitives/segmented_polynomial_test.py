@@ -233,7 +233,8 @@ def run_segmented_polynomial_test(
         device
     )
 
-    test_tol_dict = tol_dict[(dtype, math_dtype)]
+    t_math_dtype = math_dtype if math_dtype is not None else dtype
+    test_tol_dict = tol_dict[(dtype, t_math_dtype)]
 
     if grad:
         m_ref = Grad(m_ref)
@@ -264,6 +265,8 @@ DATA_TYPES_IN_MATH = [
     (torch.float64, torch.float32),
     (torch.float32, torch.float32),
     (torch.float64, torch.float64),
+    (torch.float32, None),
+    (torch.float64, None),
     (torch.float16, torch.float32),
     (torch.bfloat16, torch.float32),
 ]
@@ -387,7 +390,11 @@ def test_segmented_polynomial_dytpes(
     # Unsupported combinations
     if method == "fused_tp" and name == "symmetric_contraction":
         pytest.skip("Skipping fused TP for symmetric contraction: unsupported")
-    if method == "fused_tp" and math_dtype == torch.float32 and dtype == torch.float64:
+    if (
+        method == "fused_tp"
+        and math_dtype in [torch.float32, None]
+        and dtype == torch.float64
+    ):
         pytest.skip("Skipping fused TP for float32 math_dtype with float64 inputs")
 
     run_segmented_polynomial_test(
@@ -449,7 +456,7 @@ def test_segmented_polynomial_export(
 
 
 @pytest.mark.parametrize("method", METHODS + ["indexed_linear"])
-@pytest.mark.parametrize("dtype, math_dtype", DATA_TYPES_IN_MATH[2:4])
+@pytest.mark.parametrize("dtype, math_dtype", DATA_TYPES_IN_MATH[2:6])
 @pytest.mark.parametrize("batch_size", BATCH_SIZE[1:])
 @pytest.mark.parametrize("mode", EXPORT_MODES[:1])
 @pytest.mark.parametrize("grad", GRAD)
@@ -479,6 +486,14 @@ def test_segmented_polynomial_indexed_linear(
     # Unsupported combinations
     if method == "uniform_1d":
         pytest.skip("Linear is not supported for uniform_1d")
+    if (
+        method == "fused_tp"
+        and math_dtype in [torch.float32, None]
+        and dtype == torch.float64
+    ):
+        pytest.skip("Skipping fused TP for float32 math_dtype with float64 inputs")
+    if method == "indexed_linear" and math_dtype is not None:
+        pytest.skip("indexed_linear does not support math_dtype")
 
     run_segmented_polynomial_test(
         name,
