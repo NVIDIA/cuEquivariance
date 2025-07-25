@@ -57,21 +57,21 @@ def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
         args, kwargs, _ = noop((args, kwargs, outputs))
         return (args, kwargs)
 
-    second_sleep_time: float = 30e-6
+    tick_time: float = 10e-6
 
     @partial(jax.jit, static_argnums=(0, 1))
-    def run_bench(n_iter: int, sleep_time: float, state):
-        # Warmup phase: execute once to trigger potential JIT compilation or library loading
+    def run_bench(n_warm: int, n_iter: int, fill_time: float, state):
+        # First sleep: fill CUDA stream
+        _, state = sleep(fill_time, state)
+
+        # Warmup phase: execute multiple times to stabilize GPU clocks and trigger JIT compilation
         _, state = _event_record(state, copy_before=True)
-        state = run_func(state)
+        for _ in range(n_warm):
+            state = run_func(state)
         _, state = _event_record(state, copy_before=False)
 
-        # Pre-measurement clock rate calibration
-        # Sleep to fill the CUDA stream and measure clock rate
-        # Assumption: each operation takes less than 10us
-        sleep_time = sleep_time + 10e-6 * n_iter
-        ticks_before, state = sleep(sleep_time, state)
-        rate_before = ticks_before / sleep_time
+        # Second sleep: measure clock ticks
+        ticks_before, state = sleep(tick_time, state)
 
         # Main measurement phase
         start_event, state = _event_record(state, copy_before=True)
@@ -79,36 +79,45 @@ def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
             state = run_func(state)
         end_event, state = _event_record(state, copy_before=False)
 
-        # Post-measurement clock rate calibration
-        # Use 30us as a reasonable time to measure clock ticks
-        ticks_after, state = sleep(second_sleep_time, state)
-        rate_after = ticks_after / second_sleep_time
+        # Third sleep: measure clock ticks
+        ticks_after, state = sleep(tick_time, state)
 
         # Synchronize to check if the CPU lags behind the GPU or not
         sync_time, state = synchronize(state)
 
-        # Calculate average time per function call using GPU events
-        # Call noop to ensure sleep+sync is executed before event_elapsed
-        end_event, state = noop((end_event, state))
+        # Call noop to ensure instruction order is preserved
+        start_event, end_event, ticks_before, ticks_after, state = noop(
+            (start_event, end_event, ticks_before, ticks_after, state)
+        )
         total_time = 1e-3 * _event_elapsed(start_event, end_event)
         avg_time = total_time / n_iter
+
+        rate_before = ticks_before / tick_time
+        rate_after = ticks_after / tick_time
 
         return avg_time, rate_before, rate_after, sync_time
 
     # Adaptive iteration counting to find optimal measurement parameters
+    n_warm = 1
     n_iter = 1
-    sleep_time = 50e-6
+    fill_base = 50e-6  # Base time for stream filling
     rejections: list[str] = []
+    best_measurement = None
+    best_variation = float("inf")
 
     for attempt in range(20):
+        fill_time = fill_base + 10e-6 * (n_warm + n_iter)
         avg_time, rate_before, rate_after, sync_time = jax.tree.map(
-            float, run_bench(n_iter, sleep_time, (args, kwargs))
+            float, run_bench(n_warm, n_iter, fill_time, (args, kwargs))
         )
         avg_rate = (rate_before + rate_after) / 2
 
+        if best_measurement is None:
+            best_measurement = (avg_rate, avg_time)
+
         # print(
-        #     f"DEBUG: Attempt {attempt + 1}, n_iter={n_iter}, "
-        #     f"sleep_time={sleep_time * 1e6:.1f}us, "
+        #     f"DEBUG: Attempt {attempt + 1}, n_iter={n_iter}, n_warm={n_warm}, "
+        #     f"fill_time={fill_time * 1e6:.1f}us, "
         #     f"sync_time={sync_time * 1e6:.1f}us, "
         #     f"avg_time={avg_time * 1e6:.1f}us, "
         #     f"rate_before={rate_before / 1e9:.2f} GHz, "
@@ -116,11 +125,11 @@ def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
         # )
 
         # If synchronization time is small, it indicates the CPU is lagging behind the GPU
-        target_sync_time = second_sleep_time + 20e-6
+        target_sync_time = tick_time + 20e-6
         if sync_time < target_sync_time:
-            sleep_time += (target_sync_time - sync_time) + 50e-6
+            fill_base += (target_sync_time - sync_time) + 50e-6
             rejections.append(
-                f"CPU lagging behind GPU (will sleep {sleep_time * 1e3:.1f} ms)"
+                f"CPU lagging behind GPU (will sleep {fill_base * 1e3:.1f} ms)"
             )
             continue
 
@@ -141,20 +150,33 @@ def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
             abs(rate_before - rate_after),
             0.02 * max(rate_before, rate_after),
         )
+
+        # Track the best measurement (lowest clock rate variation) for fallback
+        if diff < best_variation:
+            best_variation = diff
+            best_measurement = (avg_rate, avg_time)
+
         if diff > max_tol:
             rejections.append(
                 f"Clock rate variation too high "
                 f"({diff / 1e6:.2f} MHz variation > {max_tol / 1e6:.2f} MHz)"
             )
+            if n_warm < n_iter:
+                n_warm = n_iter
+            else:
+                n_warm += round(n_warm * 0.2) + 1
             continue
 
         return avg_rate, avg_time
 
+    # If we get here, no measurement met all criteria
+    # Return the best measurement (lowest clock rate variation) we found
     rejection_details = "\n".join(
         f"  Attempt #{i + 1}: {reason}" for i, reason in enumerate(rejections)
     )
     warnings.warn(
         f"Was not able to reach a satisfying measurement in {len(rejections)} attempts. "
+        f"Returning measurement with lowest clock rate variation ({best_variation / 1e6:.2f} MHz). "
         f"Rejection reasons:\n{rejection_details}"
     )
-    return avg_rate, avg_time
+    return best_measurement

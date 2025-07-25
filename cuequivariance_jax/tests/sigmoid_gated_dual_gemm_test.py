@@ -426,6 +426,7 @@ def test_sigmoid_gated_dual_gemm_precision_modes(precision):
     assert output_dual_bias.shape == (M, N)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("tuning_mode", ["ONDEMAND", None])  # "AOT" is too slow to test
 def test_sigmoid_gated_dual_gemm_triton_tuning_modes(tuning_mode, monkeypatch):
     """Test sigmoid_gated_dual_gemm with different CUEQ_TRITON_TUNING environment variable values."""

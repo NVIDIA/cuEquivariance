@@ -31,6 +31,14 @@ def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
 
     Returns:
         tuple: A tuple containing the average clock rate in Hz and the average time per function call in seconds.
+
+        Example:
+        def my_function(x, y):
+            return x + y
+
+        rate, time = measure_clock_ticks(my_function, x, y)
+        clock_ticks = rate * time
+        print(f"Function took {clock_ticks} clock ticks")
     """
     from cuequivariance_ops_torch import sleep
 
@@ -40,25 +48,35 @@ def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
     compiled_func = torch.compile(f)
     x = torch.tensor(0, device="cuda")
 
-    t_sleep_before = 200e-6  # 200 microseconds
+    fill_base = 200e-6  # Base time for stream filling
+    n_warm = 0
     n_iter = 1
     rejections: list[str] = []
+    best_measurement = None
+    best_variation = float("inf")
 
     for attempt in range(20):
-        sleep_before_time = torch.tensor(30e-6 * n_iter + t_sleep_before, device="cuda")
-        sleep_after_time = torch.tensor(30e-6, device="cuda")
+        fill_time = torch.tensor(30e-6 * (n_warm + n_iter) + fill_base, device="cuda")
+        tick_time = torch.tensor(30e-6, device="cuda")
         start_event = torch.cuda.Event(enable_timing=True)
         end_event = torch.cuda.Event(enable_timing=True)
 
-        # Sleep to (i) measure clock ticks and (ii) ensure the stream is kept full
-        ticks_before, x = sleep(sleep_before_time, x)
+        # First sleep: fill CUDA stream
+        _, x = sleep(fill_time, x)
+
+        for _ in range(n_warm):
+            _ = compiled_func(*args, **kwargs)
+
+        # Second sleep: measure clock ticks
+        ticks_before, x = sleep(tick_time, x)
 
         start_event.record()
         for _ in range(n_iter):
             _ = compiled_func(*args, **kwargs)
         end_event.record()
 
-        ticks_after, x = sleep(sleep_after_time, x)
+        # Third sleep: measure clock ticks
+        ticks_after, x = sleep(tick_time, x)
 
         t0 = time.perf_counter()
         torch.cuda.synchronize()
@@ -67,13 +85,13 @@ def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
         total_time: float = start_event.elapsed_time(end_event) * 1e-3
         avg_time = total_time / n_iter
 
-        rate_before = ticks_before.item() / sleep_before_time.item()
-        rate_after = ticks_after.item() / sleep_after_time.item()
-        avg_clock_rate = (rate_before + rate_after) / 2
+        rate_before = ticks_before.item() / tick_time.item()
+        rate_after = ticks_after.item() / tick_time.item()
+        avg_rate = (rate_before + rate_after) / 2
 
         # print(
-        #     f"DEBUG: Attempt {attempt + 1}, n_iter={n_iter}, "
-        #     f"sleep_time={t_sleep_before * 1e6:.1f}us, "
+        #     f"DEBUG: Attempt {attempt + 1}, n_iter={n_iter}, n_warm={n_warm}, "
+        #     f"total_sleep={sleep_before_time.item() * 1e6:.1f}us, "
         #     f"sync_time={sync_time * 1e6:.1f}us, "
         #     f"avg_time={avg_time * 1e6:.1f}us, "
         #     f"rate_before={rate_before / 1e9:.2f} GHz, "
@@ -82,14 +100,17 @@ def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
 
         if attempt == 0:
             # Always skip the first iteration to allow for JIT compilation
+            diff = abs(rate_before - rate_after)
+            best_variation = diff
+            best_measurement = (avg_rate, avg_time)
             rejections.append("First iteration (always skipped)")
             continue
 
         if sync_time < 50e-6:
             # If synchronization is too fast, it may indicate that the CPU is lagging behind the GPU.
-            t_sleep_before += 50e-6 - sync_time + 500e-6
+            fill_base += 50e-6 - sync_time + 500e-6
             rejections.append(
-                f"CPU lagging behind GPU (will sleep {t_sleep_before * 1e3:.1f} ms)"
+                f"CPU lagging behind GPU (will sleep {fill_base * 1e3:.1f} ms)"
             )
             continue
 
@@ -105,21 +126,34 @@ def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
             abs(rate_before - rate_after),
             0.02 * max(rate_before, rate_after),
         )
+
+        # Track the best measurement (lowest clock rate variation) for fallback
+        if diff < best_variation:
+            best_variation = diff
+            best_measurement = (avg_rate, avg_time)
+
         if diff > max_tol:
-            # If the clock rate varies too much, simply retry
+            # If the clock rate varies too much, increase warmup and retry
             rejections.append(
                 f"Clock rate variation too high "
                 f"({diff / 1e6:.2f} MHz variation is bigger than {max_tol / 1e6:.2f} MHz)"
             )
+            if n_warm < n_iter:
+                n_warm = n_iter
+            else:
+                n_warm += round(n_warm * 0.2) + 1
             continue
 
-        return avg_clock_rate, avg_time
+        return avg_rate, avg_time
 
+    # If we get here, no measurement met all criteria
+    # Return the best measurement (lowest clock rate variation) we found
     rejection_details = "\n".join(
         f"  Attempt #{i + 1}: {reason}" for i, reason in enumerate(rejections)
     )
     warnings.warn(
         f"Was not able to reach a satisfying measurement in {len(rejections)} attempts. "
+        f"Returning measurement with lowest clock rate variation ({best_variation / 1e6:.2f} MHz). "
         f"Rejection reasons:\n{rejection_details}"
     )
-    return avg_clock_rate, avg_time
+    return best_measurement
