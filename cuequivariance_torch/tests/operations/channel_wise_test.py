@@ -50,6 +50,9 @@ def test_channel_wise_fwd(
     use_fallback: bool,
     batch: int,
 ):
+    if use_fallback is False and not torch.cuda.is_available():
+        pytest.skip("CUDA is not available")
+
     if not use_fallback and irreps2 == cue.Irreps("O3", "1o + 2e"):
         pytest.skip("This method does not work for non-uniform irreps.")
 
