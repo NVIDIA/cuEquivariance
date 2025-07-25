@@ -94,7 +94,7 @@ jobs:
         python -c "import cuequivariance_jax; print('cuex', cuequivariance_jax.__version__)"
     - name: Test with pytest (including slow tests)
       run: |
-        pytest --doctest-modules -x cuequivariance_jax
+        XLA_PYTHON_CLIENT_PREALLOCATE=false pytest --doctest-modules -x cuequivariance_jax
 
   cuequivariance-torch-full:
     needs: check-changes
@@ -135,7 +135,81 @@ jobs:
     if: always() && needs.check-changes.outputs.should_run == 'true' && (needs.cuequivariance-full.result == 'failure' || needs.cuequivariance-jax-full.result == 'failure' || needs.cuequivariance-torch-full.result == 'failure')
     runs-on: ubuntu-latest
     steps:
-    - name: Report failure
-      run: |
-        echo "❌ Nightly full tests failed!"
-        echo "Check the workflow run for details: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" 
+    - name: Create Issue on Failure
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const title = `🚨 Nightly Tests Failed - ${new Date().toISOString().split('T')[0]}`;
+          const body = `## Nightly Test Failure Report
+          
+          **Date:** ${new Date().toISOString()}
+          **Workflow Run:** [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          
+          ### Failed Jobs:
+          ${needs['cuequivariance-full'].result === 'failure' ? '❌ cuequivariance-full\n' : ''}${needs['cuequivariance-jax-full'].result === 'failure' ? '❌ cuequivariance-jax-full\n' : ''}${needs['cuequivariance-torch-full'].result === 'failure' ? '❌ cuequivariance-torch-full\n' : ''}
+          
+          Please investigate and fix the failing tests.
+          
+          ---
+          *This issue was automatically created by the nightly test workflow.*`;
+          
+          // Check if there's already an open issue for nightly test failures
+          const { data: issues } = await github.rest.issues.listForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            state: 'open',
+            labels: 'nightly-test-failure'
+          });
+          
+          if (issues.length === 0) {
+            // Create new issue
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: body,
+              labels: ['nightly-test-failure', 'bug']
+            });
+          } else {
+            // Update existing issue
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issues[0].number,
+              body: `## New Failure Report\n\n${body}`
+            });
+          } 
+
+  close-failure-issues:
+    needs: [check-changes, cuequivariance-full, cuequivariance-jax-full, cuequivariance-torch-full]
+    if: always() && needs.check-changes.outputs.should_run == 'true' && needs.cuequivariance-full.result == 'success' && needs.cuequivariance-jax-full.result == 'success' && needs.cuequivariance-torch-full.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Close Failure Issues
+      uses: actions/github-script@v7
+      with:
+        script: |
+          // Find open nightly test failure issues
+          const { data: issues } = await github.rest.issues.listForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            state: 'open',
+            labels: 'nightly-test-failure'
+          });
+          
+          // Close them with a success comment
+          for (const issue of issues) {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              body: `✅ **Tests are now passing!**\n\nNightly tests passed on ${new Date().toISOString().split('T')[0]}.\nWorkflow run: [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\n\nClosing this issue automatically.`
+            });
+            
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              state: 'closed'
+            });
+          } 
