@@ -23,13 +23,13 @@ from cuequivariance_jax.triangle._layer_norm_transpose import (
     layer_norm_transpose,
 )
 from cuequivariance_jax.triangle._sigmoid_gated_dual_gemm import (
-    Precision,
     sigmoid_gated_dual_gemm,
     sigmoid_gated_dual_gemm_dual_x,
 )
+from cuequivariance_jax.triangle._utils import Precision
 
 CUEQ_TRIMUL_FALLBACK_THRESHOLD: int = int(
-    os.getenv("CUEQ_TRIMUL_FALLBACK_THRESHOLD", "100")
+    os.getenv("CUEQ_TRIMUL_FALLBACK_THRESHOLD", "50")
 )
 
 
@@ -129,13 +129,18 @@ def triangle_multiplicative_update(
     norm_in_weight: jax.Array | None = None,
     norm_in_bias: jax.Array | None = None,
     p_in_weight: jax.Array | None = None,
+    p_in_bias: jax.Array | None = None,
     g_in_weight: jax.Array | None = None,
+    g_in_bias: jax.Array | None = None,
     norm_out_weight: jax.Array | None = None,
     norm_out_bias: jax.Array | None = None,
     p_out_weight: jax.Array | None = None,
+    p_out_bias: jax.Array | None = None,
     g_out_weight: jax.Array | None = None,
+    g_out_bias: jax.Array | None = None,
     eps: float = 1e-5,
     precision: Precision = Precision.DEFAULT,
+    fallback: bool | None = None,
 ) -> jax.Array:
     """Apply triangle multiplicative update operation.
 
@@ -162,16 +167,24 @@ def triangle_multiplicative_update(
             If None, initialized to zeros.
         p_in_weight (jax.Array, optional): Weight tensor for input projection of shape (2D, D).
             If None, initialized with LeCun normal distribution.
+        p_in_bias (jax.Array, optional): Bias tensor for input projection of shape (2D,).
+            If None, no bias is applied to the input projection.
         g_in_weight (jax.Array, optional): Weight tensor for input gating of shape (2D, D).
             If None, initialized with LeCun normal distribution.
+        g_in_bias (jax.Array, optional): Bias tensor for input gating of shape (2D,).
+            If None, no bias is applied to the input gating.
         norm_out_weight (jax.Array, optional): Weight tensor for output normalization of shape (D,).
             If None, initialized to ones.
         norm_out_bias (jax.Array, optional): Bias tensor for output normalization of shape (D,).
             If None, initialized to zeros.
         p_out_weight (jax.Array, optional): Weight tensor for output projection of shape (D, D).
             If None, initialized with LeCun normal distribution.
+        p_out_bias (jax.Array, optional): Bias tensor for output projection of shape (D,).
+            If None, no bias is applied to the output projection.
         g_out_weight (jax.Array, optional): Weight tensor for output gating of shape (D, D).
             If None, initialized with LeCun normal distribution.
+        g_out_bias (jax.Array, optional): Bias tensor for output gating of shape (D,).
+            If None, no bias is applied to the output gating.
         eps (float): Small constant for numerical stability in normalization. Defaults to 1e-5.
         precision (Precision): Precision mode for matrix multiplications.
             Available options:
@@ -203,6 +216,11 @@ def triangle_multiplicative_update(
         >>> # Create weight parameters (in practice, these would be learned)
         >>> norm_in_weight = jnp.ones(hidden_dim)
         >>> norm_in_bias = jnp.zeros(hidden_dim)
+        >>> # Optional bias parameters for projection and gating layers
+        >>> p_in_bias = jnp.zeros(2 * hidden_dim)  # Optional input projection bias
+        >>> g_in_bias = jnp.zeros(2 * hidden_dim)  # Optional input gating bias
+        >>> p_out_bias = jnp.zeros(hidden_dim)     # Optional output projection bias
+        >>> g_out_bias = jnp.zeros(hidden_dim)     # Optional output gating bias
         >>> # Initialize other weights using the key
         >>> key, subkey = jax.random.split(key)
         >>> # Perform triangular multiplication
@@ -213,6 +231,10 @@ def triangle_multiplicative_update(
         ...     mask=mask,
         ...     norm_in_weight=norm_in_weight,
         ...     norm_in_bias=norm_in_bias,
+        ...     p_in_bias=p_in_bias,  # Can be None to skip bias
+        ...     g_in_bias=g_in_bias,  # Can be None to skip bias
+        ...     p_out_bias=p_out_bias,  # Can be None to skip bias
+        ...     g_out_bias=g_out_bias,  # Can be None to skip bias
         ...     # ... pass other weights or let them initialize ...
         ... )
         >>> print(output.shape)
@@ -241,10 +263,62 @@ def triangle_multiplicative_update(
     hidden_dim = x.shape[-1]
 
     # Check hidden dimension constraint for BND_BND layout
-    if hidden_dim % 64 != 0:
+    if hidden_dim % 32 != 0:
         raise ValueError(
-            f"Hidden dimension must be divisible by 64 for BND_BND layout in layer normalization. "
+            f"Hidden dimension must be divisible by 32 for BND_BND layout in layer normalization. "
             f"Got hidden_dim={hidden_dim}"
+        )
+
+    # Validate weight dimensions if provided
+    if norm_in_weight is not None and norm_in_weight.shape != (hidden_dim,):
+        raise ValueError(
+            f"norm_in_weight must have shape ({hidden_dim},), got {norm_in_weight.shape}"
+        )
+    if norm_in_bias is not None and norm_in_bias.shape != (hidden_dim,):
+        raise ValueError(
+            f"norm_in_bias must have shape ({hidden_dim},), got {norm_in_bias.shape}"
+        )
+    if p_in_weight is not None and p_in_weight.shape != (2 * hidden_dim, hidden_dim):
+        raise ValueError(
+            f"p_in_weight must have shape ({2 * hidden_dim}, {hidden_dim}), got {p_in_weight.shape}"
+        )
+    if g_in_weight is not None and g_in_weight.shape != (2 * hidden_dim, hidden_dim):
+        raise ValueError(
+            f"g_in_weight must have shape ({2 * hidden_dim}, {hidden_dim}), got {g_in_weight.shape}"
+        )
+    if norm_out_weight is not None and norm_out_weight.shape != (hidden_dim,):
+        raise ValueError(
+            f"norm_out_weight must have shape ({hidden_dim},), got {norm_out_weight.shape}"
+        )
+    if norm_out_bias is not None and norm_out_bias.shape != (hidden_dim,):
+        raise ValueError(
+            f"norm_out_bias must have shape ({hidden_dim},), got {norm_out_bias.shape}"
+        )
+    if p_out_weight is not None and p_out_weight.shape != (hidden_dim, hidden_dim):
+        raise ValueError(
+            f"p_out_weight must have shape ({hidden_dim}, {hidden_dim}), got {p_out_weight.shape}"
+        )
+    if g_out_weight is not None and g_out_weight.shape != (hidden_dim, hidden_dim):
+        raise ValueError(
+            f"g_out_weight must have shape ({hidden_dim}, {hidden_dim}), got {g_out_weight.shape}"
+        )
+
+    # Validate bias dimensions if provided
+    if p_in_bias is not None and p_in_bias.shape != (2 * hidden_dim,):
+        raise ValueError(
+            f"p_in_bias must have shape ({2 * hidden_dim},), got {p_in_bias.shape}"
+        )
+    if g_in_bias is not None and g_in_bias.shape != (2 * hidden_dim,):
+        raise ValueError(
+            f"g_in_bias must have shape ({2 * hidden_dim},), got {g_in_bias.shape}"
+        )
+    if p_out_bias is not None and p_out_bias.shape != (hidden_dim,):
+        raise ValueError(
+            f"p_out_bias must have shape ({hidden_dim},), got {p_out_bias.shape}"
+        )
+    if g_out_bias is not None and g_out_bias.shape != (hidden_dim,):
+        raise ValueError(
+            f"g_out_bias must have shape ({hidden_dim},), got {g_out_bias.shape}"
         )
 
     # If we need to initialize weights and no key is provided, raise an error
@@ -287,7 +361,8 @@ def triangle_multiplicative_update(
             (hidden_dim, hidden_dim), key_g_out, dtype=x.dtype
         )
 
-    fallback = x.shape[-2] <= CUEQ_TRIMUL_FALLBACK_THRESHOLD
+    if fallback is None:
+        fallback = x.shape[-2] <= CUEQ_TRIMUL_FALLBACK_THRESHOLD
 
     # Input normalization
     x = layer_norm_transpose(
@@ -300,7 +375,9 @@ def triangle_multiplicative_update(
         x,
         g_in_weight,
         p_in_weight,
-        mask,
+        b1=g_in_bias,
+        b2=p_in_bias,
+        mask=mask,
         transpose_out=True,
         precision=precision,
         fallback=fallback,
@@ -325,7 +402,14 @@ def triangle_multiplicative_update(
 
     # Output gating
     x = sigmoid_gated_dual_gemm_dual_x(
-        x_in, x_out, g_out_weight, p_out_weight, precision=precision, fallback=fallback
+        x_in,
+        x_out,
+        g_out_weight,
+        p_out_weight,
+        b1=g_out_bias,
+        b2=p_out_bias,
+        precision=precision,
+        fallback=fallback,
     )
 
     return x

@@ -12,14 +12,28 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from ._utils import Precision
-from ._triangle_multiplicative_update import (
-    triangle_multiplicative_update,
-)
-from ._triangle_attention import triangle_attention
 
-__all__ = [
-    "Precision",
-    "triangle_multiplicative_update",
-    "triangle_attention",
-]
+import enum
+
+import jax
+
+
+# Precision modes matching cuequivariance_ops
+class Precision(enum.IntEnum):
+    """Precision modes for matrix multiplication operations."""
+
+    DEFAULT = 0
+    TF32 = 1
+    TF32x3 = 2
+    IEEE = 3
+
+    def _to_jax(self) -> jax.lax.Precision:
+        """Convert Precision enum to JAX precision."""
+        if self == Precision.DEFAULT:
+            return jax.lax.Precision.DEFAULT
+        elif self == Precision.TF32:
+            return jax.lax.Precision.HIGH
+        elif self == Precision.TF32x3:
+            return jax.lax.Precision.HIGHEST
+        elif self == Precision.IEEE:
+            return jax.lax.Precision.HIGHEST
