@@ -94,7 +94,7 @@ jobs:
         python -c "import cuequivariance_jax; print('cuex', cuequivariance_jax.__version__)"
     - name: Test with pytest (including slow tests)
       run: |
-        pytest --doctest-modules -x cuequivariance_jax
+        XLA_PYTHON_CLIENT_PREALLOCATE=false pytest --doctest-modules -x cuequivariance_jax
 
   cuequivariance-torch-full:
     needs: check-changes
