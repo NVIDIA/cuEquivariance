@@ -143,25 +143,6 @@ def apply_linear(
     return output
 
 
-# Simple code to count the number of occurrences of each index
-# TODO: More efficient implementation
-def count(indices: torch.Tensor, classes: int):
-    c = 0
-    s = 0
-    counts = torch.zeros(classes, dtype=torch.int32)
-    for i in indices:
-        if i == c:
-            s += 1
-        elif i > c:
-            counts[c] = s
-            c = i
-            s = 1
-        else:
-            raise ValueError("Indexed_linear does not support non-sorted indices.")
-    counts[c] = s
-    return counts.to(indices.device)
-
-
 class SegmentedPolynomialIndexedLinear(nn.Module):
     def __init__(
         self,
@@ -249,7 +230,10 @@ class SegmentedPolynomialIndexedLinear(nn.Module):
             if not self.indexed_input[k]:
                 inputs[k] = inputs[k][v]
             else:
-                count_indices[k] = count(input_indices[k], inputs[k].shape[0])
+                assert torch.all(v[1:] - v[:-1] >= 0), (
+                    "Indexed_linear does not support non-sorted indices."
+                )
+                count_indices[k] = torch.bincount(v, minlength=inputs[k].shape[0]).int()
 
         # Output indices:
         out_indices = [torch.empty(0) for _ in range(self.num_outputs)]
@@ -260,7 +244,12 @@ class SegmentedPolynomialIndexedLinear(nn.Module):
             if not self.indexed_input[k + self.num_inputs]:
                 out_indices[k] = v
             else:
-                out_indices[k] = count(v, output_shapes[k].shape[0])
+                assert torch.all(v[1:] - v[:-1] >= 0), (
+                    "Indexed_linear does not support non-sorted indices."
+                )
+                out_indices[k] = torch.bincount(
+                    v, minlength=output_shapes[k].shape[0]
+                ).int()
 
         input_batch_sizes = [t.shape[0] for t in inputs]
         batch_size = 1
