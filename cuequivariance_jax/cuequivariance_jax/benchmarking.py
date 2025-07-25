@@ -60,10 +60,10 @@ def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
     second_sleep_time: float = 30e-6
 
     @partial(jax.jit, static_argnums=(0, 1))
-    def run_bench(n_iter: int, sleep_time: float, state):
-        # Warmup phase: execute once to trigger potential JIT compilation or library loading
+    def run_bench(n_iter: int, sleep_time: float, n_warm: int, state):
+        # Warmup phase: execute multiple times to stabilize GPU clocks and trigger JIT compilation
         _, state = _event_record(state, copy_before=True)
-        state = run_func(state)
+        state = jax.lax.fori_loop(0, n_warm, lambda i, state: run_func(state), state)
         _, state = _event_record(state, copy_before=False)
 
         # Pre-measurement clock rate calibration
@@ -96,18 +96,24 @@ def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
         return avg_time, rate_before, rate_after, sync_time
 
     # Adaptive iteration counting to find optimal measurement parameters
+    n_warm = 1
     n_iter = 1
     sleep_time = 50e-6
     rejections: list[str] = []
+    best_measurement = None
+    best_variation = float("inf")
 
     for attempt in range(20):
         avg_time, rate_before, rate_after, sync_time = jax.tree.map(
-            float, run_bench(n_iter, sleep_time, (args, kwargs))
+            float, run_bench(n_iter, sleep_time, n_warm, (args, kwargs))
         )
         avg_rate = (rate_before + rate_after) / 2
 
+        if best_measurement is None:
+            best_measurement = (avg_rate, avg_time)
+
         # print(
-        #     f"DEBUG: Attempt {attempt + 1}, n_iter={n_iter}, "
+        #     f"DEBUG: Attempt {attempt + 1}, n_iter={n_iter}, n_warm={n_warm}, "
         #     f"sleep_time={sleep_time * 1e6:.1f}us, "
         #     f"sync_time={sync_time * 1e6:.1f}us, "
         #     f"avg_time={avg_time * 1e6:.1f}us, "
@@ -141,20 +147,33 @@ def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
             abs(rate_before - rate_after),
             0.02 * max(rate_before, rate_after),
         )
+
+        # Track the best measurement (lowest clock rate variation) for fallback
+        if diff < best_variation:
+            best_variation = diff
+            best_measurement = (avg_rate, avg_time)
+
         if diff > max_tol:
             rejections.append(
                 f"Clock rate variation too high "
                 f"({diff / 1e6:.2f} MHz variation > {max_tol / 1e6:.2f} MHz)"
             )
+            if n_warm < n_iter:
+                n_warm = n_iter
+            else:
+                n_warm += round(n_warm * 0.2) + 1
             continue
 
         return avg_rate, avg_time
 
+    # If we get here, no measurement met all criteria
+    # Return the best measurement (lowest clock rate variation) we found
     rejection_details = "\n".join(
         f"  Attempt #{i + 1}: {reason}" for i, reason in enumerate(rejections)
     )
     warnings.warn(
         f"Was not able to reach a satisfying measurement in {len(rejections)} attempts. "
+        f"Returning measurement with lowest clock rate variation ({best_variation / 1e6:.2f} MHz). "
         f"Rejection reasons:\n{rejection_details}"
     )
-    return avg_rate, avg_time
+    return best_measurement
