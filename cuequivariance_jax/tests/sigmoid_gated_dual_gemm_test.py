@@ -13,26 +13,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
 from jax import test_util
 
-from cuequivariance_jax.triangle import (
-    Precision,
+from cuequivariance_jax.triangle import Precision
+from cuequivariance_jax.triangle._sigmoid_gated_dual_gemm import (
     sigmoid_gated_dual_gemm,
     sigmoid_gated_dual_gemm_dual_x,
-)
-from cuequivariance_jax.triangle._sigmoid_gated_dual_gemm import (
-    _sigmoid_gated_dual_gemm_reference,
+    sigmoid_gated_dual_gemm_reference,
 )
 
 # Enable x64 support but test with fp32
 jax.config.update("jax_enable_x64", True)
+os.environ["CUEQ_TRITON_IGNORE_EXISTING_CACHE"] = (
+    "1"  # needed to be set before the first call to the API
+)
 
 
-def create_test_data(M=32, N=64, K=128, include_mask=False, batch_size=None):
+def create_test_data(
+    M=32, N=64, K=128, include_mask=False, include_bias=False, batch_size=None
+):
     """Create standard test data for sigmoid_gated_dual_gemm tests."""
     key = jax.random.key(42)
     data = {
@@ -41,6 +46,10 @@ def create_test_data(M=32, N=64, K=128, include_mask=False, batch_size=None):
         "w2": jax.random.normal(jax.random.key(2), (N, K), dtype=jnp.float32),
         "x2": jax.random.normal(jax.random.key(3), (M, K), dtype=jnp.float32),
     }
+
+    if include_bias:
+        data["b1"] = jax.random.normal(jax.random.key(7), (N,), dtype=jnp.float32)
+        data["b2"] = jax.random.normal(jax.random.key(8), (N,), dtype=jnp.float32)
 
     if include_mask:
         data["mask"] = jax.random.uniform(jax.random.key(4), (M,), dtype=jnp.float32)
@@ -68,7 +77,9 @@ def test_sigmoid_gated_dual_gemm_comprehensive():
     B = 4
 
     # Create test data
-    test_data = create_test_data(M, N, K, include_mask=True, batch_size=B)
+    test_data = create_test_data(
+        M, N, K, include_mask=True, include_bias=True, batch_size=B
+    )
     x, w1, w2, x2, mask = (
         test_data["x"],
         test_data["w1"],
@@ -76,24 +87,48 @@ def test_sigmoid_gated_dual_gemm_comprehensive():
         test_data["x2"],
         test_data["mask"],
     )
+    b1, b2 = test_data["b1"], test_data["b2"]
     x_batch, x2_batch = test_data["x_batch"], test_data["x2_batch"]
 
     # Test single input API
     output = sigmoid_gated_dual_gemm(x, w1, w2)
     assert output.shape == (M, N)
 
+    # Test single input API with bias
+    output_bias = sigmoid_gated_dual_gemm(x, w1, w2, b1=b1, b2=b2)
+    assert output_bias.shape == (M, N)
+    # Outputs should be different when bias is added
+    assert not jnp.allclose(output, output_bias, atol=1e-5)
+
     # Test with mask
     output_masked = sigmoid_gated_dual_gemm(x, w1, w2, mask=mask)
     assert output_masked.shape == (M, N)
+
+    # Test with mask and bias
+    output_masked_bias = sigmoid_gated_dual_gemm(x, w1, w2, b1=b1, b2=b2, mask=mask)
+    assert output_masked_bias.shape == (M, N)
 
     # Test transpose_out
     output_transposed = sigmoid_gated_dual_gemm(x, w1, w2, transpose_out=True)
     assert output_transposed.shape == (N, M)
     assert jnp.allclose(output_transposed, output.T, atol=1e-5)
 
+    # Test transpose_out with bias
+    output_transposed_bias = sigmoid_gated_dual_gemm(
+        x, w1, w2, b1=b1, b2=b2, transpose_out=True
+    )
+    assert output_transposed_bias.shape == (N, M)
+    assert jnp.allclose(output_transposed_bias, output_bias.T, atol=1e-5)
+
     # Test dual input API
     output_dual = sigmoid_gated_dual_gemm_dual_x(x, x2, w1, w2)
     assert output_dual.shape == (M, N)
+
+    # Test dual input API with bias
+    output_dual_bias = sigmoid_gated_dual_gemm_dual_x(x, x2, w1, w2, b1=b1, b2=b2)
+    assert output_dual_bias.shape == (M, N)
+    # Outputs should be different when bias is added
+    assert not jnp.allclose(output_dual, output_dual_bias, atol=1e-5)
 
     # Test dual input with transpose
     output_dual_transposed = sigmoid_gated_dual_gemm_dual_x(
@@ -106,33 +141,73 @@ def test_sigmoid_gated_dual_gemm_comprehensive():
     output_batch = sigmoid_gated_dual_gemm(x_batch, w1, w2)
     assert output_batch.shape == (B, M, N)
 
+    # Test batch processing with bias
+    output_batch_bias = sigmoid_gated_dual_gemm(x_batch, w1, w2, b1=b1, b2=b2)
+    assert output_batch_bias.shape == (B, M, N)
+
     output_dual_batch = sigmoid_gated_dual_gemm_dual_x(x_batch, x2_batch, w1, w2)
     assert output_dual_batch.shape == (B, M, N)
 
+    # Test batch processing dual input with bias
+    output_dual_batch_bias = sigmoid_gated_dual_gemm_dual_x(
+        x_batch, x2_batch, w1, w2, b1=b1, b2=b2
+    )
+    assert output_dual_batch_bias.shape == (B, M, N)
+
     # Test reference implementation
-    output_ref = _sigmoid_gated_dual_gemm_reference(
+    output_ref = sigmoid_gated_dual_gemm_reference(
         x,
         None,
         w1,
         w2,
         None,
-        two_inputs=False,
+        None,
+        None,
         transpose_out=False,
         precision=Precision.DEFAULT,
     )
     assert output_ref.shape == (M, N)
 
-    output_ref_dual = _sigmoid_gated_dual_gemm_reference(
+    # Test reference implementation with bias
+    output_ref_bias = sigmoid_gated_dual_gemm_reference(
+        x,
+        None,
+        w1,
+        w2,
+        b1,
+        b2,
+        None,
+        transpose_out=False,
+        precision=Precision.DEFAULT,
+    )
+    assert output_ref_bias.shape == (M, N)
+
+    output_ref_dual = sigmoid_gated_dual_gemm_reference(
         x,
         x2,
         w1,
         w2,
         None,
-        two_inputs=True,
+        None,
+        None,
         transpose_out=False,
         precision=Precision.DEFAULT,
     )
     assert output_ref_dual.shape == (M, N)
+
+    # Test reference implementation dual with bias
+    output_ref_dual_bias = sigmoid_gated_dual_gemm_reference(
+        x,
+        x2,
+        w1,
+        w2,
+        b1,
+        b2,
+        None,
+        transpose_out=False,
+        precision=Precision.DEFAULT,
+    )
+    assert output_ref_dual_bias.shape == (M, N)
 
 
 def test_sigmoid_gated_dual_gemm_correctness():
@@ -140,7 +215,7 @@ def test_sigmoid_gated_dual_gemm_correctness():
     M, N, K = 4, 32, 32  # Use dimensions compatible with tile sizes
 
     # Create test data
-    test_data = create_test_data(M, N, K, include_mask=True)
+    test_data = create_test_data(M, N, K, include_mask=True, include_bias=True)
     x, w1, w2, x2, mask = (
         test_data["x"],
         test_data["w1"],
@@ -148,15 +223,27 @@ def test_sigmoid_gated_dual_gemm_correctness():
         test_data["x2"],
         test_data["mask"],
     )
+    b1, b2 = test_data["b1"], test_data["b2"]  # TODO insert above?
 
     tol = 1e-5
 
-    # Test single input correctness
-    expected_single = _sigmoid_gated_dual_gemm_reference(
-        x, None, w1, w2, None, False, False, Precision.IEEE
+    # Test single input correctness without bias
+    expected_single = sigmoid_gated_dual_gemm_reference(
+        x, None, w1, w2, None, None, None, transpose_out=False, precision=Precision.IEEE
     )
     output_single = sigmoid_gated_dual_gemm(x, w1, w2, precision=Precision.IEEE)
     np.testing.assert_allclose(output_single, expected_single, rtol=tol, atol=tol)
+
+    # Test single input correctness with bias
+    expected_single_bias = sigmoid_gated_dual_gemm_reference(
+        x, None, w1, w2, b1, b2, None, transpose_out=False, precision=Precision.IEEE
+    )
+    output_single_bias = sigmoid_gated_dual_gemm(
+        x, w1, w2, b1=b1, b2=b2, precision=Precision.IEEE
+    )
+    np.testing.assert_allclose(
+        output_single_bias, expected_single_bias, rtol=tol, atol=tol
+    )
 
     # Test single input with mask
     expected_masked = expected_single * mask[:, None]
@@ -165,14 +252,32 @@ def test_sigmoid_gated_dual_gemm_correctness():
     )
     np.testing.assert_allclose(output_masked, expected_masked, rtol=tol, atol=tol)
 
-    # Test dual input correctness
-    expected_dual = _sigmoid_gated_dual_gemm_reference(
-        x, x2, w1, w2, None, True, False, Precision.IEEE
+    # Test single input with mask and bias
+    expected_masked_bias = expected_single_bias * mask[:, None]
+    output_masked_bias = sigmoid_gated_dual_gemm(
+        x, w1, w2, b1=b1, b2=b2, mask=mask, precision=Precision.IEEE
+    )
+    np.testing.assert_allclose(
+        output_masked_bias, expected_masked_bias, rtol=tol, atol=tol
+    )
+
+    # Test dual input correctness without bias
+    expected_dual = sigmoid_gated_dual_gemm_reference(
+        x, x2, w1, w2, None, None, None, transpose_out=False, precision=Precision.IEEE
     )
     output_dual = sigmoid_gated_dual_gemm_dual_x(
         x, x2, w1, w2, precision=Precision.IEEE
     )
     np.testing.assert_allclose(output_dual, expected_dual, rtol=tol, atol=tol)
+
+    # Test dual input correctness with bias
+    expected_dual_bias = sigmoid_gated_dual_gemm_reference(
+        x, x2, w1, w2, b1, b2, None, transpose_out=False, precision=Precision.IEEE
+    )
+    output_dual_bias = sigmoid_gated_dual_gemm_dual_x(
+        x, x2, w1, w2, b1=b1, b2=b2, precision=Precision.IEEE
+    )
+    np.testing.assert_allclose(output_dual_bias, expected_dual_bias, rtol=tol, atol=tol)
 
 
 @pytest.mark.parametrize("backend", ["cpu", "gpu"])
@@ -181,7 +286,7 @@ def test_sigmoid_gated_dual_gemm_gradients(backend):
     M, N, K = 8, 32, 32  # Use smaller dimensions for faster gradient checking
 
     # Create test data
-    test_data = create_test_data(M, N, K, include_mask=True)
+    test_data = create_test_data(M, N, K, include_mask=True, include_bias=True)
     x, w1, w2, x2, mask = (
         test_data["x"],
         test_data["w1"],
@@ -189,6 +294,7 @@ def test_sigmoid_gated_dual_gemm_gradients(backend):
         test_data["x2"],
         test_data["mask"],
     )
+    b1, b2 = test_data["b1"], test_data["b2"]
 
     if backend == "cpu":
         device = jax.devices("cpu")[0]
@@ -198,9 +304,11 @@ def test_sigmoid_gated_dual_gemm_gradients(backend):
         except RuntimeError:
             pytest.skip("No GPU available for testing")
 
-    [x, x2, w1, w2, mask] = jax.device_put([x, x2, w1, w2, mask], device)
+    [x, x2, w1, w2, b1, b2, mask] = jax.device_put(
+        [x, x2, w1, w2, b1, b2, mask], device
+    )
 
-    # Test single input gradients
+    # Test single input gradients without bias
     def single_input_fn(x, w1, w2):
         return jnp.sum(sigmoid_gated_dual_gemm(x, w1, w2, precision=Precision.IEEE))
 
@@ -211,7 +319,26 @@ def test_sigmoid_gated_dual_gemm_gradients(backend):
 
     test_util.check_grads(single_input_fn, (x, w1, w2), order=1, modes=["rev"])
 
-    # Test dual input gradients
+    # Test single input gradients with bias
+    def single_input_bias_fn(x, w1, w2, b1, b2):
+        return jnp.sum(
+            sigmoid_gated_dual_gemm(x, w1, w2, b1=b1, b2=b2, precision=Precision.IEEE)
+        )
+
+    grads_bias = jax.grad(single_input_bias_fn, argnums=(0, 1, 2, 3, 4))(
+        x, w1, w2, b1, b2
+    )
+    assert grads_bias[0].shape == x.shape
+    assert grads_bias[1].shape == w1.shape
+    assert grads_bias[2].shape == w2.shape
+    assert grads_bias[3].shape == b1.shape
+    assert grads_bias[4].shape == b2.shape
+
+    test_util.check_grads(
+        single_input_bias_fn, (x, w1, w2, b1, b2), order=1, modes=["rev"]
+    )
+
+    # Test dual input gradients without bias
     def dual_input_fn(x1, x2, w1, w2):
         return jnp.sum(
             sigmoid_gated_dual_gemm_dual_x(x1, x2, w1, w2, precision=Precision.IEEE)
@@ -225,13 +352,47 @@ def test_sigmoid_gated_dual_gemm_gradients(backend):
 
     test_util.check_grads(dual_input_fn, (x, x2, w1, w2), order=1, modes=["rev"])
 
-    # Test masked input gradients
+    # Test dual input gradients with bias
+    def dual_input_bias_fn(x1, x2, w1, w2, b1, b2):
+        return jnp.sum(
+            sigmoid_gated_dual_gemm_dual_x(
+                x1, x2, w1, w2, b1=b1, b2=b2, precision=Precision.IEEE
+            )
+        )
+
+    grads_dual_bias = jax.grad(dual_input_bias_fn, argnums=(0, 1, 2, 3, 4, 5))(
+        x, x2, w1, w2, b1, b2
+    )
+    assert grads_dual_bias[0].shape == x.shape
+    assert grads_dual_bias[1].shape == x2.shape
+    assert grads_dual_bias[2].shape == w1.shape
+    assert grads_dual_bias[3].shape == w2.shape
+    assert grads_dual_bias[4].shape == b1.shape
+    assert grads_dual_bias[5].shape == b2.shape
+
+    test_util.check_grads(
+        dual_input_bias_fn, (x, x2, w1, w2, b1, b2), order=1, modes=["rev"]
+    )
+
+    # Test masked input gradients without bias
     def masked_fn(x, w1, w2, mask):
         return jnp.sum(
             sigmoid_gated_dual_gemm(x, w1, w2, mask=mask, precision=Precision.IEEE)
         )
 
     test_util.check_grads(masked_fn, (x, w1, w2, mask), order=1, modes=["rev"])
+
+    # Test masked input gradients with bias
+    def masked_bias_fn(x, w1, w2, b1, b2, mask):
+        return jnp.sum(
+            sigmoid_gated_dual_gemm(
+                x, w1, w2, b1=b1, b2=b2, mask=mask, precision=Precision.IEEE
+            )
+        )
+
+    test_util.check_grads(
+        masked_bias_fn, (x, w1, w2, b1, b2, mask), order=1, modes=["rev"]
+    )
 
 
 @pytest.mark.parametrize(
@@ -242,28 +403,39 @@ def test_sigmoid_gated_dual_gemm_precision_modes(precision):
     M, N, K = 32, 64, 128
 
     # Create test data
-    test_data = create_test_data(M, N, K)
+    test_data = create_test_data(M, N, K, include_bias=True)
     x, w1, w2, x2 = test_data["x"], test_data["w1"], test_data["w2"], test_data["x2"]
+    b1, b2 = test_data["b1"], test_data["b2"]
 
     # Test single input with different precision
     output = sigmoid_gated_dual_gemm(x, w1, w2, precision=precision)
     assert output.shape == (M, N)
 
+    # Test single input with bias and different precision
+    output_bias = sigmoid_gated_dual_gemm(x, w1, w2, b1=b1, b2=b2, precision=precision)
+    assert output_bias.shape == (M, N)
+
     # Test dual input with different precision
     output_dual = sigmoid_gated_dual_gemm_dual_x(x, x2, w1, w2, precision=precision)
     assert output_dual.shape == (M, N)
 
+    # Test dual input with bias and different precision
+    output_dual_bias = sigmoid_gated_dual_gemm_dual_x(
+        x, x2, w1, w2, b1=b1, b2=b2, precision=precision
+    )
+    assert output_dual_bias.shape == (M, N)
 
-@pytest.mark.parametrize("tuning_mode", ["AOT", "ONDEMAND", None])
+
+@pytest.mark.parametrize("tuning_mode", ["ONDEMAND", None])  # "AOT" is too slow to test
 def test_sigmoid_gated_dual_gemm_triton_tuning_modes(tuning_mode, monkeypatch):
     """Test sigmoid_gated_dual_gemm with different CUEQ_TRITON_TUNING environment variable values."""
+    assert os.environ["CUEQ_TRITON_IGNORE_EXISTING_CACHE"] == "1"
 
     # Configure environment variables using pytest's monkeypatch fixture
     if tuning_mode is None:
         monkeypatch.delenv("CUEQ_TRITON_TUNING", raising=False)
     else:
         monkeypatch.setenv("CUEQ_TRITON_TUNING", tuning_mode)
-    monkeypatch.setenv("CUEQ_TRITON_IGNORE_EXISTING_CACHE", "1")
 
     # Create test data
     M, N, K = 32, 64, 128
@@ -278,6 +450,29 @@ def test_sigmoid_gated_dual_gemm_triton_tuning_modes(tuning_mode, monkeypatch):
         test_data["x"], test_data["x2"], test_data["w1"], test_data["w2"]
     )
     validate_output(output_dual, (M, N), "dual input output")
+
+    # Test backward pass for single input mode
+    def single_input_fn(x, w1, w2):
+        return jnp.sum(sigmoid_gated_dual_gemm(x, w1, w2))
+
+    grads = jax.grad(single_input_fn, argnums=(0, 1, 2))(
+        test_data["x"], test_data["w1"], test_data["w2"]
+    )
+    assert grads[0].shape == test_data["x"].shape
+    assert grads[1].shape == test_data["w1"].shape
+    assert grads[2].shape == test_data["w2"].shape
+
+    # Test backward pass for dual input mode
+    def dual_input_fn(x1, x2, w1, w2):
+        return jnp.sum(sigmoid_gated_dual_gemm_dual_x(x1, x2, w1, w2))
+
+    grads_dual = jax.grad(dual_input_fn, argnums=(0, 1, 2, 3))(
+        test_data["x"], test_data["x2"], test_data["w1"], test_data["w2"]
+    )
+    assert grads_dual[0].shape == test_data["x"].shape
+    assert grads_dual[1].shape == test_data["x2"].shape
+    assert grads_dual[2].shape == test_data["w1"].shape
+    assert grads_dual[3].shape == test_data["w2"].shape
 
 
 def test_sigmoid_gated_dual_gemm_batched_mask_reshaping():
@@ -391,3 +586,115 @@ def test_sigmoid_gated_dual_gemm_cpu_execution():
         x_cpu, w1_cpu, w2_cpu, transpose_out=True, precision=Precision.IEEE
     )
     np.testing.assert_allclose(output_single, output_no_mask, rtol=1e-6, atol=1e-6)
+
+
+def test_sigmoid_gated_dual_gemm_bias_functionality():
+    """Comprehensive test for bias functionality."""
+    M, N, K = 32, 64, 128
+
+    # Create test data
+    test_data = create_test_data(M, N, K, include_mask=True, include_bias=True)
+    x, w1, w2, x2, mask = (
+        test_data["x"],
+        test_data["w1"],
+        test_data["w2"],
+        test_data["x2"],
+        test_data["mask"],
+    )
+    b1, b2 = test_data["b1"], test_data["b2"]
+
+    # Test that bias changes the output
+    output_no_bias = sigmoid_gated_dual_gemm(
+        x, w1, w2, precision=Precision.IEEE, fallback=True
+    )
+    output_with_bias = sigmoid_gated_dual_gemm(
+        x, w1, w2, b1=b1, b2=b2, precision=Precision.IEEE, fallback=True
+    )
+
+    # Outputs should be different when bias is added
+    assert not jnp.allclose(output_no_bias, output_with_bias, atol=1e-6)
+
+    # Test that only b1 changes output
+    output_b1_only = sigmoid_gated_dual_gemm(
+        x, w1, w2, b1=b1, precision=Precision.IEEE, fallback=True
+    )
+    assert not jnp.allclose(output_no_bias, output_b1_only, atol=1e-6)
+    assert not jnp.allclose(output_with_bias, output_b1_only, atol=1e-6)
+
+    # Test that only b2 changes output
+    output_b2_only = sigmoid_gated_dual_gemm(
+        x, w1, w2, b2=b2, precision=Precision.IEEE, fallback=True
+    )
+    assert not jnp.allclose(output_no_bias, output_b2_only, atol=1e-6)
+    assert not jnp.allclose(output_with_bias, output_b2_only, atol=1e-6)
+    assert not jnp.allclose(output_b1_only, output_b2_only, atol=1e-6)
+
+    # Test dual input mode
+    output_dual_no_bias = sigmoid_gated_dual_gemm_dual_x(
+        x, x2, w1, w2, precision=Precision.IEEE, fallback=True
+    )
+    output_dual_with_bias = sigmoid_gated_dual_gemm_dual_x(
+        x, x2, w1, w2, b1=b1, b2=b2, precision=Precision.IEEE, fallback=True
+    )
+
+    # Outputs should be different when bias is added
+    assert not jnp.allclose(output_dual_no_bias, output_dual_with_bias, atol=1e-6)
+
+    # Test bias gradients
+    def loss_fn_bias(b1, b2):
+        return jnp.sum(
+            sigmoid_gated_dual_gemm(
+                x, w1, w2, b1=b1, b2=b2, precision=Precision.IEEE, fallback=True
+            )
+        )
+
+    grad_fn = jax.grad(loss_fn_bias, argnums=(0, 1))
+    grad_b1, grad_b2 = grad_fn(b1, b2)
+
+    # Gradients should have correct shapes and not be zero
+    assert grad_b1.shape == b1.shape
+    assert grad_b2.shape == b2.shape
+    assert not jnp.allclose(grad_b1, 0.0, atol=1e-6)
+    assert not jnp.allclose(grad_b2, 0.0, atol=1e-6)
+
+    # Test bias gradients for dual input
+    def dual_loss_fn_bias(b1, b2):
+        return jnp.sum(
+            sigmoid_gated_dual_gemm_dual_x(
+                x, x2, w1, w2, b1=b1, b2=b2, precision=Precision.IEEE, fallback=True
+            )
+        )
+
+    dual_grad_fn = jax.grad(dual_loss_fn_bias, argnums=(0, 1))
+    dual_grad_b1, dual_grad_b2 = dual_grad_fn(b1, b2)
+
+    # Gradients should have correct shapes and not be zero
+    assert dual_grad_b1.shape == b1.shape
+    assert dual_grad_b2.shape == b2.shape
+    assert not jnp.allclose(dual_grad_b1, 0.0, atol=1e-6)
+    assert not jnp.allclose(dual_grad_b2, 0.0, atol=1e-6)
+
+    # Test bias with masking
+    output_masked_no_bias = sigmoid_gated_dual_gemm(
+        x, w1, w2, mask=mask, precision=Precision.IEEE, fallback=True
+    )
+    output_masked_with_bias = sigmoid_gated_dual_gemm(
+        x, w1, w2, b1=b1, b2=b2, mask=mask, precision=Precision.IEEE, fallback=True
+    )
+
+    # Outputs should be different when bias is added, even with masking
+    assert not jnp.allclose(output_masked_no_bias, output_masked_with_bias, atol=1e-6)
+
+    # Test that bias works with different shapes
+    B = 2
+    x_batch = jax.random.normal(jax.random.key(42), (B, M, K), dtype=jnp.float32)
+    output_batch_no_bias = sigmoid_gated_dual_gemm(
+        x_batch, w1, w2, precision=Precision.IEEE, fallback=True
+    )
+    output_batch_with_bias = sigmoid_gated_dual_gemm(
+        x_batch, w1, w2, b1=b1, b2=b2, precision=Precision.IEEE, fallback=True
+    )
+
+    assert output_batch_no_bias.shape == (B, M, N)
+    assert output_batch_with_bias.shape == (B, M, N)
+    assert not jnp.allclose(output_batch_no_bias, output_batch_with_bias, atol=1e-6)

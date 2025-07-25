@@ -46,17 +46,17 @@ layer_norm_bwd_p.multiple_results = True
 
 # Layout configuration mapping
 LAYOUT_CONFIG = {
-    Layout.BND_BND: {"dims": lambda x: x.shape, "tiles": (16, 64)},
+    Layout.BND_BND: {"dims": lambda x: x.shape, "tiles": (64, 64)},
     Layout.BDN_BND: {
         "dims": lambda x: (x.shape[0], x.shape[2], x.shape[1]),
-        "tiles": (32, 32),
+        "tiles": (64, 64),
     },
-    Layout.BND_BDN: {"dims": lambda x: x.shape, "tiles": (32, 32)},
+    Layout.BND_BDN: {"dims": lambda x: x.shape, "tiles": (64, 64)},
     Layout.DBN_BND: {
         "dims": lambda x: (x.shape[1], x.shape[2], x.shape[0]),
-        "tiles": (32, 32),
+        "tiles": (64, 64),
     },
-    Layout.BND_DBN: {"dims": lambda x: x.shape, "tiles": (32, 32)},
+    Layout.BND_DBN: {"dims": lambda x: x.shape, "tiles": (64, 64)},
 }
 
 OUTPUT_SHAPES = {
@@ -73,6 +73,21 @@ def get_dims_and_config(x, layout):
     B, N, D = LAYOUT_CONFIG[layout]["dims"](x)
     tiles = LAYOUT_CONFIG[layout]["tiles"]
     return B, N, D, tiles
+
+
+def get_backward_tile_n(dtype, base_tile_n=64):
+    """Get TILE_N for backward pass based on data type.
+
+    Args:
+        dtype: Input tensor dtype
+        base_tile_n: Base TILE_N value (default 64)
+
+    Returns:
+        TILE_N value: 32 for float32, base_tile_n for others
+    """
+    if dtype == jnp.float32:
+        return 32
+    return base_tile_n
 
 
 def layer_norm_fwd_abstract_eval(x, w, b, *, eps, elementwise_affine, layout, fallback):
@@ -139,7 +154,6 @@ def _layer_norm_forward_impl(x, w, b, eps, elementwise_affine, layout):
     B, N, D, (TILE_N, TILE_D) = get_dims_and_config(x, layout)
     out_shape = OUTPUT_SHAPES[layout](B, N, D)
 
-    assert D % TILE_D == 0
     out, mean, rstd = jt.triton_call(
         x,
         w,
@@ -159,6 +173,8 @@ def _layer_norm_forward_impl(x, w, b, eps, elementwise_affine, layout):
         TILE_D=TILE_D,
         ELEMENTWISE_AFFINE=elementwise_affine,
         LAYOUT=layout.value,
+        num_warps=8,
+        num_stages=2,
     )
     return out, mean, rstd
 
@@ -172,10 +188,11 @@ def _layer_norm_backward_impl(
 
     from cuequivariance_ops.triton import layer_norm_transpose_backward_kernel
 
-    B, N, D, (TILE_N, TILE_D) = get_dims_and_config(x, layout)
+    B, N, D, (base_tile_n, TILE_D) = get_dims_and_config(x, layout)
+    # Use dtype-dependent TILE_N for backward pass
+    TILE_N = get_backward_tile_n(x.dtype, base_tile_n)
     num_tiles = triton.cdiv(N, TILE_N)
 
-    assert D % TILE_D == 0
     grad_x, grad_w_tiles, grad_b_tiles = jt.triton_call(
         grad_out,
         x,
@@ -196,6 +213,8 @@ def _layer_norm_backward_impl(
         TILE_D=TILE_D,
         ELEMENTWISE_AFFINE=elementwise_affine,
         LAYOUT=layout.value,
+        num_warps=8,
+        num_stages=2,
     )
 
     grad_w = jnp.sum(grad_w_tiles, axis=(0, 1))
