@@ -305,11 +305,16 @@ DEVICES = (
 
 @pytest.mark.parametrize("name, polynomial", SEGMENTED_POLYNOMIALS[:1])
 @pytest.mark.parametrize("method", METHODS)
-@pytest.mark.parametrize("dtype, math_dtype", DATA_TYPES_IN_MATH[:1])
-@pytest.mark.parametrize("batch_size", BATCH_SIZE[1:])
-@pytest.mark.parametrize("mode", EXPORT_MODES[:1])
-@pytest.mark.parametrize("grad", GRAD[1:])
-@pytest.mark.parametrize("backward", BACKWARD[1:])
+@pytest.mark.parametrize(
+    "dtype, math_dtype",
+    [
+        (torch.float32, torch.float64),
+    ],
+)
+@pytest.mark.parametrize("batch_size", [5])
+@pytest.mark.parametrize("mode", ["eager"])
+@pytest.mark.parametrize("grad", [True])
+@pytest.mark.parametrize("backward", [True])
 @pytest.mark.parametrize("indexing", ALL_INDEXING)
 def test_segmented_polynomial_indexing(
     name,
