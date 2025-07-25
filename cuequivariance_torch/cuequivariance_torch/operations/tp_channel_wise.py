@@ -87,9 +87,11 @@ class ChannelWiseTensorProduct(torch.nn.Module):
             e.operands[-1].irreps,
         )
         assert descriptor.subscripts == "uv,iu,jv,kuv+ijk"
-        #
         e2 = e.flatten_coefficient_modes().squeeze_modes()
-        u1d_compatible = e2.all_same_segment_shape() and len(e2.subscripts.modes()) == 1
+        u1d_compatible = (
+            e2.all_same_segment_shape()
+            and len(e2.polynomial.operations[0][1].subscripts.modes()) == 1
+        )
 
         self.irreps_in1 = irreps_in1
         self.irreps_in2 = irreps_in2
