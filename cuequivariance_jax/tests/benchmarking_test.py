@@ -12,14 +12,27 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from ._utils import Precision
-from ._triangle_multiplicative_update import (
-    triangle_multiplicative_update,
-)
-from ._triangle_attention import triangle_attention
 
-__all__ = [
-    "Precision",
-    "triangle_multiplicative_update",
-    "triangle_attention",
-]
+import importlib.util
+
+import jax.numpy as jnp
+import pytest
+
+from cuequivariance_jax.benchmarking import measure_clock_ticks
+
+
+@pytest.mark.skipif(
+    not importlib.util.find_spec("cuequivariance_ops_jax"),
+    reason="cuequivariance_ops_jax is not installed",
+)
+@pytest.mark.parametrize("size", [4, 64, 1024])
+def test_benchmarking(size):
+    x = jnp.ones((size, 32), dtype=jnp.float32)
+    y = jnp.ones((size, 32), dtype=jnp.float32)
+
+    def f(x, y):
+        return x * y
+
+    rate, time = measure_clock_ticks(f, x, y)
+    assert rate > 0
+    assert time > 0

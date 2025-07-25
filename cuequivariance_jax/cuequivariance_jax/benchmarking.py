@@ -19,11 +19,10 @@ import warnings
 from functools import partial
 
 import jax
-import numpy as np
 from jax.experimental.mosaic.gpu.profiler import _event_elapsed, _event_record
 
 
-def measure_clock_ticks(f, *args, **kwargs) -> float:
+def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
     """Measure the execution time of a function in clock ticks.
 
     The measurement process:
@@ -38,16 +37,17 @@ def measure_clock_ticks(f, *args, **kwargs) -> float:
         **kwargs: Keyword arguments to pass to the function
 
     Returns:
-        float: The execution time in clock ticks per function call
+        tuple: A tuple containing the average clock rate in Hz and the average time per function call in seconds.
 
         Example:
         def my_function(x, y):
             return x + y
 
-        clock_ticks = measure_clock_ticks(my_function, 1, 2)
+        rate, time = measure_clock_ticks(my_function, 1, 2)
+        clock_ticks = rate * time
         print(f"Function took {clock_ticks} clock ticks")
     """
-    from cuequivariance_ops_jax import noop, sleep
+    from cuequivariance_ops_jax import noop, sleep, synchronize
 
     def run_func(state):
         """Wrapper function that calls the target function and ensures proper data flow."""
@@ -57,8 +57,10 @@ def measure_clock_ticks(f, *args, **kwargs) -> float:
         args, kwargs, _ = noop((args, kwargs, outputs))
         return (args, kwargs)
 
-    @partial(jax.jit, static_argnums=(0,))
-    def run_bench(n_iter: int, state):
+    second_sleep_time: float = 30e-6
+
+    @partial(jax.jit, static_argnums=(0, 1))
+    def run_bench(n_iter: int, sleep_time: float, state):
         # Warmup phase: execute once to trigger potential JIT compilation or library loading
         _, state = _event_record(state, copy_before=True)
         state = run_func(state)
@@ -66,8 +68,8 @@ def measure_clock_ticks(f, *args, **kwargs) -> float:
 
         # Pre-measurement clock rate calibration
         # Sleep to fill the CUDA stream and measure clock rate
-        # Assumption: each operation takes less than 10us, add 100us buffer
-        sleep_time = 10e-6 * n_iter + 100e-6
+        # Assumption: each operation takes less than 10us
+        sleep_time = sleep_time + 10e-6 * n_iter
         ticks_before, state = sleep(sleep_time, state)
         rate_before = ticks_before / sleep_time
 
@@ -79,33 +81,47 @@ def measure_clock_ticks(f, *args, **kwargs) -> float:
 
         # Post-measurement clock rate calibration
         # Use 30us as a reasonable time to measure clock ticks
-        calib_time = 30e-6
-        ticks_after, state = sleep(calib_time, state)
-        rate_after = ticks_after / calib_time
+        ticks_after, state = sleep(second_sleep_time, state)
+        rate_after = ticks_after / second_sleep_time
+
+        # Synchronize to check if the CPU lags behind the GPU or not
+        sync_time, state = synchronize(state)
 
         # Calculate average time per function call using GPU events
-        # Call noop to ensure sleep is executed before event_elapsed
+        # Call noop to ensure sleep+sync is executed before event_elapsed
         end_event, state = noop((end_event, state))
         total_time = 1e-3 * _event_elapsed(start_event, end_event)
         avg_time = total_time / n_iter
 
-        return avg_time, rate_before, rate_after
+        return avg_time, rate_before, rate_after, sync_time
 
     # Adaptive iteration counting to find optimal measurement parameters
-    success = False
     n_iter = 1
-    max_tries = 5
+    sleep_time = 50e-6
+    rejections: list[str] = []
 
-    for attempt in range(max_tries):
-        avg_time, rate_before, rate_after = jax.tree.map(
-            np.array, run_bench(n_iter, (args, kwargs))
+    for attempt in range(20):
+        avg_time, rate_before, rate_after, sync_time = jax.tree.map(
+            float, run_bench(n_iter, sleep_time, (args, kwargs))
         )
+        avg_rate = (rate_before + rate_after) / 2
 
-        # Check if clock rates are consistent (within 1% tolerance)
-        # Inconsistent rates indicate timing measurement issues
-        tolerance = 0.01
-        max_rate = max(rate_before, rate_after)
-        if abs(rate_before - rate_after) > tolerance * max_rate:
+        # print(
+        #     f"DEBUG: Attempt {attempt + 1}, n_iter={n_iter}, "
+        #     f"sleep_time={sleep_time * 1e6:.1f}us, "
+        #     f"sync_time={sync_time * 1e6:.1f}us, "
+        #     f"avg_time={avg_time * 1e6:.1f}us, "
+        #     f"rate_before={rate_before / 1e9:.2f} GHz, "
+        #     f"rate_after={rate_after / 1e9:.2f} GHz"
+        # )
+
+        # If synchronization time is small, it indicates the CPU is lagging behind the GPU
+        target_sync_time = second_sleep_time + 20e-6
+        if sync_time < target_sync_time:
+            sleep_time += (target_sync_time - sync_time) + 50e-6
+            rejections.append(
+                f"CPU lagging behind GPU (will sleep {sleep_time * 1e3:.1f} ms)"
+            )
             continue
 
         # Ensure measurement duration is long enough for accuracy (at least 20us total)
@@ -114,16 +130,31 @@ def measure_clock_ticks(f, *args, **kwargs) -> float:
             # Increase iterations to reach minimum measurement time
             target = 100e-6  # Target 100us total measurement time
             n_iter = int(target / avg_time)
+            rejections.append(
+                f"Too short measurement time (will measure {n_iter} iterations)"
+            )
             continue
 
-        success = True
-        break
+        # Check if clock rates are consistent (within 1% tolerance)
+        # Inconsistent rates indicate timing measurement issues
+        diff, max_tol = (
+            abs(rate_before - rate_after),
+            0.02 * max(rate_before, rate_after),
+        )
+        if diff > max_tol:
+            rejections.append(
+                f"Clock rate variation too high "
+                f"({diff / 1e6:.2f} MHz variation > {max_tol / 1e6:.2f} MHz)"
+            )
+            continue
 
-    if not success:
-        warnings.warn(f"Potentially bad measurement of clock ticks for {f.__name__}.")
+        return avg_rate, avg_time
 
-    # Convert seconds to clock ticks using average of before/after rates
-    avg_rate = (rate_before + rate_after) / 2
-    ticks_per_call = avg_time * avg_rate
-
-    return ticks_per_call
+    rejection_details = "\n".join(
+        f"  Attempt #{i + 1}: {reason}" for i, reason in enumerate(rejections)
+    )
+    warnings.warn(
+        f"Was not able to reach a satisfying measurement in {len(rejections)} attempts. "
+        f"Rejection reasons:\n{rejection_details}"
+    )
+    return avg_rate, avg_time
