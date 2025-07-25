@@ -87,7 +87,9 @@ class ChannelWiseTensorProduct(torch.nn.Module):
             e.operands[-1].irreps,
         )
         assert descriptor.subscripts == "uv,iu,jv,kuv+ijk"
-        same_shape = e.flatten_coefficient_modes().all_same_segment_shape()
+        #
+        e2 = e.flatten_coefficient_modes().squeeze_modes()
+        u1d_compatible = e2.all_same_segment_shape() and len(e2.subscripts.modes()) == 1
 
         self.irreps_in1 = irreps_in1
         self.irreps_in2 = irreps_in2
@@ -138,13 +140,13 @@ class ChannelWiseTensorProduct(torch.nn.Module):
 
         if method is None:
             if use_fallback is None:
-                if same_shape:
+                if u1d_compatible:
                     # No warning here as it's the default behavior
                     self.method = "uniform_1d"
                 else:
                     warnings.warn(
                         "Segments are not the same shape, falling back to `naive` method\n"
-                        "You can consider reshaping your input to have the same shape"
+                        "You can consider making the segments uniform in the descriptor."
                     )
                     self.method = "naive"
             else:
@@ -152,17 +154,17 @@ class ChannelWiseTensorProduct(torch.nn.Module):
                     "`use_fallback` is deprecated, please use `method` instead",
                     DeprecationWarning,
                 )
-                if not same_shape and not use_fallback:
+                if not u1d_compatible and not use_fallback:
                     raise ValueError(
                         "`uniform_1d` method requires segments to be the same shape\n"
-                        "You can consider reshaping your input to have the same shape"
+                        "You can consider making the segments uniform in the descriptor."
                     )
                 self.method = "naive" if use_fallback else "uniform_1d"
         else:
-            if method == "uniform_1d" and not same_shape:
+            if method == "uniform_1d" and not u1d_compatible:
                 raise ValueError(
                     "`uniform_1d` method requires segments to be the same shape\n"
-                    "You can consider reshaping your input to have the same shape"
+                    "You can consider making the segments uniform in the descriptor."
                 )
             self.method = method
 

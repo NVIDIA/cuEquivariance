@@ -66,6 +66,7 @@ class SegmentedPolynomial(nn.Module):
                 - For method "uniform_1d", the dtype of the input tensors will be used if allowed
                   (FP32 or FP64), otherwise float32 will be used.
                 - For method "fused_tp", the default dtype (FP32) will be used.
+                - For method "indexed_linear", the default dtype (FP32) will be used.
         output_dtype_map: Optional list that, for each output buffer, specifies
             the index of the input buffer from which it inherits its data type.
             -1 means the math_dtype is used.

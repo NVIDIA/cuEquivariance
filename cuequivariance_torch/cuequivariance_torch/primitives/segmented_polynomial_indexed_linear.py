@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import warnings
 from typing import Dict, List, Optional, Tuple
 
 import torch
@@ -176,6 +177,9 @@ class SegmentedPolynomialIndexedLinear(nn.Module):
         self.input_sizes = [o.size for o in polynomial.inputs]
         self.name = name
         if math_dtype is None:
+            warnings.warn(
+                "`math_dtype` is not provided for method `indexed_linear`: using float32."
+            )
             math_dtype = torch.float32
         if math_dtype not in [torch.float32, torch.float64]:
             raise ValueError(
@@ -254,6 +258,12 @@ class SegmentedPolynomialIndexedLinear(nn.Module):
         ):
             raise ValueError(
                 "Indexed_linear does not support float32 math_dtype with float64 inputs."
+            )
+        if self.math_dtype == torch.float64 and any(
+            t.dtype == torch.float32 for t in inputs
+        ):
+            raise ValueError(
+                "Indexed_linear does not support float64 math_dtype with float32 inputs."
             )
 
         # Input indexing

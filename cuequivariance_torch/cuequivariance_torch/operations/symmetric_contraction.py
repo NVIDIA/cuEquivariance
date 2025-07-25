@@ -184,7 +184,7 @@ class SymmetricContraction(torch.nn.Module):
                 else:
                     warnings.warn(
                         "Segments are not the same shape, falling back to `naive` method\n"
-                        "You can consider reshaping your input to have the same shape"
+                        "You can consider making the segments uniform in the descriptor."
                     )
                     self.method = "naive"
             else:
@@ -195,14 +195,14 @@ class SymmetricContraction(torch.nn.Module):
                 if not same_shape and not use_fallback:
                     raise ValueError(
                         "`uniform_1d` method requires segments to be the same shape\n"
-                        "You can consider reshaping your input to have the same shape"
+                        "You can consider making the segments uniform in the descriptor."
                     )
                 self.method = "naive" if use_fallback else "uniform_1d"
         else:
             if method == "uniform_1d" and not same_shape:
                 raise ValueError(
                     "`uniform_1d` method requires segments to be the same shape\n"
-                    "You can consider reshaping your input to have the same shape"
+                    "You can consider making the segments uniform in the descriptor."
                 )
             self.method = method
 

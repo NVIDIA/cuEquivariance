@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import warnings
 from typing import Dict, List, Optional
 
 import torch
@@ -85,6 +86,9 @@ class SegmentedPolynomialFusedTP(nn.Module):
         self.input_sizes = [o.size for o in polynomial.inputs]
         self.name = name
         if math_dtype is None:
+            warnings.warn(
+                "`math_dtype` is not provided for method `fused_tp`: using float32."
+            )
             math_dtype = torch.float32
         if math_dtype not in [torch.float32, torch.float64]:
             raise ValueError(

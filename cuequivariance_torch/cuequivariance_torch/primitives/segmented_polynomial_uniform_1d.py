@@ -152,7 +152,7 @@ class SegmentedPolynomialFromUniform1dJit(nn.Module):
         self.name = name
         if math_dtype not in [None, torch.float32, torch.float64]:
             raise ValueError(
-                f"For method 'uniform_1d', math_dtype must be float32 or float64, got {math_dtype}"
+                f"For method 'uniform_1d', math_dtype must be float32, float64, or None; got {math_dtype}"
             )
         self.math_dtype = math_dtype
         self.operand_extent = operand_extent
