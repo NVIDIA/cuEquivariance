@@ -96,7 +96,7 @@ class Rotation(torch.nn.Module):
                 else:
                     warnings.warn(
                         "Segments are not the same shape, falling back to naive method\n"
-                        "You can consider reshaping your input to have the same shape"
+                        "You can consider making the segments uniform in the descriptor."
                     )
                     self.method = "naive"
             else:
@@ -107,14 +107,14 @@ class Rotation(torch.nn.Module):
                 if not same_shape and not use_fallback:
                     raise ValueError(
                         "Uniform 1D method requires segments to be the same shape\n"
-                        "You can consider reshaping your input to have the same shape"
+                        "You can consider making the segments uniform in the descriptor."
                     )
                 self.method = "naive" if use_fallback else "uniform_1d"
         else:
             if method == "uniform_1d" and not same_shape:
                 raise ValueError(
                     "Uniform 1D method requires segments to be the same shape\n"
-                    "You can consider reshaping your input to have the same shape"
+                    "You can consider making the segments uniform in the descriptor."
                 )
             self.method = method
 
@@ -151,7 +151,9 @@ class Rotation(torch.nn.Module):
         encodings_beta = encode_rotation_angle(beta, self.lmax)
         encodings_alpha = encode_rotation_angle(alpha, self.lmax)
 
-        output = self.f([encodings_gamma, encodings_beta, encodings_alpha, x])
+        output = self.f(
+            [encodings_gamma, encodings_beta, encodings_alpha, self.transpose_in(x)]
+        )
         return self.transpose_out(output[0])
 
 

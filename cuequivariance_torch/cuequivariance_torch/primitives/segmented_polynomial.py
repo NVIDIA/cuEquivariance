@@ -56,17 +56,18 @@ class SegmentedPolynomial(nn.Module):
             - "uniform_1d": Uses a CUDA implementation for polynomials with a single uniform mode.
             - "fused_tp": Uses a CUDA implementation for polynomials with 3 and 4 operands contractions.
             - "indexed_linear": Uses a CUDA implementation for linear layers with indexed weights.
-        math_dtype: Data type for computational operations.
+        math_dtype: Optional data type for computational operations.
             If specified, internal buffers will be of this dtype,
             and operands will be converted to this type for all computations
             (please note that this will not be affected by changes to the module dtype,
             and that not all methods support all dtypes).
             If math_dtype is not specified:
-                - For method "naive", the dtype of the input tensors will be used
+                - For method "naive", the dtype of the input tensors will be used.
                 - For method "uniform_1d", the dtype of the input tensors will be used if allowed
                   (FP32 or FP64), otherwise float32 will be used.
                 - For method "fused_tp", the default dtype (FP32) will be used.
-                - For method "indexed_linear", the default dtype (FP32) will be used.
+                - For method "indexed_linear", the dtype of the input tensors will be used
+                  (please note that this is the only option available for this method).
         output_dtype_map: Optional list that, for each output buffer, specifies
             the index of the input buffer from which it inherits its data type.
             -1 means the math_dtype is used.
@@ -164,7 +165,8 @@ class SegmentedPolynomial(nn.Module):
                 for each input tensor. The key is the index into the inputs.
                 If a key is not present, no indexing takes place.
                 The contents of the index tensor must be suitable to index the
-                input tensor (i.e. 0 <= index_tensor[i] < input.shape[0].
+                input tensor (i.e. 0 <= index_tensor[i] < input.shape[0]).
+                Please note that method "indexed_linear" requires the indices to be sorted.
             output_shapes: A dictionary specifying the size of the output batch
                 dimensions using Tensors. We only read shape_tensor.shape[0].
                 This is mandatory if the output tensor is indexed. Otherwise,

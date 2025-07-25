@@ -176,16 +176,8 @@ class SegmentedPolynomialIndexedLinear(nn.Module):
         self.num_outputs = polynomial.num_outputs
         self.input_sizes = [o.size for o in polynomial.inputs]
         self.name = name
-        if math_dtype is None:
-            warnings.warn(
-                "`math_dtype` is not provided for method `indexed_linear`: using float32."
-            )
-            math_dtype = torch.float32
-        if math_dtype not in [torch.float32, torch.float64]:
-            raise ValueError(
-                "Indexed_linear only supports math_dtype==float32 or math_dtype==float64"
-            )
-        self.math_dtype = math_dtype
+        if math_dtype is not None:
+            warnings.warn("`indexed_linear` does not support `math_dtype`.")
         self.out_size = [o.size for o in polynomial.outputs]
         default_dtype_map = [
             0 if polynomial.num_inputs >= 1 else -1
@@ -251,20 +243,6 @@ class SegmentedPolynomialIndexedLinear(nn.Module):
                 raise ValueError(
                     f"Input {i} has shape {x.shape} but expected shape {size}."
                 )
-
-        # This is not supported:
-        if self.math_dtype == torch.float32 and any(
-            t.dtype == torch.float64 for t in inputs
-        ):
-            raise ValueError(
-                "Indexed_linear does not support float32 math_dtype with float64 inputs."
-            )
-        if self.math_dtype == torch.float64 and any(
-            t.dtype == torch.float32 for t in inputs
-        ):
-            raise ValueError(
-                "Indexed_linear does not support float64 math_dtype with float32 inputs."
-            )
 
         # Input indexing
         count_indices = {}

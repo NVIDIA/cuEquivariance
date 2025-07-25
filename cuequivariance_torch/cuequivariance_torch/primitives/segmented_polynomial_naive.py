@@ -372,7 +372,7 @@ class SegmentedPolynomialNaive(nn.Module):
         for size in input_batch_sizes:
             if size != 1:
                 assert batch_size in [1, size]
-            batch_size = size
+                batch_size = size
         outputs_dims = [
             (batch_size, shape)
             if i not in output_shapes.keys()
