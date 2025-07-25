@@ -33,6 +33,13 @@ from cuequivariance_torch.primitives.segmented_polynomial_uniform_1d import (
     SegmentedPolynomialFromUniform1dJit,
 )
 
+try:
+    import cuequivariance_ops_torch  # noqa: F401
+
+    HAS_CUE_OPS = True
+except ImportError:
+    HAS_CUE_OPS = False
+
 
 class SegmentedPolynomial(nn.Module):
     """
@@ -94,6 +101,12 @@ class SegmentedPolynomial(nn.Module):
                 "• 'indexed_linear' - A CUDA implementation for linear layers with indexed weights.\n"
             )
             method = "uniform_1d"
+
+        if method != "naive" and not HAS_CUE_OPS:
+            method = "naive"
+            warnings.warn(
+                "cuequivariance_ops_torch is not available. Falling back to naive implementation."
+            )
 
         if method == "uniform_1d":
             self.m = SegmentedPolynomialFromUniform1dJit(
