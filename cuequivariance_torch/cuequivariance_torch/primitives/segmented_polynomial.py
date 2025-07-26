@@ -12,269 +12,33 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from itertools import accumulate
+
+import warnings
 from typing import Dict, List, Optional
 
 import torch
 import torch.nn as nn
 
 import cuequivariance as cue
+from cuequivariance_torch.primitives.segmented_polynomial_fused_tp import (
+    SegmentedPolynomialFusedTP,
+)
+from cuequivariance_torch.primitives.segmented_polynomial_indexed_linear import (
+    SegmentedPolynomialIndexedLinear,
+)
+from cuequivariance_torch.primitives.segmented_polynomial_naive import (
+    SegmentedPolynomialNaive,
+)
+from cuequivariance_torch.primitives.segmented_polynomial_uniform_1d import (
+    SegmentedPolynomialFromUniform1dJit,
+)
 
 try:
-    from cuequivariance_ops_torch.tensor_product_uniform_1d_jit import (
-        BATCH_DIM_AUTO,
-        BATCH_DIM_BATCHED,
-        BATCH_DIM_INDEXED,
-        BATCH_DIM_SHARED,
-    )
+    import cuequivariance_ops_torch  # noqa: F401
 
-    try:
-        # keep us an option to be independent of the torch.library machinery
-        from cuequivariance_ops_torch.tensor_product_uniform_1d_jit import (
-            tensor_product_uniform_1d_jit,
-        )
-    except Exception:
-
-        def tensor_product_uniform_1d_jit(
-            name: str,
-            math_dtype: torch.dtype,
-            operand_extent: int,
-            num_inputs: int,
-            num_outputs: int,
-            num_index: int,
-            buffer_dim: List[int],
-            buffer_num_segments: List[int],
-            batch_dim: List[int],
-            index_buffer: List[int],
-            dtypes: List[int],
-            num_operations: int,
-            num_operands: List[int],
-            operations: List[int],
-            num_paths: List[int],
-            path_indices_start: List[int],
-            path_coefficients_start: List[int],
-            path_indices: List[int],
-            path_coefficients: List[float],
-            batch_size: int,
-            tensors: List[torch.Tensor],
-        ) -> List[torch.Tensor]:
-            return torch.ops.cuequivariance_ops.tensor_product_uniform_1d_jit(
-                name,
-                math_dtype,
-                operand_extent,
-                num_inputs,
-                num_outputs,
-                num_index,
-                buffer_dim,
-                buffer_num_segments,
-                batch_dim,
-                index_buffer,
-                dtypes,
-                num_operations,
-                num_operands,
-                operations,
-                num_paths,
-                path_indices_start,
-                path_coefficients_start,
-                path_indices,
-                path_coefficients,
-                batch_size,
-                tensors,
-            )
+    HAS_CUE_OPS = True
 except ImportError:
-    tensor_product_uniform_1d_jit = None
-
-
-class SegmentedPolynomialFromUniform1dJit(nn.Module):
-    def __init__(
-        self,
-        polynomial: cue.SegmentedPolynomial,
-        math_dtype: torch.dtype = torch.float32,
-        output_dtype_map: List[int] = None,
-        name: str = "segmented_polynomial",
-    ):
-        super().__init__()
-
-        if tensor_product_uniform_1d_jit is None:
-            raise ImportError(
-                "The cuequivariance_ops_torch.tensor_product_uniform_1d_jit module is not available."
-            )
-
-        operand_extent = None
-        for o in polynomial.operands:
-            torch._assert(
-                o.ndim in [0, 1], "only 0 or 1 dimensional operands are supported"
-            )
-            torch._assert(
-                all(len(s) == o.ndim for s in o.segments),
-                "all segments must have the same number of dimensions as the operand",
-            )
-            torch._assert(
-                o.all_same_segment_shape(), "all segments must have the same shape"
-            )
-            if o.ndim == 1 and len(o.segments) > 0:
-                if operand_extent is None:
-                    (operand_extent,) = o.segment_shape
-                else:
-                    torch._assert(
-                        (operand_extent,) == o.segment_shape,
-                        "all operands must have the same extent",
-                    )
-        if operand_extent is None:
-            operand_extent = 1
-
-        for o, stp in polynomial.operations:
-            torch._assert(
-                stp.num_operands == len(o.buffers),
-                "the number of operands must match the number of buffers",
-            )
-            torch._assert(
-                stp.coefficient_subscripts == "", "the coefficients must be scalar"
-            )
-
-        self.num_inputs = polynomial.num_inputs
-        self.num_outputs = polynomial.num_outputs
-        self.name = name
-        self.math_dtype = math_dtype
-        self.operand_extent = operand_extent
-        self.buffer_dim = [o.ndim for o in polynomial.operands]
-        torch._assert(
-            all(buffer_dim in [0, 1] for buffer_dim in self.buffer_dim),
-            "buffer dimensions must be 0 or 1",
-        )
-        self.buffer_num_segments = [len(o.segments) for o in polynomial.operands]
-        default_dtype_map = [
-            0 if polynomial.num_inputs >= 1 else -1
-        ] * polynomial.num_outputs
-        self.dtypes = list(range(self.num_inputs)) + (
-            default_dtype_map if output_dtype_map is None else output_dtype_map
-        )
-        self.num_operations = len(polynomial.operations)
-        self.num_operands = [len(o.buffers) for o, stp in polynomial.operations]
-        self.operations = [b for o, stp in polynomial.operations for b in o.buffers]
-        self.num_paths = [stp.num_paths for o, stp in polynomial.operations]
-        self.path_indices_start = [0] + list(
-            accumulate(
-                [stp.num_paths * stp.num_operands for o, stp in polynomial.operations]
-            )
-        )[:-1]
-        self.path_coefficients_start = [0] + list(
-            accumulate([stp.num_paths for o, stp in polynomial.operations])
-        )[:-1]
-        self.path_indices = [
-            i for o, stp in polynomial.operations for p in stp.paths for i in p.indices
-        ]
-        self.path_coefficients = [
-            float(p.coefficients) for o, stp in polynomial.operations for p in stp.paths
-        ]
-
-        self.BATCH_DIM_AUTO = BATCH_DIM_AUTO
-        self.BATCH_DIM_SHARED = BATCH_DIM_SHARED
-        self.BATCH_DIM_BATCHED = BATCH_DIM_BATCHED
-        self.BATCH_DIM_INDEXED = BATCH_DIM_INDEXED
-
-    # For torch.jit.trace, we cannot pass explicit optionals,
-    # so these must be passed as kwargs then.
-    # List[Optional[Tensor]] does not work for similar reasons, hence, Dict
-    # is the only option.
-    # Also, shapes cannot be passed as integers, so they are passed via a
-    # (potentially small-strided) tensor with the right shape.
-    def forward(
-        self,
-        inputs: List[torch.Tensor],
-        input_indices: Optional[Dict[int, torch.Tensor]] = None,
-        output_shapes: Optional[Dict[int, torch.Tensor]] = None,
-        output_indices: Optional[Dict[int, torch.Tensor]] = None,
-    ):
-        empty_dict: Dict[int, torch.Tensor] = {}
-        if input_indices is None:
-            input_indices = dict(empty_dict)
-        if output_shapes is None:
-            output_shapes = dict(empty_dict)
-        if output_indices is None:
-            output_indices = dict(empty_dict)
-
-        torch._assert(
-            len(inputs) == self.num_inputs,
-            "the number of inputs must match the number of inputs of the polynomial",
-        )
-
-        for k, v in input_indices.items():
-            torch._assert(0 <= k < self.num_inputs, "input index must be in range")
-            torch._assert(v.ndim == 1, "input index must be one-dimensional")
-            torch._assert(
-                v.dtype in [torch.int32, torch.int64], "input index must be integral"
-            )
-        for k, v in output_indices.items():
-            torch._assert(0 <= k < self.num_outputs, "output index must be in range")
-            torch._assert(v.ndim == 1, "input index must be one-dimensional")
-            torch._assert(
-                v.dtype in [torch.int32, torch.int64], "input index must be integral"
-            )
-        for k, v in output_shapes.items():
-            torch._assert(0 <= k < self.num_outputs, "output index must be in range")
-            torch._assert(v.ndim == 2, "output shape must be two-dimensional")
-
-        num_index = 0
-        batch_dim = [self.BATCH_DIM_AUTO] * (self.num_inputs + self.num_outputs)
-        index_buffer = [-1] * (self.num_inputs + self.num_outputs)
-        tensors = list(inputs)
-
-        for idx_pos, idx_tensor in input_indices.items():
-            batch_dim[idx_pos] = self.BATCH_DIM_INDEXED
-            tensors.append(idx_tensor)
-            index_buffer[idx_pos] = num_index
-            num_index += 1
-            index_buffer.append(inputs[idx_pos].shape[0])
-
-        for idx_pos, idx_tensor in output_indices.items():
-            batch_dim[idx_pos + self.num_inputs] = self.BATCH_DIM_INDEXED
-            tensors.append(idx_tensor)
-            index_buffer[idx_pos + self.num_inputs] = num_index
-            num_index += 1
-            torch._assert(
-                idx_pos in output_shapes,
-                "output shapes must be provided for output indices",
-            )
-            index_buffer.append(output_shapes[idx_pos].size(0))
-
-        batch_size = self.BATCH_DIM_AUTO
-        for idx_pos, idx_shape in output_shapes.items():
-            if batch_dim[idx_pos + self.num_inputs] == self.BATCH_DIM_AUTO:
-                if idx_shape.size(0) == 1:
-                    batch_dim[idx_pos + self.num_inputs] = self.BATCH_DIM_SHARED
-                else:
-                    torch._assert(
-                        batch_size == self.BATCH_DIM_AUTO
-                        or batch_size == idx_shape.size(0),
-                        "batch size must be auto or the output shape",
-                    )
-                    batch_dim[idx_pos + self.num_inputs] = self.BATCH_DIM_BATCHED
-                    batch_size = idx_shape.size(0)
-
-        return tensor_product_uniform_1d_jit(
-            self.name,
-            self.math_dtype,
-            self.operand_extent,
-            self.num_inputs,
-            self.num_outputs,
-            num_index,
-            self.buffer_dim,
-            self.buffer_num_segments,
-            batch_dim,
-            index_buffer,
-            self.dtypes,
-            self.num_operations,
-            self.num_operands,
-            self.operations,
-            self.num_paths,
-            self.path_indices_start,
-            self.path_coefficients_start,
-            self.path_indices,
-            self.path_coefficients,
-            batch_size,
-            tensors,
-        )
+    HAS_CUE_OPS = False
 
 
 class SegmentedPolynomial(nn.Module):
@@ -287,7 +51,23 @@ class SegmentedPolynomial(nn.Module):
     Args:
         polynomial: The segmented polynomial to compute, an instance of
             `cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`.
-        math_dtype: Data type for computational operations, defaulting to float32.
+        method: Specifies the implementation method to use. Options are:
+            - "naive": Uses a naive PyTorch implementation. It always works but is not optimized.
+            - "uniform_1d": Uses a CUDA implementation for polynomials with a single uniform mode.
+            - "fused_tp": Uses a CUDA implementation for polynomials with 3 and 4 operands contractions.
+            - "indexed_linear": Uses a CUDA implementation for linear layers with indexed weights.
+        math_dtype: Optional data type for computational operations.
+            If specified, internal buffers will be of this dtype,
+            and operands will be converted to this type for all computations
+            (please note that this will not be affected by changes to the module dtype,
+            and that not all methods support all dtypes).
+            If math_dtype is not specified:
+                - For method "naive", the dtype of the input tensors will be used.
+                - For method "uniform_1d", the dtype of the input tensors will be used if allowed
+                  (FP32 or FP64), otherwise float32 will be used.
+                - For method "fused_tp", the default dtype (FP32) will be used.
+                - For method "indexed_linear", the dtype of the input tensors will be used
+                  (please note that this is the only option available for this method).
         output_dtype_map: Optional list that, for each output buffer, specifies
             the index of the input buffer from which it inherits its data type.
             -1 means the math_dtype is used.
@@ -298,15 +78,72 @@ class SegmentedPolynomial(nn.Module):
     def __init__(
         self,
         polynomial: cue.SegmentedPolynomial,
-        math_dtype: torch.dtype = torch.float32,
+        method: str = "",
+        math_dtype: torch.dtype = None,
         output_dtype_map: List[int] = None,
         name: str = "segmented_polynomial",
     ):
         super().__init__()
-        self.m = SegmentedPolynomialFromUniform1dJit(
-            polynomial, math_dtype, output_dtype_map, name
-        )
 
+        self.num_inputs = polynomial.num_inputs
+        self.num_outputs = polynomial.num_outputs
+        self.method = method
+        self.repr = polynomial.__repr__()
+
+        if method == "":
+            warnings.warn(
+                "Hello! It looks like you're using code that was written for an older version of this library.\n"
+                "Starting in v0.6.0, the `method` argument is suggested when using `SegmentedPolynomial()`.\n"
+                "This change helps ensure you get optimal performance by explicitly choosing the computation method.\n"
+                "For the moment, we will default to the 'uniform_1d' method.\n\n"
+                "To remove this warning, add a `method` parameter to your function call. Here are the available options:\n"
+                "• 'naive' - Works everywhere but not optimized (good for testing)\n"
+                "• 'uniform_1d' - Fast CUDA implementation for single uniform mode polynomials\n"
+                "• 'fused_tp' - A more general CUDA implementation, supporting many 3 and 4 operands contractions.\n"
+                "• 'indexed_linear' - A CUDA implementation for linear layers with indexed weights.\n"
+            )
+            method = "uniform_1d"
+
+        if method != "naive" and not HAS_CUE_OPS:
+            method = "naive"
+            warnings.warn(
+                "cuequivariance_ops_torch is not available. Falling back to naive implementation."
+            )
+
+        if method == "uniform_1d":
+            self.m = SegmentedPolynomialFromUniform1dJit(
+                polynomial, math_dtype, output_dtype_map, name
+            )
+            self.fallback = self.m
+        elif method == "naive":
+            self.m = SegmentedPolynomialNaive(
+                polynomial, math_dtype, output_dtype_map, name
+            )
+            self.fallback = self.m
+        elif method == "fused_tp":
+            self.m = SegmentedPolynomialFusedTP(
+                polynomial, math_dtype, output_dtype_map, name
+            )
+            self.fallback = SegmentedPolynomialNaive(
+                polynomial, math_dtype, output_dtype_map, name
+            )
+        elif method == "indexed_linear":
+            self.m = SegmentedPolynomialIndexedLinear(
+                polynomial, math_dtype, output_dtype_map, name
+            )
+            self.fallback = self.m
+        else:
+            raise ValueError(f"Invalid method: {method}")
+
+    def __repr__(self):
+        return self.repr + f"\n{super().__repr__()}"
+
+    # For torch.jit.trace, we cannot pass explicit optionals,
+    # so these must be passed as kwargs then.
+    # List[Optional[Tensor]] does not work for similar reasons, hence, Dict
+    # is the only option.
+    # Also, shapes cannot be passed as integers, so they are passed via a
+    # (potentially small-strided) tensor with the right shape.
     def forward(
         self,
         inputs: List[torch.Tensor],
@@ -328,7 +165,8 @@ class SegmentedPolynomial(nn.Module):
                 for each input tensor. The key is the index into the inputs.
                 If a key is not present, no indexing takes place.
                 The contents of the index tensor must be suitable to index the
-                input tensor (i.e. 0 <= index_tensor[i] < input.shape[0].
+                input tensor (i.e. 0 <= index_tensor[i] < input.shape[0]).
+                Please note that method "indexed_linear" requires the indices to be sorted.
             output_shapes: A dictionary specifying the size of the output batch
                 dimensions using Tensors. We only read shape_tensor.shape[0].
                 This is mandatory if the output tensor is indexed. Otherwise,
@@ -341,4 +179,43 @@ class SegmentedPolynomial(nn.Module):
                 The output tensors resulting from the segmented polynomial.
                 Their shapes are specified just like the inputs.
         """
+
+        # General checks
+        empty_dict: Dict[int, torch.Tensor] = {}
+        if input_indices is None:
+            input_indices = dict(empty_dict)
+        if output_shapes is None:
+            output_shapes = dict(empty_dict)
+        if output_indices is None:
+            output_indices = dict(empty_dict)
+
+        inputs = list(inputs)
+        torch._assert(
+            len(inputs) == self.num_inputs,
+            "the number of inputs must match the number of inputs of the polynomial",
+        )
+
+        for k, v in input_indices.items():
+            torch._assert(0 <= k < self.num_inputs, "input index must be in range")
+            torch._assert(v.ndim == 1, "input index must be one-dimensional")
+            torch._assert(
+                v.dtype in [torch.int32, torch.int64], "input index must be integral"
+            )
+        for k, v in output_indices.items():
+            torch._assert(0 <= k < self.num_outputs, "output index must be in range")
+            torch._assert(v.ndim == 1, "input index must be one-dimensional")
+            torch._assert(
+                v.dtype in [torch.int32, torch.int64], "input index must be integral"
+            )
+        for k, v in output_shapes.items():
+            torch._assert(0 <= k < self.num_outputs, "output index must be in range")
+            torch._assert(v.ndim == 2, "output shape must be two-dimensional")
+
+        # If the input is on the CPU and we're using fused_tp, we need to fall back to naive
+        if inputs[0].device == torch.device("cpu") and self.method == "fused_tp":
+            warnings.warn(
+                "Fused TP is not supported on CPU. Falling back to naive implementation."
+            )
+            return self.fallback(inputs, input_indices, output_shapes, output_indices)
+
         return self.m(inputs, input_indices, output_shapes, output_indices)

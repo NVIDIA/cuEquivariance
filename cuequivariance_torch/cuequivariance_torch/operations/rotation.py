@@ -12,6 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import warnings
 from typing import Optional
 
 import torch
@@ -19,7 +20,10 @@ import torch
 import cuequivariance as cue
 import cuequivariance_torch as cuet
 from cuequivariance import descriptors
-from cuequivariance.group_theory.irreps_array.misc_ui import default_irreps
+from cuequivariance.group_theory.irreps_array.misc_ui import (
+    default_irreps,
+    default_layout,
+)
 
 
 class Rotation(torch.nn.Module):
@@ -29,6 +33,15 @@ class Rotation(torch.nn.Module):
     Args:
         irreps (Irreps): The irreducible representations of the tensor to rotate.
         layout (IrrepsLayout, optional): The memory layout of the tensor, ``cue.ir_mul`` is preferred.
+        layout_in (IrrepsLayout, optional): The layout of the input irreducible representations, by default ``layout``.
+        layout_out (IrrepsLayout, optional): The layout of the output irreducible representations, by default ``layout``.
+        device (torch.device, optional): The device to use for the operation.
+        math_dtype (torch.dtype, optional): The dtype to use for the math operations, by default it follows the dtype of the input tensors.
+        method (str, optional): The method to use for the operation, by default "uniform_1d" (using a CUDA kernel)
+            if all segments have the same shape, otherwise "naive" (using a PyTorch implementation).
+        use_fallback (bool, optional, deprecated): Whether to use a "fallback" implementation, now maps to method:
+            If `True` the "naive" method is used.
+            If `False` the "uniform_1d" method is used (make sure all segments have the same shape).
     """
 
     def __init__(
@@ -41,6 +54,7 @@ class Rotation(torch.nn.Module):
         device: Optional[torch.device] = None,
         math_dtype: Optional[torch.dtype] = None,
         use_fallback: Optional[bool] = None,
+        method: Optional[str] = None,
     ):
         super().__init__()
         (irreps,) = default_irreps(irreps)
@@ -50,18 +64,65 @@ class Rotation(torch.nn.Module):
                 f"Unsupported irrep class {irreps.irrep_class}. Must be SO3 or O3."
             )
 
+        e = descriptors.yxy_rotation(irreps)
+        same_shape = e.all_same_segment_shape()
+
         self.irreps = irreps
         self.lmax = max(ir.l for _, ir in irreps)
 
-        self.f = cuet.EquivariantTensorProduct(
-            descriptors.yxy_rotation(irreps),
-            layout=layout,
-            layout_in=layout_in,
-            layout_out=layout_out,
+        layout_in = default_layout(layout_in or layout)
+        self.transpose_in = cuet.TransposeIrrepsLayout(
+            e.inputs[3].irreps,
+            source=layout_in,
+            target=e.inputs[3].layout,
             device=device,
-            math_dtype=math_dtype,
             use_fallback=use_fallback,
         )
+
+        layout_out = default_layout(layout_out or layout)
+        self.transpose_out = cuet.TransposeIrrepsLayout(
+            e.outputs[0].irreps,
+            source=e.outputs[0].layout,
+            target=layout_out,
+            device=device,
+            use_fallback=use_fallback,
+        )
+
+        if method is None:
+            if use_fallback is None:
+                if same_shape:
+                    # No warning here as it's the default behavior
+                    self.method = "uniform_1d"
+                else:
+                    warnings.warn(
+                        "Segments are not the same shape, falling back to naive method\n"
+                        "You can consider making the segments uniform in the descriptor."
+                    )
+                    self.method = "naive"
+            else:
+                warnings.warn(
+                    "`use_fallback` is deprecated, please use `method` instead",
+                    DeprecationWarning,
+                )
+                if not same_shape and not use_fallback:
+                    raise ValueError(
+                        "Uniform 1D method requires segments to be the same shape\n"
+                        "You can consider making the segments uniform in the descriptor."
+                    )
+                self.method = "naive" if use_fallback else "uniform_1d"
+        else:
+            if method == "uniform_1d" and not same_shape:
+                raise ValueError(
+                    "Uniform 1D method requires segments to be the same shape\n"
+                    "You can consider making the segments uniform in the descriptor."
+                )
+            self.method = method
+
+        self.f = cuet.SegmentedPolynomial(
+            e.polynomial,
+            method=self.method,
+            math_dtype=math_dtype,
+        ).to(device)
 
     def forward(
         self,
@@ -90,7 +151,10 @@ class Rotation(torch.nn.Module):
         encodings_beta = encode_rotation_angle(beta, self.lmax)
         encodings_alpha = encode_rotation_angle(alpha, self.lmax)
 
-        return self.f(encodings_gamma, encodings_beta, encodings_alpha, x)
+        output = self.f(
+            [encodings_gamma, encodings_beta, encodings_alpha, self.transpose_in(x)]
+        )
+        return self.transpose_out(output[0])
 
 
 def encode_rotation_angle(angle: torch.Tensor, ell: int) -> torch.Tensor:
@@ -151,9 +215,15 @@ class Inversion(torch.nn.Module):
     Args:
         irreps (Irreps): The irreducible representations of the tensor to invert.
         layout (IrrepsLayout, optional): The memory layout of the tensor, ``cue.ir_mul`` is preferred.
-        use_fallback (bool, optional): If `None` (default), a CUDA kernel will be used if available.
-                If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
-                If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
+        layout_in (IrrepsLayout, optional): The layout of the input irreducible representations, by default ``layout``.
+        layout_out (IrrepsLayout, optional): The layout of the output irreducible representations, by default ``layout``.
+        device (torch.device, optional): The device to use for the linear layer.
+        math_dtype (torch.dtype, optional): The dtype to use for the math operations, by default it follows the dtype of the input tensors.
+        method (str, optional): The method to use for the linear layer, by default "uniform_1d" (using a CUDA kernel)
+            if all segments have the same shape, otherwise "naive" (using a PyTorch implementation).
+        use_fallback (bool, optional, deprecated): Whether to use a "fallback" implementation, now maps to method:
+            If `True` the "naive" method is used.
+            If `False` the "uniform_1d" method is used (make sure all segments have the same shape).
     """
 
     def __init__(
@@ -166,6 +236,7 @@ class Inversion(torch.nn.Module):
         device: Optional[torch.device] = None,
         math_dtype: Optional[torch.dtype] = None,
         use_fallback: Optional[bool] = None,
+        method: Optional[str] = None,
     ):
         super().__init__()
         (irreps,) = default_irreps(irreps)
@@ -175,17 +246,64 @@ class Inversion(torch.nn.Module):
                 f"Unsupported irrep class {irreps.irrep_class}. Must be O3."
             )
 
-        self.irreps = irreps
-        self.f = cuet.EquivariantTensorProduct(
-            descriptors.inversion(irreps),
-            layout=layout,
-            layout_in=layout_in,
-            layout_out=layout_out,
+        e = descriptors.inversion(irreps)
+        same_shape = e.all_same_segment_shape()
+
+        layout_in = default_layout(layout_in or layout)
+        self.transpose_in = cuet.TransposeIrrepsLayout(
+            e.inputs[0].irreps,
+            source=layout_in,
+            target=e.inputs[0].layout,
             device=device,
-            math_dtype=math_dtype,
             use_fallback=use_fallback,
         )
 
+        layout_out = default_layout(layout_out or layout)
+        self.transpose_out = cuet.TransposeIrrepsLayout(
+            e.outputs[0].irreps,
+            source=e.outputs[0].layout,
+            target=layout_out,
+            device=device,
+            use_fallback=use_fallback,
+        )
+
+        if method is None:
+            if use_fallback is None:
+                if same_shape:
+                    # No warning here as it's the default behavior
+                    self.method = "uniform_1d"
+                else:
+                    warnings.warn(
+                        "Segments are not the same shape, falling back to naive method\n"
+                        "You can consider making the segments uniform in the descriptor."
+                    )
+                    self.method = "naive"
+            else:
+                warnings.warn(
+                    "`use_fallback` is deprecated, please use `method` instead",
+                    DeprecationWarning,
+                )
+                if not same_shape and not use_fallback:
+                    raise ValueError(
+                        "Uniform 1D method requires segments to be the same shape\n"
+                        "You can consider making the segments uniform in the descriptor."
+                    )
+                self.method = "naive" if use_fallback else "uniform_1d"
+        else:
+            if method == "uniform_1d" and not same_shape:
+                raise ValueError(
+                    "Uniform 1D method requires segments to be the same shape\n"
+                    "You can consider making the segments uniform in the descriptor."
+                )
+            self.method = method
+
+        self.f = cuet.SegmentedPolynomial(
+            e.polynomial,
+            method=self.method,
+            math_dtype=math_dtype,
+        ).to(device)
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Apply the inversion layer."""
-        return self.f(x)
+        output = self.f([self.transpose_in(x)])
+        return self.transpose_out(output[0])

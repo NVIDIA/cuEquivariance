@@ -12,6 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import warnings
 from typing import Optional
 
 import torch
@@ -24,6 +25,7 @@ from cuequivariance.group_theory.experimental.mace.symmetric_contractions import
 from cuequivariance.group_theory.irreps_array.misc_ui import (
     assert_same_group,
     default_irreps,
+    default_layout,
 )
 
 
@@ -39,19 +41,23 @@ class SymmetricContraction(torch.nn.Module):
             polynomial in the symmetric contraction.
         num_elements (int): The number of elements for the weight tensor.
         layout (IrrepsLayout, optional): The layout of the input and output irreps. If not provided, a default layout is used.
-        math_dtype (torch.dtype, optional): The data type for mathematical operations. If not specified, the default data type
-            from the torch environment is used.
-        use_fallback (bool, optional): If `None` (default), a CUDA kernel will be used if available.
-                If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
-                If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
+        layout_in (IrrepsLayout, optional): The layout of the input irreducible representations, by default ``layout``.
+        layout_out (IrrepsLayout, optional): The layout of the output irreducible representations, by default ``layout``.
+        device (torch.device, optional): The device to use for the operation.
+        dtype (torch.dtype, optional): The dtype to use for the operation weights, by default ``torch.float32``.
+        math_dtype (torch.dtype, optional): The dtype to use for the math operations, by default it follows the dtype of the input tensors.
+        original_mace (bool, optional): Whether to use the original MACE implementation, by default False.
+        method (str, optional): The method to use for the operation, by default "uniform_1d" (using a CUDA kernel)
+            if all segments have the same shape, otherwise "naive" (using a PyTorch implementation).
+        use_fallback (bool, optional, deprecated): Whether to use a "fallback" implementation, now maps to method:
+            If `True` the "naive" method is used.
+            If `False` the "uniform_1d" method is used (make sure all segments have the same shape).
 
     Examples:
         >>> device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         >>> irreps_in = cue.Irreps("O3", "32x0e + 32x1o")
         >>> irreps_out = cue.Irreps("O3", "32x0e")
         >>> layer = SymmetricContraction(irreps_in, irreps_out, contraction_degree=3, num_elements=5, layout=cue.ir_mul, dtype=torch.float32, device=device)
-
-        Now `layer` can be used as part of a PyTorch model.
 
         The argument `original_mace` can be set to `True` to emulate the original MACE implementation.
 
@@ -111,11 +117,9 @@ class SymmetricContraction(torch.nn.Module):
         math_dtype: Optional[torch.dtype] = None,
         original_mace: bool = False,
         use_fallback: Optional[bool] = None,
+        method: Optional[str] = None,
     ):
         super().__init__()
-
-        if dtype is None:
-            dtype = torch.get_default_dtype()
 
         irreps_in, irreps_out = default_irreps(irreps_in, irreps_out)
         assert_same_group(irreps_in, irreps_out)
@@ -132,6 +136,8 @@ class SymmetricContraction(torch.nn.Module):
         self.etp, p = symmetric_contraction(
             irreps_in, irreps_out, range(1, contraction_degree + 1)
         )
+        same_shape = self.etp.all_same_segment_shape()
+
         if original_mace:
             self.register_buffer(
                 "projection", torch.tensor(p, dtype=dtype, device=device)
@@ -148,15 +154,59 @@ class SymmetricContraction(torch.nn.Module):
             )
         )
 
-        self.f = cuet.EquivariantTensorProduct(
-            self.etp,
-            layout=layout,
-            layout_in=layout_in,
-            layout_out=layout_out,
+        layout_in = default_layout(layout_in or layout)
+        self.transpose_in = cuet.TransposeIrrepsLayout(
+            self.etp.inputs[1].irreps,
+            source=layout_in,
+            target=self.etp.inputs[1].layout,
             device=device,
-            math_dtype=math_dtype or dtype,
             use_fallback=use_fallback,
         )
+
+        layout_out = default_layout(layout_out or layout)
+        self.transpose_out = cuet.TransposeIrrepsLayout(
+            self.etp.outputs[0].irreps,
+            source=self.etp.outputs[0].layout,
+            target=layout_out,
+            device=device,
+            use_fallback=use_fallback,
+        )
+
+        if method is None:
+            if use_fallback is None:
+                if same_shape:
+                    # No warning here as it's the default behavior
+                    self.method = "uniform_1d"
+                else:
+                    warnings.warn(
+                        "Segments are not the same shape, falling back to `naive` method\n"
+                        "You can consider making the segments uniform in the descriptor."
+                    )
+                    self.method = "naive"
+            else:
+                warnings.warn(
+                    "`use_fallback` is deprecated, please use `method` instead",
+                    DeprecationWarning,
+                )
+                if not same_shape and not use_fallback:
+                    raise ValueError(
+                        "`uniform_1d` method requires segments to be the same shape\n"
+                        "You can consider making the segments uniform in the descriptor."
+                    )
+                self.method = "naive" if use_fallback else "uniform_1d"
+        else:
+            if method == "uniform_1d" and not same_shape:
+                raise ValueError(
+                    "`uniform_1d` method requires segments to be the same shape\n"
+                    "You can consider making the segments uniform in the descriptor."
+                )
+            self.method = method
+
+        self.f = cuet.SegmentedPolynomial(
+            self.etp.polynomial,
+            method=self.method,
+            math_dtype=math_dtype,
+        ).to(device)
 
     def extra_repr(self) -> str:
         return (
@@ -187,4 +237,5 @@ class SymmetricContraction(torch.nn.Module):
             weight = self.weight
         weight = weight.flatten(1)
 
-        return self.f(weight, x, indices=indices)
+        output = self.f([weight, self.transpose_in(x)], input_indices={0: indices})
+        return self.transpose_out(output[0])
