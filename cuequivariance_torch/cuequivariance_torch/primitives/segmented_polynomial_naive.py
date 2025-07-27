@@ -379,12 +379,7 @@ class SegmentedPolynomialNaive(nn.Module):
             else (output_shapes[i].shape[0], shape)
             for i, shape in enumerate(self.out_size)
         ]
-        out_buffers = [
-            torch.zeros(
-                out_shape, dtype=inputs[out_dtype_ind].dtype, device=inputs[0].device
-            )
-            for (out_shape, out_dtype_ind) in zip(outputs_dims, self.dtypes)
-        ]
+        out_buffers = [torch.empty(0) for _ in range(self.num_outputs)]
 
         # Apply TPs
         for i, graph in enumerate(self.graphs):
@@ -399,17 +394,25 @@ class SegmentedPolynomialNaive(nn.Module):
                 if out.shape[0] == 1 and out_indices[b_out].shape[0] > 1:
                     out = out.expand(out_indices[b_out].shape[0], out.shape[1])
                 inds = out_indices[b_out].unsqueeze(-1).expand_as(out)
-                out_buffers[b_out].scatter_add_(0, inds, out)
+                tmp_out = torch.zeros(
+                    outputs_dims[b_out],
+                    dtype=inputs[self.dtypes[b_out]].dtype,
+                    device=inputs[0].device,
+                ).scatter_add_(0, inds, out)
             else:
-                if out_buffers[b_out].shape[0] == out.shape[0]:
-                    out_buffers[b_out] += out
-                elif out_buffers[b_out].shape[0] == 1:
-                    out_buffers[b_out] += out.sum(dim=0)
+                if outputs_dims[b_out][0] == out.shape[0]:
+                    tmp_out = out
+                elif outputs_dims[b_out][0] == 1:
+                    tmp_out = out.sum(dim=0, keepdim=True)
                 elif out.shape[0] == 1:
-                    out_buffers[b_out] += out.expand_as(out_buffers[b_out])
+                    tmp_out = out.expand(outputs_dims[b_out])
                 else:
                     raise ValueError(
-                        f"Input/output batch size mismatch {out_buffers[b_out].shape} vs {out.shape}."
+                        f"Input/output batch size mismatch {outputs_dims[b_out]} vs {out.shape}."
                     )
+            if out_buffers[b_out].size() == torch.Size([0]):
+                out_buffers[b_out] = tmp_out
+            else:
+                out_buffers[b_out] += tmp_out
 
         return out_buffers
