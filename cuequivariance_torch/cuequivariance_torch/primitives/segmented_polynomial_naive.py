@@ -405,7 +405,7 @@ class SegmentedPolynomialNaive(nn.Module):
                 elif outputs_dims[b_out][0] == 1:
                     tmp_out = out.sum(dim=0, keepdim=True)
                 elif out.shape[0] == 1:
-                    tmp_out = out.expand(outputs_dims[b_out])
+                    tmp_out = out.expand(outputs_dims[b_out]).clone()
                 else:
                     raise ValueError(
                         f"Input/output batch size mismatch {outputs_dims[b_out]} vs {out.shape}."
