@@ -479,10 +479,6 @@ def test_segmented_polynomial_indexed_linear(
 
     indexing = {"input": ("first", "indexed"), "output": ("all", "batch")}
 
-    # Comment this to run indexed_linear test locally
-    if method == "indexed_linear":
-        pytest.skip("Skipping for now because of missing backend")
-
     # Unsupported combinations
     if method == "uniform_1d":
         pytest.skip("Linear is not supported for uniform_1d")
