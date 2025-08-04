@@ -269,6 +269,8 @@ def attention_pair_bias(
     eps: float = 1e-5,
     attn_scale: Optional[float] = None,
     compute_pair_bias: bool = True,
+    is_cached_z: bool = False,
+    multiplicity: int = 1,
 ):
     """Compute attention with pairwise bias for diffusion models.
 
@@ -292,8 +294,12 @@ def attention_pair_bias(
     v : torch.Tensor
         Value tensor of shape (B * M, H, V, DH).
     z : torch.Tensor
-        Pairwise tensor of shape (B, U, V, z_dim) containing pairwise interactions,
-        where z_dim can be arbitrary. This is the main input for the pairwise bias computation.
+        if is_cached_z is False (default):
+            Pairwise tensor of shape (B, U, V, z_dim) containing pairwise interactions,
+            where z_dim can be arbitrary. This is the main input for the pairwise bias computation.
+        if is_cached_z is True:
+            Cached tensor of shape (B, H, U, V) containing the projected z tensor
+            (typically output from the first iteration).
     mask : torch.Tensor
         Attention mask of shape (B, V) or (B * M, V) indicating which positions
         should be masked (0 = masked, 1 = unmasked).
@@ -324,12 +330,17 @@ def attention_pair_bias(
     compute_pair_bias : bool, default=True
         Whether to compute pairwise bias. If False, z tensor should already
         be in the correct format (B, U, V, H).
+    is_cached_z : bool, default=False
+        Whether the z input is the original pairwise tensor or the projected z tensor
+        computed in a previous iteration.
+    multiplicity : int, default=1
+        Multiplicity (diffusion steps).
 
     Returns
     -------
-    torch.Tensor
-        Output tensor of shape (B * M, S, D) containing the attention output
+        - Output: torch.Tensor of shape (B * M, S, D) containing the attention output
         with pairwise bias applied.
+        - proj_z: torch.Tensor of shape (B * M, H, U, z_dim) containing the projected z tensor
 
     Notes
     -----
@@ -339,6 +350,10 @@ def attention_pair_bias(
       backend selection (CUDNN, Flash Attention, Efficient Attention).
     - The multiplicity parameter (M) allows processing multiple diffusion
       timesteps in a single forward pass.
+    - Supports reusing the projected z tensor from a previous iteration:
+      in the first iteration, the projected z tensor is computed from the original pairwise tensor
+      and returned as the proj_z output. In subsequent iterations, this value can be reused
+      by setting is_cached_z to True and passing it as the z input.
 
     Examples
     --------
@@ -419,4 +434,6 @@ def attention_pair_bias(
             eps=eps,
             attn_scale=attn_scale,
             compute_pair_bias=compute_pair_bias,
+            is_cached_z=is_cached_z,
+            multiplicity=multiplicity,
         )
