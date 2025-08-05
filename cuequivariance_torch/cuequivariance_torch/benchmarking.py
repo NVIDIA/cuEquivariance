@@ -50,7 +50,7 @@ def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
 
     fill_base = 200e-6  # Base time for stream filling
     n_warm = 0
-    n_iter = 3
+    n_iter = 5
     rejections: list[str] = []
     best_measurement = None
     best_variation = float("inf")
