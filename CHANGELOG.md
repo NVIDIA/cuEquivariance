@@ -1,5 +1,11 @@
 ## Latest Changes
 
+## 0.6.0 (next)
+
+### Known Issues
+- [JAX] The function `cuex.triangle_multiplicative_update` requires `triton<=3.3.1`. We are waiting for an update of the package `jax-triton`.
+
+
 ## 0.5.1 (2025-06-18)
 
 This release includes improvements to triangle multiplicative update with torch.compile support and enhanced tuning configuration options.
