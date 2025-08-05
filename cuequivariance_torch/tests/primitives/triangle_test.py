@@ -165,7 +165,7 @@ def test_attention_pair_bias():
         w_ln_z = torch.randn(z_dim, device=device, dtype=torch.float32)
         b_ln_z = torch.randn(z_dim, device=device, dtype=torch.float32)
         # Perform operation
-        output = cuet.attention_pair_bias(
+        output, proj_z = cuet.attention_pair_bias(
             s=s,
             q=q,
             k=k,
