@@ -41,6 +41,7 @@ from .operations.spherical_harmonics import SphericalHarmonics
 from .primitives.triangle import (
     triangle_attention,
     triangle_multiplicative_update,
+    attention_pair_bias,
     TriMulPrecision,
 )
 
@@ -66,6 +67,7 @@ __all__ = [
     "SphericalHarmonics",
     "triangle_attention",
     "triangle_multiplicative_update",
+    "attention_pair_bias",
     "TriMulPrecision",
     "layers",
 ]
