@@ -98,8 +98,8 @@ def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
         return avg_time, rate_before, rate_after, sync_time
 
     # Adaptive iteration counting to find optimal measurement parameters
-    n_warm = 1
-    n_iter = 1
+    n_warm = 2
+    n_iter = 5
     fill_base = 50e-6  # Base time for stream filling
     rejections: list[str] = []
     best_measurement = None
