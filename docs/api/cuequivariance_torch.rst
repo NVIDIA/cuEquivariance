@@ -70,7 +70,7 @@ Triangle
 
    triangle_attention
    triangle_multiplicative_update
-   .. attention_pair_bias, hari ?
+   attention_pair_bias
 
 Extra Modules
 -------------

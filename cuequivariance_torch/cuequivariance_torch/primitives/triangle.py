@@ -422,5 +422,5 @@ def attention_pair_bias(
             eps=eps,
             attn_scale=attn_scale,
             compute_pair_bias=compute_pair_bias,
-            # multiplicity=multiplicity,  # TODO hari?
+            multiplicity=multiplicity,
         )
