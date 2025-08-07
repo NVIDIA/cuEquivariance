@@ -331,7 +331,7 @@ def attention_pair_bias(
     Returns
     -------
         - Output: torch.Tensor of shape (B * M, S, D) containing the attention output
-        with pairwise bias applied.
+          with pairwise bias applied.
         - proj_z: torch.Tensor of shape (B, H, U, V) containing the projected z tensor
 
     Notes
