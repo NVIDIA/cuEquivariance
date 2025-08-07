@@ -84,8 +84,7 @@ class TensorProduct(torch.nn.Module):
                 logger.warning(f"CUDA implementation not available: {e}")
                 logger.warning(
                     "Did you forget to install the CUDA version of cuequivariance-ops-torch?\n"
-                    "Install it with one of the following commands:\n"
-                    "pip install cuequivariance-ops-torch-cu11\n"
+                    "Install it with the following command:\n"
                     "pip install cuequivariance-ops-torch-cu12"
                 )
 
