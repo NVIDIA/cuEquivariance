@@ -3,7 +3,7 @@
 ## 0.6.0 (next)
 
 ### Added
-- [Torch] Added `method` argument to `cuet.SegmentedPolynomial` to give users control over which backend solution is used (naive, uniform_1d, fused_tp, indexed_linear).
+- [Torch/JAX] Added `method` argument to `cuet.SegmentedPolynomial`/`cuex.segmented_polynomial` to give users control over which backend solution is used (naive, uniform_1d, fused_tp, indexed_linear).
 - [JAX] Added complete JAX bindings for triangle operations with `cuex.triangle_attention` and `cuex.triangle_multiplicative_update`:
 
 ### Breaking Changes
