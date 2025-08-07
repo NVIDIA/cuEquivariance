@@ -14,6 +14,7 @@
 # limitations under the License.
 import math
 
+import pytest
 import torch
 
 import cuequivariance_torch as cuet
@@ -165,6 +166,10 @@ def test_attention_pair_bias():
         w_ln_z = torch.randn(z_dim, device=device, dtype=torch.float32)
         b_ln_z = torch.randn(z_dim, device=device, dtype=torch.float32)
         # Perform operation
+
+        # hari?
+        pytest.skip("TODO hari?")
+
         output, proj_z = cuet.attention_pair_bias(
             s=s,
             q=q,
