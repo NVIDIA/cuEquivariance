@@ -46,8 +46,10 @@ The easiest way to install cuEquivariance is from `PyPi <https://pypi.org/>`_ us
 Requirements
 ------------
 
- - ``cuequivariance-ops-torch-*`` packages are available for Linux x86_64/aarch64 and require PyTorch 2.4.0 or later. aarch64 is only available for Python 3.12.
- - ``cuequivariance-ops-jax-cu12`` package is available for Linux x86_64/aarch64 and requires JAX 0.5.0 or later.
+ - ``cuequivariance-ops-torch-*`` and ``cuequivariance-ops-jax-cu12`` packages are available for Linux x86_64/aarch64
+- Python 3.10-3.12 is supported
+- PyTorch 2.4.0+ is required for torch packages
+- JAX 0.5.0+ is required for jax packages
 
 Organization
 ------------
