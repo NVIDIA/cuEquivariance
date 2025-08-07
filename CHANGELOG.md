@@ -2,6 +2,12 @@
 
 ## 0.6.0 (next)
 
+### Added
+- [Torch] Added `method` argument to `cuet.SegmentedPolynomial` to give users control over which backend solution is used (naive, uniform_1d, fused_tp, indexed_linear).
+
+### Breaking Changes
+- Dropped support for CUDA 11. Only CUDA 12 is now supported (`cuequivariance-ops-torch-cu12`, `cuequivariance-ops-jax-cu12`).
+
 ### Known Issues
 - [JAX] The function `cuex.triangle_multiplicative_update` requires `triton<=3.3.1`. We are waiting for an update of the package `jax-triton`.
 
