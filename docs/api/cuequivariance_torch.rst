@@ -27,8 +27,8 @@ Tensor Products
    :template: pytorch_module_template.rst
 
    SegmentedPolynomial
-   EquivariantTensorProduct
-   TensorProduct
+   .. EquivariantTensorProduct
+   .. TensorProduct
 
 Special Cases of Tensor Products
 --------------------------------
@@ -70,6 +70,7 @@ Triangle
 
    triangle_attention
    triangle_multiplicative_update
+   .. attention_pair_bias, hari ?
 
 Extra Modules
 -------------
