@@ -4,15 +4,22 @@
 
 ### Added
 - [Torch/JAX] Added `method` argument to `cuet.SegmentedPolynomial`/`cuex.segmented_polynomial` to give users control over which backend solution is used (naive, uniform_1d, fused_tp, indexed_linear).
-- [JAX] Added complete JAX bindings for triangle operations with `cuex.triangle_attention` and `cuex.triangle_multiplicative_update`:
+- [Torch] Added `cuet.attention_pair_bias` (support for cached z & further acceleration coming up soon)
+- [Torch] Added `cue_ops.triton.init_triton_cache()` for users to initialize triton cache before calling torch compiled triangular multiplicative update
+- [Torch/JAX] Fixed sequence limit on long sequences in triangle attention due to illegal memory access error
+- [Torch/JAX] Added torch fallback option for triangle kernels and attention pair bias using env vars: `CUEQ_TRIMUL_FALLBACK_THRESHOLD`, `CUEQ_TRIATTN_FALLBACK_THRESHOLD`, `CUEQ_ATTENTION_PAIR_BIAS_FALLBACK_THRESHOLD`. Defaults to fallback for seq_lens < 100
+- [Torch/JAX] Added support for optional input and output biases in `cuex.triangle_multiplicative_update`
+- [JAX] Added complete JAX bindings for triangle operations with `cuex.triangle_attention` and `cuex.triangle_multiplicative_update`
 
 ### Breaking Changes
 - Dropped support for CUDA 11. Only CUDA 12 is now supported (`cuequivariance-ops-torch-cu12`, `cuequivariance-ops-jax-cu12`).
+- [Torch/JAX] Simplified precision arg of triangular multiplicative updateNone (which defaults to DEFAULT with non-fp32 input and tf32 vs tf32x3 based on CUDA/CUDNN env var) and IEEE.
 
 ### Known Issues
 - [JAX] The function `cuex.triangle_multiplicative_update` requires `triton<=3.3.1`. We are waiting for an update of the package `jax-triton`.
 - [PyTorch] The function `cuet.triangle_multiplicative_update` requires `triton>=3.4.0` on Blackwell GPUs.
 - As a consequence of the two last point, `cuex.triangle_multiplicative_update` can't run on Blackwell GPUs.
+- `cuet.attention_pair_bias` does not support caching of projected pairwise tensor. We are working on adding support for this.
 
 ## 0.5.1 (2025-06-18)
 
