@@ -148,11 +148,11 @@ Normalizing the paths for the last operand such that the output is normalized to
 
 As we can see, the paths coefficients have been normalized.
 
-Now we are creating a tensor product from the descriptor and executing it. In PyTorch, we can use the :class:`cuet.TensorProduct <cuequivariance_torch.TensorProduct>` class.
+Now we are creating a tensor product from the descriptor and executing it. In PyTorch, we can use the :class:`cuet.SegmentedPolynomial <cuequivariance_torch.SegmentedPolynomial>` class.
 
 .. jupyter-execute::
 
-   linear_torch = cuet.TensorProduct(d, use_fallback=True)
+   linear_torch = cuet.SegmentedPolynomial(cue.SegmentedPolynomial.eval_last_operand(d), method="naive")
    linear_torch
 
 
@@ -163,7 +163,7 @@ Now we can execute the linear layer with random input and weight tensors.
    w = torch.randn(1, d.operands[0].size)
    x1 = torch.randn(3000, irreps1.dim)
 
-   x2 = linear_torch(w, x1)
+   [x2] = linear_torch([w, x1])
 
    assert x2.shape == (3000, irreps2.dim)
 

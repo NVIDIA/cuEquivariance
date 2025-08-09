@@ -21,6 +21,8 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 import datetime
+import os
+import sys
 
 import nvidia_sphinx_theme  # noqa
 
@@ -34,7 +36,8 @@ if current_year == 2024:
 else:
     copyright = f"2024-{current_year}, {author}"
 
-with open("../VERSION") as version_file:
+here = os.path.dirname(__file__)
+with open(os.path.join(here, "..", "VERSION")) as version_file:
     version = version_file.read().strip()
 release = version
 
@@ -51,7 +54,7 @@ extensions = [
 ]
 
 templates_path = ["_templates"]
-exclude_patterns = ["README.md", "_build", "Thumbs.db", ".DS_Store"]
+exclude_patterns = ["README.md", "_build", "public", "Thumbs.db", ".DS_Store"]
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
@@ -78,3 +81,10 @@ napoleon_numpy_docstring = False
 # -- Options for autodoc -----------------------------------------------------
 
 autodoc_member_order = "bysource"
+autosummary_generate = True
+autodoc_typehints = "description"
+autodoc_typehints_format = "short"
+autodoc_class_signature = "separated"
+
+# Ensure repository root is importable so top-level packages resolve
+sys.path.insert(0, os.path.abspath(os.path.join(here, "..")))
