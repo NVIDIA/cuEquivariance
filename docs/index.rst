@@ -30,7 +30,7 @@ cuEquivariance frontend is open-source and available on `GitHub <https://github.
 Installation
 ------------
 
-The easiest way to install cuEquivariance is from `PyPi <https://pypi.org/>`_ using `pip <https://pip.pypa.io/en/stable/>`_.
+The easiest way to install cuEquivariance is from `PyPI <https://pypi.org/>`_ using `pip <https://pip.pypa.io/en/stable/>`_.
 
 .. code-block:: bash
 
