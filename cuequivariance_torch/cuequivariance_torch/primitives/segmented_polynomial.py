@@ -44,9 +44,6 @@ except ImportError:
 class SegmentedPolynomial(nn.Module):
     """PyTorch module that computes a segmented polynomial.
 
-    Currently, it supports segmented polynomials where all segment sizes are the same,
-    and each operand is one- or zero-dimensional.
-
     Args:
         polynomial: The segmented polynomial to compute, an instance of
             `cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`.
