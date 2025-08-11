@@ -9,7 +9,7 @@
 - [Torch/JAX] Fixed sequence limit on long sequences in triangle attention due to illegal memory access error
 - [Torch/JAX] Added torch fallback option for triangle kernels and attention pair bias using env vars: `CUEQ_TRIMUL_FALLBACK_THRESHOLD`, `CUEQ_TRIATTN_FALLBACK_THRESHOLD`, `CUEQ_ATTENTION_PAIR_BIAS_FALLBACK_THRESHOLD`. Defaults to fallback for seq_lens < 100
 - [Torch/JAX] Added support for optional input and output biases in `cuex.triangle_multiplicative_update`
-- [JAX] Added complete JAX bindings for triangle operations with `cuex.triangle_attention` and `cuex.triangle_multiplicative_update`
+- [JAX] Added JAX bindings for triangle operations with `cuex.triangle_attention` and `cuex.triangle_multiplicative_update`
 
 ### Breaking Changes
 - Dropped support for CUDA 11. Only CUDA 12 is now supported (`cuequivariance-ops-torch-cu12`, `cuequivariance-ops-jax-cu12`).
