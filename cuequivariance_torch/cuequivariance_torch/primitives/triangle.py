@@ -181,11 +181,9 @@ def triangle_multiplicative_update(
         g_out_weight (torch.Tensor): Weight tensor for output gating of shape (D, D).
         g_out_bias (torch.Tensor): Bias tensor for output gating of shape (D,).
         eps (float, optional): Small constant for numerical stability in normalization. Defaults to 1e-5.
-        precision (Precision, optional): Precision mode for matrix multiplications. If None, uses TF32 if enabled in PyTorch using torch.backends.cuda.matmul.allow_tf32, otherwise uses default precision.
+        precision (Precision, optional): Precision mode for matrix multiplications.
             Available options:
-            - DEFAULT: Use default precision setting of triton.language.dot
-            - TF32: Use TensorFloat-32 precision
-            - TF32x3: Use TensorFloat-32 precision with 3x accumulation
+            - None: Defaults to triton language dot's default for non-32b input and for 32b input, tf32/tf32x3 based on 1/0 value set in torch.backends.cuda.matmul.allow_tf32
             - IEEE: Use IEEE 754 precision
 
     Returns:
@@ -326,7 +324,7 @@ def attention_pair_bias(
         Whether to compute pairwise bias. If False, z tensor should already
         be in the correct format (B, U, V, H).
     multiplicity : int, default=1
-        Multiplicity (diffusion steps).
+        Multiplicity (diffusion steps). Should be explicitly set if multiplicity > 1 and is not reflected in z tensor.
 
     Returns
     -------
@@ -342,6 +340,7 @@ def attention_pair_bias(
       backend selection (CUDNN, Flash Attention, Efficient Attention).
     - The multiplicity parameter (M) allows processing multiple diffusion
       timesteps in a single forward pass.
+    - Please discard the proj_z output as it's an experimental output to prevent breakage when we enable caching of pair bias tensor in next release. Currently it returns the pairwise bias tensor with mask applied.
 
     Examples
     --------
