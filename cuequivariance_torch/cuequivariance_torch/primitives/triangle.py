@@ -181,7 +181,7 @@ def triangle_multiplicative_update(
         g_out_weight (torch.Tensor): Optional weight tensor for output gating of shape (D, D).
         g_out_bias (torch.Tensor): Optional bias tensor for output gating of shape (D,).
         eps (float, optional): Small constant for numerical stability in normalization. Defaults to 1e-5.
-        precision (Precision, optional): Precision mode for matrix multiplications.
+        precision (TriMulPrecision, optional): Precision mode for matrix multiplications.
             Available options:
             - None: Defaults to triton language dot's default for non-32b input and for 32b input, tf32/tf32x3 based on 1/0 value set in torch.backends.cuda.matmul.allow_tf32
             - IEEE: Use IEEE 754 precision
