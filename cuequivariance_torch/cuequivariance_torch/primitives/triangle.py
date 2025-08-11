@@ -168,18 +168,18 @@ def triangle_multiplicative_update(
             D is the hidden dimension
         direction (str): Direction of the triangular projection. Must be either "outgoing" or "incoming".
         mask (torch.Tensor): Optional Mask tensor of shape (B, N, N) for masking the output.
-        norm_in_weight (torch.Tensor): Weight tensor for input normalization of shape (D,).
-        norm_in_bias (torch.Tensor): Bias tensor for input normalization of shape (D,).
-        p_in_weight (torch.Tensor): Weight tensor for input projection of shape (2D, D).
-        p_in_bias (torch.Tensor): Bias tensor for input projection of shape (D,).
-        g_in_weight (torch.Tensor): Weight tensor for input gating of shape (2D, D).
-        g_in_bias (torch.Tensor): Bias tensor for input gating of shape (D,).
-        norm_out_weight (torch.Tensor): Weight tensor for output normalization of shape (D,).
-        norm_out_bias (torch.Tensor): Bias tensor for output normalization of shape (D,).
-        p_out_weight (torch.Tensor): Weight tensor for output projection of shape (D, D).
-        p_out_bias (torch.Tensor): Bias tensor for output projection of shape (D,).
-        g_out_weight (torch.Tensor): Weight tensor for output gating of shape (D, D).
-        g_out_bias (torch.Tensor): Bias tensor for output gating of shape (D,).
+        norm_in_weight (torch.Tensor): Optional weight tensor for input normalization of shape (D,).
+        norm_in_bias (torch.Tensor): Optional bias tensor for input normalization of shape (D,).
+        p_in_weight (torch.Tensor): Optional weight tensor for input projection of shape (2D, D).
+        p_in_bias (torch.Tensor): Optional bias tensor for input projection of shape (D,).
+        g_in_weight (torch.Tensor): Optional weight tensor for input gating of shape (2D, D).
+        g_in_bias (torch.Tensor): Optional bias tensor for input gating of shape (D,).
+        norm_out_weight (torch.Tensor): Optional weight tensor for output normalization of shape (D,).
+        norm_out_bias (torch.Tensor): Optional bias tensor for output normalization of shape (D,).
+        p_out_weight (torch.Tensor): Optional weight tensor for output projection of shape (D, D).
+        p_out_bias (torch.Tensor): Optional bias tensor for output projection of shape (D,).
+        g_out_weight (torch.Tensor): Optional weight tensor for output gating of shape (D, D).
+        g_out_bias (torch.Tensor): Optional bias tensor for output gating of shape (D,).
         eps (float, optional): Small constant for numerical stability in normalization. Defaults to 1e-5.
         precision (Precision, optional): Precision mode for matrix multiplications.
             Available options:
@@ -316,16 +316,16 @@ def attention_pair_bias(
         Bias for gating projection of shape (D,).
     b_proj_o : Optional[torch.Tensor], default=None
         Bias for output projection of shape (D,).
-    inf : float, default=1e6
+    inf : Optional[float], default=1e6
         Large value used for masking invalid attention positions.
-    eps : float, default=1e-5
+    eps : Optional[float], default=1e-5
         Epsilon value for layer normalization.
     attn_scale : Optional[float], default=None
         Scaling factor for attention scores. If None, uses 1/sqrt(head_dim).
     compute_pair_bias : bool, default=True
         Whether to compute pairwise bias. If False, z tensor should already
         be in the correct format (B, U, V, H).
-    multiplicity : int, default=1
+    multiplicity : Optional[int], default=1
         Multiplicity (diffusion steps). Should be explicitly set if multiplicity > 1 and is not reflected in z tensor.
 
     Returns
