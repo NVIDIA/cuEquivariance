@@ -10,6 +10,7 @@ To build the documentation locally, you need to have sphinx installed. You can i
 pip install -r requirements.txt
 ```
 
+Then make sure `cuequivariance`, `cuequivariance-jax` and `cuequivariance-torch` are installed (use `pip install -e`).
 Then, you can build the documentation by running the following command:
 
 ```bash
