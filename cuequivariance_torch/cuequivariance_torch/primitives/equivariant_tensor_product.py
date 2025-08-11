@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import List, Optional, Union
+
 
 import torch
 
@@ -28,14 +28,14 @@ class Dispatcher(torch.nn.Module):
 
 
 class Transpose1Dispatcher(Dispatcher):
-    def forward(self, inputs: List[torch.Tensor]):
+    def forward(self, inputs: list[torch.Tensor]):
         ret = inputs.copy()
         ret[0] = self.tp[0](ret[0])
         return ret
 
 
 class Transpose2Dispatcher(Dispatcher):
-    def forward(self, inputs: List[torch.Tensor]):
+    def forward(self, inputs: list[torch.Tensor]):
         ret = inputs.copy()
         ret[0] = self.tp[0](ret[0])
         ret[1] = self.tp[1](ret[1])
@@ -43,7 +43,7 @@ class Transpose2Dispatcher(Dispatcher):
 
 
 class Transpose3Dispatcher(Dispatcher):
-    def forward(self, inputs: List[torch.Tensor]):
+    def forward(self, inputs: list[torch.Tensor]):
         ret = inputs.copy()
         ret[0] = self.tp[0](ret[0])
         ret[1] = self.tp[1](ret[1])
@@ -52,7 +52,7 @@ class Transpose3Dispatcher(Dispatcher):
 
 
 class Transpose4Dispatcher(Dispatcher):
-    def forward(self, inputs: List[torch.Tensor]):
+    def forward(self, inputs: list[torch.Tensor]):
         ret = inputs.copy()
         ret[0] = self.tp[0](ret[0])
         ret[1] = self.tp[1](ret[1])
@@ -72,8 +72,8 @@ TRANSPOSE_DISPATCHERS = [
 class TPDispatcher(cuet._Wrapper):
     def forward(
         self,
-        inputs: List[torch.Tensor],
-        indices: Optional[torch.Tensor] = None,
+        inputs: list[torch.Tensor],
+        indices: torch.Tensor | None = None,
     ) -> torch.Tensor:
         if indices is not None:
             # TODO: at some point we will have kernel for this
@@ -84,8 +84,8 @@ class TPDispatcher(cuet._Wrapper):
 class SymmetricTPDispatcher(Dispatcher):
     def forward(
         self,
-        inputs: List[torch.Tensor],
-        indices: Optional[torch.Tensor] = None,
+        inputs: list[torch.Tensor],
+        indices: torch.Tensor | None = None,
     ) -> torch.Tensor:
         assert indices is None
         return self.tp(inputs[0])
@@ -94,8 +94,8 @@ class SymmetricTPDispatcher(Dispatcher):
 class IWeightedSymmetricTPDispatcher(Dispatcher):
     def forward(
         self,
-        inputs: List[torch.Tensor],
-        indices: Optional[torch.Tensor] = None,
+        inputs: list[torch.Tensor],
+        indices: torch.Tensor | None = None,
     ) -> torch.Tensor:
         x0, x1 = inputs
         if indices is None:
@@ -146,14 +146,12 @@ class EquivariantTensorProduct(torch.nn.Module):
         self,
         e: cue.EquivariantTensorProduct,
         *,
-        layout: Optional[cue.IrrepsLayout] = None,
-        layout_in: Optional[
-            Union[cue.IrrepsLayout, tuple[Optional[cue.IrrepsLayout], ...]]
-        ] = None,
-        layout_out: Optional[cue.IrrepsLayout] = None,
-        device: Optional[torch.device] = None,
-        math_dtype: Optional[torch.dtype] = None,
-        use_fallback: Optional[bool] = None,
+        layout: cue.IrrepsLayout | None = None,
+        layout_in: cue.IrrepsLayout | tuple[cue.IrrepsLayout | None, ...] | None = None,
+        layout_out: cue.IrrepsLayout | None = None,
+        device: torch.device | None = None,
+        math_dtype: torch.dtype | None = None,
+        use_fallback: bool | None = None,
     ):
         super().__init__()
 
@@ -262,10 +260,10 @@ class EquivariantTensorProduct(torch.nn.Module):
     def forward(
         self,
         x0: torch.Tensor,
-        x1: Optional[torch.Tensor] = None,
-        x2: Optional[torch.Tensor] = None,
-        x3: Optional[torch.Tensor] = None,
-        indices: Optional[torch.Tensor] = None,
+        x1: torch.Tensor | None = None,
+        x2: torch.Tensor | None = None,
+        x3: torch.Tensor | None = None,
+        indices: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """
         If ``indices`` is not None, the first input is indexed by ``indices``.

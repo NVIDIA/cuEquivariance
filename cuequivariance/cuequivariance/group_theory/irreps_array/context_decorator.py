@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from functools import wraps
-from typing import Optional, Type, Union
+from typing import Type
 
 import cuequivariance as cue  # noqa: F401
 import cuequivariance.group_theory.irreps_array as irreps_array
@@ -52,8 +52,8 @@ class assume:
 
     def __init__(
         self,
-        irrep_class: Optional[Union[str, Type[Irrep]]] = None,
-        layout: Optional[irreps_array.IrrepsLayout] = None,
+        irrep_class: str | Type[Irrep] | None = None,
+        layout: irreps_array.IrrepsLayout | None = None,
     ):
         if isinstance(irrep_class, irreps_array.IrrepsLayout) and layout is None:
             irrep_class, layout = None, irrep_class

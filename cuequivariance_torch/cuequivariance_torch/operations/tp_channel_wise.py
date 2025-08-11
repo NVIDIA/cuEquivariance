@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import warnings
-from typing import Optional, Sequence
+from typing import Sequence
 
 import torch
 
@@ -61,17 +61,17 @@ class ChannelWiseTensorProduct(torch.nn.Module):
         irreps_in2: cue.Irreps,
         filter_irreps_out: Sequence[cue.Irrep] = None,
         *,
-        layout: Optional[cue.IrrepsLayout] = None,
-        layout_in1: Optional[cue.IrrepsLayout] = None,
-        layout_in2: Optional[cue.IrrepsLayout] = None,
-        layout_out: Optional[cue.IrrepsLayout] = None,
+        layout: cue.IrrepsLayout | None = None,
+        layout_in1: cue.IrrepsLayout | None = None,
+        layout_in2: cue.IrrepsLayout | None = None,
+        layout_out: cue.IrrepsLayout | None = None,
         shared_weights: bool = True,
         internal_weights: bool = None,
-        device: Optional[torch.device] = None,
-        dtype: Optional[torch.dtype] = None,
-        math_dtype: Optional[torch.dtype] = None,
-        use_fallback: Optional[bool] = None,
-        method: Optional[str] = None,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
+        math_dtype: torch.dtype | None = None,
+        use_fallback: bool | None = None,
+        method: str | None = None,
     ):
         super().__init__()
         irreps_in1, irreps_in2 = default_irreps(irreps_in1, irreps_in2)
@@ -186,11 +186,11 @@ class ChannelWiseTensorProduct(torch.nn.Module):
         self,
         x1: torch.Tensor,
         x2: torch.Tensor,
-        weight: Optional[torch.Tensor] = None,
-        indices_1: Optional[torch.Tensor] = None,
-        indices_2: Optional[torch.Tensor] = None,
-        indices_out: Optional[torch.Tensor] = None,
-        size_out: Optional[int] = None,
+        weight: torch.Tensor | None = None,
+        indices_1: torch.Tensor | None = None,
+        indices_2: torch.Tensor | None = None,
+        indices_out: torch.Tensor | None = None,
+        size_out: int | None = None,
     ) -> torch.Tensor:
         """
         Perform the forward pass of the channel-wise tensor product operation.

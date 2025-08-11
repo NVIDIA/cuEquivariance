@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import warnings
-from typing import Dict, Optional
 
 import torch
 
@@ -56,17 +55,17 @@ class Linear(torch.nn.Module):
         irreps_in: cue.Irreps,
         irreps_out: cue.Irreps,
         *,
-        layout: Optional[cue.IrrepsLayout] = None,
-        layout_in: Optional[cue.IrrepsLayout] = None,
-        layout_out: Optional[cue.IrrepsLayout] = None,
+        layout: cue.IrrepsLayout | None = None,
+        layout_in: cue.IrrepsLayout | None = None,
+        layout_out: cue.IrrepsLayout | None = None,
         shared_weights: bool = True,
         internal_weights: bool = None,
-        weight_classes: Optional[int] = 1,
-        device: Optional[torch.device] = None,
-        dtype: Optional[torch.dtype] = None,
-        math_dtype: Optional[torch.dtype] = None,
-        use_fallback: Optional[bool] = None,
-        method: Optional[str] = None,
+        weight_classes: int | None = 1,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
+        math_dtype: torch.dtype | None = None,
+        use_fallback: bool | None = None,
+        method: str | None = None,
     ):
         super().__init__()
         irreps_in, irreps_out = default_irreps(irreps_in, irreps_out)
@@ -146,8 +145,8 @@ class Linear(torch.nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-        weight: Optional[torch.Tensor] = None,
-        weight_indices: Optional[torch.Tensor] = None,
+        weight: torch.Tensor | None = None,
+        weight_indices: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """
         Forward pass of the linear layer.
@@ -175,7 +174,7 @@ class Linear(torch.nn.Module):
                 raise ValueError("Internal weights are used, weight should be None")
             weight = self.weight
 
-        input_indices: Dict[int, torch.Tensor] = {}
+        input_indices: dict[int, torch.Tensor] = {}
         if self.weight_classes > 1:
             if weight_indices is None:
                 raise ValueError(

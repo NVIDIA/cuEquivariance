@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import itertools
-from typing import Optional, Sequence
+from typing import Sequence
 
 import cuequivariance as cue
 from cuequivariance.group_theory.irreps_array.irrep_utils import into_list_of_irrep
@@ -87,7 +87,7 @@ def fully_connected_tensor_product(
 def full_tensor_product(
     irreps1: cue.Irreps,
     irreps2: cue.Irreps,
-    irreps3_filter: Optional[Sequence[cue.Irrep]] = None,
+    irreps3_filter: Sequence[cue.Irrep] | None = None,
 ) -> cue.EquivariantPolynomial:
     """
     subscripts: ``lhs[iu],rhs[jv],output[kuv]``
@@ -258,7 +258,7 @@ def _align_two_irreps(
 def elementwise_tensor_product(
     irreps1: cue.Irreps,
     irreps2: cue.Irreps,
-    irreps3_filter: Optional[Sequence[cue.Irrep]] = None,
+    irreps3_filter: Sequence[cue.Irrep] | None = None,
 ) -> cue.EquivariantPolynomial:
     """
     subscripts: ``lhs[iu],rhs[ju],output[ku]``

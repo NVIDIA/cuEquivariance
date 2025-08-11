@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, List, Optional, Tuple
 
 import torch
 import torch.fx
@@ -26,8 +25,8 @@ class IndexedLinear(nn.Module):
     def __init__(
         self,
         d: cue.SegmentedTensorProduct,
-        subscripts: Tuple[str],
-        dim_indices: List[List[int]],
+        subscripts: tuple[str],
+        dim_indices: list[list[int]],
     ):
         super().__init__()
         self.repr = d.__repr__()
@@ -114,12 +113,12 @@ def apply_linear(
     input2: torch.Tensor,
     Z: int,
     C: int,
-    uind: List[int],
-    vind: List[int],
-    wind: List[int],
-    reshape_inputs: List[int],
+    uind: list[int],
+    vind: list[int],
+    wind: list[int],
+    reshape_inputs: list[int],
     counts: torch.Tensor,
-    subscripts: Tuple[str],
+    subscripts: tuple[str],
     coefficients: torch.Tensor,
 ):
     from cuequivariance_ops_torch import indexed_linear
@@ -147,8 +146,8 @@ class SegmentedPolynomialIndexedLinear(nn.Module):
     def __init__(
         self,
         polynomial: cue.SegmentedPolynomial,
-        math_dtype: Optional[torch.dtype] = None,
-        output_dtype_map: List[int] = None,
+        math_dtype: torch.dtype | None = None,
+        output_dtype_map: list[int] = None,
         name: str = "segmented_polynomial",
     ):
         super().__init__()
@@ -211,10 +210,10 @@ class SegmentedPolynomialIndexedLinear(nn.Module):
 
     def forward(
         self,
-        inputs: List[torch.Tensor],
-        input_indices: Dict[int, torch.Tensor],
-        output_shapes: Dict[int, torch.Tensor],
-        output_indices: Dict[int, torch.Tensor],
+        inputs: list[torch.Tensor],
+        input_indices: dict[int, torch.Tensor],
+        output_shapes: dict[int, torch.Tensor],
+        output_indices: dict[int, torch.Tensor],
     ):
         for i, x, size in zip(range(self.num_inputs), inputs, self.input_sizes):
             if x.ndim == 0:
@@ -304,7 +303,7 @@ class SegmentedPolynomialIndexedLinear(nn.Module):
         return out_buffers
 
 
-# Dict of subscripts to
+# dict of subscripts to
 # [canonicalized subscripts, indices of Z, C, u, v, w, whether to reshape each input]
 # indices in a list [input1.shape, input2.shape, output.shape, [1]]
 SUBDICT = {

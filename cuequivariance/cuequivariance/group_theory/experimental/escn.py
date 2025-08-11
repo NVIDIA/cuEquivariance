@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Optional
+
 
 import numpy as np
 
@@ -23,8 +23,8 @@ import cuequivariance as cue
 def escn_tp(
     irreps_in: cue.Irreps,
     irreps_out: cue.Irreps,
-    m_max: Optional[int] = None,
-    l_max: Optional[int] = None,
+    m_max: int | None = None,
+    l_max: int | None = None,
 ) -> cue.EquivariantPolynomial:
     """
     subsrcipts: ``weights[uv],input[u],output[v]``
@@ -117,7 +117,7 @@ def escn_tp(
 def escn_tp_compact(
     irreps_in: cue.Irreps,
     irreps_out: cue.Irreps,
-    m_max: Optional[int] = None,
+    m_max: int | None = None,
 ) -> cue.SegmentedPolynomial:
     """
     subsrcipts: ``weights[uv],input[u],output[v]``

@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import warnings
-from typing import Optional
 
 import torch
 
@@ -109,15 +108,15 @@ class SymmetricContraction(torch.nn.Module):
         contraction_degree: int,
         num_elements: int,
         *,
-        layout: Optional[cue.IrrepsLayout] = None,
-        layout_in: Optional[cue.IrrepsLayout] = None,
-        layout_out: Optional[cue.IrrepsLayout] = None,
-        device: Optional[torch.device] = None,
-        dtype: Optional[torch.dtype] = None,
-        math_dtype: Optional[torch.dtype] = None,
+        layout: cue.IrrepsLayout | None = None,
+        layout_in: cue.IrrepsLayout | None = None,
+        layout_out: cue.IrrepsLayout | None = None,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
+        math_dtype: torch.dtype | None = None,
         original_mace: bool = False,
-        use_fallback: Optional[bool] = None,
-        method: Optional[str] = None,
+        use_fallback: bool | None = None,
+        method: str | None = None,
     ):
         super().__init__()
 

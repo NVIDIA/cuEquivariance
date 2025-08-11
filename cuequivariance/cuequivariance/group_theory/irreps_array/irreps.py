@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import dataclasses
 import re
-from typing import Any, Callable, NamedTuple, Optional, Sequence, Type, Union
+from typing import Any, Callable, NamedTuple, Sequence, Type
 
 import cuequivariance as cue
 
@@ -94,7 +94,7 @@ class Irreps:
         assert isinstance(irrep_class, type) and issubclass(irrep_class, cue.Irrep)
 
         irrep_class: Type[cue.Irrep]
-        input: Union[Irreps, str, Sequence[MulIrrep, cue.Irrep]] = args[1]
+        input: Irreps | str | Sequence[MulIrrep, cue.Irrep] = args[1]
 
         mulreps = []
 
@@ -161,14 +161,14 @@ class Irreps:
     def __iter__(self):
         return iter(self._mulirreps)
 
-    def __getitem__(self, index: Union[int, slice]) -> Union[MulIrrep, Irreps]:
+    def __getitem__(self, index: int | slice) -> MulIrrep | Irreps:
         x = self._mulirreps[index]
 
         if isinstance(index, slice):
             return Irreps(self.irrep_class, x)
         return x
 
-    def __contains__(self, rep: Union[str, cue.Irrep]) -> bool:
+    def __contains__(self, rep: str | cue.Irrep) -> bool:
         # This function does not check the multiplicity of the representation!
         rep = self.irrep_class._from(rep)
         return any(mulrep.ir == rep for mulrep in self)
@@ -186,7 +186,7 @@ class Irreps:
         """
         return Irreps(self.irrep_class, [(mul, self.irrep_class.trivial())])
 
-    def count(self, rep: Union[str, cue.Irrep]) -> int:
+    def count(self, rep: str | cue.Irrep) -> int:
         """
         Count the total multiplicity of a representation.
 
@@ -377,9 +377,9 @@ class Irreps:
     def filter(
         self,
         *,
-        keep: Union[str, Sequence[cue.Irrep], Callable[[MulIrrep], bool], None] = None,
-        drop: Union[str, Sequence[cue.Irrep], Callable[[MulIrrep], bool], None] = None,
-        mask: Optional[Sequence[bool]] = None,
+        keep: str | Sequence[cue.Irrep] | Callable[[MulIrrep], bool] | None = None,
+        drop: str | Sequence[cue.Irrep] | Callable[[MulIrrep], bool] | None = None,
+        mask: Sequence[bool] | None = None,
     ) -> Irreps:
         """
         Filter the representation.
@@ -404,8 +404,8 @@ class Irreps:
     def filter_mask(
         self,
         *,
-        keep: Union[str, Sequence[cue.Irrep], Callable[[MulIrrep], bool], None] = None,
-        drop: Union[str, Sequence[cue.Irrep], Callable[[MulIrrep], bool], None] = None,
+        keep: str | Sequence[cue.Irrep] | Callable[[MulIrrep], bool] | None = None,
+        drop: str | Sequence[cue.Irrep] | Callable[[MulIrrep], bool] | None = None,
     ) -> list[bool]:
         if keep is not None:
             if drop is not None:
@@ -423,7 +423,7 @@ class Irreps:
                 )  # pragma: no cover
 
     def _filter_keep(
-        self, keep: Union[str, Sequence[cue.Irrep], Callable[[MulIrrep], bool]]
+        self, keep: str | Sequence[cue.Irrep] | Callable[[MulIrrep], bool]
     ):
         if callable(keep):
             return [keep(mulrep) for mulrep in self]
@@ -438,7 +438,7 @@ class Irreps:
         return [mulrep.ir in keep for mulrep in self]
 
     def _filter_drop(
-        self, drop: Union[str, Sequence[cue.Irrep], Callable[[MulIrrep], bool]]
+        self, drop: str | Sequence[cue.Irrep] | Callable[[MulIrrep], bool]
     ):
         if callable(drop):
             return [not drop(mulrep) for mulrep in self]

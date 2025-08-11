@@ -14,7 +14,7 @@
 # limitations under the License.
 import itertools
 import math
-from typing import Generator, Tuple
+from typing import Generator
 
 # we cannot import cuequivariance as cue because of circular import
 from cuequivariance.segmented_polynomials import SegmentedTensorProduct, Subscripts
@@ -24,7 +24,7 @@ def dispatch(
     descriptor: SegmentedTensorProduct,
     targets: list[Subscripts],
     permutation_mode: str,
-) -> Generator[Tuple[SegmentedTensorProduct, Tuple[int, ...]], None, None]:
+) -> Generator[tuple[SegmentedTensorProduct, tuple[int, ...]], None, None]:
     """Dispatch a descriptor to a target subscripts.
 
     Args:

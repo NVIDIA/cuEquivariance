@@ -17,7 +17,7 @@ from __future__ import annotations
 import copy
 import dataclasses
 import warnings
-from typing import Optional, Sequence, Union
+from typing import Sequence
 
 import cuequivariance as cue
 
@@ -58,7 +58,7 @@ class EquivariantTensorProduct:
 
     def __init__(
         self,
-        d: Union[cue.SegmentedTensorProduct, Sequence[cue.SegmentedTensorProduct]],
+        d: cue.SegmentedTensorProduct | Sequence[cue.SegmentedTensorProduct],
         operands: list[cue.Rep],
         symmetrize: bool = True,
     ):
@@ -206,7 +206,7 @@ class EquivariantTensorProduct:
         """Move an operand to the back."""
         return self.move_operand(src, -1)
 
-    def squeeze_modes(self, modes: Optional[str] = None) -> EquivariantTensorProduct:
+    def squeeze_modes(self, modes: str | None = None) -> EquivariantTensorProduct:
         """Squeeze the modes."""
         return EquivariantTensorProduct(
             [d.squeeze_modes(modes) for d in self.ds], self.operands
@@ -258,7 +258,7 @@ class EquivariantTensorProduct:
             return inputs + [inputs[-1]] * (num_operand - self.num_operands) + [output]
 
     def change_layout(
-        self, layout: Union[cue.IrrepsLayout, list[cue.IrrepsLayout]]
+        self, layout: cue.IrrepsLayout | list[cue.IrrepsLayout]
     ) -> EquivariantTensorProduct:
         if isinstance(layout, Sequence):
             layouts = list(layout)
@@ -320,7 +320,7 @@ class EquivariantTensorProduct:
         return sum(d.flop(-1) for d in self.ds) * batch_size
 
     def memory_cost(
-        self, batch_sizes: tuple[int, ...], itemsize: Union[int, tuple[int, ...]]
+        self, batch_sizes: tuple[int, ...], itemsize: int | tuple[int, ...]
     ) -> int:
         """Compute the number of memory accesses of the tensor product."""
         assert len(batch_sizes) == self.num_operands
@@ -370,7 +370,7 @@ class EquivariantTensorProduct:
         e = EquivariantTensorProduct(ds, tuple(self.operands[i] for i in oids))
         return e, tuple(oids)
 
-    def stp_operand(self, oid: int) -> Optional[cue.SegmentedOperand]:
+    def stp_operand(self, oid: int) -> cue.SegmentedOperand | None:
         # output
         if oid == self.num_operands - 1:
             return self.ds[0].operands[-1]

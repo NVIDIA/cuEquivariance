@@ -14,7 +14,6 @@
 # limitations under the License.
 import logging
 import math
-from typing import List, Optional
 
 import torch
 import torch.fx
@@ -38,9 +37,9 @@ class SymmetricTensorProduct(torch.nn.Module):
         self,
         descriptors: list[cue.SegmentedTensorProduct],
         *,
-        device: Optional[torch.device] = None,
-        math_dtype: Optional[torch.dtype] = None,
-        use_fallback: Optional[bool] = None,
+        device: torch.device | None = None,
+        math_dtype: torch.dtype | None = None,
+        use_fallback: bool | None = None,
     ):
         super().__init__()
 
@@ -113,9 +112,9 @@ class IWeightedSymmetricTensorProduct(torch.nn.Module):
         self,
         descriptors: list[cue.SegmentedTensorProduct],
         *,
-        device: Optional[torch.device] = None,
-        math_dtype: Optional[torch.dtype] = None,
-        use_fallback: Optional[bool] = None,
+        device: torch.device | None = None,
+        math_dtype: torch.dtype | None = None,
+        use_fallback: bool | None = None,
     ):
         super().__init__()
 
@@ -223,7 +222,7 @@ class CUDAKernel(torch.nn.Module):
     def __init__(
         self,
         ds: list[cue.SegmentedTensorProduct],
-        device: Optional[torch.device],
+        device: torch.device | None,
         math_dtype: torch.dtype,
     ):
         super().__init__()
@@ -341,8 +340,8 @@ class FallbackImpl(torch.nn.Module):
     def __init__(
         self,
         stps: list[cue.SegmentedTensorProduct],
-        device: Optional[torch.device],
-        math_dtype: Optional[torch.dtype],
+        device: torch.device | None,
+        math_dtype: torch.dtype | None,
     ):
         super().__init__()
         self.fs = torch.nn.ModuleList(
@@ -357,7 +356,7 @@ class FallbackImpl(torch.nn.Module):
     def forward(
         self, x0: torch.Tensor, i0: torch.Tensor, x1: torch.Tensor
     ) -> torch.Tensor:
-        outs: List[torch.Tensor] = []
+        outs: list[torch.Tensor] = []
 
         for f in self.fs:
             if f.num_operands == 8:

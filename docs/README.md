@@ -4,7 +4,13 @@ This is the documentation folder for the project. It uses sphinx to generate the
 
 ## Building the documentation locally
 
-To build the documentation locally, you need to have sphinx installed. You can install it using pip:
+To build the documentation locally, you can use the nox session which handles all dependencies:
+
+```bash
+nox -s docs
+```
+
+Alternatively, if you prefer to install dependencies manually using the packages installed in your environement:
 
 ```bash
 pip install -r requirements.txt

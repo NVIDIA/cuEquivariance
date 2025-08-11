@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import warnings
-from typing import Dict, List, Optional
 
 import torch
 import torch.fx
@@ -44,7 +43,7 @@ class FusedTP3(nn.Module):
     def __repr__(self):
         return self.repr
 
-    def forward(self, inputs: List[torch.Tensor]):
+    def forward(self, inputs: list[torch.Tensor]):
         return self.tp(inputs[0], inputs[1])
 
 
@@ -68,7 +67,7 @@ class FusedTP4(nn.Module):
     def __repr__(self):
         return self.repr
 
-    def forward(self, inputs: List[torch.Tensor]):
+    def forward(self, inputs: list[torch.Tensor]):
         return self.tp(inputs[0], inputs[1], inputs[2])
 
 
@@ -76,8 +75,8 @@ class SegmentedPolynomialFusedTP(nn.Module):
     def __init__(
         self,
         polynomial: cue.SegmentedPolynomial,
-        math_dtype: Optional[torch.dtype] = None,
-        output_dtype_map: List[int] = None,
+        math_dtype: torch.dtype | None = None,
+        output_dtype_map: list[int] = None,
         name: str = "segmented_polynomial",
     ):
         super().__init__()
@@ -159,10 +158,10 @@ class SegmentedPolynomialFusedTP(nn.Module):
 
     def forward(
         self,
-        inputs: List[torch.Tensor],
-        input_indices: Dict[int, torch.Tensor],
-        output_shapes: Dict[int, torch.Tensor],
-        output_indices: Dict[int, torch.Tensor],
+        inputs: list[torch.Tensor],
+        input_indices: dict[int, torch.Tensor],
+        output_shapes: dict[int, torch.Tensor],
+        output_indices: dict[int, torch.Tensor],
     ):
         for i, x, size in zip(range(self.num_inputs), inputs, self.input_sizes):
             if x.ndim == 0:

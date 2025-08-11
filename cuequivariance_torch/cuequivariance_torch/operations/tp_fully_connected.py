@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import warnings
-from typing import Optional
 
 import torch
 
@@ -60,17 +59,17 @@ class FullyConnectedTensorProduct(torch.nn.Module):
         irreps_in2: cue.Irreps,
         irreps_out: cue.Irreps,
         *,
-        layout: Optional[cue.IrrepsLayout] = None,
-        layout_in1: Optional[cue.IrrepsLayout] = None,
-        layout_in2: Optional[cue.IrrepsLayout] = None,
-        layout_out: Optional[cue.IrrepsLayout] = None,
+        layout: cue.IrrepsLayout | None = None,
+        layout_in1: cue.IrrepsLayout | None = None,
+        layout_in2: cue.IrrepsLayout | None = None,
+        layout_out: cue.IrrepsLayout | None = None,
         shared_weights: bool = True,
         internal_weights: bool = None,
-        device: Optional[torch.device] = None,
-        dtype: Optional[torch.dtype] = None,
-        math_dtype: Optional[torch.dtype] = None,
-        use_fallback: Optional[bool] = None,
-        method: Optional[str] = None,
+        device: torch.device | None = None,
+        dtype: torch.dtype | None = None,
+        math_dtype: torch.dtype | None = None,
+        use_fallback: bool | None = None,
+        method: str | None = None,
     ):
         super().__init__()
         irreps_in1, irreps_in2, irreps_out = default_irreps(
@@ -164,7 +163,7 @@ class FullyConnectedTensorProduct(torch.nn.Module):
         self,
         x1: torch.Tensor,
         x2: torch.Tensor,
-        weight: Optional[torch.Tensor] = None,
+        weight: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """
         Perform the forward pass of the fully connected tensor product operation.

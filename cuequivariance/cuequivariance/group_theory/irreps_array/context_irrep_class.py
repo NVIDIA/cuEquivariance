@@ -12,12 +12,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Type, Union
+from typing import Type
 
 import cuequivariance as cue
 from cuequivariance.group_theory.representations import Irrep
 
-_irrep_class: Union[None, str, Type[Irrep]] = None
+_irrep_class: None | str | Type[Irrep] = None
 
 
 def get_irrep_scope(raising: bool = True) -> Type[Irrep]:

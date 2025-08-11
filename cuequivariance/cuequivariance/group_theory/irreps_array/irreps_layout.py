@@ -15,7 +15,6 @@
 from __future__ import annotations
 
 from enum import Enum, auto
-from typing import Union
 
 import cuequivariance as cue
 
@@ -43,9 +42,7 @@ class IrrepsLayout(Enum):
     mul_ir = auto()
     ir_mul = auto()
 
-    def shape(
-        self, mulir: Union[cue.MulIrrep, tuple[int, cue.Irrep]]
-    ) -> tuple[int, int]:
+    def shape(self, mulir: cue.MulIrrep | tuple[int, cue.Irrep]) -> tuple[int, int]:
         """The shape of the tensor for the given layout.
 
         Examples:
@@ -74,7 +71,7 @@ class IrrepsLayout(Enum):
         return self.__repr__()
 
     @staticmethod
-    def as_layout(layout: Union[str, IrrepsLayout, None]) -> IrrepsLayout:
+    def as_layout(layout: str | IrrepsLayout | None) -> IrrepsLayout:
         if isinstance(layout, IrrepsLayout):
             return layout
         if layout is None:
