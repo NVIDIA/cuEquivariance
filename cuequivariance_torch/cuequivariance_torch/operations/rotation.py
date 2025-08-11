@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import warnings
-from typing import Optional
 
 import torch
 
@@ -48,13 +47,13 @@ class Rotation(torch.nn.Module):
         self,
         irreps: cue.Irreps,
         *,
-        layout: Optional[cue.IrrepsLayout] = None,
-        layout_in: Optional[cue.IrrepsLayout] = None,
-        layout_out: Optional[cue.IrrepsLayout] = None,
-        device: Optional[torch.device] = None,
-        math_dtype: Optional[torch.dtype] = None,
-        use_fallback: Optional[bool] = None,
-        method: Optional[str] = None,
+        layout: cue.IrrepsLayout | None = None,
+        layout_in: cue.IrrepsLayout | None = None,
+        layout_out: cue.IrrepsLayout | None = None,
+        device: torch.device | None = None,
+        math_dtype: torch.dtype | None = None,
+        use_fallback: bool | None = None,
+        method: str | None = None,
     ):
         super().__init__()
         (irreps,) = default_irreps(irreps)
@@ -230,13 +229,13 @@ class Inversion(torch.nn.Module):
         self,
         irreps: cue.Irreps,
         *,
-        layout: Optional[cue.IrrepsLayout] = None,
-        layout_in: Optional[cue.IrrepsLayout] = None,
-        layout_out: Optional[cue.IrrepsLayout] = None,
-        device: Optional[torch.device] = None,
-        math_dtype: Optional[torch.dtype] = None,
-        use_fallback: Optional[bool] = None,
-        method: Optional[str] = None,
+        layout: cue.IrrepsLayout | None = None,
+        layout_in: cue.IrrepsLayout | None = None,
+        layout_out: cue.IrrepsLayout | None = None,
+        device: torch.device | None = None,
+        math_dtype: torch.dtype | None = None,
+        use_fallback: bool | None = None,
+        method: str | None = None,
     ):
         super().__init__()
         (irreps,) = default_irreps(irreps)

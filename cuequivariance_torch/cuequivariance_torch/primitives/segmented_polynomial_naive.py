@@ -16,7 +16,7 @@
 import logging
 import math
 from functools import partial
-from typing import Dict, List, Optional, OrderedDict
+from typing import OrderedDict
 
 import torch
 import torch.fx
@@ -27,7 +27,7 @@ import cuequivariance as cue
 logger = logging.getLogger(__name__)
 
 
-def prod(numbers: List[int]):
+def prod(numbers: list[int]):
     """
     This method is a workaround for script() not recognizing math.prod()
     """
@@ -60,8 +60,8 @@ def disable_type_conv(t):
 
 def _tensor_product_fx(
     descriptor: cue.SegmentedTensorProduct,
-    device: Optional[torch.device],
-    math_dtype: Optional[torch.dtype],
+    device: torch.device | None,
+    math_dtype: torch.dtype | None,
     optimize_einsums: bool,
 ) -> torch.nn.Module:
     """
@@ -248,37 +248,37 @@ class graph_inputs_base(nn.Module):
 
 # Single classes for each number of inputs for scripting purposes
 class graph_inputs0(graph_inputs_base):
-    def forward(self, inputs: List[torch.Tensor]):
+    def forward(self, inputs: list[torch.Tensor]):
         return self.graph()
 
 
 class graph_inputs1(graph_inputs_base):
-    def forward(self, inputs: List[torch.Tensor]):
+    def forward(self, inputs: list[torch.Tensor]):
         return self.graph(inputs[0])
 
 
 class graph_inputs2(graph_inputs_base):
-    def forward(self, inputs: List[torch.Tensor]):
+    def forward(self, inputs: list[torch.Tensor]):
         return self.graph(inputs[0], inputs[1])
 
 
 class graph_inputs3(graph_inputs_base):
-    def forward(self, inputs: List[torch.Tensor]):
+    def forward(self, inputs: list[torch.Tensor]):
         return self.graph(inputs[0], inputs[1], inputs[2])
 
 
 class graph_inputs4(graph_inputs_base):
-    def forward(self, inputs: List[torch.Tensor]):
+    def forward(self, inputs: list[torch.Tensor]):
         return self.graph(inputs[0], inputs[1], inputs[2], inputs[3])
 
 
 class graph_inputs5(graph_inputs_base):
-    def forward(self, inputs: List[torch.Tensor]):
+    def forward(self, inputs: list[torch.Tensor]):
         return self.graph(inputs[0], inputs[1], inputs[2], inputs[3], inputs[4])
 
 
 class graph_inputs6(graph_inputs_base):
-    def forward(self, inputs: List[torch.Tensor]):
+    def forward(self, inputs: list[torch.Tensor]):
         return self.graph(
             inputs[0], inputs[1], inputs[2], inputs[3], inputs[4], inputs[5]
         )
@@ -299,8 +299,8 @@ class SegmentedPolynomialNaive(nn.Module):
     def __init__(
         self,
         polynomial: cue.SegmentedPolynomial,
-        math_dtype: Optional[torch.dtype] = None,
-        output_dtype_map: List[int] = None,
+        math_dtype: torch.dtype | None = None,
+        output_dtype_map: list[int] = None,
         name: str = "segmented_polynomial",
     ):
         super().__init__()
@@ -342,10 +342,10 @@ class SegmentedPolynomialNaive(nn.Module):
 
     def forward(
         self,
-        inputs: List[torch.Tensor],
-        input_indices: Dict[int, torch.Tensor],
-        output_shapes: Dict[int, torch.Tensor],
-        output_indices: Dict[int, torch.Tensor],
+        inputs: list[torch.Tensor],
+        input_indices: dict[int, torch.Tensor],
+        output_shapes: dict[int, torch.Tensor],
+        output_indices: dict[int, torch.Tensor],
     ):
         for i, x, size in zip(range(self.num_inputs), inputs, self.input_sizes):
             if x.ndim == 0:

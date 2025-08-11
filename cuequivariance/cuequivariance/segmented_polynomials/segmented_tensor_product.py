@@ -25,7 +25,7 @@ import logging
 import math
 import re
 import zlib
-from typing import Any, Callable, Optional, Sequence, Union
+from typing import Any, Callable, Sequence
 
 import numpy as np
 import opt_einsum
@@ -486,8 +486,8 @@ class SegmentedTensorProduct:
         return self.get_dimensions_dict().get(m, set())
 
     def get_path_dimensions_dict(
-        self, path: Union[int, Path], *, returns_sets: bool = False
-    ) -> dict[str, Union[int, set[int]]]:
+        self, path: int | Path, *, returns_sets: bool = False
+    ) -> dict[str, int | set[int]]:
         """Get the dimensions of a specific path."""
         if isinstance(path, int):
             path = self.paths[path]
@@ -505,8 +505,8 @@ class SegmentedTensorProduct:
         return {m: next(iter(dd)) for m, dd in dims.items()}
 
     def get_path_dim(
-        self, path: Union[int, Path], m: str, *, returns_set=False
-    ) -> Union[int, set[int]]:
+        self, path: int | Path, m: str, *, returns_set=False
+    ) -> int | set[int]:
         """Get the dimension of a specific mode in a specific path."""
         if isinstance(path, int):
             path = self.paths[path]
@@ -514,15 +514,13 @@ class SegmentedTensorProduct:
             m, set() if returns_set else 0
         )
 
-    def segment_slice(self, operand: int, path: Union[int, Path]) -> slice:
+    def segment_slice(self, operand: int, path: int | Path) -> slice:
         """Get the slice of the segment in the given operand selected by the given path."""
         if isinstance(path, int):
             path = self.paths[path]
         return self.operands[operand].segment_slices()[path.indices[operand]]
 
-    def get_segment_shape(
-        self, operand: int, path: Union[int, Path]
-    ) -> tuple[int, ...]:
+    def get_segment_shape(self, operand: int, path: int | Path) -> tuple[int, ...]:
         """Get the shape of the segment in the given operand selected by the given path."""
         if isinstance(path, int):
             path = self.paths[path]
@@ -656,9 +654,9 @@ class SegmentedTensorProduct:
     def insert_path(
         self,
         path_index,
-        *segments: Union[int, tuple[int, ...], dict[str, int], None],
+        *segments: int | tuple[int, ...] | dict[str, int] | None,
         c: np.ndarray,
-        dims: Optional[dict[str, int]] = None,
+        dims: dict[str, int] | None = None,
     ) -> int:
         """Insert a path at a specific index."""
         path_index = _canonicalize_index("path_index", path_index, len(self.paths) + 1)
@@ -741,9 +739,9 @@ class SegmentedTensorProduct:
 
     def add_path(
         self,
-        *segments: Union[int, tuple[int, ...], dict[str, int], None],
+        *segments: int | tuple[int, ...] | dict[str, int] | None,
         c: np.ndarray,
-        dims: Optional[dict[str, int]] = None,
+        dims: dict[str, int] | None = None,
     ) -> int:
         """
         Add a path to the descriptor.
@@ -810,7 +808,7 @@ class SegmentedTensorProduct:
         )
 
     def add_segment(
-        self, operand: int, segment: Union[tuple[int, ...], dict[str, int]]
+        self, operand: int, segment: tuple[int, ...] | dict[str, int]
     ) -> int:
         """Add a segment to the descriptor."""
         if isinstance(segment, dict):
@@ -818,7 +816,7 @@ class SegmentedTensorProduct:
         return self.operands[operand].add_segment(segment)
 
     def add_segments(
-        self, operand: int, segments: list[Union[tuple[int, ...], dict[str, int]]]
+        self, operand: int, segments: list[tuple[int, ...] | dict[str, int]]
     ):
         """Add segments to the descriptor."""
         for segment in segments:
@@ -845,7 +843,7 @@ class SegmentedTensorProduct:
         return d
 
     def add_or_rename_modes(
-        self, subscripts: str, *, mapping: Optional[dict[str, str]] = None
+        self, subscripts: str, *, mapping: dict[str, str] | None = None
     ) -> SegmentedTensorProduct:
         r"""
         Return a new descriptor with the modes renamed according to the new subscripts.
@@ -919,7 +917,7 @@ class SegmentedTensorProduct:
         return D
 
     def add_or_transpose_modes(
-        self, subscripts: str, dims: Optional[dict[str, int]] = None
+        self, subscripts: str, dims: dict[str, int] | None = None
     ) -> SegmentedTensorProduct:
         r"""
         Return a new descriptor with the modes transposed according to the new subscripts.
@@ -1059,7 +1057,7 @@ class SegmentedTensorProduct:
         )
 
     def sort_paths(
-        self, operands_ordering: Optional[Union[int, Sequence[int]]] = None
+        self, operands_ordering: int | Sequence[int] | None = None
     ) -> SegmentedTensorProduct:
         """
         Sort the paths by their indices in lexicographical order.
@@ -1085,7 +1083,7 @@ class SegmentedTensorProduct:
             ),
         )
 
-    def squeeze_modes(self, modes: Optional[str] = None) -> SegmentedTensorProduct:
+    def squeeze_modes(self, modes: str | None = None) -> SegmentedTensorProduct:
         """
         Squeeze the descriptor by removing dimensions that are always 1.
 
@@ -1626,7 +1624,7 @@ class SegmentedTensorProduct:
             self.coefficient_subscripts, skip_zeros=skip_zeros, force=force
         )
 
-    def consolidate_modes(self, modes: Optional[str] = None) -> SegmentedTensorProduct:
+    def consolidate_modes(self, modes: str | None = None) -> SegmentedTensorProduct:
         """
         Consolidate the descriptor by merging modes together.
 

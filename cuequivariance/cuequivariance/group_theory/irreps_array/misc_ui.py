@@ -15,12 +15,12 @@
 from __future__ import annotations
 
 import warnings
-from typing import Any, Generator, Optional, Union
+from typing import Any, Generator
 
 import cuequivariance as cue
 
 
-def default_layout(layout: Optional[cue.IrrepsLayout]) -> cue.IrrepsLayout:
+def default_layout(layout: cue.IrrepsLayout | None) -> cue.IrrepsLayout:
     if layout is None:
         warnings.warn(
             "layout is not specified, defaulting to cue.mul_ir. This is the layout used in the e3nn library."
@@ -42,7 +42,7 @@ def assert_same_group(*irreps_: cue.Irreps) -> None:
 
 
 def default_irreps(
-    *irreps_: Union[cue.Irreps, Any],
+    *irreps_: cue.Irreps | Any,
 ) -> Generator[cue.Irreps, None, None]:
     for irreps in irreps_:
         if isinstance(irreps, cue.Irreps):

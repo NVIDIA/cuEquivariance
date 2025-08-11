@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Any, Optional, Tuple
+from typing import Any
 
 import torch
 
@@ -27,10 +27,10 @@ def triangle_attention(
     k: torch.Tensor,
     v: torch.Tensor,
     bias: torch.Tensor,
-    mask: Optional[torch.Tensor] = None,
-    scale: Optional[float] = None,
+    mask: torch.Tensor | None = None,
+    scale: float | None = None,
     return_aux: bool = False,
-) -> torch.Tensor | Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     r"""
     Triangle Attention
 
@@ -126,21 +126,21 @@ def triangle_attention(
 def triangle_multiplicative_update(
     x: torch.Tensor,
     direction: str = "outgoing",
-    mask: Optional[torch.Tensor] = None,
-    norm_in_weight: Optional[torch.Tensor] = None,
-    norm_in_bias: Optional[torch.Tensor] = None,
-    p_in_weight: Optional[torch.Tensor] = None,
-    p_in_bias: Optional[torch.Tensor] = None,
-    g_in_weight: Optional[torch.Tensor] = None,
-    g_in_bias: Optional[torch.Tensor] = None,
-    norm_out_weight: Optional[torch.Tensor] = None,
-    norm_out_bias: Optional[torch.Tensor] = None,
-    p_out_weight: Optional[torch.Tensor] = None,
-    p_out_bias: Optional[torch.Tensor] = None,
-    g_out_weight: Optional[torch.Tensor] = None,
-    g_out_bias: Optional[torch.Tensor] = None,
+    mask: torch.Tensor | None = None,
+    norm_in_weight: torch.Tensor | None = None,
+    norm_in_bias: torch.Tensor | None = None,
+    p_in_weight: torch.Tensor | None = None,
+    p_in_bias: torch.Tensor | None = None,
+    g_in_weight: torch.Tensor | None = None,
+    g_in_bias: torch.Tensor | None = None,
+    norm_out_weight: torch.Tensor | None = None,
+    norm_out_bias: torch.Tensor | None = None,
+    p_out_weight: torch.Tensor | None = None,
+    p_out_bias: torch.Tensor | None = None,
+    g_out_weight: torch.Tensor | None = None,
+    g_out_bias: torch.Tensor | None = None,
     eps: float = 1e-5,
-    precision: Optional[TriMulPrecision] = None,
+    precision: TriMulPrecision | None = None,
 ) -> torch.Tensor:
     """Apply triangle multiplicative update operation.
 
@@ -262,14 +262,14 @@ def attention_pair_bias(
     w_proj_o: torch.Tensor,
     w_ln_z: torch.Tensor,
     b_ln_z: torch.Tensor,
-    b_proj_z: Optional[torch.Tensor] = None,
-    b_proj_g: Optional[torch.Tensor] = None,
-    b_proj_o: Optional[torch.Tensor] = None,
-    inf: Optional[float] = 1e6,
-    eps: Optional[float] = 1e-5,
-    attn_scale: Optional[float] = None,
-    compute_pair_bias: Optional[bool] = True,
-    multiplicity: Optional[int] = 1,
+    b_proj_z: torch.Tensor | None = None,
+    b_proj_g: torch.Tensor | None = None,
+    b_proj_o: torch.Tensor | None = None,
+    inf: float | None = 1e6,
+    eps: float | None = 1e-5,
+    attn_scale: float | None = None,
+    compute_pair_bias: bool | None = True,
+    multiplicity: int | None = 1,
 ):
     """Compute attention with pairwise bias for diffusion models.
 

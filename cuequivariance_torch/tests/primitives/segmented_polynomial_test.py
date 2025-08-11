@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Dict, List, Optional
+
 
 import pytest
 import torch
@@ -151,7 +151,7 @@ class Grad(torch.nn.Module):
         self.m = m
 
     @staticmethod
-    def scalar(tensors: List[torch.Tensor]) -> torch.Tensor:
+    def scalar(tensors: list[torch.Tensor]) -> torch.Tensor:
         result = tensors[0].pow(2).sum()
         for t in tensors[1:]:
             result += t.pow(2).sum()
@@ -159,10 +159,10 @@ class Grad(torch.nn.Module):
 
     def forward(
         self,
-        inputs: List[torch.Tensor],
-        input_indices: Optional[Dict[int, torch.Tensor]] = None,
-        output_shapes: Optional[Dict[int, torch.Tensor]] = None,
-        output_indices: Optional[Dict[int, torch.Tensor]] = None,
+        inputs: list[torch.Tensor],
+        input_indices: dict[int, torch.Tensor] | None = None,
+        output_shapes: dict[int, torch.Tensor] | None = None,
+        output_indices: dict[int, torch.Tensor] | None = None,
     ):
         return torch.autograd.grad(
             [self.scalar(self.m(inputs, input_indices, output_shapes, output_indices))],

@@ -15,7 +15,6 @@
 from __future__ import annotations
 
 import math
-from typing import Optional, Union
 
 import numpy as np
 
@@ -25,8 +24,8 @@ import cuequivariance as cue
 def compute_last_operand(
     descriptor: cue.SegmentedTensorProduct,
     *inputs: np.ndarray,
-    segment_axes: Union[int, list[int]] = -1,
-    dtype: Optional[np.dtype] = None,
+    segment_axes: int | list[int] = -1,
+    dtype: np.dtype | None = None,
 ) -> np.ndarray:
     r"""
     Compute the last operand of a segmented tensor product.
@@ -92,7 +91,7 @@ def primitive_compute_last_operand(
     segment_offsets: list[list[slice]],  # segment_offsets[oid][sid] = offset
     segment_sizes: list[list[int]],  # segment_sizes[oid][sid] = size
     indices: list[tuple[int, ...]],  # indices[pid][oid] = sid
-    coefficients: Union[list[np.ndarray], np.ndarray],  # coefficients[pid] = coeff
+    coefficients: list[np.ndarray] | np.ndarray,  # coefficients[pid] = coeff
     segment_axes: list[int],  # segment_axes[oid] = axis
     dtype,
     *inputs: np.ndarray,

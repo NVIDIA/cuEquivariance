@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, List, Optional, Sequence, Tuple, Union
+from typing import Callable, Sequence
 
 import numpy as np
 
@@ -41,9 +41,9 @@ class NumpyIrrepsArray:
 
     def __init__(
         self,
-        irreps: Union[cue.Irreps, str],
+        irreps: cue.Irreps | str,
         array: np.ndarray,
-        layout: Optional[cue.IrrepsLayout] = None,
+        layout: cue.IrrepsLayout | None = None,
     ):
         irreps = cue.Irreps(irreps)
         layout = cue.IrrepsLayout.as_layout(layout)
@@ -61,7 +61,7 @@ class NumpyIrrepsArray:
         object.__setattr__(self, "layout", layout)
 
     @property
-    def shape(self) -> Tuple[int, ...]:
+    def shape(self) -> tuple[int, ...]:
         """Shape of the data array."""
         return self.array.shape
 
@@ -85,7 +85,7 @@ class NumpyIrrepsArray:
         return f"{self.irreps} {r}"
 
     @property
-    def segments(self) -> List[np.ndarray]:
+    def segments(self) -> list[np.ndarray]:
         """List of segments of the data array."""
         leading_shape = self.array.shape[:-1]
         return [
@@ -105,7 +105,7 @@ class NumpyIrrepsArray:
     def __neg__(self: NumpyIrrepsArray) -> NumpyIrrepsArray:
         return NumpyIrrepsArray(self.irreps, -self.array, self.layout)
 
-    def reshape(self, shape: Tuple[int, ...]) -> NumpyIrrepsArray:
+    def reshape(self, shape: tuple[int, ...]) -> NumpyIrrepsArray:
         if not (shape[-1] == -1 or shape[-1] == self.irreps.dim):
             raise ValueError(
                 f"Last dimension of shape should be -1 or {self.irreps.dim}, got {shape[-1]}"
@@ -136,8 +136,8 @@ class NumpyIrrepsArray:
     def filter(
         self,
         *,
-        keep: Union[str, Sequence[cue.Irrep], Callable[[cue.MulIrrep], bool]] = None,
-        drop: Union[str, Sequence[cue.Irrep], Callable[[cue.MulIrrep], bool]] = None,
+        keep: str | Sequence[cue.Irrep] | Callable[[cue.MulIrrep], bool] | None = None,
+        drop: str | Sequence[cue.Irrep] | Callable[[cue.MulIrrep], bool] | None = None,
     ) -> NumpyIrrepsArray:
         if keep is not None:
             if drop is not None:
@@ -151,7 +151,7 @@ class NumpyIrrepsArray:
                 return self
 
     def _filter_keep(
-        self, keep: Union[str, Sequence[cue.Irrep], Callable[[cue.MulIrrep], bool]]
+        self, keep: str | Sequence[cue.Irrep] | Callable[[cue.MulIrrep], bool]
     ):
         if callable(keep):
             return from_segments(
@@ -182,7 +182,7 @@ class NumpyIrrepsArray:
         )
 
     def _filter_drop(
-        self, drop: Union[str, Sequence[cue.Irrep], Callable[[cue.MulIrrep], bool]]
+        self, drop: str | Sequence[cue.Irrep] | Callable[[cue.MulIrrep], bool]
     ):
         if callable(drop):
             return from_segments(
@@ -221,9 +221,9 @@ class NumpyIrrepsArray:
 
 def from_segments(
     irreps: cue.Irreps,
-    segments: List[np.ndarray],
+    segments: list[np.ndarray],
     layout: cue.IrrepsLayout,
-    leading_shape: Tuple[int, ...],
+    leading_shape: tuple[int, ...],
 ) -> NumpyIrrepsArray:
     if len(segments) != len(irreps):
         raise ValueError(f"Expected {len(irreps)} segments, got {len(segments)}")
@@ -252,12 +252,8 @@ def from_segments(
 
 
 def concatenate(
-    arrays: Union[
-        list[cue.Irreps],
-        list[Union[cue.IrrepsAndLayout]],
-        list[NumpyIrrepsArray],
-    ],
-) -> Union[cue.Irreps, cue.IrrepsAndLayout, NumpyIrrepsArray]:
+    arrays: list[cue.Irreps] | list[cue.IrrepsAndLayout] | list[NumpyIrrepsArray],
+) -> cue.Irreps | cue.IrrepsAndLayout | NumpyIrrepsArray:
     if len(arrays) == 0:
         raise ValueError("Expected at least one input")
 

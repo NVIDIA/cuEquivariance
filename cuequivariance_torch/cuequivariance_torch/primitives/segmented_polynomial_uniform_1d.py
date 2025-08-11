@@ -14,7 +14,6 @@
 # limitations under the License.
 
 from itertools import accumulate
-from typing import Dict, List, Optional
 
 import torch
 import torch.nn as nn
@@ -43,22 +42,22 @@ try:
             num_inputs: int,
             num_outputs: int,
             num_index: int,
-            buffer_dim: List[int],
-            buffer_num_segments: List[int],
-            batch_dim: List[int],
-            index_buffer: List[int],
-            dtypes: List[int],
+            buffer_dim: list[int],
+            buffer_num_segments: list[int],
+            batch_dim: list[int],
+            index_buffer: list[int],
+            dtypes: list[int],
             num_operations: int,
-            num_operands: List[int],
-            operations: List[int],
-            num_paths: List[int],
-            path_indices_start: List[int],
-            path_coefficients_start: List[int],
-            path_indices: List[int],
-            path_coefficients: List[float],
+            num_operands: list[int],
+            operations: list[int],
+            num_paths: list[int],
+            path_indices_start: list[int],
+            path_coefficients_start: list[int],
+            path_indices: list[int],
+            path_coefficients: list[float],
             batch_size: int,
-            tensors: List[torch.Tensor],
-        ) -> List[torch.Tensor]:
+            tensors: list[torch.Tensor],
+        ) -> list[torch.Tensor]:
             return torch.ops.cuequivariance_ops.tensor_product_uniform_1d_jit(
                 name,
                 math_dtype,
@@ -90,8 +89,8 @@ class SegmentedPolynomialFromUniform1dJit(nn.Module):
     def __init__(
         self,
         polynomial: cue.SegmentedPolynomial,
-        math_dtype: Optional[torch.dtype] = torch.float32,
-        output_dtype_map: List[int] = None,
+        math_dtype: torch.dtype | None = torch.float32,
+        output_dtype_map: list[int] = None,
         name: str = "segmented_polynomial",
     ):
         super().__init__()
@@ -194,10 +193,10 @@ class SegmentedPolynomialFromUniform1dJit(nn.Module):
 
     def forward(
         self,
-        inputs: List[torch.Tensor],
-        input_indices: Dict[int, torch.Tensor],
-        output_shapes: Dict[int, torch.Tensor],
-        output_indices: Dict[int, torch.Tensor],
+        inputs: list[torch.Tensor],
+        input_indices: dict[int, torch.Tensor],
+        output_shapes: dict[int, torch.Tensor],
+        output_indices: dict[int, torch.Tensor],
     ):
         num_index = 0
         batch_dim = [self.BATCH_DIM_AUTO] * (self.num_inputs + self.num_outputs)

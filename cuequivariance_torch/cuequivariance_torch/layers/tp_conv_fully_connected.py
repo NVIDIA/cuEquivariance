@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Optional, Sequence, Union
+from typing import Sequence
 
 import torch
 from torch import nn
@@ -101,10 +101,10 @@ class FullyConnectedTensorProductConv(nn.Module):
         sh_irreps: cue.Irreps,
         out_irreps: cue.Irreps,
         batch_norm: bool = True,
-        mlp_channels: Optional[Sequence[int]] = None,
-        mlp_activation: Union[nn.Module, Sequence[nn.Module], None] = nn.GELU(),
+        mlp_channels: Sequence[int] | None = None,
+        mlp_activation: nn.Module | Sequence[nn.Module] | None = nn.GELU(),
         layout: cue.IrrepsLayout = None,  # e3nn_compat_mode
-        use_fallback: Optional[bool] = None,
+        use_fallback: bool | None = None,
     ):
         super().__init__()
 
@@ -159,10 +159,10 @@ class FullyConnectedTensorProductConv(nn.Module):
         edge_sh: torch.Tensor,
         edge_emb: torch.Tensor,
         graph: tuple[torch.Tensor, tuple[int, int]],
-        src_scalars: Optional[torch.Tensor] = None,
-        dst_scalars: Optional[torch.Tensor] = None,
+        src_scalars: torch.Tensor | None = None,
+        dst_scalars: torch.Tensor | None = None,
         reduce: str = "mean",
-        edge_envelope: Optional[torch.Tensor] = None,
+        edge_envelope: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """Forward pass.
 
@@ -259,7 +259,7 @@ def scatter_reduce(
     src: torch.Tensor,
     index: torch.Tensor,
     dim: int = 0,
-    dim_size: Optional[int] = None,  # value of out.size(dim)
+    dim_size: int | None = None,  # value of out.size(dim)
     reduce: str = "sum",  # "sum", "prod", "mean", "amax", "amin"
 ):
     # scatter() expects index to be int64

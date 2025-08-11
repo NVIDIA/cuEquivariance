@@ -15,7 +15,6 @@
 from __future__ import annotations
 
 import re
-from typing import Union
 
 SEP = ","
 
@@ -29,7 +28,7 @@ class Subscripts(str):
         - "ui,vj,uvk+ijk" could be the subscripts of a full tensor product (without weights but with Clebsch-Gordan coefficients).
     """
 
-    def __new__(cls, subscripts: Union[str, list[str]]):
+    def __new__(cls, subscripts: str | list[str]):
         if not isinstance(subscripts, str):
             subscripts = SEP.join(subscripts)
         subscripts = subscripts.replace("_", ",")

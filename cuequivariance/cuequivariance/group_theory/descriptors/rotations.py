@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Optional
+
 
 import numpy as np
 
@@ -49,7 +49,7 @@ def fixed_axis_angle_rotation(
 
 
 def yxy_rotation(
-    irreps: cue.Irreps, lmax: Optional[int] = None
+    irreps: cue.Irreps, lmax: int | None = None
 ) -> cue.EquivariantPolynomial:
     """
     subsrcipts: ``gamma[],beta[],alpha[],input[u],output[u]``
@@ -86,7 +86,7 @@ def yxy_rotation(
 
 
 def xy_rotation(
-    irreps: cue.Irreps, lmax: Optional[int] = None
+    irreps: cue.Irreps, lmax: int | None = None
 ) -> cue.EquivariantPolynomial:
     """
     subsrcipts: ``gamma[],beta[],input[u],output[u]``
@@ -109,7 +109,7 @@ def xy_rotation(
 
 
 def yx_rotation(
-    irreps: cue.Irreps, lmax: Optional[int] = None
+    irreps: cue.Irreps, lmax: int | None = None
 ) -> cue.EquivariantPolynomial:
     """
     subsrcipts: ``phi[],theta[],input[u],output[u]``
@@ -132,7 +132,7 @@ def yx_rotation(
 
 
 def y_rotation(
-    irreps: cue.Irreps, lmax: Optional[int] = None
+    irreps: cue.Irreps, lmax: int | None = None
 ) -> cue.EquivariantPolynomial:
     """
     subsrcipts: ``phi[],input[u],output[u]``
@@ -201,7 +201,7 @@ def y_rotation(
 
 
 def x_rotation(
-    irreps: cue.Irreps, lmax: Optional[int] = None
+    irreps: cue.Irreps, lmax: int | None = None
 ) -> cue.EquivariantPolynomial:
     """
     subsrcipts: ``phi[],input[u],output[u]``

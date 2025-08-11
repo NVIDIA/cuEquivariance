@@ -16,7 +16,7 @@ import logging
 import math
 import warnings
 from functools import partial
-from typing import List, Optional, OrderedDict, Tuple
+from typing import OrderedDict
 
 import torch
 import torch.fx
@@ -26,7 +26,7 @@ import cuequivariance as cue
 logger = logging.getLogger(__name__)
 
 
-def prod(numbers: List[int]):
+def prod(numbers: list[int]):
     """
     This method is a workaround for script() not recognizing math.prod()
     """
@@ -58,9 +58,9 @@ class TensorProduct(torch.nn.Module):
         self,
         descriptor: cue.SegmentedTensorProduct,
         *,
-        device: Optional[torch.device] = None,
-        math_dtype: Optional[torch.dtype] = None,
-        use_fallback: Optional[bool] = None,
+        device: torch.device | None = None,
+        math_dtype: torch.dtype | None = None,
+        use_fallback: bool | None = None,
     ):
         super().__init__()
         self.descriptor = descriptor
@@ -105,12 +105,12 @@ class TensorProduct(torch.nn.Module):
     def forward(
         self,
         x0: torch.Tensor,
-        x1: Optional[torch.Tensor] = None,
-        x2: Optional[torch.Tensor] = None,
-        x3: Optional[torch.Tensor] = None,
-        x4: Optional[torch.Tensor] = None,
-        x5: Optional[torch.Tensor] = None,
-        x6: Optional[torch.Tensor] = None,
+        x1: torch.Tensor | None = None,
+        x2: torch.Tensor | None = None,
+        x3: torch.Tensor | None = None,
+        x4: torch.Tensor | None = None,
+        x5: torch.Tensor | None = None,
+        x6: torch.Tensor | None = None,
     ):
         r"""
         Perform the tensor product based on the specified descriptor.
@@ -198,7 +198,7 @@ def disable_type_conv(t):
 
 def _tensor_product_fx(
     descriptor: cue.SegmentedTensorProduct,
-    device: Optional[torch.device],
+    device: torch.device | None,
     math_dtype: torch.dtype,
     optimize_einsums: bool,
 ) -> torch.nn.Module:
@@ -355,42 +355,42 @@ class _Caller(torch.nn.Module):
 
 
 class _NoArgCaller(_Caller):
-    def forward(self, args: List[torch.Tensor]):
+    def forward(self, args: list[torch.Tensor]):
         return self.module()
 
 
 class _OneArgCaller(_Caller):
-    def forward(self, args: List[torch.Tensor]):
+    def forward(self, args: list[torch.Tensor]):
         return self.module(args[0])
 
 
 class _TwoArgCaller(_Caller):
-    def forward(self, args: List[torch.Tensor]):
+    def forward(self, args: list[torch.Tensor]):
         return self.module(args[0], args[1])
 
 
 class _ThreeArgCaller(_Caller):
-    def forward(self, args: List[torch.Tensor]):
+    def forward(self, args: list[torch.Tensor]):
         return self.module(args[0], args[1], args[2])
 
 
 class _FourArgCaller(_Caller):
-    def forward(self, args: List[torch.Tensor]):
+    def forward(self, args: list[torch.Tensor]):
         return self.module(args[0], args[1], args[2], args[3])
 
 
 class _FiveArgCaller(_Caller):
-    def forward(self, args: List[torch.Tensor]):
+    def forward(self, args: list[torch.Tensor]):
         return self.module(args[0], args[1], args[2], args[3], args[4])
 
 
 class _SixArgCaller(_Caller):
-    def forward(self, args: List[torch.Tensor]):
+    def forward(self, args: list[torch.Tensor]):
         return self.module(args[0], args[1], args[2], args[3], args[4], args[5])
 
 
 class _SevenArgCaller(_Caller):
-    def forward(self, args: List[torch.Tensor]):
+    def forward(self, args: list[torch.Tensor]):
         return self.module(
             args[0], args[1], args[2], args[3], args[4], args[5], args[6]
         )
@@ -414,13 +414,13 @@ class _Wrapper(torch.nn.Module):
         self.module = CALL_DISPATCHERS[descriptor.num_operands - 1](module)
         self.descriptor = descriptor
 
-    def forward(self, args: List[torch.Tensor]):
+    def forward(self, args: list[torch.Tensor]):
         return self.module(args)
 
 
 def _tensor_product_cuda(
     descriptor: cue.SegmentedTensorProduct,
-    device: Optional[torch.device],
+    device: torch.device | None,
     math_dtype: torch.dtype,
 ) -> torch.nn.Module:
     logger.debug(f"Starting search for a cuda kernel for {descriptor}")
@@ -498,7 +498,7 @@ def _tensor_product_cuda(
         return FusedTensorProductOp4(descriptor, perm[:3], device, math_dtype)
 
 
-def _permutation_module(permutation: Tuple[int, ...]):
+def _permutation_module(permutation: tuple[int, ...]):
     graph = torch.fx.Graph()
     inputs = [graph.placeholder(f"input_{i}") for i in range(len(permutation))]
     graph.output([inputs[i] for i in permutation])
@@ -509,8 +509,8 @@ class FusedTensorProductOp3(torch.nn.Module):
     def __init__(
         self,
         descriptor: cue.SegmentedTensorProduct,
-        perm: Tuple[int, int],
-        device: Optional[torch.device],
+        perm: tuple[int, int],
+        device: torch.device | None,
         math_dtype: torch.dtype,
     ):
         super().__init__()
@@ -564,8 +564,8 @@ class FusedTensorProductOp4(torch.nn.Module):
     def __init__(
         self,
         descriptor: cue.SegmentedTensorProduct,
-        perm: Tuple[int, int, int],
-        device: Optional[torch.device],
+        perm: tuple[int, int, int],
+        device: torch.device | None,
         math_dtype: torch.dtype,
     ):
         super().__init__()
@@ -622,7 +622,7 @@ class TensorProductUniform1d(torch.nn.Module):
     def __init__(
         self,
         descriptor: cue.SegmentedTensorProduct,
-        device: Optional[torch.device],
+        device: torch.device | None,
         math_dtype: torch.dtype,
     ):
         super().__init__()
@@ -696,7 +696,7 @@ class TensorProductUniform3x1dIndexed(torch.nn.Module):
     def __init__(
         self,
         descriptor: cue.SegmentedTensorProduct,
-        device: Optional[torch.device],
+        device: torch.device | None,
         math_dtype: torch.dtype,
     ):
         super().__init__()
@@ -728,9 +728,9 @@ class TensorProductUniform3x1dIndexed(torch.nn.Module):
         self,
         x0: torch.Tensor,
         x1: torch.Tensor,
-        op_idx0: Optional[torch.Tensor],
-        op_idx1: Optional[torch.Tensor],
-        op_idx_out: Optional[torch.Tensor],
+        op_idx0: torch.Tensor | None,
+        op_idx1: torch.Tensor | None,
+        op_idx_out: torch.Tensor | None,
         num_output_rows: int,
     ) -> torch.Tensor:
         if (
@@ -753,7 +753,7 @@ class TensorProductUniform4x1dIndexed(torch.nn.Module):
     def __init__(
         self,
         descriptor: cue.SegmentedTensorProduct,
-        device: Optional[torch.device],
+        device: torch.device | None,
         math_dtype: torch.dtype,
     ):
         super().__init__()
@@ -786,10 +786,10 @@ class TensorProductUniform4x1dIndexed(torch.nn.Module):
         x0: torch.Tensor,
         x1: torch.Tensor,
         x2: torch.Tensor,
-        op_idx0: Optional[torch.Tensor],
-        op_idx1: Optional[torch.Tensor],
-        op_idx2: Optional[torch.Tensor],
-        op_idx_out: Optional[torch.Tensor],
+        op_idx0: torch.Tensor | None,
+        op_idx1: torch.Tensor | None,
+        op_idx2: torch.Tensor | None,
+        op_idx_out: torch.Tensor | None,
         num_output_rows,
     ) -> torch.Tensor:
         if (

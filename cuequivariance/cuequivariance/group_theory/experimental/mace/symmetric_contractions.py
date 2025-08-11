@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from functools import cache
-from typing import Optional
 
 import numpy as np
 
@@ -95,7 +94,7 @@ def symmetric_contraction_cached(
 
 
 def _flatten(
-    x: np.ndarray, axis_start: Optional[int] = None, axis_end: Optional[int] = None
+    x: np.ndarray, axis_start: int | None = None, axis_end: int | None = None
 ) -> np.ndarray:
     x = np.asarray(x)
     if axis_start is None:
@@ -197,7 +196,7 @@ def U_matrix_real(
 # This function is an adaptation of https://github.com/ACEsuit/mace/blob/bd412319b11c5f56c37cec6c4cfae74b2a49ff43/mace/tools/cg.py
 @cache
 def _wigner_nj(
-    irreps_in: cue.Irreps, degree: int, filter_ir_mid: Optional[frozenset[cue.Irrep]]
+    irreps_in: cue.Irreps, degree: int, filter_ir_mid: frozenset[cue.Irrep] | None
 ) -> list[tuple[cue.Irrep, np.ndarray]]:
     assert degree > 0
 

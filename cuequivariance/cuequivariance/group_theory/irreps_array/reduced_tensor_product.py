@@ -16,7 +16,7 @@ import functools
 import itertools
 import logging
 from math import prod
-from typing import FrozenSet, Iterator, List, Optional, Sequence, Tuple, Union
+from typing import FrozenSet, Iterator, Sequence
 
 import numpy as np
 
@@ -51,11 +51,11 @@ History of the different versions of the code:
 
 
 def reduced_tensor_product_basis(
-    formula_or_irreps_list: Union[str, List[irreps_array.Irreps]],
+    formula_or_irreps_list: str | list[irreps_array.Irreps],
     *,
     layout: irreps_array.IrrepsLayout = irreps_array.mul_ir,
     epsilon: float = 1e-5,
-    keep_ir: Optional[Union[irreps_array.Irreps, List[Irrep]]] = None,
+    keep_ir: irreps_array.Irreps | list[Irrep] | None = None,
     _use_optimized_implementation: bool = True,
     **irreps_dict,
 ) -> irreps_array.NumpyIrrepsArray:
@@ -81,7 +81,7 @@ def reduced_tensor_product_basis(
     if isinstance(formula_or_irreps_list, (tuple, list)):
         irreps_tuple = tuple(formula_or_irreps_list)
         assert all(isinstance(irreps, irreps_array.Irreps) for irreps in irreps_tuple)
-        perm_repr: FrozenSet[Tuple[int, Tuple[int, ...]]] = frozenset(
+        perm_repr: FrozenSet[tuple[int, tuple[int, ...]]] = frozenset(
             {(1, tuple(range(len(irreps_tuple))))}
         )
         if keep_ir is not None:
@@ -150,7 +150,7 @@ def reduced_symmetric_tensor_product_basis(
     *,
     layout: irreps_array.IrrepsLayout = irreps_array.mul_ir,
     epsilon: float = 1e-5,
-    keep_ir: Optional[Union[irreps_array.Irreps, List[Irrep]]] = None,
+    keep_ir: irreps_array.Irreps | list[Irrep] | None = None,
     _use_optimized_implementation: bool = True,
 ) -> irreps_array.NumpyIrrepsArray:
     r"""Reduce a symmetric tensor product, usually called for a single irrep.
@@ -176,7 +176,7 @@ def reduced_symmetric_tensor_product_basis(
 
         keep_ir = frozenset(into_list_of_irrep(irreps.irrep_class, keep_ir))
 
-    perm_repr: FrozenSet[Tuple[int, Tuple[int, ...]]] = _symmetric_perm_repr(degree)
+    perm_repr: FrozenSet[tuple[int, tuple[int, ...]]] = _symmetric_perm_repr(degree)
     return _entrypoint(
         tuple([irreps] * degree),
         perm_repr,
@@ -197,7 +197,7 @@ def reduced_antisymmetric_tensor_product_basis(
     *,
     layout: irreps_array.IrrepsLayout = irreps_array.mul_ir,
     epsilon: float = 1e-5,
-    keep_ir: Optional[Union[irreps_array.Irreps, List[Irrep]]] = None,
+    keep_ir: irreps_array.Irreps | list[Irrep] | None = None,
     _use_optimized_implementation: bool = True,
 ) -> irreps_array.NumpyIrrepsArray:
     r"""Reduce an antisymmetric tensor product.
@@ -223,7 +223,7 @@ def reduced_antisymmetric_tensor_product_basis(
 
         keep_ir = frozenset(into_list_of_irrep(irreps.irrep_class, keep_ir))
 
-    perm_repr: FrozenSet[Tuple[int, Tuple[int, ...]]] = _antisymmetric_perm_repr(degree)
+    perm_repr: FrozenSet[tuple[int, tuple[int, ...]]] = _antisymmetric_perm_repr(degree)
     return _entrypoint(
         tuple([irreps] * degree),
         perm_repr,
@@ -238,9 +238,9 @@ def reduced_antisymmetric_tensor_product_basis(
 
 
 def _entrypoint(
-    irreps_tuple: Tuple[irreps_array.Irreps, ...],
-    perm_repr: FrozenSet[Tuple[int, Tuple[int, ...]]],
-    keep_ir: Optional[FrozenSet[Irrep]],
+    irreps_tuple: tuple[irreps_array.Irreps, ...],
+    perm_repr: FrozenSet[tuple[int, tuple[int, ...]]],
+    keep_ir: FrozenSet[Irrep] | None,
     layout: irreps_array.IrrepsLayout,
     epsilon: float,
     _use_optimized_implementation: bool,
@@ -274,9 +274,9 @@ def _entrypoint(
 
 @functools.lru_cache(maxsize=None)
 def _main_cached_recursive(
-    irreps_tuple: Tuple[irreps_array.Irreps, ...],
-    perm_repr: FrozenSet[Tuple[int, Tuple[int, ...]]],
-    keep_ir: Optional[FrozenSet[Irrep]],
+    irreps_tuple: tuple[irreps_array.Irreps, ...],
+    perm_repr: FrozenSet[tuple[int, tuple[int, ...]]],
+    keep_ir: FrozenSet[Irrep] | None,
     epsilon: float,
     _use_optimized_implementation: bool,
 ) -> irreps_array.NumpyIrrepsArray:
@@ -407,7 +407,7 @@ def generate_tuples_with_fixed_sum(length: int, sum: int):
             yield (first,) + subtuple
 
 
-def repeat_indices(indices: Sequence[int], powers: Sequence[int]) -> List[int]:
+def repeat_indices(indices: Sequence[int], powers: Sequence[int]) -> list[int]:
     """Given [i1, i2, ...] and [p1, p2, ...], returns [i1, i1, ... (p1 times), i2, i2, ... (p2 times), ...]"""
     repeated_indices = []
     for index, power in zip(indices, powers):
@@ -417,7 +417,7 @@ def repeat_indices(indices: Sequence[int], powers: Sequence[int]) -> List[int]:
 
 def generate_permutations(
     seq: Sequence[float],
-) -> Iterator[Tuple[Sequence[float], Sequence[int]]]:
+) -> Iterator[tuple[Sequence[float], Sequence[int]]]:
     """Generates permutations of a sequence along with the indices used to create the permutation."""
     indices = range(len(seq))
     for permuted_indices in itertools.permutations(indices):
@@ -469,7 +469,7 @@ def _optimized_reduced_symmetric_tensor_product_basis(
     degree: int,
     *,
     epsilon: float,
-    keep_ir: Optional[List[Irrep]] = None,
+    keep_ir: list[Irrep] | None = None,
 ):
     r"""Reduce a symmetric tensor product.
 
@@ -485,7 +485,7 @@ def _optimized_reduced_symmetric_tensor_product_basis(
     """
     assert isinstance(irreps, irreps_array.Irreps)
 
-    def compute_padding_for_term(irrep_indices: Sequence[int]) -> List[Tuple[int, int]]:
+    def compute_padding_for_term(irrep_indices: Sequence[int]) -> list[tuple[int, int]]:
         """Computes the padding for the given term at each index.
 
         This is required because the output change-of-basis must have the
@@ -637,7 +637,7 @@ def _optimized_reduced_symmetric_tensor_product_basis(
 @functools.lru_cache(maxsize=None)
 def germinate_perm_repr(
     formula: str,
-) -> Tuple[str, FrozenSet[Tuple[int, Tuple[int, ...]]]]:
+) -> tuple[str, FrozenSet[tuple[int, tuple[int, ...]]]]:
     """Convert the formula (generators) into a group."""
     formulas = [
         (-1 if f.startswith("-") else 1, f.replace("-", "")) for f in formula.split("=")
@@ -682,7 +682,7 @@ _cache_reduce_basis_product = {}
 def reduce_basis_product(
     basis1: irreps_array.NumpyIrrepsArray,
     basis2: irreps_array.NumpyIrrepsArray,
-    keep_ir: Optional[List[Irrep]] = None,
+    keep_ir: list[Irrep] | None = None,
 ) -> irreps_array.NumpyIrrepsArray:
     """Reduce the product of two basis."""
     basis1 = basis1.regroup()
@@ -710,7 +710,7 @@ def reduce_basis_product(
     if cache_key in _cache_reduce_basis_product:
         return _cache_reduce_basis_product[cache_key]
 
-    new_irreps: List[Tuple[int, Irrep]] = []
+    new_irreps: list[tuple[int, Irrep]] = []
     new_list = []
 
     for (mul1, ir1), x1 in zip(basis1.irreps, basis1.segments):
@@ -764,8 +764,8 @@ def constrain_rotation_basis_by_permutation_basis(
         (permutation_basis.shape[0], prod(permutation_basis.shape[1:])),
     )  # (free, dim)
 
-    new_irreps: List[Tuple[int, Irrep]] = []
-    new_list: List[np.ndarray] = []
+    new_irreps: list[tuple[int, Irrep]] = []
+    new_list: list[np.ndarray] = []
 
     for ir in sorted({ir for mul, ir in rotation_basis.irreps}):
         idx = [i for i, (mul, ir_) in enumerate(rotation_basis.irreps) if ir == ir_]
@@ -790,8 +790,8 @@ def constrain_rotation_basis_by_permutation_basis(
 
 
 def subrepr_permutation(
-    sub_f0: FrozenSet[int], perm_repr: FrozenSet[Tuple[int, Tuple[int, ...]]]
-) -> FrozenSet[Tuple[int, Tuple[int, ...]]]:
+    sub_f0: FrozenSet[int], perm_repr: FrozenSet[tuple[int, tuple[int, ...]]]
+) -> FrozenSet[tuple[int, tuple[int, ...]]]:
     sor = sorted(sub_f0)
     return frozenset(
         {
@@ -804,8 +804,8 @@ def subrepr_permutation(
 
 def reduce_subgroup_permutation(
     sub_f0: FrozenSet[int],
-    perm_repr: FrozenSet[Tuple[int, Tuple[int, ...]]],
-    dims: Tuple[int, ...],
+    perm_repr: FrozenSet[tuple[int, tuple[int, ...]]],
+    dims: tuple[int, ...],
     return_dim: bool = False,
 ) -> np.ndarray:
     sub_perm_repr = subrepr_permutation(sub_f0, perm_repr)
@@ -825,14 +825,14 @@ def reduce_subgroup_permutation(
 
 
 @functools.lru_cache(maxsize=None)
-def full_base_fn(dims: Tuple[int, ...]) -> List[Tuple[int, ...]]:
+def full_base_fn(dims: tuple[int, ...]) -> list[tuple[int, ...]]:
     return list(itertools.product(*(range(d) for d in dims)))
 
 
 @functools.lru_cache(maxsize=None)
 def reduce_permutation_base(
-    perm_repr: FrozenSet[Tuple[int, Tuple[int, ...]]], dims: Tuple[int, ...]
-) -> FrozenSet[FrozenSet[FrozenSet[Tuple[int, Tuple[int, ...]]]]]:
+    perm_repr: FrozenSet[tuple[int, tuple[int, ...]]], dims: tuple[int, ...]
+) -> FrozenSet[FrozenSet[FrozenSet[tuple[int, tuple[int, ...]]]]]:
     full_base = full_base_fn(dims)  # (0, 0, 0), (0, 0, 1), (0, 0, 2), ... (3, 3, 3)
     # len(full_base) degrees of freedom in an unconstrained tensor
 
@@ -856,8 +856,8 @@ def reduce_permutation_base(
 
 @functools.lru_cache(maxsize=None)
 def reduce_permutation_matrix(
-    base: FrozenSet[FrozenSet[FrozenSet[Tuple[int, Tuple[int, ...]]]]],
-    dims: Tuple[int, ...],
+    base: FrozenSet[FrozenSet[FrozenSet[tuple[int, tuple[int, ...]]]]],
+    dims: tuple[int, ...],
 ) -> np.ndarray:
     base = sorted(
         [sorted([sorted(xs) for xs in x]) for x in base]

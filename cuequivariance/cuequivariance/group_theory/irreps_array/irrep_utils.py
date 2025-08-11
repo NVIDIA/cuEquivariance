@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Iterable, Type, Union
+from typing import Iterable, Type
 
 import cuequivariance as cue
 from cuequivariance.group_theory import Irrep, irreps_array
@@ -20,12 +20,10 @@ from cuequivariance.group_theory import Irrep, irreps_array
 
 def into_list_of_irrep(
     irrep_class: Type[Irrep],
-    input: Union[
-        str,
-        Irrep,
-        irreps_array.MulIrrep,
-        Iterable[Union[str, Irrep, irreps_array.MulIrrep]],
-    ],
+    input: str
+    | Irrep
+    | irreps_array.MulIrrep
+    | Iterable[str | Irrep | irreps_array.MulIrrep],
 ) -> list[Irrep]:
     if isinstance(input, str):
         return [rep for _, rep in cue.Irreps(irrep_class, input)]

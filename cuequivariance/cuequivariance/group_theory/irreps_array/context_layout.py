@@ -12,11 +12,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Union
+
 
 from cuequivariance.group_theory.irreps_array import IrrepsLayout
 
-_layout: Union[None, IrrepsLayout] = None
+_layout: None | IrrepsLayout = None
 
 
 def get_layout_scope(raising: bool = True) -> IrrepsLayout:

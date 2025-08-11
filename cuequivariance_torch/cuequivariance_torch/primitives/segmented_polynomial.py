@@ -14,7 +14,6 @@
 # limitations under the License.
 
 import warnings
-from typing import Dict, List, Optional
 
 import torch
 import torch.nn as nn
@@ -133,7 +132,7 @@ class SegmentedPolynomial(nn.Module):
         polynomial: cue.SegmentedPolynomial,
         method: str = "",
         math_dtype: torch.dtype = None,
-        output_dtype_map: List[int] = None,
+        output_dtype_map: list[int] = None,
         name: str = "segmented_polynomial",
     ):
         super().__init__()
@@ -193,16 +192,16 @@ class SegmentedPolynomial(nn.Module):
 
     # For torch.jit.trace, we cannot pass explicit optionals,
     # so these must be passed as kwargs then.
-    # List[Optional[Tensor]] does not work for similar reasons, hence, Dict
+    # List[Tensor | None] does not work for similar reasons, hence, Dict
     # is the only option.
     # Also, shapes cannot be passed as integers, so they are passed via a
     # (potentially small-strided) tensor with the right shape.
     def forward(
         self,
-        inputs: List[torch.Tensor],
-        input_indices: Optional[Dict[int, torch.Tensor]] = None,
-        output_shapes: Optional[Dict[int, torch.Tensor]] = None,
-        output_indices: Optional[Dict[int, torch.Tensor]] = None,
+        inputs: list[torch.Tensor],
+        input_indices: dict[int, torch.Tensor] | None = None,
+        output_shapes: dict[int, torch.Tensor] | None = None,
+        output_indices: dict[int, torch.Tensor] | None = None,
     ):
         """Compute the segmented polynomial based on the specified descriptor.
 
@@ -235,7 +234,7 @@ class SegmentedPolynomial(nn.Module):
         """
 
         # General checks
-        empty_dict: Dict[int, torch.Tensor] = {}
+        empty_dict: dict[int, torch.Tensor] = {}
         if input_indices is None:
             input_indices = dict(empty_dict)
         if output_shapes is None:

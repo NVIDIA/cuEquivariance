@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Optional
+
 
 import torch
 import torch.fx
@@ -35,8 +35,8 @@ class TransposeIrrepsLayout(torch.nn.Module):
         *,
         source: cue.IrrepsLayout,
         target: cue.IrrepsLayout,
-        device: Optional[torch.device] = None,
-        use_fallback: Optional[bool] = None,
+        device: torch.device | None = None,
+        use_fallback: bool | None = None,
     ):
         super().__init__()
 
@@ -84,8 +84,8 @@ class TransposeSegments(torch.nn.Module):
     def __init__(
         self,
         segments: list[tuple[int, int]],
-        device: Optional[torch.device] = None,
-        use_fallback: Optional[bool] = None,
+        device: torch.device | None = None,
+        use_fallback: bool | None = None,
     ):
         super().__init__()
 
@@ -124,7 +124,7 @@ class TransposeSegments(torch.nn.Module):
         ----------
         x : torch.Tensor
             The input tensor to be transposed.
-        use_fallback : Optional[bool], optional
+        use_fallback : bool | None, optional
             If `None` (default), a CUDA kernel will be used if available.
             If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
             If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
@@ -163,9 +163,7 @@ def _transpose_segments_fx(segments: list[tuple[int, int]]) -> torch.nn.Module:
     return graphmod
 
 
-def _transpose_info(
-    segments: list[tuple[int, int]], device
-) -> Optional[torch.IntTensor]:
+def _transpose_info(segments: list[tuple[int, int]], device) -> torch.IntTensor | None:
     info = []
     offset = 0
     is_trivial = True

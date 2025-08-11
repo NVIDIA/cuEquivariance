@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import warnings
-from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -30,10 +29,10 @@ class SphericalHarmonics(nn.Module):
         self,
         ls: list[int],
         normalize: bool = True,
-        device: Optional[torch.device] = None,
-        math_dtype: Optional[torch.dtype] = None,
-        use_fallback: Optional[bool] = None,
-        method: Optional[str] = None,
+        device: torch.device | None = None,
+        math_dtype: torch.dtype | None = None,
+        use_fallback: bool | None = None,
+        method: str | None = None,
     ):
         """
         Args:

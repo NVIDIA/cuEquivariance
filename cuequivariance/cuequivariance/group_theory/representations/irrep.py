@@ -17,7 +17,7 @@ from __future__ import annotations
 import dataclasses
 import itertools
 import re
-from typing import FrozenSet, Iterable, Optional, Sequence, Type, Union
+from typing import FrozenSet, Iterable, Sequence, Type
 
 import numpy as np
 
@@ -238,9 +238,9 @@ def clebsch_gordan(rep1: Irrep, rep2: Irrep, rep3: Irrep) -> np.ndarray:
 
 
 def selection_rule_product(
-    irs1: Union[Irrep, Sequence[Irrep], None],
-    irs2: Union[Irrep, Sequence[Irrep], None],
-) -> Optional[FrozenSet[Irrep]]:
+    irs1: Irrep | Sequence[Irrep] | None,
+    irs2: Irrep | Sequence[Irrep] | None,
+) -> FrozenSet[Irrep] | None:
     if irs1 is None or irs2 is None:
         return None
 
@@ -259,7 +259,7 @@ def selection_rule_product(
 
 
 def selection_rule_power(
-    irrep_class: Type[Irrep], irs: Union[Irrep, Sequence[Irrep]], n: int
+    irrep_class: Type[Irrep], irs: Irrep | Sequence[Irrep], n: int
 ) -> FrozenSet[Irrep]:
     if isinstance(irs, Irrep):
         irs = [irs]
