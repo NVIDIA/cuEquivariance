@@ -235,7 +235,7 @@ def triangle_attention(
 
     .. math::
 
-        \text{Attention}_a(Q, K, V, M, T) = \sum_b \text{softmax}_b(M_b ? -10^9 : (Q_a K_b + T_{ab})) V_b
+        \text{Attention}_a(Q, K, V, M, T) = \sum_b \mathrm{softmax}_b\left( M_b \cdot (Q_a K_b + T_{ab}) + (1 - M_b) \cdot (-10^9) \right) V_b
 
     where :math:`Q`, :math:`K`, and :math:`V` are the query, key, and value tensors,
     :math:`M` is the mask bias, and :math:`T` is the triangle bias.

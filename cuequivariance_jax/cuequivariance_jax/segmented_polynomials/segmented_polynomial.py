@@ -72,20 +72,27 @@ def segmented_polynomial(
         indices: Optional list of indices for inputs and outputs. If None, no indexing
             is applied. Defaults to None. Note that indices are not supported for all methods.
         method: Specifies the implementation method to use. Options are:
-            - "naive": Uses a naive JAX implementation. It always works but is not optimized.
-            - "uniform_1d": Uses a CUDA implementation for polynomials with a single uniform mode.
-            - "indexed_linear": Uses a CUDA implementation for linear layers with indexed weights.
+
+            - ``"naive"``: Uses a naive JAX implementation. It always works but is not optimized.
+            - ``"uniform_1d"``: Uses a CUDA implementation for polynomials with a single uniform mode.
+            - ``"indexed_linear"``: Uses a CUDA implementation for linear layers with indexed weights.
+
+            .. note::
+               The ``"fused_tp"`` method is only available in the PyTorch implementation.
         math_dtype: Data type for computational operations. If None, automatically
             determined from input types, defaulting to float32 if no float64 inputs
-            are present. Defaults to None.
-        name: Optional name for the operation. Defaults to None.
-        precision: The precision to use for the computation. Defaults to HIGHEST. Note that precision is not supported for all methods.
+            are present.
+
+        name: Optional name for the operation.
+        precision: The precision to use for the computation. Defaults to HIGHEST.
+            Note that precision is only supported for the ``"naive"`` method.
 
     Returns:
         List of JAX arrays containing the computed polynomial outputs.
 
-    Implementation Details:
-        - Supports JAX transformations: jit, grad, jvp, vmap
+    Notes:
+        **JAX Transformations Support:**
+            - Supports JAX transformations: jit, grad, jvp, vmap
             - Supports infinite derivatives through JVP and transpose rules
             - Full batching support
 
@@ -121,8 +128,8 @@ def segmented_polynomial(
 
         Example computing a linear layer with indexed weights using the "indexed_linear" method:
 
-        >>> input_irreps = cue.Irreps(cue.O3, f"10x0e + 10x1o")
-        >>> output_irreps = cue.Irreps(cue.O3, f"20x0e + 20x1o")
+        >>> input_irreps = cue.Irreps(cue.O3, "10x0e + 10x1o")
+        >>> output_irreps = cue.Irreps(cue.O3, "20x0e + 20x1o")
         >>> poly = cue.descriptors.linear(input_irreps, output_irreps).polynomial
         >>> counts = jnp.array([3, 4, 3], dtype=jnp.int32)  # Number of elements in each partition
         >>> w = jax.random.normal(jax.random.key(0), (3, poly.inputs[0].size), dtype=jnp.float32)
