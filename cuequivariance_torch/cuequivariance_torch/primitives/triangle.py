@@ -247,3 +247,180 @@ def triangle_multiplicative_update(
             eps=eps,
             precision=precision,
         )
+
+
+def attention_pair_bias(
+    s: torch.Tensor,
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    z: torch.Tensor,
+    mask: torch.Tensor,
+    num_heads: int,
+    w_proj_z: torch.Tensor,
+    w_proj_g: torch.Tensor,
+    w_proj_o: torch.Tensor,
+    w_ln_z: torch.Tensor,
+    b_ln_z: torch.Tensor,
+    b_proj_z: Optional[torch.Tensor] = None,
+    b_proj_g: Optional[torch.Tensor] = None,
+    b_proj_o: Optional[torch.Tensor] = None,
+    inf: Optional[float] = 1e6,
+    eps: Optional[float] = 1e-5,
+    attn_scale: Optional[float] = None,
+    compute_pair_bias: Optional[bool] = True,
+    multiplicity: Optional[int] = 1,
+):
+    """Compute attention with pairwise bias for diffusion models.
+
+    This function implements attention with pairwise bias, which is commonly used
+    in diffusion models.
+
+    The function automatically chooses between optimized Triton kernels (for long
+    sequences) and PyTorch fallback (for short sequences) based on sequence length.
+
+    Parameters
+    ----------
+    s : torch.Tensor
+        Input sequence tensor of shape (B * M, S, D) where B is batch size,
+        M is multiplicity (diffusion steps), S is sequence length, and D is
+        feature dimension.
+    q : torch.Tensor
+        Query tensor of shape (B * M, H, U, DH) where H is number of heads,
+        U is query sequence length, and DH is head dimension.
+    k : torch.Tensor
+        Key tensor of shape (B * M, H, V, DH) where V is key sequence length.
+    v : torch.Tensor
+        Value tensor of shape (B * M, H, V, DH).
+    z : torch.Tensor
+        Pairwise tensor of shape (B, U, V, z_dim) containing pairwise interactions,
+        where z_dim can be arbitrary. This is the main input for the pairwise bias computation.
+    mask : torch.Tensor
+        Attention mask of shape (B, V) or (B * M, V) indicating which positions
+        should be masked (0 = masked, 1 = unmasked).
+    num_heads : int
+        Number of attention heads.
+    w_proj_z : torch.Tensor
+        Weight matrix for z projection of shape (H, z_dim).
+    w_proj_g : torch.Tensor
+        Weight matrix for gating projection of shape (D, D).
+    w_proj_o : torch.Tensor
+        Weight matrix for output projection of shape (D, D).
+    w_ln_z : torch.Tensor
+        Weight for layer normalization of z tensor of shape (z_dim,).
+    b_ln_z : torch.Tensor
+        Bias for layer normalization of z tensor of shape (z_dim,).
+    b_proj_z : Optional[torch.Tensor], default=None
+        Bias for z projection of shape (H,).
+    b_proj_g : Optional[torch.Tensor], default=None
+        Bias for gating projection of shape (D,).
+    b_proj_o : Optional[torch.Tensor], default=None
+        Bias for output projection of shape (D,).
+    inf : float, default=1e6
+        Large value used for masking invalid attention positions.
+    eps : float, default=1e-5
+        Epsilon value for layer normalization.
+    attn_scale : Optional[float], default=None
+        Scaling factor for attention scores. If None, uses 1/sqrt(head_dim).
+    compute_pair_bias : bool, default=True
+        Whether to compute pairwise bias. If False, z tensor should already
+        be in the correct format (B, U, V, H).
+    multiplicity : int, default=1
+        Multiplicity (diffusion steps).
+
+    Returns
+    -------
+        - Output: torch.Tensor of shape (B * M, S, D) containing the attention output
+        with pairwise bias applied.
+        - proj_z: torch.Tensor of shape (B, H, U, V) containing the projected z tensor
+
+    Notes
+    -----
+    - For short sequences (≤ CUEQ_ATTENTION_PAIR_BIAS_FALLBACK_THRESHOLD),
+      uses PyTorch fallback implementation.
+    - For long sequences, uses optimized Triton kernels with automatic
+      backend selection (CUDNN, Flash Attention, Efficient Attention).
+    - The multiplicity parameter (M) allows processing multiple diffusion
+      timesteps in a single forward pass.
+
+    Examples
+    --------
+        >>> import torch
+        >>> from cuequivariance_torch import attention_pair_bias
+        >>> if torch.cuda.is_available():  # doctest: +SKIP
+        ...     device = torch.device("cuda")
+        ...     batch_size, seq_len, num_heads, heads_dim, hidden_dim = 1, 32, 2, 32, 64
+        ...     query_len, key_len, z_dim = 32, 32, 16
+        ...     # Create input tensors on GPU
+        ...     s = torch.randn(batch_size, seq_len, hidden_dim,
+        ...                     device=device, dtype=torch.float32)
+        ...     q = torch.randn(batch_size, num_heads, query_len, heads_dim,
+        ...                     device=device, dtype=torch.float32)
+        ...     k = torch.randn(batch_size, num_heads, key_len, heads_dim,
+        ...                     device=device, dtype=torch.float32)
+        ...     v = torch.randn(batch_size, num_heads, key_len, heads_dim,
+        ...                     device=device, dtype=torch.float32)
+        ...     z = torch.randn(batch_size, query_len, key_len, z_dim,
+        ...                     device=device, dtype=torch.float32)
+        ...     mask = torch.rand(batch_size, key_len,
+        ...                       device=device) < 0.5
+        ...     w_proj_z = torch.randn(num_heads, z_dim,
+        ...                     device=device, dtype=torch.float32)
+        ...     w_proj_g = torch.randn(hidden_dim, hidden_dim,
+        ...                     device=device, dtype=torch.float32)
+        ...     w_proj_o = torch.randn(hidden_dim, hidden_dim,
+        ...                     device=device, dtype=torch.float32)
+        ...     w_ln_z = torch.randn(z_dim,
+        ...                     device=device, dtype=torch.float32)
+        ...     b_ln_z = torch.randn(z_dim,
+        ...                     device=device, dtype=torch.float32)
+        ...     # Perform operation
+        ...     output, proj_z = attention_pair_bias(
+        ...         s=s,
+        ...         q=q,
+        ...         k=k,
+        ...         v=v,
+        ...         z=z,
+        ...         mask=mask,
+        ...         num_heads=num_heads,
+        ...         w_proj_z=w_proj_z,
+        ...         w_proj_g=w_proj_g,
+        ...         w_proj_o=w_proj_o,
+        ...         w_ln_z=w_ln_z,
+        ...         b_ln_z=b_ln_z,
+        ...     )
+        ...     print(output.shape)  # torch.Size([1, 32, 64])
+        torch.Size([1, 32, 64])
+    """
+
+    try:
+        from cuequivariance_ops_torch.attention_pair_bias_torch import (
+            attention_pair_bias as f,
+        )
+    except Exception:
+        raise ImportError(
+            "Error importing attention_pair_bias from cuequivariance_ops_torch."
+        )
+    else:
+        return f(
+            s,
+            q,
+            k,
+            v,
+            z,
+            mask,
+            num_heads,
+            w_proj_z=w_proj_z,
+            w_proj_g=w_proj_g,
+            w_proj_o=w_proj_o,
+            w_ln_z=w_ln_z,
+            b_ln_z=b_ln_z,
+            b_proj_z=b_proj_z,
+            b_proj_g=b_proj_g,
+            b_proj_o=b_proj_o,
+            inf=inf,
+            eps=eps,
+            attn_scale=attn_scale,
+            compute_pair_bias=compute_pair_bias,
+            multiplicity=multiplicity,
+        )
