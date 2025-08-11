@@ -274,78 +274,59 @@ def attention_pair_bias(
     """Compute attention with pairwise bias for diffusion models.
 
     This function implements attention with pairwise bias, which is commonly used
-    in diffusion models.
+    in diffusion models. The function automatically chooses between optimized
+    Triton kernels (for long sequences) and PyTorch fallback (for short sequences)
+    based on sequence length.
 
-    The function automatically chooses between optimized Triton kernels (for long
-    sequences) and PyTorch fallback (for short sequences) based on sequence length.
+    Args:
+        s: Input sequence tensor of shape (B * M, S, D) where B is batch size,
+            M is multiplicity (diffusion steps), S is sequence length, and D is
+            feature dimension.
+        q: Query tensor of shape (B * M, H, U, DH) where H is number of heads,
+            U is query sequence length, and DH is head dimension.
+        k: Key tensor of shape (B * M, H, V, DH) where V is key sequence length.
+        v: Value tensor of shape (B * M, H, V, DH).
+        z: Pairwise tensor of shape (B, U, V, z_dim) containing pairwise interactions,
+            where z_dim can be arbitrary. This is the main input for the pairwise bias computation.
+        mask: Attention mask of shape (B, V) or (B * M, V) indicating which positions
+            should be masked (0 = masked, 1 = unmasked).
+        num_heads: Number of attention heads.
+        w_proj_z: Weight matrix for z projection of shape (H, z_dim).
+        w_proj_g: Weight matrix for gating projection of shape (D, D).
+        w_proj_o: Weight matrix for output projection of shape (D, D).
+        w_ln_z: Weight for layer normalization of z tensor of shape (z_dim,).
+        b_ln_z: Bias for layer normalization of z tensor of shape (z_dim,).
+        b_proj_z: Bias for z projection of shape (H,). Defaults to None.
+        b_proj_g: Bias for gating projection of shape (D,). Defaults to None.
+        b_proj_o: Bias for output projection of shape (D,). Defaults to None.
+        inf: Large value used for masking invalid attention positions. Defaults to 1e6.
+        eps: Epsilon value for layer normalization. Defaults to 1e-5.
+        attn_scale: Scaling factor for attention scores. If None, uses 1/sqrt(head_dim).
+            Defaults to None.
+        compute_pair_bias: Whether to compute pairwise bias. If False, z tensor should already
+            be in the correct format (B, U, V, H). Defaults to True.
+        multiplicity: Multiplicity (diffusion steps). Should be explicitly set if multiplicity > 1
+            and is not reflected in z tensor. Defaults to 1.
 
-    Parameters
-    ----------
-    s : torch.Tensor
-        Input sequence tensor of shape (B * M, S, D) where B is batch size,
-        M is multiplicity (diffusion steps), S is sequence length, and D is
-        feature dimension.
-    q : torch.Tensor
-        Query tensor of shape (B * M, H, U, DH) where H is number of heads,
-        U is query sequence length, and DH is head dimension.
-    k : torch.Tensor
-        Key tensor of shape (B * M, H, V, DH) where V is key sequence length.
-    v : torch.Tensor
-        Value tensor of shape (B * M, H, V, DH).
-    z : torch.Tensor
-        Pairwise tensor of shape (B, U, V, z_dim) containing pairwise interactions,
-        where z_dim can be arbitrary. This is the main input for the pairwise bias computation.
-    mask : torch.Tensor
-        Attention mask of shape (B, V) or (B * M, V) indicating which positions
-        should be masked (0 = masked, 1 = unmasked).
-    num_heads : int
-        Number of attention heads.
-    w_proj_z : torch.Tensor
-        Weight matrix for z projection of shape (H, z_dim).
-    w_proj_g : torch.Tensor
-        Weight matrix for gating projection of shape (D, D).
-    w_proj_o : torch.Tensor
-        Weight matrix for output projection of shape (D, D).
-    w_ln_z : torch.Tensor
-        Weight for layer normalization of z tensor of shape (z_dim,).
-    b_ln_z : torch.Tensor
-        Bias for layer normalization of z tensor of shape (z_dim,).
-    b_proj_z : Optional[torch.Tensor], default=None
-        Bias for z projection of shape (H,).
-    b_proj_g : Optional[torch.Tensor], default=None
-        Bias for gating projection of shape (D,).
-    b_proj_o : Optional[torch.Tensor], default=None
-        Bias for output projection of shape (D,).
-    inf : Optional[float], default=1e6
-        Large value used for masking invalid attention positions.
-    eps : Optional[float], default=1e-5
-        Epsilon value for layer normalization.
-    attn_scale : Optional[float], default=None
-        Scaling factor for attention scores. If None, uses 1/sqrt(head_dim).
-    compute_pair_bias : bool, default=True
-        Whether to compute pairwise bias. If False, z tensor should already
-        be in the correct format (B, U, V, H).
-    multiplicity : Optional[int], default=1
-        Multiplicity (diffusion steps). Should be explicitly set if multiplicity > 1 and is not reflected in z tensor.
+    Returns:
+        A tuple containing:
 
-    Returns
-    -------
-        - Output: torch.Tensor of shape (B * M, S, D) containing the attention output
+        - **output** (:class:`torch.Tensor`): Attention output of shape (B * M, S, D)
           with pairwise bias applied.
-        - proj_z: torch.Tensor of shape (B, H, U, V) containing the projected z tensor
+        - **proj_z** (:class:`torch.Tensor`): Projected z tensor of shape (B, H, U, V)
+          containing the pairwise bias tensor with mask applied.
 
-    Notes
-    -----
-    - For short sequences (≤ CUEQ_ATTENTION_PAIR_BIAS_FALLBACK_THRESHOLD),
-      uses PyTorch fallback implementation.
-    - For long sequences, uses optimized Triton kernels with automatic
-      backend selection (CUDNN, Flash Attention, Efficient Attention).
-    - The multiplicity parameter (M) allows processing multiple diffusion
-      timesteps in a single forward pass.
-    - Please discard the proj_z output as it's an experimental output to prevent breakage when we enable caching of pair bias tensor in next release. Currently it returns the pairwise bias tensor with mask applied.
+    Notes:
+        - For short sequences (≤ CUEQ_ATTENTION_PAIR_BIAS_FALLBACK_THRESHOLD),
+          uses PyTorch fallback implementation.
+        - For long sequences, uses optimized Triton kernels with automatic
+          backend selection (CUDNN, Flash Attention, Efficient Attention).
+        - The multiplicity parameter (M) allows processing multiple diffusion
+          timesteps in a single forward pass.
+        - The proj_z output is experimental to prevent breakage when caching
+          of pair bias tensor is enabled in the next release.
 
-    Examples
-    --------
+    Examples:
         >>> import torch
         >>> from cuequivariance_torch import attention_pair_bias
         >>> if torch.cuda.is_available():  # doctest: +SKIP
