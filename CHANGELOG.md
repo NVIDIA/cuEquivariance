@@ -1,6 +1,6 @@
 ## Latest Changes
 
-## 0.6.0 (next)
+## 0.6.0 (2025-08-11)
 
 ### Added
 - [Torch] New feature: Added `cuet.attention_pair_bias` (support for caching the pair bias tensor & further kernel acceleration coming up soon. There maybe API related changes for this in the next release)
