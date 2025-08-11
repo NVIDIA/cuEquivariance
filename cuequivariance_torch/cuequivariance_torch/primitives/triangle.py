@@ -171,9 +171,9 @@ def triangle_multiplicative_update(
         norm_in_weight (torch.Tensor): Optional weight tensor for input normalization of shape (D,).
         norm_in_bias (torch.Tensor): Optional bias tensor for input normalization of shape (D,).
         p_in_weight (torch.Tensor): Optional weight tensor for input projection of shape (2D, D).
-        p_in_bias (torch.Tensor): Optional bias tensor for input projection of shape (D,).
+        p_in_bias (torch.Tensor): Optional bias tensor for input projection of shape (2D,).
         g_in_weight (torch.Tensor): Optional weight tensor for input gating of shape (2D, D).
-        g_in_bias (torch.Tensor): Optional bias tensor for input gating of shape (D,).
+        g_in_bias (torch.Tensor): Optional bias tensor for input gating of shape (2D,).
         norm_out_weight (torch.Tensor): Optional weight tensor for output normalization of shape (D,).
         norm_out_bias (torch.Tensor): Optional bias tensor for output normalization of shape (D,).
         p_out_weight (torch.Tensor): Optional weight tensor for output projection of shape (D, D).
