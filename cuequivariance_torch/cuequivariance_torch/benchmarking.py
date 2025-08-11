@@ -45,7 +45,6 @@ def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required")
 
-    compiled_func = torch.compile(f)
     x = torch.tensor(0, device="cuda")
 
     fill_base = 200e-6  # Base time for stream filling
@@ -65,14 +64,14 @@ def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
         _, x = sleep(fill_time, x)
 
         for _ in range(n_warm):
-            _ = compiled_func(*args, **kwargs)
+            _ = f(*args, **kwargs)
 
         # Second sleep: measure clock ticks
         ticks_before, x = sleep(tick_time, x)
 
         start_event.record()
         for _ in range(n_iter):
-            _ = compiled_func(*args, **kwargs)
+            _ = f(*args, **kwargs)
         end_event.record()
 
         # Third sleep: measure clock ticks
