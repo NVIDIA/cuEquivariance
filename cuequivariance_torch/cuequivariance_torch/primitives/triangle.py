@@ -193,6 +193,8 @@ def triangle_multiplicative_update(
         (1) Context is saved for backward pass. You don't need to save it manually.
         (2) Kernel precision (fp32, bf16, fp16) is based on input dtypes. For tf32, set it from torch global scope using torch.backends.cuda.matmul.allow_tf32
         (3) **Limitation**: Currently only supports hidden_dim values that are multiples of 32.
+        (4) We have moved away from the default round-towards-zero (RZ) implementation to round-nearest (RN) for better tf32 accuracy in cuex.triangle_multiplicative_update. In rare circumstances, this may cause minor differences in results observed.
+        (5) When using torch compile, use `cueuivariance_ops_torch.init_triton_cache()` to initialize triton cache before calling torch compiled triangular multiplicative update.
 
     Example:
         >>> import torch
