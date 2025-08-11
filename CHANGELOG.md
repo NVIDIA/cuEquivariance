@@ -16,7 +16,7 @@
 
 ### Breaking Changes
 - Dropped support for CUDA 11. Only CUDA 12 is now supported (`cuequivariance-ops-torch-cu12`, `cuequivariance-ops-jax-cu12`).
-- [Torch/JAX] Simplified precision arg of triangular multiplicative updateNone (which defaults to DEFAULT with non-fp32 input and tf32 vs tf32x3 based on CUDA/CUDNN env var) and IEEE.
+- [Torch/JAX] Simplified precision arg of triangular multiplicative update to just two: None (which defaults to DEFAULT with non-fp32 input and tf32 vs tf32x3 based on CUDA/CUDNN env var) and IEEE.
 - [Torch/JAX] We have moved away from the default round-towards-zero (RZ) implementation to round-nearest (RN) for better tf32 accuracy in cuex.triangle_multiplicative_update. In rare circumstances, this may cause minor differences in results observed. 
 
 ### Known Issues
