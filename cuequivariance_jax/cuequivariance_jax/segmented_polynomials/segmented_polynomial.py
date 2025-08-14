@@ -268,10 +268,6 @@ def segmented_polynomial(
             index_configuration.append(bi)
             index_mode.append(im)
 
-    # Set default math_dtype
-    if math_dtype is None:
-        math_dtype = jnp.result_type(*io_buffers)
-
     # Execute the polynomial
     kwargs = dict(
         inputs=io_buffers[: polynomial.num_inputs],
@@ -344,7 +340,7 @@ def segmented_polynomial_prim(
     index_configuration: list[list[int]],  # maps: buffer index -> unique indices index
     index_mode: list[list[IndexingMode]],  # shared, batched, indexed, repeated
     polynomial: cue.SegmentedPolynomial,
-    math_dtype: jnp.dtype,
+    math_dtype: jnp.dtype | None,
     name: str,
     method: str,
     precision: jax.lax.Precision,
@@ -376,7 +372,7 @@ def segmented_polynomial_prim(
             x for x, used in zip(outputs_shape_dtype, used_outputs) if used
         ),
         polynomial=polynomial.filter_keep_operands(used_inputs + used_outputs),
-        math_dtype=jnp.dtype(math_dtype),
+        math_dtype=jnp.dtype(math_dtype) if math_dtype is not None else None,
         name=str(name),
         method=method,
         precision=precision,
@@ -435,7 +431,7 @@ def segmented_polynomial_abstract_eval(
     index_mode: tuple[tuple[IndexingMode, ...], ...],
     outputs_shape_dtype: tuple[jax.ShapeDtypeStruct, ...],
     polynomial: cue.SegmentedPolynomial,
-    math_dtype: jnp.dtype,
+    math_dtype: jnp.dtype | None,
     name: str,
     method: str,
     precision: jax.lax.Precision,
@@ -452,7 +448,7 @@ def segmented_polynomial_impl(
     index_mode: tuple[tuple[IndexingMode, ...], ...],
     outputs_shape_dtype: tuple[jax.ShapeDtypeStruct, ...],
     polynomial: cue.SegmentedPolynomial,
-    math_dtype: jnp.dtype,
+    math_dtype: jnp.dtype | None,
     name: str,
     method: str,
     precision: jax.lax.Precision,
@@ -531,7 +527,7 @@ def segmented_polynomial_jvp(
     index_mode: tuple[tuple[IndexingMode, ...], ...],
     outputs_shape_dtype: tuple[jax.ShapeDtypeStruct, ...],
     polynomial: cue.SegmentedPolynomial,
-    math_dtype: jnp.dtype,
+    math_dtype: jnp.dtype | None,
     name: str,
     method: str,
     precision: jax.lax.Precision,
@@ -594,7 +590,7 @@ def segmented_polynomial_transpose(
     index_mode: tuple[tuple[IndexingMode, ...], ...],
     outputs_shape_dtype: tuple[jax.ShapeDtypeStruct, ...],
     polynomial: cue.SegmentedPolynomial,
-    math_dtype: jnp.dtype,
+    math_dtype: jnp.dtype | None,
     name: str,
     method: str,
     precision: jax.lax.Precision,
@@ -660,7 +656,7 @@ def segmented_polynomial_batching(
     index_mode: tuple[tuple[IndexingMode, ...], ...],
     outputs_shape_dtype: tuple[jax.ShapeDtypeStruct, ...],
     polynomial: cue.SegmentedPolynomial,
-    math_dtype: jnp.dtype,
+    math_dtype: jnp.dtype | None,
     name: str,
     method: str,
     precision: jax.lax.Precision,

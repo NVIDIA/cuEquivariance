@@ -42,12 +42,17 @@ def execute_indexed_linear(
     index_configuration: tuple[tuple[int, ...], ...],
     index_mode: tuple[tuple[IndexingMode, ...], ...],
     polynomial: cue.SegmentedPolynomial,
-    math_dtype: jnp.dtype,
+    math_dtype: jnp.dtype | None,
     precision: jax.lax.Precision,
     name: str,
     run_kernel: bool = True,
 ) -> list[jax.Array]:  # output buffers
     num_inputs = len(index_configuration) - len(outputs_shape_dtype)
+
+    # Set default math_dtype if None
+    if math_dtype is None:
+        io_buffers_for_dtype = list(inputs) + list(outputs_shape_dtype)
+        math_dtype = jnp.result_type(*io_buffers_for_dtype)
 
     io_buffers = list(inputs) + [
         jnp.zeros(out.shape, out.dtype) for out in outputs_shape_dtype

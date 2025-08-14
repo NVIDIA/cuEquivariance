@@ -39,7 +39,7 @@ def execute_naive(
     index_configuration: tuple[tuple[int, ...], ...],
     index_mode: tuple[tuple[IndexingMode, ...], ...],
     polynomial: cue.SegmentedPolynomial,
-    math_dtype: jnp.dtype,
+    math_dtype: jnp.dtype | None,
     precision: jax.lax.Precision,
     name: str,
 ) -> list[jax.Array]:  # output buffers
@@ -56,6 +56,11 @@ def execute_naive(
             name,
             run_kernel=False,
         )
+
+    # Set default math_dtype if None
+    if math_dtype is None:
+        io_buffers_for_dtype = list(inputs) + list(outputs_shape_dtype)
+        math_dtype = jnp.result_type(*io_buffers_for_dtype)
 
     num_inputs = len(index_configuration) - len(outputs_shape_dtype)
 
