@@ -86,7 +86,6 @@ def test_method_uniform_1d(e: cue.EquivariantPolynomial):
             inputs,
             jax.ShapeDtypeStruct(output_batch_shape + (e.outputs[0].dim,), jnp.float64),
             indices,
-            math_dtype=jnp.float64,
             method=method,
         ).array
 

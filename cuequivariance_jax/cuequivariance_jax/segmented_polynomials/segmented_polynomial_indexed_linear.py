@@ -23,7 +23,11 @@ import numpy as np
 
 import cuequivariance as cue
 from cuequivariance_jax.segmented_polynomials.indexing_mode import IndexingMode
-from cuequivariance_jax.segmented_polynomials.utils import batch_size, indexing
+from cuequivariance_jax.segmented_polynomials.utils import (
+    batch_size,
+    indexing,
+    math_dtype_for_naive_method,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +46,7 @@ def execute_indexed_linear(
     index_configuration: tuple[tuple[int, ...], ...],
     index_mode: tuple[tuple[IndexingMode, ...], ...],
     polynomial: cue.SegmentedPolynomial,
-    math_dtype: jnp.dtype,
-    precision: jax.lax.Precision,
+    math_dtype: str | None,
     name: str,
     run_kernel: bool = True,
 ) -> list[jax.Array]:  # output buffers
@@ -80,7 +83,6 @@ def execute_indexed_linear(
             batch_sizes=batch_sizes,
             d=d.move_operand_last(ope_out),
             math_dtype=math_dtype,
-            precision=precision,
             run_kernel=run_kernel,
         )
         out = sum_cat_list_list(
@@ -138,8 +140,7 @@ def tp_list_list(
     indices: list[jax.Array],
     batch_sizes: list[int],
     d: cue.SegmentedTensorProduct,
-    math_dtype: jnp.dtype,
-    precision: jax.lax.Precision,
+    math_dtype: str | None,
     run_kernel: bool,
 ) -> list[list[jax.Array]]:
     num_batch_axes = len(batch_sizes)
@@ -184,7 +185,6 @@ def tp_list_list(
                 d.subscripts.operands,
                 d.coefficient_subscripts,
                 batch_sizes,
-                precision,
                 math_dtype,
                 run_kernel=run_kernel,
             )
@@ -202,8 +202,7 @@ def ein(
     subscripts: list[str],
     coefficient_subscripts: str,
     batch_sizes: list[int],
-    precision: jax.lax.Precision,
-    math_dtype: jnp.dtype,
+    math_dtype: str | None,
     run_kernel: bool,
 ) -> jax.Array:
     num_batch_axes = len(batch_sizes)
@@ -216,9 +215,6 @@ def ein(
     terms = [coefficient_subscripts] + terms_in + [term_out]
     formula = ",".join(terms[:-1]) + "->" + terms[-1]
     modes = tuple([x.mode for x in segments] + [output.mode])
-
-    if run_kernel:
-        assert precision == jax.lax.Precision.HIGHEST
 
     if (
         run_kernel
@@ -413,11 +409,16 @@ def ein(
     if run_kernel:
         raise ValueError("It was not possible to execute the method indexed_linear.")
 
+    compute_dtype, precision = math_dtype_for_naive_method(
+        jnp.result_type(*[x.data.dtype for x in segments], output.data.dtype),
+        math_dtype,
+    )
+
     segments_data = [
         scatter(x.data, x.bi, x.mode, indices, batch_sizes) for x in segments
     ]
-    coeffs = jnp.array(coefficients, dtype=math_dtype)
-    segments_data = [x.astype(math_dtype) for x in segments_data]
+    coeffs = jnp.array(coefficients, dtype=compute_dtype)
+    segments_data = [x.astype(compute_dtype) for x in segments_data]
     segment = jnp.einsum(formula, coeffs, *segments_data, precision=precision)
     segment = segment.astype(output.data.dtype)
     return gather(output.data, segment, output.bi, output.mode, indices)
