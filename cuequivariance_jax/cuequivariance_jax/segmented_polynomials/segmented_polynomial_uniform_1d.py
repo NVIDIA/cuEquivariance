@@ -38,7 +38,7 @@ def execute_uniform_1d(
     indices: list[jax.Array],
     index_configuration: tuple[tuple[int, ...], ...],
     polynomial: cue.SegmentedPolynomial,
-    math_dtype: jnp.dtype | None,
+    math_dtype: str | None,
     name: str,
 ) -> list[jax.Array]:
     error_message = f"Failed to execute 'uniform_1d' method for the following polynomial:\n{polynomial}\n"
@@ -151,16 +151,18 @@ def execute_uniform_1d(
     if len({b.shape[-1] for b in buffers}.union({1})) > 2:
         raise ValueError(f"Buffer shapes not compatible {[b.shape for b in buffers]}")
 
-    # Set default math_dtype if None
-    if math_dtype is None:
+    if math_dtype is not None:
+        supported_dtypes = {"float32", "float64"}
+        if math_dtype not in supported_dtypes:
+            raise ValueError(
+                f"method='uniform_1d' only supports math_dtype equal to {supported_dtypes}, got '{math_dtype}'."
+            )
+        compute_dtype = getattr(jnp, math_dtype)
+    else:
         if jnp.result_type(*buffers) == jnp.float64:
-            math_dtype = jnp.float64
+            compute_dtype = jnp.float64
         else:
-            math_dtype = jnp.float32
-
-    math_dtype = jnp.dtype(math_dtype)
-    if math_dtype.type not in {jnp.float32, jnp.float64}:
-        raise ValueError(f"Unsupported math_dtype: {math_dtype}")
+            compute_dtype = jnp.float32
 
     try:
         from cuequivariance_ops_jax import (
@@ -191,7 +193,7 @@ def execute_uniform_1d(
         index_configuration,
         operations=operations,
         paths=paths,
-        math_dtype=math_dtype,
+        math_dtype=compute_dtype,
         name=sanitize_string(name),
     )
     return [jnp.reshape(x, y.shape) for x, y in zip(outputs, outputs_shape_dtype)]

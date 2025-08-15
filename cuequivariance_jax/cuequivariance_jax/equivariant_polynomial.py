@@ -29,9 +29,9 @@ def equivariant_polynomial(
     indices: None | list[None | jax.Array | tuple[jax.Array | slice]] = None,
     *,
     method: str = "",
-    math_dtype: jnp.dtype | None = None,
+    math_dtype: str | None = None,
     name: str | None = None,
-    precision: jax.lax.Precision = jax.lax.Precision.HIGHEST,
+    precision: jax.lax.Precision = "undefined",
 ) -> list[cuex.RepArray] | cuex.RepArray:
     """Compute an equivariant polynomial.
 
@@ -50,10 +50,8 @@ def equivariant_polynomial(
             total number of operands (inputs + outputs). Use None for unindexed
             operands. Defaults to None. Note that indices are not supported for all methods.
         method: Method to use for computation. See :func:`cuex.segmented_polynomial <cuequivariance_jax.segmented_polynomial>` for available methods.
-        math_dtype: Data type for computational operations. If None, automatically
-            determined from input types. Defaults to None.
+        math_dtype: See :func:`cuex.segmented_polynomial <cuequivariance_jax.segmented_polynomial>` for supported options.
         name: Optional name for the operation. Defaults to None.
-        precision: The precision to use for the computation. Defaults to HIGHEST. Note that precision is not supported for all methods.
 
     Returns:
         :class:`cuex.RepArray <cuequivariance_jax.RepArray>` or list of :class:`cuex.RepArray <cuequivariance_jax.RepArray>`
@@ -103,6 +101,11 @@ def equivariant_polynomial(
     """
     if name is None:
         name = "equivariant_polynomial"
+
+    if precision != "undefined":
+        raise ValueError(
+            "precision is not anymore supported. Please use math_dtype instead."
+        )
 
     if len(inputs) != poly.num_inputs:
         raise ValueError(
@@ -185,7 +188,6 @@ def equivariant_polynomial(
         math_dtype=math_dtype,
         name=name,
         method=method,
-        precision=precision,
     )
     outputs = [cuex.RepArray(rep, x) for rep, x in zip(poly.outputs, outputs)]
 

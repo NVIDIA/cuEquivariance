@@ -188,20 +188,12 @@ def test_compare_uniform_1d_with_naive(dtype):
         ],
     ]
 
-    math_dtype = {
-        jnp.bfloat16: np.float32,
-        jnp.float16: np.float32,
-        jnp.float32: np.float32,
-        jnp.float64: np.float64,
-    }[dtype]
-
     [jax_out] = cuex.segmented_polynomial(
         poly,
         operands[: poly.num_inputs],
         operands[poly.num_inputs :],
         indices,
         method="naive",
-        math_dtype=math_dtype,
     )
     [cud_out] = cuex.segmented_polynomial(
         poly,
@@ -209,7 +201,6 @@ def test_compare_uniform_1d_with_naive(dtype):
         operands[poly.num_inputs :],
         indices,
         method="uniform_1d",
-        math_dtype=math_dtype,
     )
     assert jax_out.shape == cud_out.shape
     assert jax_out.dtype == cud_out.dtype
