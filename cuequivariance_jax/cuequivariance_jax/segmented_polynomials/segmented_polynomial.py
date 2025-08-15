@@ -79,7 +79,7 @@ def segmented_polynomial(
 
             .. note::
                The ``"fused_tp"`` method is only available in the PyTorch implementation.
-                math_dtype: Data type for computational operations. If None, automatically determined from input types. Defaults to None.
+        math_dtype: Data type for computational operations. If None, automatically determined from input types. Defaults to None.
 
             Supported options vary by method:
 
