@@ -163,7 +163,7 @@ def segmented_polynomial(
     if name is None:
         name = "segmented_polynomial"
 
-    if isinstance(math_dtype, jnp.dtype):
+    if math_dtype is not None and not isinstance(math_dtype, str):
         math_dtype = jnp.dtype(math_dtype).name
     assert isinstance(math_dtype, str) or math_dtype is None
 
