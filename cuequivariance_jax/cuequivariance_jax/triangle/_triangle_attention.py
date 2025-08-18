@@ -19,6 +19,8 @@ import jax.numpy as jnp
 from jax import custom_vjp
 from jax.interpreters import batching, mlir, xla
 
+from cuequivariance_jax.triangle._naive_batching import naive_batching_rule
+
 try:
     from cuequivariance_ops_jax import (
         triangle_attention_cuda_bwd,
@@ -186,60 +188,6 @@ def triangle_attention_bwd_impl(
         return dq, dk, dv, dbias
 
 
-def triangle_attention_batching(
-    primitive: jax.extend.core.Primitive,
-    batched_inputs: tuple[jax.Array, ...],
-    batch_axes: tuple[int | None, ...],
-    *,
-    scale: float,
-    precision: jax.lax.Precision | None = None,
-) -> tuple[tuple[jax.Array, ...], tuple[int, ...]]:
-    """Generic batching rule for triangle attention primitives."""
-
-    # Move batch axes to position 0
-    def prepare(input: jax.Array, axis: int | None) -> jax.Array:
-        if axis is None:
-            return jnp.expand_dims(input, 0)
-        else:
-            return jnp.moveaxis(input, axis, 0)
-
-    batched_inputs = [
-        prepare(input, axis) for input, axis in zip(batched_inputs, batch_axes)
-    ]
-
-    # Determine the new batch dimension
-    new_dim = 1
-    for x in batched_inputs:
-        if x.shape[0] != 1:
-            assert new_dim in (1, x.shape[0])
-            new_dim = x.shape[0]
-
-    # Expand inputs with batch dim 1 to new_dim, then fuse first two dimensions
-    expanded_inputs = []
-    orig_batch_sizes = []
-
-    for x in batched_inputs:
-        orig_batch_sizes.append(x.shape[1])
-        # Expand if batch dimension is 1
-        if x.shape[0] == 1:
-            x = jnp.broadcast_to(x, (new_dim,) + x.shape[1:])
-        # Fuse first two dimensions (new_batch, B) -> (new_batch * B)
-        x = x.reshape((new_dim * x.shape[1],) + x.shape[2:])
-        expanded_inputs.append(x)
-
-    # Call the primitive
-    outputs = primitive.bind(*expanded_inputs, scale=scale, precision=precision)
-
-    # Unfuse batch dimensions: restore [new_batch, B, ...] from [new_batch * B, ...]
-    unfused_outputs = []
-    for out, orig_b in zip(outputs, orig_batch_sizes):
-        unfused_out = out.reshape((new_dim, orig_b) + out.shape[1:])
-        unfused_outputs.append(unfused_out)
-
-    # All outputs have batch axis at position 0
-    return tuple(unfused_outputs), (0,) * len(unfused_outputs)
-
-
 fwd_p.def_abstract_eval(triangle_attention_fwd_abstract_eval)
 fwd_p.def_impl(partial(xla.apply_primitive, fwd_p))
 for platform in ["cuda", None]:
@@ -262,8 +210,8 @@ for platform in ["cuda", None]:
         platform,
     )
 
-batching.primitive_batchers[fwd_p] = partial(triangle_attention_batching, fwd_p)
-batching.primitive_batchers[bwd_p] = partial(triangle_attention_batching, bwd_p)
+batching.primitive_batchers[fwd_p] = partial(naive_batching_rule, fwd_p)
+batching.primitive_batchers[bwd_p] = partial(naive_batching_rule, bwd_p)
 
 
 @partial(custom_vjp, nondiff_argnames=("scale", "precision"))
