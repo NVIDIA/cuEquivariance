@@ -69,7 +69,24 @@ OUTPUT_SHAPES = {
 
 
 def get_dims_and_config(x, layout):
-    """Get B, N, D dimensions and tile configuration for given layout."""
+    """Get B, N, D dimensions and tile configuration for given layout.
+
+    Args:
+        x: Input tensor with shape depending on layout:
+            - Layout.BND_BND: (B, N, D)
+            - Layout.BDN_BND: (B, D, N) -> dims extracted as (B, N, D)
+            - Layout.BND_BDN: (B, N, D)
+            - Layout.DBN_BND: (D, B, N) -> dims extracted as (B, N, D)
+            - Layout.BND_DBN: (B, N, D)
+        layout: Layout enum specifying tensor layout
+
+    Returns:
+        Tuple containing:
+            - B: Batch dimension
+            - N: Sequence/spatial dimension
+            - D: Feature dimension
+            - tiles: Tuple of tile sizes (TILE_N, TILE_D) for kernel optimization
+    """
     B, N, D = LAYOUT_CONFIG[layout]["dims"](x)
     tiles = LAYOUT_CONFIG[layout]["tiles"]
     return B, N, D, tiles
@@ -111,7 +128,32 @@ def layer_norm_bwd_abstract_eval(
 
 
 def layer_norm_transpose_reference_forward(x, w, b, eps, elementwise_affine, layout):
-    """Pure JAX reference implementation."""
+    """Pure JAX reference implementation of layer normalization with layout transformation.
+
+    Args:
+        x: Input tensor with layout-dependent shape:
+            - Layout.BND_BND: (B, N, D)
+            - Layout.BDN_BND: (B, D, N)
+            - Layout.DBN_BND: (D, B, N)
+            - Layout.BND_BDN: (B, N, D)
+            - Layout.BND_DBN: (B, N, D)
+        w: Weight tensor for scaling, shape (D,)
+        b: Bias tensor for shifting, shape (D,)
+        eps: Small constant for numerical stability
+        elementwise_affine: Whether to apply elementwise affine transformation
+        layout: Layout enum specifying input/output transformation
+
+    Returns:
+        Tuple containing:
+            - out: Normalized output tensor with layout-dependent shape:
+                - Layout.BND_BND: (B, N, D)
+                - Layout.BDN_BND: (B, N, D)
+                - Layout.DBN_BND: (B, N, D)
+                - Layout.BND_BDN: (B, D, N)
+                - Layout.BND_DBN: (D, B, N)
+            - mean: Per-sample means, shape (B, N)
+            - rstd: Per-sample reciprocal standard deviations, shape (B, N)
+    """
     # Transform input to BND format
     if layout == Layout.BDN_BND:
         x = x.transpose(0, 2, 1)
@@ -336,19 +378,51 @@ _layer_norm.defvjp(_layer_norm_fwd, _layer_norm_bwd)
 def layer_norm_transpose(
     x, w, b, eps=1e-5, elementwise_affine=True, layout="nd->nd", fallback=False
 ):
-    """Apply fused layer normalization with support for various input layouts.
+    """Apply fused layer normalization with support for various input/output layouts.
+
+    This function performs layer normalization along the last dimension while supporting
+    different input and output tensor layouts through reshaping and transposition.
 
     Args:
-        x: Input tensor
-        w: Weight tensor for scaling (shape: (D,))
-        b: Bias tensor for shifting (shape: (D,))
-        eps: Small constant for numerical stability
-        elementwise_affine: Whether to apply elementwise affine transformation
-        layout: Input/output layout specification
-        fallback: Whether to force fallback to reference implementation
+        x: Input tensor with shape depending on layout:
+            - "nd->nd": (N, D)
+            - "nd->dn": (N, D)
+            - "bnd->bnd": (B, N, D)
+            - "bdn->bnd": (B, D, N)
+            - "bnd->bdn": (B, N, D)
+            - "dbn->bnd": (D, B, N)
+            - "bnd->dbn": (B, N, D)
+            - "bijd->bijd": (B, I, J, D)
+            - "bijd->bdij": (B, I, J, D)
+            - "bdij->bijd": (B, D, I, J)
+            - "dbij->bijd": (D, B, I, J)
+            - "bijd->dbij": (B, I, J, D)
+        w: Weight tensor for scaling, shape (D,) where D is the feature dimension
+        b: Bias tensor for shifting, shape (D,) where D is the feature dimension
+        eps: Small constant for numerical stability (default: 1e-5)
+        elementwise_affine: Whether to apply elementwise affine transformation (default: True)
+        layout: Input/output layout specification string (default: "nd->nd")
+        fallback: Whether to force fallback to reference implementation (default: False)
 
     Returns:
-        Normalized tensor with shape determined by the output layout
+        Normalized tensor with shape determined by the output layout:
+            - "nd->nd": (N, D)
+            - "nd->dn": (D, N)
+            - "bnd->bnd": (B, N, D)
+            - "bdn->bnd": (B, N, D)
+            - "bnd->bdn": (B, D, N)
+            - "dbn->bnd": (B, N, D)
+            - "bnd->dbn": (D, B, N)
+            - "bijd->bijd": (B, I, J, D)
+            - "bijd->bdij": (B, D, I, J)
+            - "bdij->bijd": (B, I, J, D)
+            - "dbij->bijd": (B, I, J, D)
+            - "bijd->dbij": (D, B, I, J)
+
+    Notes:
+        - Normalization is always performed along the feature dimension D
+        - For 4D tensors like "bijd->bijd", the I*J dimensions are flattened to N for normalization
+        - When fallback=False, uses optimized Triton kernels on GPU; otherwise uses JAX reference
 
     Examples:
         >>> x = jnp.ones((4, 16, 64))  # (B, N, D)
