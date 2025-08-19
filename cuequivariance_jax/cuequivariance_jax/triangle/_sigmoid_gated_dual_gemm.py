@@ -36,6 +36,7 @@ except ImportError:
 
 # Unified JAX primitives
 sigmoid_gated_dual_gemm_fwd_p = jax.extend.core.Primitive("sigmoid_gated_dual_gemm_fwd")
+sigmoid_gated_dual_gemm_fwd_p.multiple_results = True
 sigmoid_gated_dual_gemm_bwd_p = jax.extend.core.Primitive("sigmoid_gated_dual_gemm_bwd")
 sigmoid_gated_dual_gemm_bwd_p.multiple_results = True
 
@@ -60,13 +61,13 @@ sigmoid_gated_dual_gemm_bwd_p.multiple_results = True
 
 
 def _abstract_eval_fwd(
-    x1: jax.core.ShapedArray,
-    x2: jax.core.ShapedArray,
-    w1: jax.core.ShapedArray,
-    w2: jax.core.ShapedArray,
-    b1: jax.core.ShapedArray,
-    b2: jax.core.ShapedArray,
-    mask: jax.core.ShapedArray,
+    x1: jax.core.ShapedArray,  # (M, K)
+    x2: jax.core.ShapedArray,  # (M, K)
+    w1: jax.core.ShapedArray,  # (N, K)
+    w2: jax.core.ShapedArray,  # (N, K)
+    b1: jax.core.ShapedArray,  # (N,)
+    b2: jax.core.ShapedArray,  # (N,)
+    mask: jax.core.ShapedArray,  # (M,)
     *,
     two_inputs: bool,
     transpose_out: bool,
@@ -79,18 +80,20 @@ def _abstract_eval_fwd(
     """Abstract evaluation for forward pass."""
     M, N = x1.shape[0], w1.shape[0]
     out_shape = (N, M) if transpose_out else (M, N)
-    return jax.core.ShapedArray(out_shape, x1.dtype)
+    return (
+        jax.core.ShapedArray(out_shape, x1.dtype),  # (M, N) or (N, M) if transpose_out
+    )
 
 
 def _abstract_eval_bwd(
-    grad_out: jax.core.ShapedArray,
-    x1: jax.core.ShapedArray,
-    x2: jax.core.ShapedArray,
-    w1: jax.core.ShapedArray,
-    w2: jax.core.ShapedArray,
-    b1: jax.core.ShapedArray,
-    b2: jax.core.ShapedArray,
-    mask: jax.core.ShapedArray,
+    grad_out: jax.core.ShapedArray,  # (M, N) or (N, M) if transpose_out
+    x1: jax.core.ShapedArray,  # (M, K)
+    x2: jax.core.ShapedArray,  # (M, K)
+    w1: jax.core.ShapedArray,  # (N, K)
+    w2: jax.core.ShapedArray,  # (N, K)
+    b1: jax.core.ShapedArray,  # (N,)
+    b2: jax.core.ShapedArray,  # (N,)
+    mask: jax.core.ShapedArray,  # (M,)
     *,
     two_inputs: bool,
     transpose_out: bool,
@@ -102,13 +105,13 @@ def _abstract_eval_bwd(
 ):
     """Abstract evaluation for backward pass."""
     return (
-        jax.core.ShapedArray(x1.shape, x1.dtype),  # grad_x1
-        jax.core.ShapedArray(x2.shape, x2.dtype),  # grad_x2
-        jax.core.ShapedArray(w1.shape, w1.dtype),  # grad_w1
-        jax.core.ShapedArray(w2.shape, w2.dtype),  # grad_w2
-        jax.core.ShapedArray(b1.shape, b1.dtype),  # grad_b1
-        jax.core.ShapedArray(b2.shape, b2.dtype),  # grad_b2
-        jax.core.ShapedArray(mask.shape, mask.dtype),  # grad_mask
+        jax.core.ShapedArray(x1.shape, x1.dtype),  # grad_x1: (M, K)
+        jax.core.ShapedArray(x2.shape, x2.dtype),  # grad_x2: (M, K)
+        jax.core.ShapedArray(w1.shape, w1.dtype),  # grad_w1: (N, K)
+        jax.core.ShapedArray(w2.shape, w2.dtype),  # grad_w2: (N, K)
+        jax.core.ShapedArray(b1.shape, b1.dtype),  # grad_b1: (N,)
+        jax.core.ShapedArray(b2.shape, b2.dtype),  # grad_b2: (N,)
+        jax.core.ShapedArray(mask.shape, mask.dtype),  # grad_mask: (M,)
     )
 
 
@@ -234,7 +237,7 @@ def _triton_forward(
         num_warps=num_warps,
     )
 
-    return results[0]
+    return results
 
 
 def _triton_backward(
@@ -281,12 +284,12 @@ def _triton_backward(
     M, K, N = x1.shape[0], x1.shape[1], w1.shape[0]
     assert N % TILE_N == 0 and K % TILE_K == 0
 
+    num_tiles_n = triton.cdiv(N, TILE_N)
     out_shapes = [
         jax.ShapeDtypeStruct(shape=(M, N), dtype=x1.dtype),  # grad_xw1
         jax.ShapeDtypeStruct(shape=(M, N), dtype=x1.dtype),  # grad_xw2
+        jax.ShapeDtypeStruct(shape=(num_tiles_n, M), dtype=mask.dtype),
     ]
-    num_tiles_n = triton.cdiv(N, TILE_N)
-    out_shapes.append(jax.ShapeDtypeStruct(shape=(num_tiles_n, M), dtype=mask.dtype))
 
     dummy = jnp.zeros((), dtype=dtype)
     results = jt.triton_call(
@@ -317,8 +320,7 @@ def _triton_backward(
         HAS_B2=has_b2,
     )
 
-    grad_xw1, grad_xw2 = results[0], results[1]
-    grad_mask = results[2]
+    grad_xw1, grad_xw2, grad_mask = results
 
     precision = precision._to_jax()
     grad_w1 = jnp.dot(grad_xw1.T, x1, precision=precision)
@@ -517,7 +519,7 @@ def _impl_dispatcher(platform: str | None, is_forward: bool, *args, **kwargs):
 
     # Fallback to reference implementation
     if is_forward:
-        return _reference_forward(*args, **kwargs)
+        return (_reference_forward(*args, **kwargs),)
     else:
         # Use JAX autodiff for backward pass
         grad_out = args[0]
@@ -544,7 +546,7 @@ sigmoid_gated_dual_gemm_bwd_p.def_impl(
 for platform in ["cuda", None]:
     mlir.register_lowering(
         sigmoid_gated_dual_gemm_fwd_p,
-        mlir.lower_fun(partial(_impl_dispatcher, platform, True), False),
+        mlir.lower_fun(partial(_impl_dispatcher, platform, True), True),
         platform,
     )
     mlir.register_lowering(
@@ -587,7 +589,7 @@ def _sigmoid_gated_dual_gemm_core(
         precision = Precision(precision)
 
     # All inputs are guaranteed to be arrays at this point
-    return sigmoid_gated_dual_gemm_fwd_p.bind(
+    (out,) = sigmoid_gated_dual_gemm_fwd_p.bind(
         x1,
         x2,
         w1,
@@ -603,6 +605,7 @@ def _sigmoid_gated_dual_gemm_core(
         has_b2=has_b2,
         has_mask=has_mask,
     )
+    return out
 
 
 def _fwd(
@@ -622,7 +625,7 @@ def _fwd(
     has_mask: bool,
 ):
     # All inputs are guaranteed to be arrays at this point
-    result = sigmoid_gated_dual_gemm_fwd_p.bind(
+    (out,) = sigmoid_gated_dual_gemm_fwd_p.bind(
         x1,
         x2,
         w1,
@@ -639,7 +642,7 @@ def _fwd(
         has_mask=has_mask,
     )
 
-    return result, (x1, x2, w1, w2, b1, b2, mask)
+    return out, (x1, x2, w1, w2, b1, b2, mask)
 
 
 def _bwd(
