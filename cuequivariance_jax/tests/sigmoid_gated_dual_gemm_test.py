@@ -699,3 +699,102 @@ def test_sigmoid_gated_dual_gemm_bias_functionality():
     assert output_batch_no_bias.shape == (B, M, N)
     assert output_batch_with_bias.shape == (B, M, N)
     assert not jnp.allclose(output_batch_no_bias, output_batch_with_bias, atol=1e-6)
+
+
+def test_sigmoid_gated_dual_gemm_vmap():
+    """Test vmap functionality with batching rule."""
+    M, N, K = 32, 64, 128
+    B = 4  # batch size for vmap
+
+    # Create test data
+    key = jax.random.key(42)
+    x_batch = jax.random.normal(key, (B, M, K), dtype=jnp.float32)
+    x2_batch = jax.random.normal(jax.random.key(1), (B, M, K), dtype=jnp.float32)
+    w1 = jax.random.normal(jax.random.key(2), (N, K), dtype=jnp.float32)
+    w2 = jax.random.normal(jax.random.key(3), (N, K), dtype=jnp.float32)
+    b1 = jax.random.normal(jax.random.key(4), (N,), dtype=jnp.float32)
+    b2 = jax.random.normal(jax.random.key(5), (N,), dtype=jnp.float32)
+    mask_batch = jax.random.uniform(jax.random.key(6), (B, M), dtype=jnp.float32)
+
+    # Test vmap for single input mode without bias
+    vmapped_single = jax.vmap(
+        lambda x: sigmoid_gated_dual_gemm(x, w1, w2, precision=Precision.IEEE)
+    )(x_batch)
+
+    # Test vmap for single input mode with bias
+    vmapped_single_bias = jax.vmap(
+        lambda x: sigmoid_gated_dual_gemm(
+            x, w1, w2, b1=b1, b2=b2, precision=Precision.IEEE
+        )
+    )(x_batch)
+
+    # Test vmap for single input mode with mask
+    vmapped_single_mask = jax.vmap(
+        lambda x, mask: sigmoid_gated_dual_gemm(
+            x, w1, w2, mask=mask, precision=Precision.IEEE
+        )
+    )(x_batch, mask_batch)
+
+    # Test vmap for single input mode with bias and mask
+    vmapped_single_bias_mask = jax.vmap(
+        lambda x, mask: sigmoid_gated_dual_gemm(
+            x, w1, w2, b1=b1, b2=b2, mask=mask, precision=Precision.IEEE
+        )
+    )(x_batch, mask_batch)
+
+    # Test vmap for dual input mode without bias
+    vmapped_dual = jax.vmap(
+        lambda x1, x2: sigmoid_gated_dual_gemm_dual_x(
+            x1, x2, w1, w2, precision=Precision.IEEE
+        )
+    )(x_batch, x2_batch)
+
+    # Test vmap for dual input mode with bias
+    vmapped_dual_bias = jax.vmap(
+        lambda x1, x2: sigmoid_gated_dual_gemm_dual_x(
+            x1, x2, w1, w2, b1=b1, b2=b2, precision=Precision.IEEE
+        )
+    )(x_batch, x2_batch)
+
+    # Test vmap for dual input mode with mask
+    vmapped_dual_mask = jax.vmap(
+        lambda x1, x2, mask: sigmoid_gated_dual_gemm_dual_x(
+            x1, x2, w1, w2, mask=mask, precision=Precision.IEEE
+        )
+    )(x_batch, x2_batch, mask_batch)
+
+    # Test vmap for dual input mode with bias and mask
+    vmapped_dual_bias_mask = jax.vmap(
+        lambda x1, x2, mask: sigmoid_gated_dual_gemm_dual_x(
+            x1, x2, w1, w2, b1=b1, b2=b2, mask=mask, precision=Precision.IEEE
+        )
+    )(x_batch, x2_batch, mask_batch)
+
+    # Test vmap with transpose_out=True
+    vmapped_single_transpose = jax.vmap(
+        lambda x: sigmoid_gated_dual_gemm(
+            x, w1, w2, transpose_out=True, precision=Precision.IEEE
+        )
+    )(x_batch)
+
+    vmapped_dual_transpose = jax.vmap(
+        lambda x1, x2: sigmoid_gated_dual_gemm_dual_x(
+            x1, x2, w1, w2, transpose_out=True, precision=Precision.IEEE
+        )
+    )(x_batch, x2_batch)
+
+    # Verify shapes
+    validate_output(vmapped_single, (B, M, N), "vmap single input")
+    validate_output(vmapped_single_bias, (B, M, N), "vmap single input with bias")
+    validate_output(vmapped_single_mask, (B, M, N), "vmap single input with mask")
+    validate_output(
+        vmapped_single_bias_mask, (B, M, N), "vmap single input with bias and mask"
+    )
+    validate_output(vmapped_dual, (B, M, N), "vmap dual input")
+    validate_output(vmapped_dual_bias, (B, M, N), "vmap dual input with bias")
+    validate_output(vmapped_dual_mask, (B, M, N), "vmap dual input with mask")
+    validate_output(
+        vmapped_dual_bias_mask, (B, M, N), "vmap dual input with bias and mask"
+    )
+    validate_output(vmapped_single_transpose, (B, N, M), "vmap single input transpose")
+    validate_output(vmapped_dual_transpose, (B, N, M), "vmap dual input transpose")

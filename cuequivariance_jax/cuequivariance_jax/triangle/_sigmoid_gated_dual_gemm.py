@@ -19,10 +19,11 @@ from functools import partial
 import jax
 import jax.numpy as jnp
 from jax import custom_vjp
-from jax.interpreters import mlir, xla
+from jax.interpreters import batching, mlir, xla
 
 from cuequivariance_jax.benchmarking import measure_clock_ticks
 
+from ._naive_batching import naive_batching_rule
 from ._utils import Precision
 
 try:
@@ -554,6 +555,77 @@ for platform in ["cuda", None]:
         mlir.lower_fun(partial(_impl_dispatcher, platform, False), True),
         platform,
     )
+
+
+def _sigmoid_gated_dual_gemm_fwd_batching_rule(
+    batched_inputs: tuple[jax.Array, ...],
+    vmapped_axes: tuple[int | None, ...],
+    *,
+    two_inputs: bool,
+    transpose_out: bool,
+    precision: Precision,
+    fallback: bool,
+    has_b1: bool,
+    has_b2: bool,
+    has_mask: bool,
+) -> tuple[tuple[jax.Array, ...], tuple[int, ...]]:
+    """Batching rule for sigmoid gated dual GEMM forward pass.
+
+    Assumes batch axis is the M axis (axis 0 for x1, x2, mask).
+    """
+    # Input batch axes: (x1, x2, w1, w2, b1, b2, mask)
+    # x1: (M, K) -> batch on axis 0
+    # x2: (M, K) -> batch on axis 0
+    # w1: (N, K) -> not batched (None)
+    # w2: (N, K) -> not batched (None)
+    # b1: (N,) -> not batched (None)
+    # b2: (N,) -> not batched (None)
+    # mask: (M,) -> batch on axis 0
+    input_batch_axes = (0, 0, None, None, None, None, 0)
+
+    # Output batch axes: (out,)
+    # out: (M, N) -> batch on axis 0 if not transpose_out
+    # out: (N, M) -> batch on axis 1 if transpose_out
+    output_batch_axes = (1 if transpose_out else 0,)
+
+    return naive_batching_rule(
+        sigmoid_gated_dual_gemm_fwd_p,
+        input_batch_axes,
+        output_batch_axes,
+        batched_inputs,
+        vmapped_axes,
+        two_inputs=two_inputs,
+        transpose_out=transpose_out,
+        precision=precision,
+        fallback=fallback,
+        has_b1=has_b1,
+        has_b2=has_b2,
+        has_mask=has_mask,
+    )
+
+
+def _sigmoid_gated_dual_gemm_bwd_batching_rule(
+    batched_inputs: tuple[jax.Array, ...],
+    vmapped_axes: tuple[int | None, ...],
+    *,
+    two_inputs: bool,
+    transpose_out: bool,
+    precision: Precision,
+    fallback: bool,
+    has_b1: bool,
+    has_b2: bool,
+    has_mask: bool,
+) -> tuple[tuple[jax.Array, ...], tuple[int, ...]]:
+    raise NotImplementedError("Batching rule for backward pass not implemented")
+
+
+# Register batching rules
+batching.primitive_batchers[sigmoid_gated_dual_gemm_fwd_p] = (
+    _sigmoid_gated_dual_gemm_fwd_batching_rule
+)
+batching.primitive_batchers[sigmoid_gated_dual_gemm_bwd_p] = (
+    _sigmoid_gated_dual_gemm_bwd_batching_rule
+)
 
 
 @partial(
