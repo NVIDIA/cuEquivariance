@@ -210,8 +210,12 @@ for platform in ["cuda", None]:
         platform,
     )
 
-batching.primitive_batchers[fwd_p] = partial(naive_batching_rule, fwd_p)
-batching.primitive_batchers[bwd_p] = partial(naive_batching_rule, bwd_p)
+batching.primitive_batchers[fwd_p] = partial(
+    naive_batching_rule, fwd_p, (0, 0, 0, 0, 0), (0, 0, 0)
+)
+batching.primitive_batchers[bwd_p] = partial(
+    naive_batching_rule, bwd_p, (0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0)
+)
 
 
 @partial(custom_vjp, nondiff_argnames=("scale", "precision"))

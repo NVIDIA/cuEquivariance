@@ -18,7 +18,9 @@ from functools import partial
 import jax
 import jax.numpy as jnp
 from jax import custom_vjp
-from jax.interpreters import mlir, xla
+from jax.interpreters import batching, mlir, xla
+
+from cuequivariance_jax.triangle._naive_batching import naive_batching_rule
 
 try:
     import jax_triton as jt
@@ -46,17 +48,36 @@ layer_norm_bwd_p.multiple_results = True
 
 # Layout configuration mapping
 LAYOUT_CONFIG = {
-    Layout.BND_BND: {"dims": lambda x: x.shape, "tiles": (64, 64)},
+    Layout.BND_BND: {
+        "dims": lambda x: x.shape,
+        "tiles": (64, 64),
+        "in_batch_axis": 0,
+        "out_batch_axis": 0,
+    },
     Layout.BDN_BND: {
         "dims": lambda x: (x.shape[0], x.shape[2], x.shape[1]),
         "tiles": (64, 64),
+        "in_batch_axis": 0,
+        "out_batch_axis": 0,
     },
-    Layout.BND_BDN: {"dims": lambda x: x.shape, "tiles": (64, 64)},
+    Layout.BND_BDN: {
+        "dims": lambda x: x.shape,
+        "tiles": (64, 64),
+        "in_batch_axis": 0,
+        "out_batch_axis": 0,
+    },
     Layout.DBN_BND: {
         "dims": lambda x: (x.shape[1], x.shape[2], x.shape[0]),
         "tiles": (64, 64),
+        "in_batch_axis": 1,
+        "out_batch_axis": 0,
     },
-    Layout.BND_DBN: {"dims": lambda x: x.shape, "tiles": (64, 64)},
+    Layout.BND_DBN: {
+        "dims": lambda x: x.shape,
+        "tiles": (64, 64),
+        "in_batch_axis": 0,
+        "out_batch_axis": 1,
+    },
 }
 
 OUTPUT_SHAPES = {
@@ -108,22 +129,32 @@ def get_backward_tile_n(dtype, base_tile_n=64):
 
 
 def layer_norm_fwd_abstract_eval(x, w, b, *, eps, elementwise_affine, layout, fallback):
+    # x: shape determined by input layout
+    # w: shape (D,)
+    # b: shape (D,)
     B, N, D, _ = get_dims_and_config(x, layout)
     out_shape = OUTPUT_SHAPES[layout](B, N, D)
     return (
-        jax.core.ShapedArray(out_shape, x.dtype),
-        jax.core.ShapedArray((B, N), x.dtype),
-        jax.core.ShapedArray((B, N), x.dtype),
+        jax.core.ShapedArray(out_shape, x.dtype),  # out
+        jax.core.ShapedArray((B, N), x.dtype),  # mean
+        jax.core.ShapedArray((B, N), x.dtype),  # rstd
     )
 
 
 def layer_norm_bwd_abstract_eval(
     grad_out, x, w, b, mean, rstd, *, eps, elementwise_affine, layout, fallback
 ):
+    # grad_out: shape determined by output layout
+    # x: shape determined by input layout
+    # w: shape (D,)
+    # b: shape (D,)
+    # mean: shape (B, N)
+    # rstd: shape (B, N)
+    B, N, D, _ = get_dims_and_config(x, layout)
     return (
-        jax.core.ShapedArray(x.shape, x.dtype),
-        jax.core.ShapedArray(w.shape, w.dtype),
-        jax.core.ShapedArray(b.shape, b.dtype),
+        jax.core.ShapedArray(x.shape, x.dtype),  # shape determined by input layout
+        jax.core.ShapedArray((B, D), w.dtype),  # (B, D)
+        jax.core.ShapedArray((B, D), b.dtype),  # (B, D)
     )
 
 
@@ -137,8 +168,8 @@ def layer_norm_transpose_reference_forward(x, w, b, eps, elementwise_affine, lay
             - Layout.DBN_BND: (D, B, N)
             - Layout.BND_BDN: (B, N, D)
             - Layout.BND_DBN: (B, N, D)
-        w: Weight tensor for scaling, shape (D,)
-        b: Bias tensor for shifting, shape (D,)
+        w: Weight tensor for scaling, shape (D,) (or (B, D))
+        b: Bias tensor for shifting, shape (D,) (or (B, D))
         eps: Small constant for numerical stability
         elementwise_affine: Whether to apply elementwise affine transformation
         layout: Layout enum specifying input/output transformation
@@ -154,11 +185,17 @@ def layer_norm_transpose_reference_forward(x, w, b, eps, elementwise_affine, lay
             - mean: Per-sample means, shape (B, N)
             - rstd: Per-sample reciprocal standard deviations, shape (B, N)
     """
+    B, N, D, _ = get_dims_and_config(x, layout)
+
     # Transform input to BND format
     if layout == Layout.BDN_BND:
         x = x.transpose(0, 2, 1)
     elif layout == Layout.DBN_BND:
         x = x.transpose(1, 2, 0)
+
+    assert x.shape == (B, N, D), f"x.shape: {x.shape}"
+    assert w.shape == (D,) or w.shape == (B, D), f"w.shape: {w.shape}"
+    assert b.shape == (D,) or b.shape == (B, D), f"b.shape: {b.shape}"
 
     # Compute mean and normalize
     mean = jnp.mean(x, axis=2, keepdims=False)
@@ -169,7 +206,10 @@ def layer_norm_transpose_reference_forward(x, w, b, eps, elementwise_affine, lay
 
     # Apply affine transformation
     if elementwise_affine:
-        out = x_hat * w[None, None, :] + b[None, None, :]
+        w = w[:, None, :] if w.ndim == 2 else w[None, None, :]
+        b = b[:, None, :] if b.ndim == 2 else b[None, None, :]
+
+        out = x_hat * w + b
     else:
         out = x_hat
 
@@ -195,6 +235,9 @@ def _layer_norm_forward_impl(x, w, b, eps, elementwise_affine, layout):
 
     B, N, D, (TILE_N, TILE_D) = get_dims_and_config(x, layout)
     out_shape = OUTPUT_SHAPES[layout](B, N, D)
+
+    assert w.shape == (D,)
+    assert b.shape == (D,)
 
     out, mean, rstd = jt.triton_call(
         x,
@@ -231,6 +274,9 @@ def _layer_norm_backward_impl(
     from cuequivariance_ops.triton import layer_norm_transpose_backward_kernel
 
     B, N, D, (base_tile_n, TILE_D) = get_dims_and_config(x, layout)
+    assert w.shape == (D,)
+    assert b.shape == (D,)
+
     # Use dtype-dependent TILE_N for backward pass
     TILE_N = get_backward_tile_n(x.dtype, base_tile_n)
     num_tiles = triton.cdiv(N, TILE_N)
@@ -259,13 +305,15 @@ def _layer_norm_backward_impl(
         num_stages=2,
     )
 
-    grad_w = jnp.sum(grad_w_tiles, axis=(0, 1))
-    grad_b = jnp.sum(grad_b_tiles, axis=(0, 1))
+    grad_w = jnp.sum(grad_w_tiles, axis=1)
+    grad_b = jnp.sum(grad_b_tiles, axis=1)
+    assert grad_w.shape == (B, D)
+    assert grad_b.shape == (B, D)
 
     # When elementwise_affine=False, gradients w.r.t. w and b should be zero
     if not elementwise_affine:
-        grad_w = jnp.zeros_like(w)
-        grad_b = jnp.zeros_like(b)
+        grad_w = jnp.zeros_like(w, shape=(B, D))
+        grad_b = jnp.zeros_like(b, shape=(B, D))
 
     return grad_x, grad_w, grad_b
 
@@ -295,6 +343,12 @@ def layer_norm_impl(platform, is_forward, *args, **kwargs):
                 x, w, b, eps, elementwise_affine, layout
             )[0]
 
+        # We need to broadcase (D,) -> (B, D) to output a gradient with a batch size to be compatible with _layer_norm_backward_impl format
+        # _layer_norm_backward_impl outputs a w and b gradient with shape (B, D) to support the vmap rule
+        B, N, D, _ = get_dims_and_config(x, layout)
+        w = jnp.broadcast_to(w, (B, D))
+        b = jnp.broadcast_to(b, (B, D))
+
         _, vjp_fn = jax.vjp(forward_fn, x, w, b)
         return vjp_fn(grad_out)
 
@@ -320,6 +374,60 @@ for platform in ["cuda", None]:
         ),
         platform,
     )
+
+
+def _layer_norm_fwd_batching_rule(
+    batched_inputs: tuple[jax.Array, ...],
+    vmapped_axes: tuple[int | None, ...],
+    *,
+    eps,
+    elementwise_affine,
+    layout,
+    fallback,
+) -> tuple[tuple[jax.Array, ...], tuple[int, ...]]:
+    """Batching rule for layer norm forward pass."""
+    axis_in = LAYOUT_CONFIG[layout]["in_batch_axis"]
+    axis_out = LAYOUT_CONFIG[layout]["out_batch_axis"]
+    return naive_batching_rule(
+        layer_norm_fwd_p,
+        (axis_in, None, None),  # (x, w, b)
+        (axis_out, 0, 0),  # (out, mean, rstd)
+        batched_inputs,
+        vmapped_axes,
+        eps=eps,
+        elementwise_affine=elementwise_affine,
+        layout=layout,
+        fallback=fallback,
+    )
+
+
+def _layer_norm_bwd_batching_rule(
+    batched_inputs: tuple[jax.Array, ...],
+    vmapped_axes: tuple[int | None, ...],
+    *,
+    eps,
+    elementwise_affine,
+    layout,
+    fallback,
+) -> tuple[tuple[jax.Array, ...], tuple[int, ...]]:
+    """Batching rule for layer norm backward pass."""
+    axis_in = LAYOUT_CONFIG[layout]["in_batch_axis"]
+    axis_out = LAYOUT_CONFIG[layout]["out_batch_axis"]
+    return naive_batching_rule(
+        layer_norm_bwd_p,
+        (axis_out, axis_in, None, None, 0, 0),  # (grad_out, x, w, b, mean, rstd)
+        (axis_in, 0, 0),  # (grad_x, grad_w, grad_b)
+        batched_inputs,
+        vmapped_axes,
+        eps=eps,
+        elementwise_affine=elementwise_affine,
+        layout=layout,
+        fallback=fallback,
+    )
+
+
+batching.primitive_batchers[layer_norm_fwd_p] = _layer_norm_fwd_batching_rule
+batching.primitive_batchers[layer_norm_bwd_p] = _layer_norm_bwd_batching_rule
 
 
 @partial(
@@ -358,7 +466,7 @@ def _layer_norm_fwd(x, w, b, eps, elementwise_affine, layout, fallback):
 
 def _layer_norm_bwd(eps, elementwise_affine, layout, fallback, residuals, grad_out):
     x, w, b, mean, rstd = residuals
-    return layer_norm_bwd_p.bind(
+    grad_x, grad_w, grad_b = layer_norm_bwd_p.bind(
         grad_out,
         x,
         w,
@@ -370,6 +478,12 @@ def _layer_norm_bwd(eps, elementwise_affine, layout, fallback, residuals, grad_o
         layout=layout,
         fallback=fallback,
     )
+    grad_w = jnp.sum(grad_w, axis=0)
+    grad_b = jnp.sum(grad_b, axis=0)
+    assert grad_x.shape == x.shape
+    assert grad_w.shape == w.shape
+    assert grad_b.shape == b.shape
+    return (grad_x, grad_w, grad_b)
 
 
 _layer_norm.defvjp(_layer_norm_fwd, _layer_norm_bwd)

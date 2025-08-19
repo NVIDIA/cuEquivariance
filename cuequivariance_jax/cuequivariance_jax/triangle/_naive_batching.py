@@ -19,71 +19,71 @@ import jax.numpy as jnp
 
 def naive_batching_rule(
     primitive: jax.extend.core.Primitive,
+    input_batch_axes: tuple[int | None, ...],
+    output_batch_axes: tuple[int, ...],
     batched_inputs: tuple[jax.Array, ...],
-    batch_axes: tuple[int | None, ...],
+    vmapped_axes: tuple[int | None, ...],
     **kwargs,
 ) -> tuple[tuple[jax.Array, ...], tuple[int, ...]]:
-    """Generic naive batching rule for primitives that only support single batch dimensions.
+    """Generic naive batching rule for primitives with flexible batch axis support."""
+    assert len(vmapped_axes) == len(batched_inputs)
+    assert len(input_batch_axes) == len(batched_inputs)
 
-    This batching rule handles vmap by:
-    1. Moving all batch axes to position 0
-    2. Expanding inputs with batch size 1 to the vmap batch size
-    3. Fusing the vmap dimension with the native batch dimension
-    4. Calling the primitive with fused batch dimension
-    5. Unfusing the output dimensions back to separate vmap and native batch
+    vmap_size = batch_size = None
+    prepared_inputs = []
 
-    Args:
-        primitive: The JAX primitive to call
-        batched_inputs: Input arrays with vmap batch dimension
-        batch_axes: Batch axis positions for each input (None if not batched)
-        **kwargs: Additional keyword arguments to pass to the primitive
-
-    Returns:
-        Tuple of (outputs, output_batch_axes) where output_batch_axes are all 0
-
-    Note:
-        This is a "naive" implementation because it uses jnp.broadcast_to to expand
-        inputs with batch size 1, which can be memory-inefficient. Ideally, the
-        backend primitive should natively support mixed batch sizes.
-    """
-
-    # Move batch axes to position 0
-    def prepare(input: jax.Array, axis: int | None) -> jax.Array:
-        if axis is None:
-            return jnp.expand_dims(input, 0)
+    # Prepare inputs: handle batch/vmap axes
+    for i, (arr, batch_axis, vmap_axis) in enumerate(
+        zip(batched_inputs, input_batch_axes, vmapped_axes)
+    ):
+        if batch_axis is None:
+            if vmap_axis is not None:
+                raise ValueError(
+                    f"Input {i} has vmap_axis={vmap_axis} but {primitive} has no batch axis for this input"
+                )
+            prepared_inputs.append(arr)
         else:
-            return jnp.moveaxis(input, axis, 0)
+            if vmap_axis is None:
+                arr = jnp.expand_dims(arr, axis=batch_axis)
+                prepared_inputs.append(arr)
+                # (..., 1, batch_size, ...)
+            else:
+                vmap_size = vmap_size or arr.shape[vmap_axis]
+                assert vmap_size == arr.shape[vmap_axis]
 
-    batched_inputs = [
-        prepare(input, axis) for input, axis in zip(batched_inputs, batch_axes)
-    ]
+                arr = jnp.moveaxis(arr, vmap_axis, batch_axis)
+                prepared_inputs.append(arr)
+                # (..., vmap_size, batch_size, ...)
+            batch_size = batch_size or arr.shape[batch_axis + 1]
+            assert batch_size == arr.shape[batch_axis + 1]
 
-    # Determine the new batch dimension and extract native batch sizes
-    new_dim = 1
-    old_dim = 1
+    assert vmap_size is not None  # this should never happen
 
-    for x in batched_inputs:
-        if x.shape[0] != 1:
-            assert new_dim in (1, x.shape[0])
-            new_dim = x.shape[0]
-        if x.shape[1] != 1:
-            assert old_dim in (1, x.shape[1])
-            old_dim = x.shape[1]
+    # Fuse dimensions for primitive call
+    final_inputs = []
+    for arr, batch_axis in zip(prepared_inputs, input_batch_axes):
+        if batch_axis is not None:
+            shape = list(arr.shape)
+            shape[batch_axis] = vmap_size
+            arr = jnp.broadcast_to(arr, shape)  # (..., vmap_size, batch_size, ...)
 
-    expanded_inputs = []
-    for x in batched_inputs:
-        x = jnp.broadcast_to(x, (new_dim, old_dim) + x.shape[2:])
-        x = x.reshape((new_dim * old_dim,) + x.shape[2:])
-        expanded_inputs.append(x)
+            shape[batch_axis] = vmap_size * batch_size
+            shape.pop(batch_axis + 1)
+            arr = arr.reshape(shape)  # (..., vmap_size * batch_size, ...)
+        final_inputs.append(arr)
 
-    # Call the primitive
-    outputs = primitive.bind(*expanded_inputs, **kwargs)
+    outputs = primitive.bind(*final_inputs, **kwargs)
+    assert primitive.multiple_results and isinstance(outputs, (tuple, list))
+    assert len(outputs) == len(output_batch_axes)
 
-    # Unfuse batch dimensions
+    # Unfuse output dimensions
     unfused_outputs = []
-    for out in outputs:
-        unfused_out = out.reshape((new_dim, old_dim) + out.shape[1:])
-        unfused_outputs.append(unfused_out)
+    for out, batch_axis in zip(outputs, output_batch_axes):
+        # Unfuse and move vmap dimension to position 0
+        shape = list(out.shape)
+        shape[batch_axis : batch_axis + 1] = [vmap_size, batch_size]
+        out = out.reshape(shape)
+        out = jnp.moveaxis(out, batch_axis, 0)
+        unfused_outputs.append(out)
 
-    # All outputs have batch axis at position 0
     return tuple(unfused_outputs), (0,) * len(unfused_outputs)
