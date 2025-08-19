@@ -128,7 +128,7 @@ def get_backward_tile_n(dtype, base_tile_n=64):
     return base_tile_n
 
 
-def layer_norm_fwd_abstract_eval(x, w, b, *, eps, elementwise_affine, layout, fallback):
+def layer_norm_fwd_abstract_eval(x, w, b, *, layout, **unused_kwargs):
     # x: shape determined by input layout
     # w: shape (D,)
     # b: shape (D,)
@@ -142,7 +142,7 @@ def layer_norm_fwd_abstract_eval(x, w, b, *, eps, elementwise_affine, layout, fa
 
 
 def layer_norm_bwd_abstract_eval(
-    grad_out, x, w, b, mean, rstd, *, eps, elementwise_affine, layout, fallback
+    grad_out, x, w, b, mean, rstd, *, layout, **unused_kwargs
 ):
     # grad_out: shape determined by output layout
     # x: shape determined by input layout

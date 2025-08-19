@@ -70,13 +70,8 @@ def _abstract_eval_fwd(
     b2: jax.core.ShapedArray,  # (N,)
     mask: jax.core.ShapedArray,  # (M,)
     *,
-    two_inputs: bool,
     transpose_out: bool,
-    precision: Precision,
-    fallback: bool,
-    has_b1: bool,
-    has_b2: bool,
-    has_mask: bool,
+    **unused_kwargs,
 ):
     """Abstract evaluation for forward pass."""
     M, N = x1.shape[0], w1.shape[0]
@@ -95,14 +90,7 @@ def _abstract_eval_bwd(
     b1: jax.core.ShapedArray,  # (N,)
     b2: jax.core.ShapedArray,  # (N,)
     mask: jax.core.ShapedArray,  # (M,)
-    *,
-    two_inputs: bool,
-    transpose_out: bool,
-    precision: Precision,
-    fallback: bool,
-    has_b1: bool,
-    has_b2: bool,
-    has_mask: bool,
+    **unused_kwargs,
 ):
     """Abstract evaluation for backward pass.
 

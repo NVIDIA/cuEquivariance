@@ -98,9 +98,7 @@ def triangle_attention_fwd_abstract_eval(
     v: jax.core.ShapedArray,  # [B, N, H, S_kv, D]
     bias: jax.core.ShapedArray,  # [B, 1, H, S_qo, S_kv]
     mask: jax.core.ShapedArray,  # [B, N, 1, 1, S_kv] boolean
-    *,
-    scale: float,
-    precision: jax.lax.Precision | None = None,
+    **unused_kwargs,
 ) -> tuple[jax.core.ShapedArray, jax.core.ShapedArray, jax.core.ShapedArray]:
     B, N, H, S_qo, D = q.shape
     a_shape = jax.core.ShapedArray((B, N, H, S_qo, D), q.dtype)
@@ -118,9 +116,7 @@ def triangle_attention_bwd_abstract_eval(
     v: jax.core.ShapedArray,  # [B, N, H, S_kv, D]
     bias: jax.core.ShapedArray,  # [B, 1, H, S_qo, S_kv]
     mask: jax.core.ShapedArray,  # [B, N, 1, 1, S_kv] boolean
-    *,
-    scale: float,
-    precision: jax.lax.Precision | None = None,
+    **unused_kwargs,
 ) -> tuple[
     jax.core.ShapedArray,
     jax.core.ShapedArray,
