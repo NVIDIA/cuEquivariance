@@ -39,7 +39,8 @@ def naive_batching_rule(
         if batch_axis is None:
             if vmap_axis is not None:
                 raise ValueError(
-                    f"Input {i} has vmap_axis={vmap_axis} but {primitive} has no batch axis for this input"
+                    f"Input {i} has vmap_axis={vmap_axis} but {primitive} has no batch axis for this input. "
+                    "If you see this error, please consider opening an issue at https://github.com/NVIDIA/cuEquivariance."
                 )
             prepared_inputs.append(arr)
         else:
