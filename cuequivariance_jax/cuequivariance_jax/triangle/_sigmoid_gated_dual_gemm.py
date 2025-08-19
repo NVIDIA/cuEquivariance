@@ -104,26 +104,29 @@ def _abstract_eval_bwd(
     has_b2: bool,
     has_mask: bool,
 ):
-    """Abstract evaluation for backward pass."""
+    """Abstract evaluation for backward pass.
+
+    Returns intermediate gradients (matching Triton kernel output):
+    - grad_xw1: (M, N) - gradient w.r.t. first projection
+    - grad_xw2: (M, N) - gradient w.r.t. second projection
+    - grad_mask: (M,) - gradient w.r.t. mask (summed)
+    """
+    M, N = x1.shape[0], w1.shape[0]
     return (
-        jax.core.ShapedArray(x1.shape, x1.dtype),  # grad_x1: (M, K)
-        jax.core.ShapedArray(x2.shape, x2.dtype),  # grad_x2: (M, K)
-        jax.core.ShapedArray(w1.shape, w1.dtype),  # grad_w1: (N, K)
-        jax.core.ShapedArray(w2.shape, w2.dtype),  # grad_w2: (N, K)
-        jax.core.ShapedArray(b1.shape, b1.dtype),  # grad_b1: (N,)
-        jax.core.ShapedArray(b2.shape, b2.dtype),  # grad_b2: (N,)
-        jax.core.ShapedArray(mask.shape, mask.dtype),  # grad_mask: (M,)
+        jax.core.ShapedArray((M, N), grad_out.dtype),  # grad_xw1: (M, N)
+        jax.core.ShapedArray((M, N), grad_out.dtype),  # grad_xw2: (M, N)
+        jax.core.ShapedArray((M,), mask.dtype),  # grad_mask: (M,)
     )
 
 
 def _reference_forward(
-    x1: jax.Array,
-    x2: jax.Array,
-    w1: jax.Array,
-    w2: jax.Array,
-    b1: jax.Array,
-    b2: jax.Array,
-    mask: jax.Array,
+    x1: jax.Array,  # (M, K)
+    x2: jax.Array,  # (M, K)
+    w1: jax.Array,  # (N, K)
+    w2: jax.Array,  # (N, K)
+    b1: jax.Array,  # (N,)
+    b2: jax.Array,  # (N,)
+    mask: jax.Array,  # (M,)
     *,
     two_inputs: bool,
     transpose_out: bool,
@@ -133,14 +136,6 @@ def _reference_forward(
     has_mask: bool,
 ):
     """Pure JAX reference implementation."""
-    # x1: (M, K)
-    # x2: (M, K)
-    # w1: (N, K)
-    # w2: (N, K)
-    # b1: (N,)
-    # b2: (N,)
-    # mask: (M,)
-    # returns: (M, N) or (N, M) if transpose_out=True
     precision = precision._to_jax()
     if two_inputs:
         acc_1 = jnp.dot(x1, w1.T, precision=precision)
@@ -163,7 +158,75 @@ def _reference_forward(
 
     output = output.astype(x1.dtype)
 
-    return output.T if transpose_out else output
+    return output.T if transpose_out else output  # (M, N) or (N, M) if transpose_out
+
+
+def _reference_backward(
+    grad_out: jax.Array,  # (M, N) or (N, M) if transpose_out
+    x1: jax.Array,  # (M, K)
+    x2: jax.Array,  # (M, K)
+    w1: jax.Array,  # (N, K)
+    w2: jax.Array,  # (N, K)
+    b1: jax.Array,  # (N,)
+    b2: jax.Array,  # (N,)
+    mask: jax.Array,  # (M,)
+    *,
+    two_inputs: bool,
+    transpose_out: bool,
+    precision: Precision,
+    has_b1: bool,
+    has_b2: bool,
+    has_mask: bool,
+):
+    """Pure JAX reference implementation of backward pass.
+
+    Replicates the Triton backward kernel logic, returning intermediate gradients
+    that match the kernel's output format.
+
+    Returns:
+        tuple: (grad_xw1, grad_xw2, grad_mask) where:
+            - grad_xw1: shape (M, N) - gradient w.r.t. first projection
+            - grad_xw2: shape (M, N) - gradient w.r.t. second projection
+            - grad_mask: shape (M,) - gradient w.r.t. mask (summed)
+    """
+
+    precision = precision._to_jax()
+
+    # Recompute forward pass to get intermediate values
+    if two_inputs:
+        acc_1 = jnp.dot(x1, w1.T, precision=precision)
+        acc_2 = jnp.dot(x2, w2.T, precision=precision)
+    else:
+        acc_1 = jnp.dot(x1, w1.T, precision=precision)
+        acc_2 = jnp.dot(x1, w2.T, precision=precision)
+
+    # Add bias (bias arrays are always provided, but has_b1/has_b2 determine if they should be applied)
+    if has_b1:
+        acc_1 = acc_1 + b1[None, :]
+    if has_b2:
+        acc_2 = acc_2 + b2[None, :]
+
+    # Compute sigmoid
+    acc_sig = jax.nn.sigmoid(acc_1)  # (M, N)
+
+    # Handle transposed gradient output
+    if transpose_out:
+        grad_out = grad_out.T  # Convert (N, M) -> (M, N)
+
+    # Apply mask to gradient if present
+    if has_mask:
+        # Compute gradient w.r.t. mask: grad_mask = grad_out * (acc_sig * acc_2)
+        grad_mask = jnp.sum(grad_out * (acc_sig * acc_2), axis=1)  # (M,)
+        # Apply mask to gradient
+        grad_out = grad_out * mask[:, None]  # (M, N)
+    else:
+        grad_mask = jnp.zeros(x1.shape[0], dtype=x1.dtype)  # (M,)
+
+    # Compute intermediate gradients (matching Triton kernel output)
+    grad_xw2 = grad_out * acc_sig  # (M, N)
+    grad_xw1 = grad_out * acc_2 * acc_sig * (1.0 - acc_sig)  # (M, N)
+
+    return grad_xw1, grad_xw2, grad_mask  # (M, N), (M, N), (M,)
 
 
 def _triton_forward(
@@ -208,10 +271,9 @@ def _triton_forward(
     assert N % TILE_N == 0 and K % TILE_K == 0
 
     out_shape = (N, M) if transpose_out else (M, N)
-    out_shapes = [jax.ShapeDtypeStruct(shape=out_shape, dtype=x1.dtype)]
-
     dummy = jnp.zeros((), dtype=dtype)
-    results = jt.triton_call(
+
+    return jt.triton_call(
         x1,
         x2 if two_inputs else dummy,
         w1,
@@ -223,7 +285,7 @@ def _triton_forward(
         N,
         K,
         kernel=fused_sigmoid_gated_dual_gemm_forward_kernel,
-        out_shape=out_shapes,
+        out_shape=[jax.ShapeDtypeStruct(shape=out_shape, dtype=x1.dtype)],
         grid=(triton.cdiv(M, TILE_M), triton.cdiv(N, TILE_N), 1),
         TILE_M=TILE_M,
         TILE_N=TILE_N,
@@ -237,8 +299,6 @@ def _triton_forward(
         num_stages=num_stages,
         num_warps=num_warps,
     )
-
-    return results
 
 
 def _triton_backward(
@@ -293,7 +353,7 @@ def _triton_backward(
     ]
 
     dummy = jnp.zeros((), dtype=dtype)
-    results = jt.triton_call(
+    grad_xw1, grad_xw2, grad_mask = jt.triton_call(
         grad_out,
         x1,
         x2 if two_inputs else dummy,
@@ -320,27 +380,7 @@ def _triton_backward(
         HAS_B1=has_b1,
         HAS_B2=has_b2,
     )
-
-    grad_xw1, grad_xw2, grad_mask = results
-
-    precision = precision._to_jax()
-    grad_w1 = jnp.dot(grad_xw1.T, x1, precision=precision)
-    grad_x1 = jnp.dot(grad_xw1, w1, precision=precision)
-    if two_inputs:
-        grad_w2 = jnp.dot(grad_xw2.T, x2, precision=precision)
-        grad_x2 = jnp.dot(grad_xw2, w2, precision=precision)
-    else:
-        grad_w2 = jnp.dot(grad_xw2.T, x1, precision=precision)
-        grad_x1 += jnp.dot(grad_xw2, w2, precision=precision)
-        grad_x2 = jnp.zeros_like(x2)
-
-    # Compute bias gradients
-    grad_b1 = jnp.sum(grad_xw1, axis=0)
-    grad_b2 = jnp.sum(grad_xw2, axis=0)
-
-    grad_mask = jnp.sum(grad_mask, axis=0)
-
-    return grad_x1, grad_x2, grad_w1, grad_w2, grad_b1, grad_b2, grad_mask
+    return grad_xw1, grad_xw2, jnp.sum(grad_mask, axis=0)
 
 
 def run_decoy(f, input_dict):
@@ -522,15 +562,7 @@ def _impl_dispatcher(platform: str | None, is_forward: bool, *args, **kwargs):
     if is_forward:
         return (_reference_forward(*args, **kwargs),)
     else:
-        # Use JAX autodiff for backward pass
-        grad_out = args[0]
-        x1, x2, w1, w2, b1, b2, mask = args[1:]
-
-        def forward_fn(x1, x2, w1, w2, b1, b2, mask):
-            return _reference_forward(x1, x2, w1, w2, b1, b2, mask, **kwargs)
-
-        _, vjp_fn = jax.vjp(forward_fn, x1, x2, w1, w2, b1, b2, mask)
-        return vjp_fn(grad_out)
+        return _reference_backward(*args, **kwargs)
 
 
 # Register primitives
@@ -616,7 +648,41 @@ def _sigmoid_gated_dual_gemm_bwd_batching_rule(
     has_b2: bool,
     has_mask: bool,
 ) -> tuple[tuple[jax.Array, ...], tuple[int, ...]]:
-    raise NotImplementedError("Batching rule for backward pass not implemented")
+    """Batching rule for sigmoid gated dual GEMM backward pass.
+
+    Assumes batch axis is the M axis (axis 0 for x1, x2, mask, and axis 0/1 for grad_out).
+    """
+    # Input batch axes: (grad_out, x1, x2, w1, w2, b1, b2, mask)
+    # grad_out: (M, N) or (N, M) if transpose_out -> batch on axis 0 if not transpose_out, axis 1 if transpose_out
+    # x1: (M, K) -> batch on axis 0
+    # x2: (M, K) -> batch on axis 0
+    # w1: (N, K) -> not batched (None)
+    # w2: (N, K) -> not batched (None)
+    # b1: (N,) -> not batched (None)
+    # b2: (N,) -> not batched (None)
+    # mask: (M,) -> batch on axis 0
+    input_batch_axes = (1 if transpose_out else 0, 0, 0, None, None, None, None, 0)
+
+    # Output batch axes: (grad_xw1, grad_xw2, grad_mask)
+    # grad_xw1: (M, N) -> batch on axis 0
+    # grad_xw2: (M, N) -> batch on axis 0
+    # grad_mask: (M,) -> batch on axis 0
+    output_batch_axes = (0, 0, 0)
+
+    return naive_batching_rule(
+        sigmoid_gated_dual_gemm_bwd_p,
+        input_batch_axes,
+        output_batch_axes,
+        batched_inputs,
+        vmapped_axes,
+        two_inputs=two_inputs,
+        transpose_out=transpose_out,
+        precision=precision,
+        fallback=fallback,
+        has_b1=has_b1,
+        has_b2=has_b2,
+        has_mask=has_mask,
+    )
 
 
 # Register batching rules
@@ -730,8 +796,8 @@ def _bwd(
 ):
     x1, x2, w1, w2, b1, b2, mask = residuals
 
-    # All inputs are guaranteed to be arrays at this point
-    grads = sigmoid_gated_dual_gemm_bwd_p.bind(
+    # Get intermediate gradients from primitive
+    grad_xw1, grad_xw2, grad_mask = sigmoid_gated_dual_gemm_bwd_p.bind(
         grad_out,
         x1,
         x2,
@@ -749,8 +815,24 @@ def _bwd(
         has_mask=has_mask,
     )
 
-    # grads is always (grad_x1, grad_x2, grad_w1, grad_w2, grad_b1, grad_b2, grad_mask)
-    grad_x1, grad_x2, grad_w1, grad_w2, grad_b1, grad_b2, grad_mask = grads
+    # Post-process intermediate gradients to compute final gradients
+    precision_jax = precision._to_jax()
+
+    # Compute weight gradients
+    grad_w1 = jnp.dot(grad_xw1.T, x1, precision=precision_jax)
+    grad_x1 = jnp.dot(grad_xw1, w1, precision=precision_jax)
+
+    if two_inputs:
+        grad_w2 = jnp.dot(grad_xw2.T, x2, precision=precision_jax)
+        grad_x2 = jnp.dot(grad_xw2, w2, precision=precision_jax)
+    else:
+        grad_w2 = jnp.dot(grad_xw2.T, x1, precision=precision_jax)
+        grad_x1 += jnp.dot(grad_xw2, w2, precision=precision_jax)
+        grad_x2 = jnp.zeros_like(x2)
+
+    # Compute bias gradients
+    grad_b1 = jnp.sum(grad_xw1, axis=0)
+    grad_b2 = jnp.sum(grad_xw2, axis=0)
 
     # Handle None bias gradients based on has_b1 and has_b2
     if not has_b1:
