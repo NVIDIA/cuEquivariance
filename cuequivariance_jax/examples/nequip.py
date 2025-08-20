@@ -21,12 +21,10 @@ import flax
 import flax.linen
 import jax
 import jax.numpy as jnp
-import numpy as np
 import optax
 
 import cuequivariance as cue
 import cuequivariance_jax as cuex
-from cuequivariance.group_theory.experimental.mace import symmetric_contraction
 from cuequivariance_jax.experimental.utils import MultiLayerPerceptron, bessel
 
 
@@ -46,165 +44,136 @@ def polynomial_envelope(x, r_max):
 def radial_basis_function(edge, r_max, num_radial_basis):
     """Radial basis function with polynomial cutoff."""
     cutoff = jnp.where(edge < r_max, polynomial_envelope(edge, r_max), 0.0)
-    return bessel(edge, num_radial_basis, r_max) * cutoff
+    return bessel(edge, num_radial_basis, r_max) * cutoff[:, None]
 
 
-class MACELayer(flax.linen.Module):
-    first: bool
-    last: bool
-    num_species: int
-    num_features: int  # typically 128
-    interaction_irreps: cue.Irreps  # typically 0e+1o+2e+3o
-    hidden_irreps: cue.Irreps  # typically 0e+1o
-    activation: Callable  # typically silu
-    epsilon: float  # typically 1/avg_num_neighbors
-    max_ell: int  # typically 3
-    correlation: int  # typically 3
-    output_irreps: cue.Irreps  # typically 1x0e
-    readout_mlp_irreps: cue.Irreps  # typically 16x0e
-    skip_connection_first_layer: bool = False
+class NEQUIPLayer(flax.linen.Module):
+    normalization_factor: (
+        float  # typically 1/avg_num_neighbors or 1/sqrt(avg_num_neighbors)
+    )
+    num_species: int = 1
+    max_ell: int = 3
+    output_irreps: cue.Irreps = 64 * cue.Irreps(cue.O3, "0e + 1o + 2e")
+    even_activation: Callable[[jax.Array], jax.Array] = jax.nn.silu
+    odd_activation: Callable[[jax.Array], jax.Array] = jax.nn.tanh
+    gate_activation: Callable[[jax.Array], jax.Array] = jax.nn.silu
+    mlp_activation: Callable[[jax.Array], jax.Array] = jax.nn.silu
+    mlp_n_hidden: int = 64
+    mlp_n_layers: int = 2
+    cutoff: float = 5.0
+    n_radial_basis: int = 8
 
     @flax.linen.compact
     def __call__(
         self,
-        vectors: cuex.RepArray,  # [num_edges, 3]
-        node_feats: cuex.RepArray,  # [num_nodes, irreps]
-        num_species: jax.Array,  # [self.num_species] int number of atoms per species
-        radial_embeddings: jax.Array,  # [num_edges, radial_embedding_dim]
-        senders: jax.Array,  # [num_edges]
-        receivers: jax.Array,  # [num_edges]
+        vectors: cuex.RepArray,
+        node_feats: cuex.RepArray,
+        node_specie: jax.Array,
+        senders: jax.Array,
+        receivers: jax.Array,
     ):
         dtype = node_feats.dtype
-        hidden_out = (
-            self.hidden_irreps.filter(keep=self.output_irreps)
-            if self.last
-            else self.hidden_irreps
+        num_nodes = node_feats.shape[0]
+        num_edges = vectors.shape[0]
+        assert vectors.shape == (num_edges, 3)
+        assert node_feats.shape == (num_nodes, node_feats.irreps.dim)
+        assert node_specie.shape == (num_nodes,)
+        assert senders.shape == (num_edges,)
+        assert receivers.shape == (num_edges,)
+        assert self.output_irreps == self.output_irreps.regroup(), (
+            f"{self.output_irreps} != {self.output_irreps.regroup()}"
         )
 
-        def lin(irreps, input, name):
-            e = cue.descriptors.linear(input.irreps, irreps)
-            w = self.param(name, jax.random.normal, (e.inputs[0].dim,), dtype)
-            return cuex.equivariant_polynomial(
-                e, [w, input], name=f"{self.name}_{name}", method="naive"
-            )
+        e = cue.descriptors.linear(node_feats.irreps, node_feats.irreps)
+        w = self.param("linear_up", jax.random.normal, (e.inputs[0].dim,), dtype)
+        x = cuex.equivariant_polynomial(e, [w, node_feats], method="naive")
 
-        def linZ(irreps, input, name):
-            e = cue.descriptors.linear(input.irreps, irreps) * (
-                1.0 / self.num_species**0.5
-            )
-            w = self.param(
-                name, jax.random.normal, (self.num_species, e.inputs[0].dim), dtype
-            )
-            return cuex.equivariant_polynomial(
-                e,
-                [w, input],
-                None,
-                [cuex.Repeats(num_species), None, None],
-                name=f"{self.name}_{name}",
-                method="indexed_linear",
-            )
+        y = cuex.spherical_harmonics(range(self.max_ell + 1), vectors)
 
-        sph = cuex.spherical_harmonics(range(self.max_ell + 1), vectors)
-
-        # Skip connection
-        self_connection = (
-            linZ(self.num_features * hidden_out, node_feats, "linZ_skip_tp")
-            if (not self.first or self.skip_connection_first_layer)
-            else None
-        )
-
-        # Message passing
-        node_feats = lin(node_feats.irreps, node_feats, "linear_up")
-
-        # Convolution
         e = cue.descriptors.channelwise_tensor_product(
-            node_feats.irreps, sph.irreps, self.interaction_irreps, True
+            x.irreps, y.irreps, self.output_irreps + "0e", simplify_irreps3=True
         )
-        e = e * self.epsilon
+        assert isinstance(self.normalization_factor, float)
+        e = e * self.normalization_factor
+
+        # Radial part
+        with jax.ensure_compile_time_eval():
+            assert abs(self.mlp_activation(0.0)) < 1e-6
+
+        lengths = cuex.norm(vectors).array.squeeze(1)
+        assert lengths.shape == (num_edges,)
+
         mix = MultiLayerPerceptron(
-            [64, 64, 64, e.inputs[0].dim],
-            self.activation,
+            self.mlp_n_layers * (self.mlp_n_hidden,) + (e.inputs[0].dim,),
+            self.mlp_activation,
             output_activation=False,
             with_bias=False,
-        )(radial_embeddings)
-        node_feats = cuex.equivariant_polynomial(
+        )(radial_basis_function(lengths, self.cutoff, self.n_radial_basis))
+
+        # Discard 0 length edges that come from graph padding
+        mix = jnp.where(lengths[:, None] == 0.0, 0.0, mix)
+        assert mix.shape == (num_edges, e.inputs[0].dim)
+
+        [z] = cuex.equivariant_polynomial(
             e,
-            [mix, node_feats, sph],
-            jax.ShapeDtypeStruct((node_feats.shape[0], -1), dtype),
-            indices=[None, senders, None, receivers],
-            name=f"{self.name}TP",
+            [mix, x, y],
+            [jax.ShapeDtypeStruct((num_nodes, e.outputs[0].dim), dtype)],
+            [None, senders, None, receivers],
             method="uniform_1d",
         )
 
-        node_feats = lin(
-            self.num_features * self.interaction_irreps, node_feats, "linear_down"
-        )
+        irreps = self.output_irreps.filter(keep=z.irreps)
+        num_nonscalar = irreps.filter(drop="0e + 0o").num_irreps
+        if num_nonscalar > 0:
+            irreps = irreps + num_nonscalar * cue.Irreps(cue.O3, "0e")
 
-        if self.first and not self.skip_connection_first_layer:
-            node_feats = linZ(
-                self.num_features * self.interaction_irreps,
-                node_feats,
-                "linZ_skip_tp_first",
-            )
-
-        # Symmetric contraction
-        e, projection = symmetric_contraction(
-            node_feats.irreps,
-            self.num_features * hidden_out,
-            range(1, self.correlation + 1),
-        )
-        projection = jnp.array(projection, dtype=dtype)
-        n = projection.shape[0]
+        e = cue.descriptors.linear(node_feats.irreps, irreps)
         w = self.param(
-            "symmetric_contraction",
-            jax.random.normal,
-            (self.num_species, n, self.num_features),
-            dtype,
+            "linear_skip", jax.random.normal, (self.num_species, e.inputs[0].dim), dtype
         )
-        w = jnp.einsum("zau,ab->zbu", w, projection)
-        w = jnp.reshape(w, (self.num_species, -1))
-        i = jnp.repeat(
-            jnp.arange(len(num_species)),
-            num_species,
-            total_repeat_length=node_feats.shape[0],
-        )
-        node_feats = cuex.equivariant_polynomial(
+        skip = cuex.equivariant_polynomial(
             e,
             [w, node_feats],
-            indices=[i, None, None],
-            name=f"{self.name}SC",
-            method="uniform_1d",
+            jax.ShapeDtypeStruct((num_nodes, e.outputs[0].dim), dtype),
+            [node_specie, None, None],
+            method="naive",
         )
 
-        node_feats = lin(self.num_features * hidden_out, node_feats, "linear_post_sc")
+        e = cue.descriptors.linear(z.irreps, irreps)
+        w = self.param("linear_down", jax.random.normal, (e.inputs[0].dim,), dtype)
+        node_feats = cuex.equivariant_polynomial(e, [w, z], method="naive")
 
-        if self_connection is not None:
-            node_feats = node_feats + self_connection
+        node_feats = node_feats + skip
+        assert node_feats.shape == (num_nodes, node_feats.irreps.dim)
 
-        node_outputs = node_feats
-        if self.last:
-            node_outputs = cuex.scalar_activation(
-                lin(self.readout_mlp_irreps, node_outputs, "linear_mlp_readout"),
-                self.activation,
+        with cue.assume(cue.O3, cue.ir_mul):
+            if num_nonscalar > 0:
+                g = node_feats.slice_by_mul[-num_nonscalar:]
+                x = node_feats.slice_by_mul[:-num_nonscalar]
+                s = x.filter(keep="0e + 0o")
+                v = x.filter(drop="0e + 0o")
+                g = cuex.scalar_activation(g, self.gate_activation)
+
+                e = cue.descriptors.elementwise_tensor_product(g.irreps, v.irreps)
+                v = cuex.equivariant_polynomial(e, [g, v], method="naive")
+
+                node_feats = cuex.concatenate([s, v])
+
+            node_feats = cuex.scalar_activation(
+                node_feats,
+                {"0e": self.even_activation, "0o": self.odd_activation},
+                normalize_act=True,
             )
-        node_outputs = lin(self.output_irreps, node_outputs, "linear_readout")
-
-        return node_outputs, node_feats
+        return node_feats
 
 
-class MACEModel(flax.linen.Module):
-    offsets: np.ndarray
+class NEQUIPModel(flax.linen.Module):
     num_species: int
     cutoff: float
     num_layers: int
     num_features: int
-    interaction_irreps: cue.Irreps
-    hidden_irreps: cue.Irreps
     max_ell: int
-    correlation: int
-    num_radial_basis: int
-    epsilon: float
-    skip_connection_first_layer: bool
+    normalization_factor: float
 
     @flax.linen.compact
     def __call__(self, batch):
@@ -228,6 +197,7 @@ class MACEModel(flax.linen.Module):
 
         def model(vecs):
             with cue.assume(cue.O3, cue.ir_mul):
+                # Initial node embeddings
                 w = self.param(
                     "linear_embedding",
                     jax.random.normal,
@@ -237,49 +207,36 @@ class MACEModel(flax.linen.Module):
                 node_feats = cuex.as_irreps_array(
                     jnp.repeat(w, num_species, axis=0, total_repeat_length=nats)
                 ) / jnp.sqrt(self.num_species)
-                radial_embeddings = jax.vmap(
-                    lambda x: radial_basis_function(
-                        x, self.cutoff, self.num_radial_basis
-                    )
-                )(jnp.linalg.norm(vecs, axis=1))
+
                 vecs = cuex.RepArray("1o", vecs)
 
-                Es = 0
                 for i in range(self.num_layers):
-                    output, node_feats = MACELayer(
-                        first=(i == 0),
-                        last=(i == self.num_layers - 1),
+                    node_feats = NEQUIPLayer(
+                        normalization_factor=self.normalization_factor,
                         num_species=self.num_species,
-                        num_features=self.num_features,
-                        interaction_irreps=self.interaction_irreps,
-                        hidden_irreps=self.hidden_irreps,
-                        activation=jax.nn.silu,
-                        epsilon=self.epsilon,
                         max_ell=self.max_ell,
-                        correlation=self.correlation,
-                        output_irreps=cue.Irreps(cue.O3, "1x0e"),
-                        readout_mlp_irreps=cue.Irreps(cue.O3, "16x0e"),
-                        skip_connection_first_layer=self.skip_connection_first_layer,
+                        output_irreps=self.num_features
+                        * cue.Irreps(cue.O3, "0e + 1o + 2e + 3o"),
+                        cutoff=self.cutoff,
                         name=f"layer_{i}",
-                    )(
-                        vecs,
-                        node_feats,
-                        num_species,
-                        radial_embeddings,
-                        senders,
-                        receivers,
-                    )
-                    Es += jnp.squeeze(output.array, 1)
-                return jnp.sum(Es), Es
+                    )(vecs, node_feats, species, senders, receivers)
+
+                # Readout layer for energy
+                e = cue.descriptors.linear(
+                    node_feats.irreps, cue.Irreps(cue.O3, "1x0e")
+                )
+                w = self.param(
+                    "energy_readout", jax.random.normal, (e.inputs[0].dim,), vecs.dtype
+                )
+                energy_per_atom = cuex.equivariant_polynomial(
+                    e, [w, node_feats], method="naive"
+                )
+                energy_per_atom = jnp.squeeze(energy_per_atom.array, 1)
+
+                return jnp.sum(energy_per_atom), energy_per_atom
 
         Fterms, Ei = jax.grad(model, has_aux=True)(vecs)
         Fterms *= jnp.expand_dims(mask, -1)
-        Ei = Ei + jnp.repeat(
-            jnp.asarray(self.offsets, dtype=Ei.dtype),
-            num_species,
-            axis=0,
-            total_repeat_length=nats,
-        )
         E = jnp.zeros((num_graphs,), Ei.dtype).at[graph_index].add(Ei)
         F = (
             jnp.zeros((nats, 3), Ei.dtype)
@@ -299,7 +256,7 @@ def benchmark(
     dtype: jnp.dtype,
     mode: str = "both",
 ):
-    assert model_size in ["MP-S", "MP-M", "MP-L", "OFF-S", "OFF-M", "OFF-L"]
+    assert model_size in ["S", "M", "L"]
     assert mode in ["train", "inference", "both"]
     dtype = jnp.dtype(dtype)
 
@@ -307,36 +264,17 @@ def benchmark(
     num_graphs = 100
     avg_num_neighbors = 20
 
-    model = MACEModel(
-        num_layers=2,
+    model = NEQUIPModel(
+        num_layers=3,
         num_features={
-            "MP-S": 128,
-            "MP-M": 128,
-            "MP-L": 128,
-            "OFF-S": 64 + 32,  # = 96
-            "OFF-M": 128,
-            "OFF-L": 128 + 64,  # = 192
+            "S": 64,
+            "M": 128,
+            "L": 256,
         }[model_size],
         num_species=num_species,
         max_ell=3,
-        correlation=3,
-        num_radial_basis=8,
-        interaction_irreps=cue.Irreps(cue.O3, "0e+1o+2e+3o"),
-        hidden_irreps=cue.Irreps(
-            cue.O3,
-            {
-                "MP-S": "0e",
-                "MP-M": "0e+1o",
-                "MP-L": "0e+1o+2e",
-                "OFF-S": "0e",
-                "OFF-M": "0e+1o",
-                "OFF-L": "0e+1o+2e",
-            }[model_size],
-        ),
-        offsets=np.zeros(num_species),
         cutoff=5.0,
-        epsilon=1 / avg_num_neighbors,
-        skip_connection_first_layer=("MP" in model_size),
+        normalization_factor=1 / avg_num_neighbors,
     )
 
     # Dummy data
@@ -408,7 +346,7 @@ def benchmark(
     # Profile and print results
     num_params = sum(x.size for x in jax.tree.leaves(w))
     print(
-        f"MACE {model_size}: {num_atoms} atoms, {num_edges} edges, {dtype}, {num_params:,} params"
+        f"NEQUIP {model_size}: {num_atoms} atoms, {num_edges} edges, {dtype}, {num_params:,} params"
     )
 
     if mode == "both":
@@ -444,8 +382,8 @@ def main():
     parser.add_argument(
         "--model",
         nargs="+",
-        choices=["MP-S", "MP-M", "MP-L", "OFF-S", "OFF-M", "OFF-L"],
-        default=["MP-S"],
+        choices=["S", "M", "L"],
+        default=["S"],
     )
     parser.add_argument(
         "--mode", choices=["train", "inference", "both"], default="both"
@@ -454,13 +392,12 @@ def main():
     parser.add_argument("--edges", type=int)
     args = parser.parse_args()
 
-    defaults = {"MP": (3_000, 160_000), "OFF": (4_000, 70_000)}
+    defaults = {"S": (1_000, 40_000), "M": (2_000, 80_000), "L": (3_000, 120_000)}
 
     for dtype in args.dtype:
         for model_size in args.model:
-            prefix = model_size.split("-")[0]
-            num_atoms = args.nodes or defaults[prefix][0]
-            num_edges = args.edges or defaults[prefix][1]
+            num_atoms = args.nodes or defaults[model_size][0]
+            num_edges = args.edges or defaults[model_size][1]
             benchmark(model_size, num_atoms, num_edges, getattr(jnp, dtype), args.mode)
 
 
