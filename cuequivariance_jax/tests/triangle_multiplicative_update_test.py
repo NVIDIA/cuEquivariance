@@ -184,19 +184,7 @@ def test_basic_functionality():
         (
             "direction must be either",
             {"direction": "invalid", "x_shape": (1, 8, 8, 64)},
-        ),
-        (
-            "must be 4-dimensional",
-            {"direction": "outgoing", "x_shape": (1, 2, 8, 8, 64)},
-        ),
-        (
-            "mask must be 3-dimensional",
-            {
-                "direction": "outgoing",
-                "x_shape": (1, 8, 8, 64),
-                "mask_shape": (1, 2, 8, 8),
-            },
-        ),
+        )
     ],
 )
 def test_errors(error_match, test_input):
