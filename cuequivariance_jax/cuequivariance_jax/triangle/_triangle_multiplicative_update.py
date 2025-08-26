@@ -29,23 +29,8 @@ from cuequivariance_jax.triangle._sigmoid_gated_dual_gemm import (
 from cuequivariance_jax.triangle._utils import Precision
 
 CUEQ_TRIMUL_FALLBACK_THRESHOLD: int = int(
-    os.getenv("CUEQ_TRIMUL_FALLBACK_THRESHOLD", "50")
+    os.getenv("CUEQ_TRIMUL_FALLBACK_THRESHOLD", "100")
 )
-
-
-def ensure_dims(ten: jax.Array, n: int) -> jax.Array:
-    """Ensure tensor has at least n dimensions by adding 1-sized dimensions at the beginning.
-
-    Args:
-        ten: Input tensor
-        n: Target number of dimensions
-
-    Returns:
-        Tensor with at least n dimensions
-    """
-    while len(ten.shape) < n:
-        ten = jnp.expand_dims(ten, 0)
-    return ten
 
 
 def _calculate_fan(linear_weight_shape, fan="fan_in"):
@@ -152,15 +137,14 @@ def triangle_multiplicative_update(
     3. Output normalization and gating
 
     Args:
-        x (jax.Array): Input tensor of shape (B, N, N, D) where:
-            - B is the batch size
+        x (jax.Array): Input tensor of shape (..., N, N, D) where:
+            - ... represents arbitrary batch dimensions
             - N is the sequence length
             - D is the hidden dimension
-            Can also be 3D (N, N, D) which will be expanded to 4D.
         direction (str): Direction of the triangular projection. Must be either "outgoing" or "incoming".
         key (jax.Array, optional): JAX random key for weight initialization. Required if any weights are None.
-        mask (jax.Array, optional): Optional mask tensor of shape (B, N, N) for masking the output.
-            Can also be 2D (N, N) which will be expanded to 3D.
+        mask (jax.Array, optional): Optional mask tensor of shape (..., N, N) for masking the output.
+            Must be broadcastable with the input tensor's batch dimensions.
         norm_in_weight (jax.Array, optional): Weight tensor for input normalization of shape (D,).
             If None, initialized to ones.
         norm_in_bias (jax.Array, optional): Bias tensor for input normalization of shape (D,).
@@ -194,25 +178,26 @@ def triangle_multiplicative_update(
             - IEEE: Use IEEE 754 precision
 
     Returns:
-        jax.Array: Output tensor of shape (B, N, N, D). Always returns 4D tensor even if input was 3D.
+        jax.Array: Output tensor of shape (..., N, N, D) with the same batch dimensions as the input.
 
     Notes:
         - Unlike PyTorch, JAX arrays are immutable, so weight initialization returns new arrays
         - Hidden dimension D must be divisible by 64 for the BND_BND layout in layer normalization
         - If weights are not provided, they are initialized with appropriate values, but in practice
           you should pass learned parameters
+        - Supports arbitrary batch dimensions through broadcasting
 
     Example:
         >>> import jax
         >>> import jax.numpy as jnp
         >>> from cuequivariance_jax import triangle_multiplicative_update
-        >>> # Create input tensor
+        >>> # Create input tensor with arbitrary batch dimensions
         >>> key = jax.random.key(0)
         >>> key, subkey = jax.random.split(key)
-        >>> batch_size, seq_len, hidden_dim = 1, 128, 128
-        >>> x = jax.random.normal(subkey, (batch_size, seq_len, seq_len, hidden_dim), dtype=jnp.float32)
+        >>> batch_dim1, batch_dim2, seq_len, hidden_dim = 2, 3, 128, 128
+        >>> x = jax.random.normal(subkey, (batch_dim1, batch_dim2, seq_len, seq_len, hidden_dim), dtype=jnp.float32)
         >>> # Create mask (1 for valid positions, 0 for masked)
-        >>> mask = jnp.ones((batch_size, seq_len, seq_len))
+        >>> mask = jnp.ones((batch_dim1, batch_dim2, seq_len, seq_len))
         >>> # Create weight parameters (in practice, these would be learned)
         >>> norm_in_weight = jnp.ones(hidden_dim)
         >>> norm_in_bias = jnp.zeros(hidden_dim)
@@ -238,36 +223,26 @@ def triangle_multiplicative_update(
         ...     # ... pass other weights or let them initialize ...
         ... )
         >>> print(output.shape)
-        (1, 128, 128, 128)
+        (2, 3, 128, 128, 128)
     """
     # Input validation
     if direction not in ["outgoing", "incoming"]:
         raise ValueError("direction must be either 'outgoing' or 'incoming'")
 
-    # Ensure x has 4 dimensions
-    x = ensure_dims(x, 4)
-    if x.ndim != 4:
-        raise ValueError(
-            "x must be 4-dimensional (batch_size, seq_len, seq_len, hidden_dim) or lower dimensional where first dimensions with size 1 are omitted"
-        )
+    seq_len, seq_len_other, hidden_dim = x.shape[-3:]
+    assert seq_len == seq_len_other
+    batch_dims = x.shape[:-3]
 
     if mask is not None:
-        # Ensure mask has 3 dimensions
-        mask = ensure_dims(mask, 3)
-        if mask.ndim != 3:
-            raise ValueError(
-                "mask must be 3-dimensional (batch_size, seq_len, seq_len) or lower dimensional where first dimensions with size 1 are omitted"
-            )
+        assert mask.shape[-2:] == (seq_len, seq_len)
+        batch_dims = jnp.broadcast_shapes(batch_dims, mask.shape[:-2])
+        x = jnp.broadcast_to(x, batch_dims + (seq_len, seq_len, hidden_dim))
+        mask = jnp.broadcast_to(mask, batch_dims + (seq_len, seq_len))
 
-    # Initialize default weights if not provided
-    hidden_dim = x.shape[-1]
-
-    # Check hidden dimension constraint for BND_BND layout
-    if hidden_dim % 32 != 0:
-        raise ValueError(
-            f"Hidden dimension must be divisible by 32 for BND_BND layout in layer normalization. "
-            f"Got hidden_dim={hidden_dim}"
-        )
+    batch_size = math.prod(batch_dims)
+    x = x.reshape(batch_size, seq_len, seq_len, hidden_dim)
+    if mask is not None:
+        mask = mask.reshape(batch_size, seq_len, seq_len)
 
     # Validate weight dimensions if provided
     if norm_in_weight is not None and norm_in_weight.shape != (hidden_dim,):
@@ -362,7 +337,7 @@ def triangle_multiplicative_update(
         )
 
     if fallback is None:
-        fallback = x.shape[-2] <= CUEQ_TRIMUL_FALLBACK_THRESHOLD
+        fallback = seq_len <= CUEQ_TRIMUL_FALLBACK_THRESHOLD
 
     # Input normalization
     x = layer_norm_transpose(
@@ -411,5 +386,8 @@ def triangle_multiplicative_update(
         precision=precision,
         fallback=fallback,
     )
+
+    # Reshape back to original shape
+    x = x.reshape(batch_dims + (seq_len, seq_len, hidden_dim))
 
     return x
