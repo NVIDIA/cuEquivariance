@@ -682,18 +682,7 @@ batching.primitive_batchers[sigmoid_gated_dual_gemm_bwd_p] = (
 )
 
 
-@partial(
-    custom_vjp,
-    nondiff_argnames=(
-        "two_inputs",
-        "transpose_out",
-        "precision",
-        "fallback",
-        "has_b1",
-        "has_b2",
-        "has_mask",
-    ),
-)
+@partial(custom_vjp, nondiff_argnums=(7, 8, 9, 10, 11, 12, 13))
 def _sigmoid_gated_dual_gemm_core(
     x1: jax.Array,
     x2: jax.Array,

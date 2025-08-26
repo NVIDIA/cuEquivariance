@@ -231,7 +231,7 @@ batching.primitive_batchers[bwd_p] = partial(
 # Custom VJP:
 
 
-@partial(custom_vjp, nondiff_argnames=("scale", "precision"))
+@partial(custom_vjp, nondiff_argnums=(5, 6))
 def triangle_attention_custom_vjp(
     q: jax.Array,  # [B, N, H, S_qo, D]
     k: jax.Array,  # [B, N, H, S_kv, D]

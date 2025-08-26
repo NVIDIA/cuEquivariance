@@ -430,9 +430,7 @@ batching.primitive_batchers[layer_norm_fwd_p] = _layer_norm_fwd_batching_rule
 batching.primitive_batchers[layer_norm_bwd_p] = _layer_norm_bwd_batching_rule
 
 
-@partial(
-    custom_vjp, nondiff_argnames=("eps", "elementwise_affine", "layout", "fallback")
-)
+@partial(custom_vjp, nondiff_argnums=(3, 4, 5, 6))
 def _layer_norm(
     x, w, b, eps=1e-5, elementwise_affine=True, layout=Layout.BND_BND, fallback=False
 ):
