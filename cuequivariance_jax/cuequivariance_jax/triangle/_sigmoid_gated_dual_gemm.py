@@ -258,6 +258,8 @@ def _triton_forward(
     M, K, N = x1.shape[0], x1.shape[1], w1.shape[0]
     assert N % TILE_N == 0 and K % TILE_K == 0
 
+    NEEDS_INT64 = (M * K >= 2**31 - 1) or (M * N >= 2**31 - 1)
+
     out_shape = (N, M) if transpose_out else (M, N)
     dummy = jnp.zeros((), dtype=dtype)
 
@@ -284,6 +286,7 @@ def _triton_forward(
         TWO_INPUTS=two_inputs,
         HAS_B1=has_b1,
         HAS_B2=has_b2,
+        NEEDS_INT64=NEEDS_INT64,
         num_stages=num_stages,
         num_warps=num_warps,
     )
@@ -333,6 +336,8 @@ def _triton_backward(
     M, K, N = x1.shape[0], x1.shape[1], w1.shape[0]
     assert N % TILE_N == 0 and K % TILE_K == 0
 
+    NEEDS_INT64 = (M * K >= 2**31 - 1) or (M * N >= 2**31 - 1)
+
     num_tiles_n = triton.cdiv(N, TILE_N)
     out_shapes = [
         jax.ShapeDtypeStruct(shape=(M, N), dtype=x1.dtype),  # grad_xw1
@@ -363,6 +368,7 @@ def _triton_backward(
         TRANSPOSE_OUT=transpose_out,
         PRECISION=precision,
         TWO_INPUTS=two_inputs,
+        NEEDS_INT64=NEEDS_INT64,
         num_stages=num_stages,
         num_warps=num_warps,
         HAS_B1=has_b1,

@@ -239,6 +239,8 @@ def _layer_norm_forward_impl(x, w, b, eps, elementwise_affine, layout):
     assert w.shape == (D,)
     assert b.shape == (D,)
 
+    NEEDS_INT64 = B * N * D >= 2**31 - 1
+
     out, mean, rstd = jt.triton_call(
         x,
         w,
@@ -258,6 +260,7 @@ def _layer_norm_forward_impl(x, w, b, eps, elementwise_affine, layout):
         TILE_D=TILE_D,
         ELEMENTWISE_AFFINE=elementwise_affine,
         LAYOUT=layout.value,
+        NEEDS_INT64=NEEDS_INT64,
         num_warps=8,
         num_stages=2,
     )
@@ -281,6 +284,8 @@ def _layer_norm_backward_impl(
     TILE_N = get_backward_tile_n(x.dtype, base_tile_n)
     num_tiles = triton.cdiv(N, TILE_N)
 
+    NEEDS_INT64 = B * N * D >= 2**31 - 1
+
     grad_x, grad_w_tiles, grad_b_tiles = jt.triton_call(
         grad_out,
         x,
@@ -301,6 +306,7 @@ def _layer_norm_backward_impl(
         TILE_D=TILE_D,
         ELEMENTWISE_AFFINE=elementwise_affine,
         LAYOUT=layout.value,
+        NEEDS_INT64=NEEDS_INT64,
         num_warps=8,
         num_stages=2,
     )
