@@ -131,9 +131,9 @@ def test_compare_with_pytorch(direction, use_mask, include_bias):
 @pytest.mark.parametrize(
     "x_shape,mask_shape,expected_shape",
     [
-        ((8, 8, 64), None, (1, 8, 8, 64)),  # 3D input -> 4D output
-        ((1, 8, 8, 64), None, (1, 8, 8, 64)),  # 4D input
-        ((2, 8, 8, 64), (2, 8, 8), (2, 8, 8, 64)),  # With mask
+        ((8, 8, 64), None, (8, 8, 64)),
+        ((1, 8, 8, 64), None, (1, 8, 8, 64)),
+        ((2, 8, 8, 64), (2, 8, 8), (2, 8, 8, 64)),
     ],
 )
 def test_shapes(x_shape, mask_shape, expected_shape):
