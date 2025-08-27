@@ -29,23 +29,8 @@ from cuequivariance_jax.triangle._sigmoid_gated_dual_gemm import (
 from cuequivariance_jax.triangle._utils import Precision
 
 CUEQ_TRIMUL_FALLBACK_THRESHOLD: int = int(
-    os.getenv("CUEQ_TRIMUL_FALLBACK_THRESHOLD", "50")
+    os.getenv("CUEQ_TRIMUL_FALLBACK_THRESHOLD", "100")
 )
-
-
-def ensure_dims(ten: jax.Array, n: int) -> jax.Array:
-    """Ensure tensor has at least n dimensions by adding 1-sized dimensions at the beginning.
-
-    Args:
-        ten: Input tensor
-        n: Target number of dimensions
-
-    Returns:
-        Tensor with at least n dimensions
-    """
-    while len(ten.shape) < n:
-        ten = jnp.expand_dims(ten, 0)
-    return ten
 
 
 def _calculate_fan(linear_weight_shape, fan="fan_in"):
@@ -152,38 +137,37 @@ def triangle_multiplicative_update(
     3. Output normalization and gating
 
     Args:
-        x (jax.Array): Input tensor of shape (B, N, N, D) where:
-            - B is the batch size
+        x (jax.Array): Input tensor of shape (..., N, N, D_in) where:
+            - ... represents arbitrary batch dimensions
             - N is the sequence length
-            - D is the hidden dimension
-            Can also be 3D (N, N, D) which will be expanded to 4D.
+            - D_in is the input hidden dimension
         direction (str): Direction of the triangular projection. Must be either "outgoing" or "incoming".
         key (jax.Array, optional): JAX random key for weight initialization. Required if any weights are None.
-        mask (jax.Array, optional): Optional mask tensor of shape (B, N, N) for masking the output.
-            Can also be 2D (N, N) which will be expanded to 3D.
-        norm_in_weight (jax.Array, optional): Weight tensor for input normalization of shape (D,).
+        mask (jax.Array, optional): Optional mask tensor of shape (..., N, N) for masking the output.
+            Must be broadcastable with the input tensor's batch dimensions.
+        norm_in_weight (jax.Array, optional): Weight tensor for input normalization of shape (D_in,).
             If None, initialized to ones.
-        norm_in_bias (jax.Array, optional): Bias tensor for input normalization of shape (D,).
+        norm_in_bias (jax.Array, optional): Bias tensor for input normalization of shape (D_in,).
             If None, initialized to zeros.
-        p_in_weight (jax.Array, optional): Weight tensor for input projection of shape (2D, D).
+        p_in_weight (jax.Array, optional): Weight tensor for input projection of shape (2*D_in, D_in).
             If None, initialized with LeCun normal distribution.
-        p_in_bias (jax.Array, optional): Bias tensor for input projection of shape (2D,).
+        p_in_bias (jax.Array, optional): Bias tensor for input projection of shape (2*D_in,).
             If None, no bias is applied to the input projection.
-        g_in_weight (jax.Array, optional): Weight tensor for input gating of shape (2D, D).
+        g_in_weight (jax.Array, optional): Weight tensor for input gating of shape (2*D_in, D_in).
             If None, initialized with LeCun normal distribution.
-        g_in_bias (jax.Array, optional): Bias tensor for input gating of shape (2D,).
+        g_in_bias (jax.Array, optional): Bias tensor for input gating of shape (2*D_in,).
             If None, no bias is applied to the input gating.
-        norm_out_weight (jax.Array, optional): Weight tensor for output normalization of shape (D,).
+        norm_out_weight (jax.Array, optional): Weight tensor for output normalization of shape (D_in,).
             If None, initialized to ones.
-        norm_out_bias (jax.Array, optional): Bias tensor for output normalization of shape (D,).
+        norm_out_bias (jax.Array, optional): Bias tensor for output normalization of shape (D_in,).
             If None, initialized to zeros.
-        p_out_weight (jax.Array, optional): Weight tensor for output projection of shape (D, D).
+        p_out_weight (jax.Array, optional): Weight tensor for output projection of shape (D_out, D_in).
             If None, initialized with LeCun normal distribution.
-        p_out_bias (jax.Array, optional): Bias tensor for output projection of shape (D,).
+        p_out_bias (jax.Array, optional): Bias tensor for output projection of shape (D_out,).
             If None, no bias is applied to the output projection.
-        g_out_weight (jax.Array, optional): Weight tensor for output gating of shape (D, D).
+        g_out_weight (jax.Array, optional): Weight tensor for output gating of shape (D_out, D_in).
             If None, initialized with LeCun normal distribution.
-        g_out_bias (jax.Array, optional): Bias tensor for output gating of shape (D,).
+        g_out_bias (jax.Array, optional): Bias tensor for output gating of shape (D_out,).
             If None, no bias is applied to the output gating.
         eps (float): Small constant for numerical stability in normalization. Defaults to 1e-5.
         precision (Precision): Precision mode for matrix multiplications.
@@ -194,33 +178,36 @@ def triangle_multiplicative_update(
             - IEEE: Use IEEE 754 precision
 
     Returns:
-        jax.Array: Output tensor of shape (B, N, N, D). Always returns 4D tensor even if input was 3D.
+        jax.Array: Output tensor of shape (..., N, N, D_out) where D_out is determined by
+                   the first dimension of g_out_weight. If g_out_weight is not provided,
+                   D_out equals D_in (the input hidden dimension).
 
     Notes:
         - Unlike PyTorch, JAX arrays are immutable, so weight initialization returns new arrays
-        - Hidden dimension D must be divisible by 64 for the BND_BND layout in layer normalization
+        - If output weights are not provided, they are initialized with D_out = D_in (preserving input dimension)
         - If weights are not provided, they are initialized with appropriate values, but in practice
           you should pass learned parameters
+        - Supports arbitrary batch dimensions through broadcasting
 
     Example:
         >>> import jax
         >>> import jax.numpy as jnp
         >>> from cuequivariance_jax import triangle_multiplicative_update
-        >>> # Create input tensor
+        >>> # Create input tensor with arbitrary batch dimensions
         >>> key = jax.random.key(0)
         >>> key, subkey = jax.random.split(key)
-        >>> batch_size, seq_len, hidden_dim = 1, 128, 128
-        >>> x = jax.random.normal(subkey, (batch_size, seq_len, seq_len, hidden_dim), dtype=jnp.float32)
+        >>> batch_dim1, batch_dim2, seq_len, D_in = 2, 3, 128, 128
+        >>> x = jax.random.normal(subkey, (batch_dim1, batch_dim2, seq_len, seq_len, D_in), dtype=jnp.float32)
         >>> # Create mask (1 for valid positions, 0 for masked)
-        >>> mask = jnp.ones((batch_size, seq_len, seq_len))
+        >>> mask = jnp.ones((batch_dim1, batch_dim2, seq_len, seq_len))
         >>> # Create weight parameters (in practice, these would be learned)
-        >>> norm_in_weight = jnp.ones(hidden_dim)
-        >>> norm_in_bias = jnp.zeros(hidden_dim)
+        >>> norm_in_weight = jnp.ones(D_in)
+        >>> norm_in_bias = jnp.zeros(D_in)
         >>> # Optional bias parameters for projection and gating layers
-        >>> p_in_bias = jnp.zeros(2 * hidden_dim)  # Optional input projection bias
-        >>> g_in_bias = jnp.zeros(2 * hidden_dim)  # Optional input gating bias
-        >>> p_out_bias = jnp.zeros(hidden_dim)     # Optional output projection bias
-        >>> g_out_bias = jnp.zeros(hidden_dim)     # Optional output gating bias
+        >>> p_in_bias = jnp.zeros(2 * D_in)  # Optional input projection bias
+        >>> g_in_bias = jnp.zeros(2 * D_in)  # Optional input gating bias
+        >>> p_out_bias = jnp.zeros(D_in)     # Optional output projection bias (would be D_out if dimension changes)
+        >>> g_out_bias = jnp.zeros(D_in)     # Optional output gating bias (would be D_out if dimension changes)
         >>> # Initialize other weights using the key
         >>> key, subkey = jax.random.split(key)
         >>> # Perform triangular multiplication
@@ -238,87 +225,105 @@ def triangle_multiplicative_update(
         ...     # ... pass other weights or let them initialize ...
         ... )
         >>> print(output.shape)
-        (1, 128, 128, 128)
+        (2, 3, 128, 128, 128)
+        >>> # Example with dimension change: input 128 -> output 256
+        >>> g_out_weight_256 = jax.random.normal(jax.random.key(1), (256, 128))
+        >>> p_out_weight_256 = jax.random.normal(jax.random.key(2), (256, 128))
+        >>> key, subkey2 = jax.random.split(key)
+        >>> output_256 = triangle_multiplicative_update(
+        ...     x=x,
+        ...     direction="outgoing",
+        ...     key=subkey2,  # Key needed for other weight initialization
+        ...     g_out_weight=g_out_weight_256,
+        ...     p_out_weight=p_out_weight_256,
+        ... )
+        >>> print(output_256.shape)
+        (2, 3, 128, 128, 256)
     """
     # Input validation
     if direction not in ["outgoing", "incoming"]:
         raise ValueError("direction must be either 'outgoing' or 'incoming'")
 
-    # Ensure x has 4 dimensions
-    x = ensure_dims(x, 4)
-    if x.ndim != 4:
-        raise ValueError(
-            "x must be 4-dimensional (batch_size, seq_len, seq_len, hidden_dim) or lower dimensional where first dimensions with size 1 are omitted"
-        )
+    seq_len, seq_len_other, D_in = x.shape[-3:]
+    assert seq_len == seq_len_other
+    batch_dims = x.shape[:-3]
 
     if mask is not None:
-        # Ensure mask has 3 dimensions
-        mask = ensure_dims(mask, 3)
-        if mask.ndim != 3:
-            raise ValueError(
-                "mask must be 3-dimensional (batch_size, seq_len, seq_len) or lower dimensional where first dimensions with size 1 are omitted"
-            )
+        assert mask.shape[-2:] == (seq_len, seq_len)
+        batch_dims = jnp.broadcast_shapes(batch_dims, mask.shape[:-2])
+        x = jnp.broadcast_to(x, batch_dims + (seq_len, seq_len, D_in))
+        mask = jnp.broadcast_to(mask, batch_dims + (seq_len, seq_len))
 
-    # Initialize default weights if not provided
-    hidden_dim = x.shape[-1]
-
-    # Check hidden dimension constraint for BND_BND layout
-    if hidden_dim % 32 != 0:
-        raise ValueError(
-            f"Hidden dimension must be divisible by 32 for BND_BND layout in layer normalization. "
-            f"Got hidden_dim={hidden_dim}"
-        )
+    batch_size = math.prod(batch_dims)
+    x = x.reshape(batch_size, seq_len, seq_len, D_in)
+    if mask is not None:
+        mask = mask.reshape(batch_size, seq_len, seq_len)
 
     # Validate weight dimensions if provided
-    if norm_in_weight is not None and norm_in_weight.shape != (hidden_dim,):
+    if norm_in_weight is not None and norm_in_weight.shape != (D_in,):
         raise ValueError(
-            f"norm_in_weight must have shape ({hidden_dim},), got {norm_in_weight.shape}"
+            f"norm_in_weight must have shape ({D_in},), got {norm_in_weight.shape}"
         )
-    if norm_in_bias is not None and norm_in_bias.shape != (hidden_dim,):
+    if norm_in_bias is not None and norm_in_bias.shape != (D_in,):
         raise ValueError(
-            f"norm_in_bias must have shape ({hidden_dim},), got {norm_in_bias.shape}"
+            f"norm_in_bias must have shape ({D_in},), got {norm_in_bias.shape}"
         )
-    if p_in_weight is not None and p_in_weight.shape != (2 * hidden_dim, hidden_dim):
+    if p_in_weight is not None and p_in_weight.shape != (2 * D_in, D_in):
         raise ValueError(
-            f"p_in_weight must have shape ({2 * hidden_dim}, {hidden_dim}), got {p_in_weight.shape}"
+            f"p_in_weight must have shape ({2 * D_in}, {D_in}), got {p_in_weight.shape}"
         )
-    if g_in_weight is not None and g_in_weight.shape != (2 * hidden_dim, hidden_dim):
+    if g_in_weight is not None and g_in_weight.shape != (2 * D_in, D_in):
         raise ValueError(
-            f"g_in_weight must have shape ({2 * hidden_dim}, {hidden_dim}), got {g_in_weight.shape}"
+            f"g_in_weight must have shape ({2 * D_in}, {D_in}), got {g_in_weight.shape}"
         )
-    if norm_out_weight is not None and norm_out_weight.shape != (hidden_dim,):
+    if norm_out_weight is not None and norm_out_weight.shape != (D_in,):
         raise ValueError(
-            f"norm_out_weight must have shape ({hidden_dim},), got {norm_out_weight.shape}"
+            f"norm_out_weight must have shape ({D_in},), got {norm_out_weight.shape}"
         )
-    if norm_out_bias is not None and norm_out_bias.shape != (hidden_dim,):
+    if norm_out_bias is not None and norm_out_bias.shape != (D_in,):
         raise ValueError(
-            f"norm_out_bias must have shape ({hidden_dim},), got {norm_out_bias.shape}"
+            f"norm_out_bias must have shape ({D_in},), got {norm_out_bias.shape}"
         )
-    if p_out_weight is not None and p_out_weight.shape != (hidden_dim, hidden_dim):
+    if p_out_weight is not None and p_out_weight.shape[1] != D_in:
         raise ValueError(
-            f"p_out_weight must have shape ({hidden_dim}, {hidden_dim}), got {p_out_weight.shape}"
+            f"p_out_weight must have shape (output_dim, {D_in}), got {p_out_weight.shape}"
         )
-    if g_out_weight is not None and g_out_weight.shape != (hidden_dim, hidden_dim):
+    if g_out_weight is not None and g_out_weight.shape[1] != D_in:
         raise ValueError(
-            f"g_out_weight must have shape ({hidden_dim}, {hidden_dim}), got {g_out_weight.shape}"
+            f"g_out_weight must have shape (output_dim, {D_in}), got {g_out_weight.shape}"
+        )
+    if (
+        p_out_weight is not None
+        and g_out_weight is not None
+        and p_out_weight.shape[0] != g_out_weight.shape[0]
+    ):
+        raise ValueError(
+            f"p_out_weight and g_out_weight must have the same output dimension, got {p_out_weight.shape[0]} and {g_out_weight.shape[0]}"
         )
 
     # Validate bias dimensions if provided
-    if p_in_bias is not None and p_in_bias.shape != (2 * hidden_dim,):
+    if p_in_bias is not None and p_in_bias.shape != (2 * D_in,):
         raise ValueError(
-            f"p_in_bias must have shape ({2 * hidden_dim},), got {p_in_bias.shape}"
+            f"p_in_bias must have shape ({2 * D_in},), got {p_in_bias.shape}"
         )
-    if g_in_bias is not None and g_in_bias.shape != (2 * hidden_dim,):
+    if g_in_bias is not None and g_in_bias.shape != (2 * D_in,):
         raise ValueError(
-            f"g_in_bias must have shape ({2 * hidden_dim},), got {g_in_bias.shape}"
+            f"g_in_bias must have shape ({2 * D_in},), got {g_in_bias.shape}"
         )
-    if p_out_bias is not None and p_out_bias.shape != (hidden_dim,):
+    # Get output dimension for bias validation
+    D_out = D_in  # default to input dimension
+    if p_out_weight is not None:
+        D_out = p_out_weight.shape[0]
+    elif g_out_weight is not None:
+        D_out = g_out_weight.shape[0]
+
+    if p_out_bias is not None and p_out_bias.shape != (D_out,):
         raise ValueError(
-            f"p_out_bias must have shape ({hidden_dim},), got {p_out_bias.shape}"
+            f"p_out_bias must have shape ({D_out},), got {p_out_bias.shape}"
         )
-    if g_out_bias is not None and g_out_bias.shape != (hidden_dim,):
+    if g_out_bias is not None and g_out_bias.shape != (D_out,):
         raise ValueError(
-            f"g_out_bias must have shape ({hidden_dim},), got {g_out_bias.shape}"
+            f"g_out_bias must have shape ({D_out},), got {g_out_bias.shape}"
         )
 
     # If we need to initialize weights and no key is provided, raise an error
@@ -337,32 +342,24 @@ def triangle_multiplicative_update(
         key_p_in, key_g_in, key_p_out, key_g_out = keys
 
     if norm_in_weight is None:
-        norm_in_weight = bias_init_one(hidden_dim, dtype=x.dtype)
+        norm_in_weight = bias_init_one(D_in, dtype=x.dtype)
     if norm_in_bias is None:
-        norm_in_bias = bias_init_zero(hidden_dim, dtype=x.dtype)
+        norm_in_bias = bias_init_zero(D_in, dtype=x.dtype)
     if p_in_weight is None:
-        p_in_weight = lecun_normal_init(
-            (2 * hidden_dim, hidden_dim), key_p_in, dtype=x.dtype
-        )
+        p_in_weight = lecun_normal_init((2 * D_in, D_in), key_p_in, dtype=x.dtype)
     if g_in_weight is None:
-        g_in_weight = lecun_normal_init(
-            (2 * hidden_dim, hidden_dim), key_g_in, dtype=x.dtype
-        )
+        g_in_weight = lecun_normal_init((2 * D_in, D_in), key_g_in, dtype=x.dtype)
     if norm_out_weight is None:
-        norm_out_weight = bias_init_one(hidden_dim, dtype=x.dtype)
+        norm_out_weight = bias_init_one(D_in, dtype=x.dtype)
     if norm_out_bias is None:
-        norm_out_bias = bias_init_zero(hidden_dim, dtype=x.dtype)
+        norm_out_bias = bias_init_zero(D_in, dtype=x.dtype)
     if p_out_weight is None:
-        p_out_weight = lecun_normal_init(
-            (hidden_dim, hidden_dim), key_p_out, dtype=x.dtype
-        )
+        p_out_weight = lecun_normal_init((D_out, D_in), key_p_out, dtype=x.dtype)
     if g_out_weight is None:
-        g_out_weight = lecun_normal_init(
-            (hidden_dim, hidden_dim), key_g_out, dtype=x.dtype
-        )
+        g_out_weight = lecun_normal_init((D_out, D_in), key_g_out, dtype=x.dtype)
 
     if fallback is None:
-        fallback = x.shape[-2] <= CUEQ_TRIMUL_FALLBACK_THRESHOLD
+        fallback = seq_len <= CUEQ_TRIMUL_FALLBACK_THRESHOLD
 
     # Input normalization
     x = layer_norm_transpose(
@@ -411,5 +408,8 @@ def triangle_multiplicative_update(
         precision=precision,
         fallback=fallback,
     )
+
+    # Reshape back to original batch dimensions with output hidden dimension
+    x = x.reshape(batch_dims + (seq_len, seq_len, D_out))
 
     return x
