@@ -134,6 +134,7 @@ def test_compare_with_pytorch(direction, use_mask, include_bias):
         ((8, 8, 64), None, (8, 8, 64)),
         ((1, 8, 8, 64), None, (1, 8, 8, 64)),
         ((2, 8, 8, 64), (2, 8, 8), (2, 8, 8, 64)),
+        ((2, 1, 4, 8, 8, 64), (3, 1, 8, 8, 64), (2, 3, 4, 8, 8, 64)),  # broadcast
     ],
 )
 def test_shapes(x_shape, mask_shape, expected_shape):
