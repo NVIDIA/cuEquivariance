@@ -229,10 +229,11 @@ def triangle_multiplicative_update(
         >>> # Example with dimension change: input 128 -> output 256
         >>> g_out_weight_256 = jax.random.normal(jax.random.key(1), (256, 128))
         >>> p_out_weight_256 = jax.random.normal(jax.random.key(2), (256, 128))
+        >>> key, subkey2 = jax.random.split(key)
         >>> output_256 = triangle_multiplicative_update(
         ...     x=x,
         ...     direction="outgoing",
-        ...     key=None,  # No initialization needed since weights provided
+        ...     key=subkey2,  # Key needed for other weight initialization
         ...     g_out_weight=g_out_weight_256,
         ...     p_out_weight=p_out_weight_256,
         ... )
