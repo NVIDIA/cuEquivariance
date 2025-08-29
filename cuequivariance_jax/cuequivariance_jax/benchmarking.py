@@ -19,7 +19,6 @@ import warnings
 from functools import partial
 
 import jax
-from jax.experimental.mosaic.gpu.profiler import _event_elapsed, _event_record
 
 
 def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
@@ -48,6 +47,14 @@ def measure_clock_ticks(f, *args, **kwargs) -> tuple[float, float]:
         print(f"Function took {clock_ticks} clock ticks")
     """
     from cuequivariance_ops_jax import noop, sleep, synchronize
+
+    try:
+        from jax.experimental.mosaic.gpu.profiler import _event_elapsed, _event_record
+    except ImportError:
+        raise ImportError(
+            "_event_elapsed and/or _event_record not found in jax.experimental.mosaic.gpu.profiler\n"
+            "They are known to be available in jax>=0.4.36,<=0.7.1"
+        )
 
     def run_func(state):
         """Wrapper function that calls the target function and ensures proper data flow."""
