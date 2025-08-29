@@ -97,22 +97,3 @@ jax.tree_util.register_pytree_node(
     lambda x: ((x.repeats,), (x.total_repeat_length,)),
     lambda a, x: Repeats(x[0], a[0]),
 )
-
-
-def math_dtype_for_naive_method(
-    io_dtype: jnp.dtype,
-    math_dtype: str | None,
-) -> tuple[jnp.dtype, jax.lax.Precision]:
-    if math_dtype is None:
-        return io_dtype, jax.lax.Precision.HIGHEST
-
-    if hasattr(jnp, math_dtype):
-        return getattr(jnp, math_dtype), jax.lax.Precision.HIGHEST
-
-    if math_dtype == "tensor_float32":
-        return jnp.float32, jax.lax.Precision.HIGH
-
-    raise ValueError(
-        f"method='naive' does not support math_dtype '{math_dtype}'. "
-        "Supported options are any JAX dtype (e.g., 'float32', 'float64', 'float16', 'bfloat16') or 'tensor_float32'."
-    )
