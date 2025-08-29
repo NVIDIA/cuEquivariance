@@ -147,6 +147,11 @@ class RepArray:
                         "If you are trying to use jax.vmap, use cuex.vmap instead."
                     )
 
+        if isinstance(array, RepArray):
+            raise ValueError(
+                "RepArray: Cannot create a RepArray from another RepArray."
+            )
+
         object.__setattr__(self, "reps", reps)
         object.__setattr__(self, "array", array)
 

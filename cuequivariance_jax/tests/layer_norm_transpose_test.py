@@ -120,3 +120,33 @@ def test_layer_norm_transpose(
     test_util.check_grads(
         loss_fn_cpu, (x_cpu, w_cpu, b_cpu), order=1, modes=["rev"], atol=1e-2, rtol=1e-2
     )
+
+
+@pytest.mark.parametrize("fallback", [True, False])
+def test_layer_norm_vmap(fallback):
+    V = 2  # vmap_size
+    B = 3  # batch_size
+    N = 4  # seq_len
+    D = 64  # d_model
+
+    key = jax.random.key(123)
+    keys = jax.random.split(key, 5)
+    dtype = jnp.float32
+
+    x = jax.random.normal(keys[0], (V, B, N, D), dtype)
+    w = jax.random.normal(keys[1], (D,), dtype)
+    b = jax.random.normal(keys[2], (D,), dtype)
+
+    def f(x, w, b):
+        return layer_norm_transpose(
+            x,
+            w,
+            b,
+            layout="bnd->dbn",
+            eps=1e-5,
+            elementwise_affine=True,
+            fallback=fallback,
+        )
+
+    out = jax.vmap(f, (0, None, None))(x, w, b)
+    assert out.shape == (V, D, B, N)

@@ -17,7 +17,9 @@ from functools import partial
 import jax
 import jax.numpy as jnp
 from jax import custom_vjp
-from jax.interpreters import mlir, xla
+from jax.interpreters import batching, mlir, xla
+
+from cuequivariance_jax.triangle._naive_batching import naive_batching_rule
 
 try:
     from cuequivariance_ops_jax import (
@@ -30,8 +32,7 @@ except ImportError:
     HAS_CUE_OPS_JAX = False
 
 
-@partial(jax.jit, static_argnames=("scale", "precision"))
-def triangle_attention_jax_fwd(
+def triangle_attention(
     q: jax.Array,  # [B, N, H, S_qo, D]
     k: jax.Array,  # [B, N, H, S_kv, D]
     v: jax.Array,  # [B, N, H, S_kv, D]
@@ -39,8 +40,8 @@ def triangle_attention_jax_fwd(
     mask: jax.Array,  # [B, N, 1, 1, S_kv] boolean
     scale: float,
     precision: jax.lax.Precision | None = None,
-) -> jax.Array:  # [B, N, H, S_qo, D]
-    r"""JAX reference implementation for triangle attention.
+):
+    r"""triangle attention
 
     Args:
         q: Query tensor of shape [B, N, H, S_qo, D].
@@ -56,11 +57,27 @@ def triangle_attention_jax_fwd(
 
     .. math::
 
-        \text{Attention}_a(Q, K, V, M, T) = \sum_b \text{softmax}_b(M_b ? -10^9 : (Q_a K_b + T_{ab})) V_b
+        \text{Attention}_a(Q, K, V, M, T) = \sum_b \mathrm{softmax}_b\left( M_b \cdot (Q_a K_b + T_{ab}) + (1 - M_b) \cdot (-10^9) \right) V_b
 
     where :math:`Q`, :math:`K`, and :math:`V` are the query, key, and value tensors,
     :math:`M` is the mask bias, and :math:`T` is the triangle bias.
     """
+    return triangle_attention_custom_vjp(
+        q, k, v, bias, mask, scale=scale, precision=precision
+    )
+
+
+@partial(jax.jit, static_argnames=("scale", "precision"))
+def triangle_attention_jax_fwd(
+    q: jax.Array,  # [B, N, H, S_qo, D]
+    k: jax.Array,  # [B, N, H, S_kv, D]
+    v: jax.Array,  # [B, N, H, S_kv, D]
+    bias: jax.Array,  # [B, 1, H, S_qo, S_kv]
+    mask: jax.Array,  # [B, N, 1, 1, S_kv] boolean
+    scale: float,
+    precision: jax.lax.Precision | None = None,
+) -> jax.Array:  # [B, N, H, S_qo, D]
+    r"""JAX reference implementation for triangle attention."""
     dtype = q.dtype
     assert k.dtype == dtype and v.dtype == dtype
     assert bias.dtype == jnp.float32 or bias.dtype == jnp.float64
@@ -96,9 +113,7 @@ def triangle_attention_fwd_abstract_eval(
     v: jax.core.ShapedArray,  # [B, N, H, S_kv, D]
     bias: jax.core.ShapedArray,  # [B, 1, H, S_qo, S_kv]
     mask: jax.core.ShapedArray,  # [B, N, 1, 1, S_kv] boolean
-    *,
-    scale: float,
-    precision: jax.lax.Precision | None = None,
+    **unused_kwargs,
 ) -> tuple[jax.core.ShapedArray, jax.core.ShapedArray, jax.core.ShapedArray]:
     B, N, H, S_qo, D = q.shape
     a_shape = jax.core.ShapedArray((B, N, H, S_qo, D), q.dtype)
@@ -116,9 +131,7 @@ def triangle_attention_bwd_abstract_eval(
     v: jax.core.ShapedArray,  # [B, N, H, S_kv, D]
     bias: jax.core.ShapedArray,  # [B, 1, H, S_qo, S_kv]
     mask: jax.core.ShapedArray,  # [B, N, 1, 1, S_kv] boolean
-    *,
-    scale: float,
-    precision: jax.lax.Precision | None = None,
+    **unused_kwargs,
 ) -> tuple[
     jax.core.ShapedArray,
     jax.core.ShapedArray,
@@ -208,9 +221,18 @@ for platform in ["cuda", None]:
         platform,
     )
 
+batching.primitive_batchers[fwd_p] = partial(
+    naive_batching_rule, fwd_p, (0, 0, 0, 0, 0), (0, 0, 0)
+)
+batching.primitive_batchers[bwd_p] = partial(
+    naive_batching_rule, bwd_p, (0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0)
+)
 
-@partial(custom_vjp, nondiff_argnames=("scale", "precision"))
-def triangle_attention(
+# Custom VJP:
+
+
+@partial(custom_vjp, nondiff_argnums=(5, 6))
+def triangle_attention_custom_vjp(
     q: jax.Array,  # [B, N, H, S_qo, D]
     k: jax.Array,  # [B, N, H, S_kv, D]
     v: jax.Array,  # [B, N, H, S_kv, D]
@@ -219,47 +241,16 @@ def triangle_attention(
     scale: float,
     precision: jax.lax.Precision | None = None,
 ):
-    r"""triangle attention
-
-    Args:
-        q: Query tensor of shape [B, N, H, S_qo, D].
-        k: Key tensor of shape [B, N, H, S_kv, D].
-        v: Value tensor of shape [B, N, H, S_kv, D].
-        bias: Bias tensor of shape [B, 1, H, S_qo, S_kv].
-        mask: Mask tensor of shape [B, N, 1, 1, S_kv] (boolean, True means valid).
-        scale: Scaling factor for the dot product.
-        precision: Precision for the computation (default is None).
-
-    Returns:
-        A tuple containing the attention output, log-sum-exp, and maximum value.
-
-    .. math::
-
-        \text{Attention}_a(Q, K, V, M, T) = \sum_b \mathrm{softmax}_b\left( M_b \cdot (Q_a K_b + T_{ab}) + (1 - M_b) \cdot (-10^9) \right) V_b
-
-    where :math:`Q`, :math:`K`, and :math:`V` are the query, key, and value tensors,
-    :math:`M` is the mask bias, and :math:`T` is the triangle bias.
-    """
-    # Convert scale to static value if it's a JAX array
-    if hasattr(scale, "item"):
-        scale = float(scale.item())
-    else:
-        scale = float(scale)
-
-    # Handle precision None case
-    if precision is None:
-        precision = jax.lax.Precision.DEFAULT
-
     return fwd_p.bind(q, k, v, bias, mask, scale=scale, precision=precision)
 
 
-def triangle_attention_fwd(q, k, v, bias, mask, scale, precision=None):
+def triangle_attention_custom_vjp_fwd(q, k, v, bias, mask, scale, precision=None):
     a, lse, amax = fwd_p.bind(q, k, v, bias, mask, scale=scale, precision=precision)
     residuals = (a, lse, q, k, v, bias, mask)
     return (a, lse, amax), residuals
 
 
-def triangle_attention_bwd(scale, precision, residuals, cotangents):
+def triangle_attention_custom_vjp_bwd(scale, precision, residuals, cotangents):
     a, lse, q, k, v, bias, mask = residuals
     da, dlse, damax = cotangents
 
@@ -269,4 +260,6 @@ def triangle_attention_bwd(scale, precision, residuals, cotangents):
     return (dq, dk, dv, dbias, None)
 
 
-triangle_attention.defvjp(triangle_attention_fwd, triangle_attention_bwd)
+triangle_attention_custom_vjp.defvjp(
+    triangle_attention_custom_vjp_fwd, triangle_attention_custom_vjp_bwd
+)

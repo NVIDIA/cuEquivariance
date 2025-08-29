@@ -131,9 +131,10 @@ def test_compare_with_pytorch(direction, use_mask, include_bias):
 @pytest.mark.parametrize(
     "x_shape,mask_shape,expected_shape",
     [
-        ((8, 8, 64), None, (1, 8, 8, 64)),  # 3D input -> 4D output
-        ((1, 8, 8, 64), None, (1, 8, 8, 64)),  # 4D input
-        ((2, 8, 8, 64), (2, 8, 8), (2, 8, 8, 64)),  # With mask
+        ((8, 8, 64), None, (8, 8, 64)),
+        ((1, 8, 8, 64), None, (1, 8, 8, 64)),
+        ((2, 8, 8, 64), (2, 8, 8), (2, 8, 8, 64)),
+        ((2, 1, 4, 8, 8, 64), (3, 1, 8, 8), (2, 3, 4, 8, 8, 64)),  # broadcast
     ],
 )
 def test_shapes(x_shape, mask_shape, expected_shape):
@@ -184,19 +185,7 @@ def test_basic_functionality():
         (
             "direction must be either",
             {"direction": "invalid", "x_shape": (1, 8, 8, 64)},
-        ),
-        (
-            "must be 4-dimensional",
-            {"direction": "outgoing", "x_shape": (1, 2, 8, 8, 64)},
-        ),
-        (
-            "mask must be 3-dimensional",
-            {
-                "direction": "outgoing",
-                "x_shape": (1, 8, 8, 64),
-                "mask_shape": (1, 2, 8, 8),
-            },
-        ),
+        )
     ],
 )
 def test_errors(error_match, test_input):
