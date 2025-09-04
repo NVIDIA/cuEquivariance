@@ -1,6 +1,6 @@
 ## Latest Changes
 
-## 0.6. (2025-09-04)
+## 0.6.1 (2025-09-04)
 
 ### Added
 - [Torch/JAX] Support for variable leading batch dimensions in triangle multiplicative update
