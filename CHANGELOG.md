@@ -5,7 +5,7 @@
 ### Added
 - [Torch/JAX] Support for variable leading batch dimensions in triangle multiplicative update
 - [Torch/JAX] Triangle attention kernel support for additional input configs: all hidden_dim<=32 and divisible by 4 for tf32/fp32, and for all hidden_dim<=128 and divisible by 8 for bf16/fp16. In the rare instance that the kernel does not support an input config, fallback to torch is enabled instead of erroring out.
-- [Torch/JAX] Tuned config for RTX PRO 6000 GPUs.
+- [Torch/JAX] Tuned config for RTX PRO 6000 GPUs for triangle multiplicative update.
 - [JAX] vmap support for triangle multiplicative update and triangle attention
 - [Torch] Improved error reporting on import failure with traceback information for stacktrace
 
