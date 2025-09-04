@@ -70,7 +70,7 @@ def triangle_attention(
     Notes:
         (1) Context is saved for backward pass. You don't need to save it manually.
         (2) Kernel precision (fp32, bf16, fp16) is based on input dtypes. For tf32, set it from torch global scope
-        (3) **Limitation**: Full FP32 is not supported for backward pass. Please set `torch.backends.cuda.matmul.allow_tf32=True`.
+        (3) Triangle attention kernel supports: all hidden_dim<=32 and divisible by 4 for tf32/fp32, and for all hidden_dim<=128 and divisible by 8 for bf16/fp16. In the rare instance that the kernel does not support an input config, fallback to torch is enabled instead of erroring out.
 
     Example:
         >>> import torch
@@ -195,6 +195,7 @@ def triangle_multiplicative_update(
         (3) **Limitation**: Currently only supports hidden_dim values that are multiples of 32.
         (4) We have moved away from the default round-towards-zero (RZ) implementation to round-nearest (RN) for better tf32 accuracy in cuex.triangle_multiplicative_update. In rare circumstances, this may cause minor differences in results observed.
         (5) When using torch compile, use `cueuivariance_ops_torch.init_triton_cache()` to initialize triton cache before calling torch compiled triangular multiplicative update.
+        (6) Although the example demonstrates the most common case of one batch dimension, the API supports variable number of leading batch dimensions.
 
     Example:
         >>> import torch
