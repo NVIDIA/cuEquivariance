@@ -11,8 +11,9 @@
 
 ### Bug fix
 - [Torch/JAX] Fixed illegal memory access issue stemming from int32 indexing for longer sequences in triangle multiplicative update and attention with pair bias.
-## 0.6.0 (2025-08-11)
 - [JAX] Moved to using nondiff_argnums instead of nondiff_argnames to be compatible with older JAX versions
+
+## 0.6.0 (2025-08-11)
 
 ### Added
 - [Torch] New feature: Added `cuet.attention_pair_bias` (support for caching the pair bias tensor & further kernel acceleration coming up soon. There maybe API related changes for this in the next release)
