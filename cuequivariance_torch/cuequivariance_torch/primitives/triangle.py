@@ -310,8 +310,6 @@ def attention_pair_bias(
             and is not reflected in z tensor. Defaults to 1.
 
     Returns:
-        A tuple containing:
-
         - **output** (:class:`torch.Tensor`): Attention output of shape (B * M, S, D)
           with pairwise bias applied.
         - **proj_z** (:class:`torch.Tensor`): Projected z tensor of shape (B, H, U, V)
@@ -326,6 +324,7 @@ def attention_pair_bias(
           timesteps in a single forward pass.
         - The proj_z output is experimental to prevent breakage when caching
           of pair bias tensor is enabled in the next release.
+        - Tested for bf16, fp16, fp32 and tf32. torch.set_float32_matmul_precision maybe used to toggle between fp32/tf32.
 
     Examples:
         >>> import torch
@@ -336,27 +335,27 @@ def attention_pair_bias(
         ...     query_len, key_len, z_dim = 32, 32, 16
         ...     # Create input tensors on GPU
         ...     s = torch.randn(batch_size, seq_len, hidden_dim,
-        ...                     device=device, dtype=torch.float32)
+        ...                     device=device, dtype=torch.bfloat16)
         ...     q = torch.randn(batch_size, num_heads, query_len, heads_dim,
-        ...                     device=device, dtype=torch.float32)
+        ...                     device=device, dtype=torch.bfloat16)
         ...     k = torch.randn(batch_size, num_heads, key_len, heads_dim,
-        ...                     device=device, dtype=torch.float32)
+        ...                     device=device, dtype=torch.bfloat16)
         ...     v = torch.randn(batch_size, num_heads, key_len, heads_dim,
-        ...                     device=device, dtype=torch.float32)
+        ...                     device=device, dtype=torch.bfloat16)
         ...     z = torch.randn(batch_size, query_len, key_len, z_dim,
-        ...                     device=device, dtype=torch.float32)
+        ...                     device=device, dtype=torch.bfloat16)
         ...     mask = torch.rand(batch_size, key_len,
         ...                       device=device) < 0.5
         ...     w_proj_z = torch.randn(num_heads, z_dim,
-        ...                     device=device, dtype=torch.float32)
+        ...                     device=device, dtype=torch.bfloat16)
         ...     w_proj_g = torch.randn(hidden_dim, hidden_dim,
-        ...                     device=device, dtype=torch.float32)
+        ...                     device=device, dtype=torch.bfloat16)
         ...     w_proj_o = torch.randn(hidden_dim, hidden_dim,
-        ...                     device=device, dtype=torch.float32)
+        ...                     device=device, dtype=torch.bfloat16)
         ...     w_ln_z = torch.randn(z_dim,
-        ...                     device=device, dtype=torch.float32)
+        ...                     device=device, dtype=torch.bfloat16)
         ...     b_ln_z = torch.randn(z_dim,
-        ...                     device=device, dtype=torch.float32)
+        ...                     device=device, dtype=torch.bfloat16)
         ...     # Perform operation
         ...     output, proj_z = attention_pair_bias(
         ...         s=s,
