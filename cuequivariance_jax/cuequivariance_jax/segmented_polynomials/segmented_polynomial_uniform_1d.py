@@ -12,6 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import logging
 import math
 import re
 import warnings
@@ -23,6 +24,8 @@ from packaging import version
 
 import cuequivariance as cue
 from cuequivariance_jax.segmented_polynomials.utils import reshape
+
+logger = logging.getLogger(__name__)
 
 
 def sanitize_string(s):
@@ -185,6 +188,14 @@ def execute_uniform_1d(
         operations.append(Operation(ope.buffers, len(paths), stp.num_paths))
         for path in stp.paths:
             paths.append(Path(path.indices, path.coefficients.item()))
+
+    logger.info(
+        "Calling tensor_product_uniform_1d_jit with buffers of shape %s, "
+        "indices shapes %s, index_configuration %s",
+        [b.shape for b in buffers],
+        [i.shape for i in indices],
+        index_configuration,
+    )
 
     outputs = tensor_product_uniform_1d_jit(
         buffers[: polynomial.num_inputs],
