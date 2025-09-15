@@ -226,10 +226,17 @@ def run_segmented_polynomial_test(
     if grad and backward and dtype.itemsize <= 2:
         pytest.skip("double backward with fp16/bf16 lacks accuracy")
 
+    # Special case for indexed_linear dtype
+    if math_dtype == "CUBLAS_COMPUTE_32F" and method == "indexed_linear":
+        o_math_dtype = math_dtype
+        math_dtype = torch.float32
+    else:
+        o_math_dtype = math_dtype
+
     m_ref = cuet.SegmentedPolynomial(
         polynomial, method="naive", math_dtype=math_dtype
     ).to(device)
-    m = cuet.SegmentedPolynomial(polynomial, method=method, math_dtype=math_dtype).to(
+    m = cuet.SegmentedPolynomial(polynomial, method=method, math_dtype=o_math_dtype).to(
         device
     )
 
@@ -267,6 +274,7 @@ DATA_TYPES_IN_MATH = [
     (torch.float64, torch.float64),
     (torch.float32, None),
     (torch.float64, None),
+    (torch.float32, "float32"),
     (torch.float16, torch.float32),
     (torch.bfloat16, torch.float32),
 ]
@@ -414,7 +422,7 @@ def test_segmented_polynomial_dytpes(
 
 
 # Testing export modes, only using one option for each to save time
-# We also have to test naive method
+# We also have to test naive method explicitly because the reference is not exported
 @pytest.mark.parametrize("name, polynomial", SEGMENTED_POLYNOMIALS[:1])
 @pytest.mark.parametrize("method", METHODS + ["naive"])
 @pytest.mark.parametrize("dtype, math_dtype", DATA_TYPES_IN_MATH[:1])
@@ -456,7 +464,10 @@ def test_segmented_polynomial_export(
 
 
 @pytest.mark.parametrize("method", METHODS + ["indexed_linear"])
-@pytest.mark.parametrize("dtype, math_dtype", DATA_TYPES_IN_MATH[2:6])
+@pytest.mark.parametrize(
+    "dtype, math_dtype",
+    DATA_TYPES_IN_MATH[2:6] + [(torch.float32, "CUBLAS_COMPUTE_32F")],
+)
 @pytest.mark.parametrize("batch_size", BATCH_SIZE[1:])
 @pytest.mark.parametrize("mode", EXPORT_MODES[:1])
 @pytest.mark.parametrize("grad", GRAD)
@@ -488,8 +499,10 @@ def test_segmented_polynomial_indexed_linear(
         and dtype == torch.float64
     ):
         pytest.skip("Skipping fused TP for float32 math_dtype with float64 inputs")
-    if method == "indexed_linear" and math_dtype is not None:
-        pytest.skip("indexed_linear does not support math_dtype")
+    if method == "indexed_linear" and math_dtype not in [None, "CUBLAS_COMPUTE_32F"]:
+        pytest.skip("indexed_linear does not support non-CUBLAS math_dtype")
+    if math_dtype == "CUBLAS_COMPUTE_32F" and method != "indexed_linear":
+        pytest.skip("only indexed_linear supports CUBLAS math_dtype")
 
     run_segmented_polynomial_test(
         name,

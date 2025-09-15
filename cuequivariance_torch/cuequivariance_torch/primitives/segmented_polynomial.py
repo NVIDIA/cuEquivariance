@@ -58,6 +58,17 @@ class SegmentedPolynomial(nn.Module):
             If specified, internal buffers will be of this dtype,
             and operands will be converted to this type for all computations.
 
+            Values can be specified as a string corresponding to a torch.dtype,
+            or as a torch.dtype.
+            For some methods, special values can be used:
+
+            - For method ``"naive"``: Any torch.dtype or corresponding string.
+            - For method ``"uniform_1d"``: ``torch.float32`` or ``torch.float64`` or corresponding strings.
+            - For method ``"fused_tp"``: ``torch.float32`` or ``torch.float64`` or corresponding strings.
+            - For method ``"indexed_linear"``: CUBLAS compute type strings such as ``"CUBLAS_COMPUTE_32F"``,
+              ``"CUBLAS_COMPUTE_32F_FAST_TF32"``, ``"CUBLAS_COMPUTE_32F_PEDANTIC"``,
+              ``"CUBLAS_COMPUTE_64F"``, etc.
+
             .. note::
                This will not be affected by changes to the module dtype,
                and not all methods support all dtypes.
@@ -68,8 +79,7 @@ class SegmentedPolynomial(nn.Module):
             - For method ``"uniform_1d"``, the dtype of the input tensors will be used if allowed
               (FP32 or FP64), otherwise float32 will be used.
             - For method ``"fused_tp"``, the default dtype (FP32) will be used.
-            - For method ``"indexed_linear"``, the dtype of the input tensors will be used
-              (this is the only option available for this method).
+            - For method ``"indexed_linear"``, the dtype of the input tensors will be used.
 
         output_dtype_map: Optional list that, for each output buffer, specifies
             the index of the input buffer from which it inherits its data type.
@@ -132,7 +142,7 @@ class SegmentedPolynomial(nn.Module):
         self,
         polynomial: cue.SegmentedPolynomial,
         method: str = "",
-        math_dtype: torch.dtype = None,
+        math_dtype: str | torch.dtype = None,
         output_dtype_map: List[int] = None,
         name: str = "segmented_polynomial",
     ):
