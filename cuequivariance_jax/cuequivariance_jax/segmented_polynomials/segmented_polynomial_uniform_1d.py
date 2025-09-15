@@ -194,7 +194,7 @@ def execute_uniform_1d(
         "indices shapes %s, index_configuration %s",
         [b.shape for b in buffers],
         [i.shape for i in indices],
-        index_configuration,
+        index_configuration.T,
     )
 
     outputs = tensor_product_uniform_1d_jit(
