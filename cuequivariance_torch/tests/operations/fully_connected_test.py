@@ -43,15 +43,20 @@ irreps = [
 @pytest.mark.parametrize("irreps1, irreps2, irreps3", irreps)
 @pytest.mark.parametrize("layout", [cue.ir_mul, cue.mul_ir])
 @pytest.mark.parametrize("use_fallback", [False, True])
+@pytest.mark.parametrize("math_dtype", [None, torch.float32, "float64"])
 def test_fully_connected(
     irreps1: cue.Irreps,
     irreps2: cue.Irreps,
     irreps3: cue.Irreps,
     layout: cue.IrrepsLayout,
     use_fallback: bool,
+    math_dtype: str | torch.dtype | None,
 ):
     if use_fallback is False and not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
+
+    if use_fallback is False and math_dtype is torch.float32:
+        pytest.skip("Skipping float32 test for fallback=False (fused_tp)")
 
     m1 = cuet.FullyConnectedTensorProduct(
         irreps1,
@@ -62,6 +67,7 @@ def test_fully_connected(
         layout=layout,
         device=device,
         dtype=torch.float64,
+        math_dtype=math_dtype,
         use_fallback=use_fallback,
     )
 

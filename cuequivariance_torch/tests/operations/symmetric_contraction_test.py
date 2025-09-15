@@ -130,7 +130,7 @@ export_modes = ["compile", "script", "jit"]
     "dtype, math_dtype, atol, rtol",
     [
         (torch.float64, torch.float64, 1e-10, 1e-10),
-        (torch.float32, torch.float32, 1e-5, 1e-5),
+        (torch.float32, "float32", 1e-5, 1e-5),
     ],
 )
 @pytest.mark.parametrize("layout", [cue.ir_mul, cue.mul_ir])
