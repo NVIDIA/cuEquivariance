@@ -217,7 +217,7 @@ def _reference_backward(
     return grad_xw1, grad_xw2, grad_mask  # (M, N), (M, N), (M,)
 
 
-def _triton_forward(
+def fused_sigmoid_gated_dual_gemm_forward_kernel_wrapper(
     x1: jax.Array,
     x2: jax.Array,
     w1: jax.Array,
@@ -292,7 +292,7 @@ def _triton_forward(
     )
 
 
-def _triton_backward(
+def fused_sigmoid_gated_dual_gemm_backward_pregemm_kernel_wrapper(
     grad_out: jax.Array,
     x1: jax.Array,
     x2: jax.Array,
@@ -460,8 +460,8 @@ def _input_to_key(
 
     # Normalize dtypes
     dtypes = [
-        str(t.dtype if t.dtype != jnp.bfloat16 else jnp.dtype(jnp.float16))
-        for t in [x1, x2, w1, w2, b1, b2, mask]
+        "torch." + str(t.dtype if t.dtype != jnp.bfloat16 else jnp.dtype(jnp.float16))
+        for t in [x1, x2, w1, w2, mask]
     ]
 
     match precision:
@@ -474,7 +474,7 @@ def _input_to_key(
         case _:
             precision_key = "default"
 
-    return f"{key_m}_{key_k}_{key_n}_{'_'.join(dtypes)}_{two_inputs}_{precision_key}"
+    return f"{key_m}_{key_n}_{key_k}_{'_'.join(dtypes)}_{two_inputs}_False_False_{precision_key}"
 
 
 def _get_autotuned_kernel(is_forward: bool):
@@ -524,7 +524,7 @@ def _get_autotuned_kernel(is_forward: bool):
             prune_configs_fn=None,
             run_decoy=run_decoy,
             run_bench=run_bench,
-        )(_triton_forward)
+        )(fused_sigmoid_gated_dual_gemm_forward_kernel_wrapper)
 
     if not is_forward and _autotuned_backward is None:
         _autotuned_backward = autotune_aot(
@@ -535,7 +535,7 @@ def _get_autotuned_kernel(is_forward: bool):
             prune_configs_fn=None,
             run_decoy=run_decoy,
             run_bench=run_bench,
-        )(_triton_backward)
+        )(fused_sigmoid_gated_dual_gemm_backward_pregemm_kernel_wrapper)
 
     return _autotuned_forward if is_forward else _autotuned_backward
 
