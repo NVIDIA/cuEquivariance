@@ -464,10 +464,7 @@ def test_segmented_polynomial_export(
 
 
 @pytest.mark.parametrize("method", METHODS + ["indexed_linear"])
-@pytest.mark.parametrize(
-    "dtype, math_dtype",
-    DATA_TYPES_IN_MATH[2:6] + [(torch.float32, "CUBLAS_COMPUTE_32F")],
-)
+@pytest.mark.parametrize("dtype, math_dtype", DATA_TYPES_IN_MATH[2:6])
 @pytest.mark.parametrize("batch_size", BATCH_SIZE[1:])
 @pytest.mark.parametrize("mode", EXPORT_MODES[:1])
 @pytest.mark.parametrize("grad", GRAD)
@@ -499,10 +496,8 @@ def test_segmented_polynomial_indexed_linear(
         and dtype == torch.float64
     ):
         pytest.skip("Skipping fused TP for float32 math_dtype with float64 inputs")
-    if method == "indexed_linear" and math_dtype not in [None, "CUBLAS_COMPUTE_32F"]:
-        pytest.skip("indexed_linear does not support non-CUBLAS math_dtype")
-    if math_dtype == "CUBLAS_COMPUTE_32F" and method != "indexed_linear":
-        pytest.skip("only indexed_linear supports CUBLAS math_dtype")
+    if method == "indexed_linear" and math_dtype not in [None]:
+        pytest.skip("indexed_linear does not support math_dtype")
 
     run_segmented_polynomial_test(
         name,

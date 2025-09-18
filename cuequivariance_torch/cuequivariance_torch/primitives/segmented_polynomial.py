@@ -65,9 +65,7 @@ class SegmentedPolynomial(nn.Module):
             - For method ``"naive"``: Any torch.dtype or corresponding string.
             - For method ``"uniform_1d"``: ``torch.float32`` or ``torch.float64`` or corresponding strings.
             - For method ``"fused_tp"``: ``torch.float32`` or ``torch.float64`` or corresponding strings.
-            - For method ``"indexed_linear"``: CUBLAS compute type strings such as ``"CUBLAS_COMPUTE_32F"``,
-              ``"CUBLAS_COMPUTE_32F_FAST_TF32"``, ``"CUBLAS_COMPUTE_32F_PEDANTIC"``,
-              ``"CUBLAS_COMPUTE_64F"``, etc.
+            - For method ``"indexed_linear"``: this is not supported and will be ignored.
 
             .. note::
                This will not be affected by changes to the module dtype,

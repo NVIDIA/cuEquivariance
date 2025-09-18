@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import warnings
 from typing import Dict, List, Optional, Tuple
 
 import torch
@@ -168,9 +169,10 @@ class SegmentedPolynomialIndexedLinear(nn.Module):
         self.num_outputs = polynomial.num_outputs
         self.input_sizes = [o.size for o in polynomial.inputs]
         self.name = name
-        if math_dtype is not None and type(math_dtype) is not str:
-            raise ValueError(
-                "`indexed_linear` does not support non-string `math_dtype`."
+        if math_dtype is not None:
+            warnings.warn(
+                "`indexed_linear` does not support explicit `math_dtype`."
+                "This will be ignored."
             )
         self.out_size = [o.size for o in polynomial.outputs]
         default_dtype_map = [
