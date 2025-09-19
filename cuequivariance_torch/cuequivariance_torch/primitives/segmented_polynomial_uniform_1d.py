@@ -59,7 +59,7 @@ try:
             batch_size: int,
             tensors: List[torch.Tensor],
         ) -> List[torch.Tensor]:
-            return torch.ops.cuequivariance_ops.tensor_product_uniform_1d_jit(
+            return torch.ops.cuequivariance.tensor_product_uniform_1d_jit(
                 name,
                 math_dtype,
                 operand_extent,
