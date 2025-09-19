@@ -12,14 +12,23 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Any, Optional, Tuple
+from typing import Optional, Tuple
 
 import torch
 
 try:
     from cuequivariance_ops_torch import TriMulPrecision
 except ImportError:
-    TriMulPrecision = Any  # type: ignore
+    import enum
+
+    class TriMulPrecision(enum.IntEnum):  # type: ignore
+        """Fallback precision enum when cuequivariance_ops_torch is not available."""
+
+        NONE = -1
+        DEFAULT = 0
+        TF32 = 1
+        TF32x3 = 2
+        IEEE = 3
 
 
 def triangle_attention(
