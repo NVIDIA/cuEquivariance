@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import warnings
 from typing import Dict, List, Optional, Tuple
 
 import torch
@@ -28,6 +29,7 @@ class IndexedLinear(nn.Module):
         d: cue.SegmentedTensorProduct,
         subscripts: Tuple[str],
         dim_indices: List[List[int]],
+        math_dtype: Optional[str] = None,
     ):
         super().__init__()
         self.repr = d.__repr__()
@@ -38,6 +40,7 @@ class IndexedLinear(nn.Module):
         self.vind = dim_indices[3]
         self.wind = dim_indices[4]
         self.reshape_inputs = dim_indices[5]
+        self.math_dtype = math_dtype
 
         d = d.sort_paths(-1)
         pids = d.compressed_path_segment(-1)
@@ -97,6 +100,7 @@ class IndexedLinear(nn.Module):
                     counts,
                     self.subscripts,
                     self.coefficients[coef],
+                    self.math_dtype,
                 )
                 for i, shape, coef in zip(ii, shapes, coefs)
             ]
@@ -121,6 +125,7 @@ def apply_linear(
     counts: torch.Tensor,
     subscripts: Tuple[str],
     coefficients: torch.Tensor,
+    math_dtype: Optional[str] = None,
 ):
     from cuequivariance_ops_torch import indexed_linear
 
@@ -136,7 +141,15 @@ def apply_linear(
         outsh = input2.shape[:-1]
         input2 = input2.reshape(-1, input2.shape[-1])
     output = indexed_linear(
-        input1, input2, counts * w, u, v, C, Z * w, subscripts, coefficients
+        input1,
+        input2,
+        counts * w,
+        u,
+        v,
+        C,
+        Z * w,
+        subscripts,
+        coefficients,  # math_dtype
     )
     if outsh is not None:
         output = output.reshape(outsh + output.shape[1:])
@@ -147,7 +160,7 @@ class SegmentedPolynomialIndexedLinear(nn.Module):
     def __init__(
         self,
         polynomial: cue.SegmentedPolynomial,
-        math_dtype: Optional[torch.dtype] = None,
+        math_dtype: Optional[str] = None,
         output_dtype_map: List[int] = None,
         name: str = "segmented_polynomial",
     ):
@@ -157,7 +170,10 @@ class SegmentedPolynomialIndexedLinear(nn.Module):
         self.input_sizes = [o.size for o in polynomial.inputs]
         self.name = name
         if math_dtype is not None:
-            raise ValueError("`indexed_linear` does not support `math_dtype`.")
+            warnings.warn(
+                "`indexed_linear` does not support explicit `math_dtype`."
+                "This will be ignored."
+            )
         self.out_size = [o.size for o in polynomial.outputs]
         default_dtype_map = [
             0 if polynomial.num_inputs >= 1 else -1
@@ -207,7 +223,7 @@ class SegmentedPolynomialIndexedLinear(nn.Module):
                 assert not self.indexed_input[Z_index], (
                     f"Buffer {Z_index} has multiple indexed values."
                 )
-            self.tps.append(IndexedLinear(d, signature[0], signature[1:]))
+            self.tps.append(IndexedLinear(d, signature[0], signature[1:], math_dtype))
 
     def forward(
         self,

@@ -287,6 +287,7 @@ tol_dict = {
     (torch.float32, torch.float64): {"atol": 1e-4, "rtol": 1e-5},
     (torch.float64, torch.float32): {"atol": 1e-4, "rtol": 1e-5},
     (torch.float32, torch.float32): {"atol": 1e-4, "rtol": 1e-5},
+    (torch.float32, "float32"): {"atol": 1e-4, "rtol": 1e-5},
     (torch.bfloat16, torch.float32): {"atol": 4.0, "rtol": 1e-2},
     (torch.float16, torch.float32): {"atol": 0.25, "rtol": 1e-2},
 }

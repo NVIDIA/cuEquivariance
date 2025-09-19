@@ -299,7 +299,7 @@ class SegmentedPolynomialNaive(nn.Module):
     def __init__(
         self,
         polynomial: cue.SegmentedPolynomial,
-        math_dtype: Optional[torch.dtype] = None,
+        math_dtype: Optional[str | torch.dtype] = None,
         output_dtype_map: List[int] = None,
         name: str = "segmented_polynomial",
     ):
@@ -308,6 +308,13 @@ class SegmentedPolynomialNaive(nn.Module):
         self.num_outputs = polynomial.num_outputs
         self.input_sizes = [o.size for o in polynomial.inputs]
         self.name = name
+        if type(math_dtype) is str:
+            try:
+                math_dtype = getattr(torch, math_dtype)
+            except AttributeError:
+                raise ValueError(
+                    f"Math_dtype {math_dtype} is not accepted for method `naive`."
+                )
         self.math_dtype = math_dtype
         self.out_size = [o.size for o in polynomial.outputs]
         default_dtype_map = [

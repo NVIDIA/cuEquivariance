@@ -31,7 +31,7 @@ class SphericalHarmonics(nn.Module):
         ls: list[int],
         normalize: bool = True,
         device: Optional[torch.device] = None,
-        math_dtype: Optional[torch.dtype] = None,
+        math_dtype: Optional[str | torch.dtype] = None,
         use_fallback: Optional[bool] = None,
         method: Optional[str] = None,
     ):
@@ -40,7 +40,8 @@ class SphericalHarmonics(nn.Module):
             ls (list of int): List of spherical harmonic degrees.
             normalize (bool, optional): Whether to normalize the input vectors. Defaults to True.
             device (torch.device, optional): The device to use for the operation.
-            math_dtype (torch.dtype, optional): The dtype to use for the operation.
+            math_dtype (torch.dtype or string, optional): The dtype to use for the operation, by default it follows the dtype of the input tensors,
+                if possible, or the torch default dtype (see SegmentedPolynomial for more details).
             method (str, optional): The method to use for the operation, by default "uniform_1d" (using a CUDA kernel).
             use_fallback (bool, optional, deprecated): Whether to use a "fallback" implementation, now maps to method:
                 If `True` the "naive" method is used.
