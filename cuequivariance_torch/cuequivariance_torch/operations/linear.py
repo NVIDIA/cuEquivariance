@@ -43,8 +43,8 @@ class Linear(torch.nn.Module):
             If this is specified and >1, at forward time each batch element will use a slice of the weight tensor as indexed by the weight_indices.
         device (torch.device, optional): The device to use for the linear layer.
         dtype (torch.dtype, optional): The dtype to use for the linear layer weights, by default ``torch.float32``.
-        math_dtype (torch.dtype, optional): The dtype to use for the math operations, by default it follows the dtype of the input tensors,
-            if possible, or the torch default dtype.
+        math_dtype (torch.dtype or string, optional): The dtype to use for the math operations, by default it follows the dtype of the input tensors,
+            if possible, or the torch default dtype (see SegmentedPolynomial for more details).
         method (str, optional): The method to use for the linear layer, by default "naive" (using a PyTorch implementation).
         use_fallback (bool, optional, deprecated): Whether to use a "fallback" implementation, now maps to method:
             If `True` or `None` (default), the "naive" method is used.
@@ -64,7 +64,7 @@ class Linear(torch.nn.Module):
         weight_classes: Optional[int] = 1,
         device: Optional[torch.device] = None,
         dtype: Optional[torch.dtype] = None,
-        math_dtype: Optional[torch.dtype] = None,
+        math_dtype: Optional[str | torch.dtype] = None,
         use_fallback: Optional[bool] = None,
         method: Optional[str] = None,
     ):

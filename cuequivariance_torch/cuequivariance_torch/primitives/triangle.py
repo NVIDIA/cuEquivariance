@@ -12,14 +12,23 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Any, Optional, Tuple
+from typing import Optional, Tuple
 
 import torch
 
 try:
     from cuequivariance_ops_torch import TriMulPrecision
 except ImportError:
-    TriMulPrecision = Any  # type: ignore
+    import enum
+
+    class TriMulPrecision(enum.IntEnum):  # type: ignore
+        """Fallback precision enum when cuequivariance_ops_torch is not available."""
+
+        NONE = -1
+        DEFAULT = 0
+        TF32 = 1
+        TF32x3 = 2
+        IEEE = 3
 
 
 def triangle_attention(
@@ -258,19 +267,19 @@ def attention_pair_bias(
     z: torch.Tensor,
     mask: torch.Tensor,
     num_heads: int,
-    w_proj_z: torch.Tensor,
+    w_proj_z: Optional[torch.Tensor],
     w_proj_g: torch.Tensor,
     w_proj_o: torch.Tensor,
-    w_ln_z: torch.Tensor,
-    b_ln_z: torch.Tensor,
+    w_ln_z: Optional[torch.Tensor] = None,
+    b_ln_z: Optional[torch.Tensor] = None,
     b_proj_z: Optional[torch.Tensor] = None,
     b_proj_g: Optional[torch.Tensor] = None,
     b_proj_o: Optional[torch.Tensor] = None,
-    inf: Optional[float] = 1e6,
-    eps: Optional[float] = 1e-5,
+    inf: float = 1e6,
+    eps: float = 1e-5,
     attn_scale: Optional[float] = None,
-    compute_pair_bias: Optional[bool] = True,
-    multiplicity: Optional[int] = 1,
+    return_z_proj: bool = True,
+    is_cached_z_proj: bool = False,
 ):
     """Compute attention with pairwise bias for diffusion models.
 
@@ -288,7 +297,7 @@ def attention_pair_bias(
         k: Key tensor of shape (B * M, H, V, DH) where V is key sequence length.
         v: Value tensor of shape (B * M, H, V, DH).
         z: Pairwise tensor of shape (B, U, V, z_dim) containing pairwise interactions,
-            where z_dim can be arbitrary. This is the main input for the pairwise bias computation.
+            where z_dim can be arbitrary. This is the main input for the pairwise bias computation. If return_z_proj is True, z should be of shape (B, H, U, V).
         mask: Attention mask of shape (B, V) or (B * M, V) indicating which positions
             should be masked (0 = masked, 1 = unmasked).
         num_heads: Number of attention heads.
@@ -304,10 +313,9 @@ def attention_pair_bias(
         eps: Epsilon value for layer normalization. Defaults to 1e-5.
         attn_scale: Scaling factor for attention scores. If None, uses 1/sqrt(head_dim).
             Defaults to None.
-        compute_pair_bias: Whether to compute pairwise bias. If False, z tensor should already
-            be in the correct format (B, U, V, H). Defaults to True.
-        multiplicity: Multiplicity (diffusion steps). Should be explicitly set if multiplicity > 1
-            and is not reflected in z tensor. Defaults to 1.
+        return_z_proj: Whether to return the projected z tensor as the second output. Defaults to True.
+        is_cached_z_proj: Whether the z tensor is already projected and cached.
+            If True, z should be of shape (B, H, U, V). Defaults to False.
 
     Returns:
         - **output** (:class:`torch.Tensor`): Attention output of shape (B * M, S, D)
@@ -320,8 +328,8 @@ def attention_pair_bias(
           uses PyTorch fallback implementation.
         - For long sequences, uses optimized Triton kernels with automatic
           backend selection (CUDNN, Flash Attention, Efficient Attention).
-        - The multiplicity parameter (M) allows processing multiple diffusion
-          timesteps in a single forward pass.
+        - Multiplicity (M) is computed automatically from tensor shapes to allow
+          processing multiple diffusion timesteps in a single forward pass.
         - The proj_z output is experimental to prevent breakage when caching
           of pair bias tensor is enabled in the next release.
         - Tested for bf16, fp16, fp32 and tf32. torch.set_float32_matmul_precision maybe used to toggle between fp32/tf32.
@@ -403,6 +411,6 @@ def attention_pair_bias(
             inf=inf,
             eps=eps,
             attn_scale=attn_scale,
-            compute_pair_bias=compute_pair_bias,
-            multiplicity=multiplicity,
+            return_z_proj=return_z_proj,
+            is_cached_z_proj=is_cached_z_proj,
         )

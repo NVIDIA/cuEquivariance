@@ -87,6 +87,7 @@ jobs:
         python -m pip install --upgrade uv
         python -m uv pip install -U pytest "jax[cuda12]"
         python -m uv pip install nvidia-cusolver-cu12==11.7.3.90
+        python -m uv pip install jax-triton triton==3.3.1
         python -m uv pip uninstall cuequivariance cuequivariance_jax cuequivariance_torch
         python -m uv pip install -e ./cuequivariance 
         python -m uv pip install -e ./cuequivariance_jax 
@@ -137,16 +138,32 @@ jobs:
     steps:
     - name: Create Issue on Failure
       uses: actions/github-script@v7
+      env:
+        CUEQUIVARIANCE_FULL_RESULT: ${{ needs.cuequivariance-full.result }}
+        CUEQUIVARIANCE_JAX_FULL_RESULT: ${{ needs.cuequivariance-jax-full.result }}
+        CUEQUIVARIANCE_TORCH_FULL_RESULT: ${{ needs.cuequivariance-torch-full.result }}
       with:
         script: |
           const title = `🚨 Nightly Tests Failed - ${new Date().toISOString().split('T')[0]}`;
+          
+          const failedJobs = [];
+          if (process.env.CUEQUIVARIANCE_FULL_RESULT === 'failure') {
+            failedJobs.push('❌ cuequivariance-full');
+          }
+          if (process.env.CUEQUIVARIANCE_JAX_FULL_RESULT === 'failure') {
+            failedJobs.push('❌ cuequivariance-jax-full');
+          }
+          if (process.env.CUEQUIVARIANCE_TORCH_FULL_RESULT === 'failure') {
+            failedJobs.push('❌ cuequivariance-torch-full');
+          }
+          
           const body = `## Nightly Test Failure Report
           
           **Date:** ${new Date().toISOString()}
           **Workflow Run:** [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
           
           ### Failed Jobs:
-          ${needs['cuequivariance-full'].result === 'failure' ? '❌ cuequivariance-full\n' : ''}${needs['cuequivariance-jax-full'].result === 'failure' ? '❌ cuequivariance-jax-full\n' : ''}${needs['cuequivariance-torch-full'].result === 'failure' ? '❌ cuequivariance-torch-full\n' : ''}
+          ${failedJobs.join('\n')}
           
           Please investigate and fix the failing tests.
           
