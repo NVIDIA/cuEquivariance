@@ -38,6 +38,14 @@ jobs:
         # python -m uv pip install jax-triton triton==3.3.1
         # python -m uv pip uninstall cuequivariance cuequivariance_jax cuequivariance_torch
         python -m uv pip install cuequivariance-ops-cu12 cuequivariance-ops-jax-cu12
+
+        # add some debug print here, one liners please
+        echo "LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
+        find $(python -c "import site; print(' '.join(site.getsitepackages()))") -name "*libcublas*" 2>/dev/null | head -5
+        python -c "import os; print('CUDA_PATH:', os.environ.get('CUDA_PATH', 'Not set'))"
+        ldconfig -p | grep cublas || echo "No cublas in ldconfig"
+        python -c "import cuequivariance_ops; print('ops lib path:', cuequivariance_ops.__file__)"
+
         python -c "import cuequivariance_ops; print('cueop', cuequivariance_ops.__version__)"
         python -c "import cuequivariance_ops_jax; print('cueopx', cuequivariance_ops_jax.__version__)"
 
