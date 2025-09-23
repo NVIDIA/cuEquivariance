@@ -1,57 +1,27 @@
-name: Debugging GHA Workflow
+name: Tests on GPUs
 
 on:
   push:
     branches:
+      - "main"
+      - "release"
       - "pull-request/[0-9]+"
-  workflow_dispatch:
 
 jobs:
 
-  system-diagnostics:
+  jax-gpu:
     runs-on: linux-amd64-gpu-l4-latest-1
     
     steps:
 
     - name: Collect System and Hardware Information
       run: |
-        echo "=== System Information ==="
         uname -a
         cat /etc/os-release
-        echo ""
-        
-        echo "=== CPU Information ==="
         lscpu | head -20
-        echo ""
-        
-        echo "=== Memory Information ==="
         free -h
-        echo ""
-        
-        echo "=== Disk Information ==="
         df -h
-        echo ""
-        
-        echo "=== GPU Information ==="
-        nvidia-smi || echo "nvidia-smi not available"
-        echo ""
-        
-        echo "=== CUDA Information ==="
-        nvcc --version || echo "CUDA compiler not available"
-        echo ""
-        
-        echo "=== Python Environment ==="
-        python3 --version || echo "Python3 not available"
-        which python3 || echo "Python3 not in PATH"
-        echo ""
-        
-        echo "=== Environment Variables ==="
-        env | grep -E "(CUDA|GPU|NVIDIA)" || echo "No CUDA/GPU environment variables"
-        echo ""
-        
-        echo "=== Docker Information ==="
-        docker --version || echo "Docker not available"
-        echo ""
+        nvidia-smi
 
     - uses: actions/checkout@v5
     - uses: actions/setup-python@v6
@@ -60,7 +30,6 @@ jobs:
 
     - name: Install dependencies
       run: |
-        echo "=== Installing dependencies ==="
         python -m pip install --upgrade pip
         python -m pip install --upgrade uv
         python -m uv pip install -U pytest "jax[cuda12]"
@@ -71,16 +40,11 @@ jobs:
         python -m uv pip install cuequivariance-ops-cu12 cuequivariance-ops-jax-cu12
         python -m uv pip install -e ./cuequivariance
         python -m uv pip install -e ./cuequivariance_jax
-        echo ""
-        
-        echo "=== Verifying installation ==="
+
         python -c "import cuequivariance; print('cue', cuequivariance.__version__)"
         python -c "import cuequivariance_jax; print('cuex', cuequivariance_jax.__version__)"
-        echo ""
 
         
     - name: Test with pytest
       run: |
-        echo "=== Running pytest on cuequivariance_jax ==="
         XLA_PYTHON_CLIENT_PREALLOCATE=false pytest --doctest-modules -x -m "not slow" cuequivariance_jax
-        echo ""
