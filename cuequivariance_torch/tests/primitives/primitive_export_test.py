@@ -14,8 +14,6 @@
 # limitations under the License.
 import pytest
 import torch
-
-import cuequivariance as cue
 from cuequivariance_torch._tests.utils import (
     module_with_mode,
 )
@@ -28,6 +26,8 @@ from cuequivariance_torch.primitives.tensor_product import (
     TensorProductUniform3x1d,
     TensorProductUniform4x1d,
 )
+
+import cuequivariance as cue
 
 device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
 

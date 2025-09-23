@@ -24,10 +24,6 @@ import jax.extend
 import jax.lax
 import jax.numpy as jnp
 import numpy as np  # noqa: F401
-from jax.interpreters import ad, batching, mlir, partial_eval, xla
-
-import cuequivariance as cue
-import cuequivariance_jax as cuex  # noqa: F401
 from cuequivariance_jax.segmented_polynomials.indexing_mode import IndexingMode
 from cuequivariance_jax.segmented_polynomials.segmented_polynomial_indexed_linear import (
     execute_indexed_linear,
@@ -43,6 +39,10 @@ from cuequivariance_jax.segmented_polynomials.utils import (
     reshape,
     sanitize_multi_index,
 )
+from jax.interpreters import ad, batching, mlir, partial_eval, xla
+
+import cuequivariance as cue
+import cuequivariance_jax as cuex  # noqa: F401
 
 logger = logging.getLogger(__name__)
 

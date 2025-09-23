@@ -17,7 +17,6 @@ import jax.numpy as jnp
 import jax.test_util
 import numpy as np
 import pytest
-
 from cuequivariance_jax.triangle import (
     Precision,
 )

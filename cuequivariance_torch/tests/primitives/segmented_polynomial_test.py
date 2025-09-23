@@ -16,10 +16,10 @@ from typing import Dict, List, Optional
 
 import pytest
 import torch
+from cuequivariance_torch._tests.utils import module_with_mode, tol_dict
 
 import cuequivariance as cue
 import cuequivariance_torch as cuet
-from cuequivariance_torch._tests.utils import module_with_mode, tol_dict
 
 global_device = (
     torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")

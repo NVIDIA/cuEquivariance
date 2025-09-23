@@ -18,8 +18,6 @@ from typing import Dict, List, Optional
 
 import torch
 import torch.nn as nn
-
-import cuequivariance as cue
 from cuequivariance_torch.primitives.segmented_polynomial_fused_tp import (
     SegmentedPolynomialFusedTP,
 )
@@ -32,6 +30,8 @@ from cuequivariance_torch.primitives.segmented_polynomial_naive import (
 from cuequivariance_torch.primitives.segmented_polynomial_uniform_1d import (
     SegmentedPolynomialFromUniform1dJit,
 )
+
+import cuequivariance as cue
 
 try:
     import cuequivariance_ops_torch  # noqa: F401
