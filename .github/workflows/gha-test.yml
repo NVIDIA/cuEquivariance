@@ -65,6 +65,7 @@ jobs:
         python -m pip install --upgrade uv
         python -m uv pip install -U pytest "jax[cuda12]"
         # python -m uv pip install nvidia-cusolver-cu12==11.7.3.90
+        python -m uv pip install nvidia-cublas-cu12
         python -m uv pip install jax-triton triton==3.3.1
         # python -m uv pip uninstall cuequivariance cuequivariance_jax cuequivariance_torch
         python -m uv pip install cuequivariance-ops-cu12 cuequivariance-ops-jax-cu12
