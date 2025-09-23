@@ -45,6 +45,10 @@ jobs:
         python -c "import os; print('CUDA_PATH:', os.environ.get('CUDA_PATH', 'Not set'))"
         ldconfig -p | grep cublas || echo "No cublas in ldconfig"
         python -c "import cuequivariance_ops; print('ops lib path:', cuequivariance_ops.__file__)"
+        
+        # Add NVIDIA CUDA libraries to LD_LIBRARY_PATH
+        export LD_LIBRARY_PATH="$(python -c "import site; import os; print(':'.join([os.path.join(p, 'nvidia/cublas/lib') for p in site.getsitepackages() if os.path.exists(os.path.join(p, 'nvidia/cublas/lib'))]))"):$LD_LIBRARY_PATH
+        echo "Updated LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
 
         python -c "import cuequivariance_ops; print('cueop', cuequivariance_ops.__version__)"
         python -c "import cuequivariance_ops_jax; print('cueopx', cuequivariance_ops_jax.__version__)"
@@ -57,4 +61,6 @@ jobs:
         
     - name: Test with pytest
       run: |
+        # Set up CUDA library path for tests
+        export LD_LIBRARY_PATH="$(python -c "import site; import os; print(':'.join([os.path.join(p, 'nvidia/cublas/lib') for p in site.getsitepackages() if os.path.exists(os.path.join(p, 'nvidia/cublas/lib'))]))"):$LD_LIBRARY_PATH
         XLA_PYTHON_CLIENT_PREALLOCATE=false pytest --doctest-modules -x -m "not slow" cuequivariance_jax
