@@ -76,6 +76,7 @@ jobs:
         python -c "import cuequivariance_jax; print('cuex', cuequivariance_jax.__version__)"
         echo ""
         
+        
     - name: Test with pytest
       run: |
         echo "=== Running pytest on cuequivariance_jax ==="
