@@ -67,15 +67,16 @@ jobs:
         # python -m uv pip install nvidia-cusolver-cu12==11.7.3.90
         python -m uv pip install jax-triton triton==3.3.1
         # python -m uv pip uninstall cuequivariance cuequivariance_jax cuequivariance_torch
-        python -m uv pip install -e ./cuequivariance 
-        python -m uv pip install -e ./cuequivariance_jax 
+        python -m uv pip install cuequivariance-ops-cu12 cuequivariance-ops-jax-cu12
+        python -m uv pip install -e ./cuequivariance
+        python -m uv pip install -e ./cuequivariance_jax
         echo ""
         
         echo "=== Verifying installation ==="
         python -c "import cuequivariance; print('cue', cuequivariance.__version__)"
         python -c "import cuequivariance_jax; print('cuex', cuequivariance_jax.__version__)"
         echo ""
-        
+
         
     - name: Test with pytest
       run: |
