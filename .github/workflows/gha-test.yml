@@ -1,20 +1,21 @@
-name: pull request workflow (gha)
+name: Debugging GHA Workflow
 
 on:
   push:
     branches:
       - "pull-request/[0-9]+"
+  workflow_dispatch:
 
 jobs:
 
-  runner-info:
+  system-diagnostics:
     runs-on: linux-amd64-gpu-l4-latest-1
     
     steps:
-    - name: Checkout
+    - name: Checkout Repository
       uses: actions/checkout@v4
 
-    - name: System Information
+    - name: Collect System and Hardware Information
       run: |
         echo "=== System Information ==="
         uname -a
