@@ -11,6 +11,9 @@ jobs:
     runs-on: linux-amd64-gpu-t4-latest-1
     
     steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
     - name: System Information
       run: |
         echo "=== System Information ==="
