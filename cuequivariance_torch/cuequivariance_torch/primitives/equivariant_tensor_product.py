@@ -15,10 +15,10 @@
 from typing import List, Optional, Union
 
 import torch
+from cuequivariance.group_theory.irreps_array.misc_ui import default_layout
 
 import cuequivariance as cue
 import cuequivariance_torch as cuet
-from cuequivariance.group_theory.irreps_array.misc_ui import default_layout
 
 
 class Dispatcher(torch.nn.Module):

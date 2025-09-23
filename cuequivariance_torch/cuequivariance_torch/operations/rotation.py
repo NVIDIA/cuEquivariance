@@ -16,14 +16,14 @@ import warnings
 from typing import Optional
 
 import torch
-
-import cuequivariance as cue
-import cuequivariance_torch as cuet
-from cuequivariance import descriptors
 from cuequivariance.group_theory.irreps_array.misc_ui import (
     default_irreps,
     default_layout,
 )
+
+import cuequivariance as cue
+import cuequivariance_torch as cuet
+from cuequivariance import descriptors
 
 
 class Rotation(torch.nn.Module):

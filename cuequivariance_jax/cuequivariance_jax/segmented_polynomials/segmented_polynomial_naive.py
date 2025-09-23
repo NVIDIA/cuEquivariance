@@ -21,8 +21,6 @@ import jax
 import jax.lax
 import jax.numpy as jnp
 import numpy as np
-
-import cuequivariance as cue
 from cuequivariance_jax.segmented_polynomials.indexing_mode import IndexingMode
 from cuequivariance_jax.segmented_polynomials.segmented_polynomial_indexed_linear import (
     execute_indexed_linear,
@@ -32,6 +30,8 @@ from cuequivariance_jax.segmented_polynomials.utils import (
     indexing,
     math_dtype_for_naive_method,
 )
+
+import cuequivariance as cue
 
 logger = logging.getLogger(__name__)
 

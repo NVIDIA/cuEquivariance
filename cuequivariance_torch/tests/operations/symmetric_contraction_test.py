@@ -17,13 +17,13 @@ import base64
 import numpy as np
 import pytest
 import torch
-
-import cuequivariance as cue
-import cuequivariance_torch as cuet
 from cuequivariance.group_theory.experimental.e3nn import O3_e3nn
 from cuequivariance_torch._tests.utils import (
     module_with_mode,
 )
+
+import cuequivariance as cue
+import cuequivariance_torch as cuet
 
 device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
 

@@ -17,7 +17,6 @@ import importlib.util
 
 import jax.numpy as jnp
 import pytest
-
 from cuequivariance_jax.benchmarking import measure_clock_ticks
 
 

@@ -16,9 +16,8 @@ import jax
 import jax.numpy as jnp
 import jax.random as random
 import pytest
-from jax import test_util
-
 from cuequivariance_jax.triangle._layer_norm_transpose import layer_norm_transpose
+from jax import test_util
 
 jax.config.update("jax_enable_x64", True)
 

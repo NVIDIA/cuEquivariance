@@ -20,14 +20,14 @@ import jax
 import jax.lax
 import jax.numpy as jnp
 import numpy as np
-
-import cuequivariance as cue
 from cuequivariance_jax.segmented_polynomials.indexing_mode import IndexingMode
 from cuequivariance_jax.segmented_polynomials.utils import (
     batch_size,
     indexing,
     math_dtype_for_naive_method,
 )
+
+import cuequivariance as cue
 
 logger = logging.getLogger(__name__)
 
