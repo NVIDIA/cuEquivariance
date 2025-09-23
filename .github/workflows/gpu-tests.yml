@@ -47,12 +47,13 @@ jobs:
         echo "=== About to check ops lib path ==="
         python -c "import cuequivariance_ops; print('ops lib path:', cuequivariance_ops.__file__)"
         
-        echo "=== About to find CUDA lib dir ==="
-        # Add NVIDIA CUDA libraries to LD_LIBRARY_PATH
-        CUDA_LIB_DIR=$(find $(python -c "import site; print(' '.join(site.getsitepackages()))") -path "*/nvidia/cublas/lib" -type d | head -1)
+        echo "=== About to find CUDA lib dirs ==="
+        # Add ALL NVIDIA CUDA libraries to LD_LIBRARY_PATH
+        SITE_PACKAGES=$(python -c "import site; print(' '.join(site.getsitepackages()))")
+        CUDA_LIB_DIRS=$(find $SITE_PACKAGES -path "*/nvidia/*/lib" -type d 2>/dev/null | tr '\n' ':')
         echo "=== About to export LD_LIBRARY_PATH ==="
-        export LD_LIBRARY_PATH="$CUDA_LIB_DIR:$LD_LIBRARY_PATH"
-        echo "Added CUDA lib dir: $CUDA_LIB_DIR"
+        export LD_LIBRARY_PATH="$CUDA_LIB_DIRS$LD_LIBRARY_PATH"
+        echo "Added CUDA lib dirs: $CUDA_LIB_DIRS"
         echo "Updated LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
 
         echo "=== About to check cuequivariance_ops version ==="
@@ -69,6 +70,7 @@ jobs:
     - name: Test with pytest
       run: |
         # Set up CUDA library path for tests
-        CUDA_LIB_DIR=$(find $(python -c "import site; print(' '.join(site.getsitepackages()))") -path "*/nvidia/cublas/lib" -type d | head -1)
-        export LD_LIBRARY_PATH="$CUDA_LIB_DIR:$LD_LIBRARY_PATH"
+        SITE_PACKAGES=$(python -c "import site; print(' '.join(site.getsitepackages()))")
+        CUDA_LIB_DIRS=$(find $SITE_PACKAGES -path "*/nvidia/*/lib" -type d 2>/dev/null | tr '\n' ':')
+        export LD_LIBRARY_PATH="$CUDA_LIB_DIRS$LD_LIBRARY_PATH"
         XLA_PYTHON_CLIENT_PREALLOCATE=false pytest --doctest-modules -x -m "not slow" cuequivariance_jax
