@@ -12,6 +12,16 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+"""
+MACE: Higher Order Equivariant Message Passing Neural Networks for Fast and Accurate Force Fields
+
+This implementation is based on the original MACE paper:
+Batatia, I., Kovács, D. P., Simm, G. N. C., Ortner, C., & Csányi, G. (2022).
+MACE: Higher Order Equivariant Message Passing Neural Networks for Fast and Accurate Force Fields.
+arXiv preprint arXiv:2206.07697. https://arxiv.org/abs/2206.07697
+"""
+
 import argparse
 import ctypes
 import time
@@ -23,11 +33,11 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
+from cuequivariance.group_theory.experimental.mace import symmetric_contraction
+from cuequivariance_jax.experimental.utils import MultiLayerPerceptron, bessel
 
 import cuequivariance as cue
 import cuequivariance_jax as cuex
-from cuequivariance.group_theory.experimental.mace import symmetric_contraction
-from cuequivariance_jax.experimental.utils import MultiLayerPerceptron, bessel
 
 
 def polynomial_envelope(x, r_max):

@@ -12,6 +12,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+"""
+E(3)-Equivariant Graph Neural Networks for Data-Efficient and Accurate Interatomic Potentials
+
+This implementation is based on the original NequIP paper:
+Batzner, S., Musaelian, A., Sun, L., Geiger, M., Mailoa, J. P., Kornbluth, M., Molinari, N.,
+Smidt, T. E., & Kozinsky, B. (2022). E(3)-Equivariant Graph Neural Networks for Data-Efficient
+and Accurate Interatomic Potentials. Nature Communications, 13(1), 2453.
+arXiv preprint arXiv:2101.03164. https://arxiv.org/abs/2101.03164
+"""
+
 import argparse
 import ctypes
 import time
@@ -22,10 +33,10 @@ import flax.linen
 import jax
 import jax.numpy as jnp
 import optax
+from cuequivariance_jax.experimental.utils import MultiLayerPerceptron, bessel
 
 import cuequivariance as cue
 import cuequivariance_jax as cuex
-from cuequivariance_jax.experimental.utils import MultiLayerPerceptron, bessel
 
 
 def polynomial_envelope(x, r_max):
