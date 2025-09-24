@@ -33,32 +33,14 @@ jobs:
         python -m pip install --upgrade pip
         python -m pip install --upgrade uv
         python -m uv pip install -U pytest "jax[cuda12]"
-        # python -m uv pip install nvidia-cusolver-cu12==11.7.3.90
-        # python -m uv pip install nvidia-cublas-cu12
-        # python -m uv pip install jax-triton triton==3.3.1
-        # python -m uv pip uninstall cuequivariance cuequivariance_jax cuequivariance_torch
         python -m uv pip install cuequivariance-ops-cu12 cuequivariance-ops-jax-cu12
 
-        # add some debug print here, one liners please
-        echo "LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
-        find $(python -c "import site; print(' '.join(site.getsitepackages()))") -name "*libcublas*" 2>/dev/null | head -5
-        python -c "import os; print('CUDA_PATH:', os.environ.get('CUDA_PATH', 'Not set'))"
-        ldconfig -p | grep cublas || echo "No cublas in ldconfig"
-        echo "=== About to check ops lib path ==="
-        python -c "import cuequivariance_ops; print('ops lib path:', cuequivariance_ops.__file__)"
-        
-        echo "=== About to find CUDA lib dirs ==="
-        # Add ALL NVIDIA CUDA libraries to LD_LIBRARY_PATH
+        # Add NVIDIA CUDA libraries to LD_LIBRARY_PATH
         SITE_PACKAGES=$(python -c "import site; print(' '.join(site.getsitepackages()))")
         CUDA_LIB_DIRS=$(find $SITE_PACKAGES -path "*/nvidia/*/lib" -type d 2>/dev/null | tr '\n' ':')
-        echo "=== About to export LD_LIBRARY_PATH ==="
         export LD_LIBRARY_PATH="$CUDA_LIB_DIRS$LD_LIBRARY_PATH"
-        echo "Added CUDA lib dirs: $CUDA_LIB_DIRS"
-        echo "Updated LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
 
-        echo "=== About to check cuequivariance_ops version ==="
         python -c "import cuequivariance_ops; print('cueop', cuequivariance_ops.__version__)"
-        echo "=== About to check cuequivariance_ops_jax version ==="
         python -c "import cuequivariance_ops_jax; print('cueopx', cuequivariance_ops_jax.__version__)"
 
         python -m uv pip install -e ./cuequivariance
