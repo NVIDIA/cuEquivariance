@@ -15,11 +15,11 @@
 import numpy as np
 import pytest
 import torch
+from cuequivariance_torch.layers.tp_conv_fully_connected import scatter_reduce
 from torch import nn
 
 import cuequivariance as cue
 import cuequivariance_torch as cuet
-from cuequivariance_torch.layers.tp_conv_fully_connected import scatter_reduce
 
 device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
 

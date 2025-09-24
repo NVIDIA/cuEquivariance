@@ -8,6 +8,7 @@ on:
 
 
 jobs:
+
   cuequivariance:
 
     runs-on: ubuntu-latest
@@ -37,7 +38,6 @@ jobs:
     - name: Test with pytest (numpy 1.26)
       run: |
         pytest --doctest-modules -x -m "not slow" cuequivariance
-
 
 
   cuequivariance-jax:
@@ -74,6 +74,7 @@ jobs:
     - name: Test with pytest
       run: |
         XLA_PYTHON_CLIENT_PREALLOCATE=false pytest --doctest-modules -x -m "not slow" cuequivariance_jax
+
 
   cuequivariance-torch:
     strategy:

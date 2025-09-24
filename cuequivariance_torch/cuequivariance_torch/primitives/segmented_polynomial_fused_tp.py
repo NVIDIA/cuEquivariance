@@ -76,7 +76,7 @@ class SegmentedPolynomialFusedTP(nn.Module):
     def __init__(
         self,
         polynomial: cue.SegmentedPolynomial,
-        math_dtype: Optional[torch.dtype] = None,
+        math_dtype: Optional[str | torch.dtype] = None,
         output_dtype_map: List[int] = None,
         name: str = "segmented_polynomial",
     ):
@@ -90,6 +90,13 @@ class SegmentedPolynomialFusedTP(nn.Module):
                 "`math_dtype` is not provided for method `fused_tp`: using float32."
             )
             math_dtype = torch.float32
+        if type(math_dtype) is str:
+            try:
+                math_dtype = getattr(torch, math_dtype)
+            except AttributeError:
+                raise ValueError(
+                    f"Math_dtype {math_dtype} is not accepted for method `fused_tp`."
+                )
         if math_dtype not in [torch.float32, torch.float64]:
             raise ValueError(
                 "Fused TP only supports math_dtype==float32 or math_dtype==float64"

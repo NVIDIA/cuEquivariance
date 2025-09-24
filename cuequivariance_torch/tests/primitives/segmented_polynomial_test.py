@@ -16,10 +16,10 @@ from typing import Dict, List, Optional
 
 import pytest
 import torch
+from cuequivariance_torch._tests.utils import module_with_mode, tol_dict
 
 import cuequivariance as cue
 import cuequivariance_torch as cuet
-from cuequivariance_torch._tests.utils import module_with_mode, tol_dict
 
 global_device = (
     torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
@@ -226,10 +226,17 @@ def run_segmented_polynomial_test(
     if grad and backward and dtype.itemsize <= 2:
         pytest.skip("double backward with fp16/bf16 lacks accuracy")
 
+    # Special case for indexed_linear dtype
+    if math_dtype == "CUBLAS_COMPUTE_32F" and method == "indexed_linear":
+        o_math_dtype = math_dtype
+        math_dtype = torch.float32
+    else:
+        o_math_dtype = math_dtype
+
     m_ref = cuet.SegmentedPolynomial(
         polynomial, method="naive", math_dtype=math_dtype
     ).to(device)
-    m = cuet.SegmentedPolynomial(polynomial, method=method, math_dtype=math_dtype).to(
+    m = cuet.SegmentedPolynomial(polynomial, method=method, math_dtype=o_math_dtype).to(
         device
     )
 
@@ -267,6 +274,7 @@ DATA_TYPES_IN_MATH = [
     (torch.float64, torch.float64),
     (torch.float32, None),
     (torch.float64, None),
+    (torch.float32, "float32"),
     (torch.float16, torch.float32),
     (torch.bfloat16, torch.float32),
 ]
@@ -414,7 +422,7 @@ def test_segmented_polynomial_dytpes(
 
 
 # Testing export modes, only using one option for each to save time
-# We also have to test naive method
+# We also have to test naive method explicitly because the reference is not exported
 @pytest.mark.parametrize("name, polynomial", SEGMENTED_POLYNOMIALS[:1])
 @pytest.mark.parametrize("method", METHODS + ["naive"])
 @pytest.mark.parametrize("dtype, math_dtype", DATA_TYPES_IN_MATH[:1])
@@ -488,7 +496,7 @@ def test_segmented_polynomial_indexed_linear(
         and dtype == torch.float64
     ):
         pytest.skip("Skipping fused TP for float32 math_dtype with float64 inputs")
-    if method == "indexed_linear" and math_dtype is not None:
+    if method == "indexed_linear" and math_dtype not in [None]:
         pytest.skip("indexed_linear does not support math_dtype")
 
     run_segmented_polynomial_test(

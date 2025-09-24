@@ -12,8 +12,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import cuequivariance as cue
 from cuequivariance.group_theory.experimental.mace import symmetric_contraction
+
+import cuequivariance as cue
 
 
 def test_symmetric_contraction():

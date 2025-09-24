@@ -16,14 +16,14 @@ import warnings
 from typing import Optional
 
 import torch
-
-import cuequivariance as cue
-import cuequivariance_torch as cuet
-from cuequivariance import descriptors
 from cuequivariance.group_theory.irreps_array.misc_ui import (
     default_irreps,
     default_layout,
 )
+
+import cuequivariance as cue
+import cuequivariance_torch as cuet
+from cuequivariance import descriptors
 
 
 class Rotation(torch.nn.Module):
@@ -36,7 +36,8 @@ class Rotation(torch.nn.Module):
         layout_in (IrrepsLayout, optional): The layout of the input irreducible representations, by default ``layout``.
         layout_out (IrrepsLayout, optional): The layout of the output irreducible representations, by default ``layout``.
         device (torch.device, optional): The device to use for the operation.
-        math_dtype (torch.dtype, optional): The dtype to use for the math operations, by default it follows the dtype of the input tensors.
+        math_dtype (torch.dtype or string, optional): The dtype to use for the math operations, by default it follows the dtype of the input tensors,
+            if possible, or the torch default dtype (see SegmentedPolynomial for more details).
         method (str, optional): The method to use for the operation, by default "uniform_1d" (using a CUDA kernel)
             if all segments have the same shape, otherwise "naive" (using a PyTorch implementation).
         use_fallback (bool, optional, deprecated): Whether to use a "fallback" implementation, now maps to method:
@@ -52,7 +53,7 @@ class Rotation(torch.nn.Module):
         layout_in: Optional[cue.IrrepsLayout] = None,
         layout_out: Optional[cue.IrrepsLayout] = None,
         device: Optional[torch.device] = None,
-        math_dtype: Optional[torch.dtype] = None,
+        math_dtype: Optional[str | torch.dtype] = None,
         use_fallback: Optional[bool] = None,
         method: Optional[str] = None,
     ):

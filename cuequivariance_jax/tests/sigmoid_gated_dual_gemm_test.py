@@ -19,14 +19,13 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from jax import test_util
-
 from cuequivariance_jax.triangle import Precision
 from cuequivariance_jax.triangle._sigmoid_gated_dual_gemm import (
     sigmoid_gated_dual_gemm,
     sigmoid_gated_dual_gemm_dual_x,
     sigmoid_gated_dual_gemm_reference,
 )
+from jax import test_util
 
 # Enable x64 support but test with fp32
 jax.config.update("jax_enable_x64", True)

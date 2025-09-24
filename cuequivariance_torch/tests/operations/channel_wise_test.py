@@ -14,13 +14,13 @@
 # limitations under the License.
 import pytest
 import torch
+from cuequivariance_torch._tests.utils import (
+    module_with_mode,
+)
 
 import cuequivariance as cue
 import cuequivariance_torch as cuet
 from cuequivariance import descriptors
-from cuequivariance_torch._tests.utils import (
-    module_with_mode,
-)
 
 device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
 
@@ -42,6 +42,7 @@ irreps = [
 @pytest.mark.parametrize("layout", [cue.ir_mul, cue.mul_ir])
 @pytest.mark.parametrize("use_fallback", [False, True])
 @pytest.mark.parametrize("batch", [1, 32])
+@pytest.mark.parametrize("math_dtype", [None, torch.float32, "float64"])
 def test_channel_wise_fwd(
     irreps1: cue.Irreps,
     irreps2: cue.Irreps,
@@ -49,6 +50,7 @@ def test_channel_wise_fwd(
     layout: cue.IrrepsLayout,
     use_fallback: bool,
     batch: int,
+    math_dtype: str | torch.dtype | None,
 ):
     if use_fallback is False and not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
@@ -65,6 +67,7 @@ def test_channel_wise_fwd(
         layout=layout,
         device=device,
         dtype=torch.float64,
+        math_dtype=math_dtype,
         use_fallback=use_fallback,
     )
     x1 = torch.randn(batch, irreps1.dim, dtype=torch.float64).to(device)

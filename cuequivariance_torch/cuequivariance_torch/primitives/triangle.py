@@ -12,14 +12,23 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Any, Optional, Tuple
+from typing import Optional, Tuple
 
 import torch
 
 try:
     from cuequivariance_ops_torch import TriMulPrecision
 except ImportError:
-    TriMulPrecision = Any  # type: ignore
+    import enum
+
+    class TriMulPrecision(enum.IntEnum):  # type: ignore
+        """Fallback precision enum when cuequivariance_ops_torch is not available."""
+
+        NONE = -1
+        DEFAULT = 0
+        TF32 = 1
+        TF32x3 = 2
+        IEEE = 3
 
 
 def triangle_attention(
@@ -70,7 +79,7 @@ def triangle_attention(
     Notes:
         (1) Context is saved for backward pass. You don't need to save it manually.
         (2) Kernel precision (fp32, bf16, fp16) is based on input dtypes. For tf32, set it from torch global scope
-        (3) **Limitation**: Full FP32 is not supported for backward pass. Please set `torch.backends.cuda.matmul.allow_tf32=True`.
+        (3) Triangle attention kernel supports: all hidden_dim<=32 and divisible by 4 for tf32/fp32, and for all hidden_dim<=128 and divisible by 8 for bf16/fp16. In the rare instance that the kernel does not support an input config, fallback to torch is enabled instead of erroring out.
 
     Example:
         >>> import torch
@@ -195,6 +204,7 @@ def triangle_multiplicative_update(
         (3) **Limitation**: Currently only supports hidden_dim values that are multiples of 32.
         (4) We have moved away from the default round-towards-zero (RZ) implementation to round-nearest (RN) for better tf32 accuracy in cuex.triangle_multiplicative_update. In rare circumstances, this may cause minor differences in results observed.
         (5) When using torch compile, use `cueuivariance_ops_torch.init_triton_cache()` to initialize triton cache before calling torch compiled triangular multiplicative update.
+        (6) Although the example demonstrates the most common case of one batch dimension, the API supports variable number of leading batch dimensions.
 
     Example:
         >>> import torch
@@ -257,19 +267,19 @@ def attention_pair_bias(
     z: torch.Tensor,
     mask: torch.Tensor,
     num_heads: int,
-    w_proj_z: torch.Tensor,
+    w_proj_z: Optional[torch.Tensor],
     w_proj_g: torch.Tensor,
     w_proj_o: torch.Tensor,
-    w_ln_z: torch.Tensor,
-    b_ln_z: torch.Tensor,
+    w_ln_z: Optional[torch.Tensor] = None,
+    b_ln_z: Optional[torch.Tensor] = None,
     b_proj_z: Optional[torch.Tensor] = None,
     b_proj_g: Optional[torch.Tensor] = None,
     b_proj_o: Optional[torch.Tensor] = None,
-    inf: Optional[float] = 1e6,
-    eps: Optional[float] = 1e-5,
+    inf: float = 1e6,
+    eps: float = 1e-5,
     attn_scale: Optional[float] = None,
-    compute_pair_bias: Optional[bool] = True,
-    multiplicity: Optional[int] = 1,
+    return_z_proj: bool = True,
+    is_cached_z_proj: bool = False,
 ):
     """Compute attention with pairwise bias for diffusion models.
 
@@ -287,7 +297,7 @@ def attention_pair_bias(
         k: Key tensor of shape (B * M, H, V, DH) where V is key sequence length.
         v: Value tensor of shape (B * M, H, V, DH).
         z: Pairwise tensor of shape (B, U, V, z_dim) containing pairwise interactions,
-            where z_dim can be arbitrary. This is the main input for the pairwise bias computation.
+            where z_dim can be arbitrary. This is the main input for the pairwise bias computation. If return_z_proj is True, z should be of shape (B, H, U, V).
         mask: Attention mask of shape (B, V) or (B * M, V) indicating which positions
             should be masked (0 = masked, 1 = unmasked).
         num_heads: Number of attention heads.
@@ -303,14 +313,11 @@ def attention_pair_bias(
         eps: Epsilon value for layer normalization. Defaults to 1e-5.
         attn_scale: Scaling factor for attention scores. If None, uses 1/sqrt(head_dim).
             Defaults to None.
-        compute_pair_bias: Whether to compute pairwise bias. If False, z tensor should already
-            be in the correct format (B, U, V, H). Defaults to True.
-        multiplicity: Multiplicity (diffusion steps). Should be explicitly set if multiplicity > 1
-            and is not reflected in z tensor. Defaults to 1.
+        return_z_proj: Whether to return the projected z tensor as the second output. Defaults to True.
+        is_cached_z_proj: Whether the z tensor is already projected and cached.
+            If True, z should be of shape (B, H, U, V). Defaults to False.
 
     Returns:
-        A tuple containing:
-
         - **output** (:class:`torch.Tensor`): Attention output of shape (B * M, S, D)
           with pairwise bias applied.
         - **proj_z** (:class:`torch.Tensor`): Projected z tensor of shape (B, H, U, V)
@@ -321,10 +328,11 @@ def attention_pair_bias(
           uses PyTorch fallback implementation.
         - For long sequences, uses optimized Triton kernels with automatic
           backend selection (CUDNN, Flash Attention, Efficient Attention).
-        - The multiplicity parameter (M) allows processing multiple diffusion
-          timesteps in a single forward pass.
+        - Multiplicity (M) is computed automatically from tensor shapes to allow
+          processing multiple diffusion timesteps in a single forward pass.
         - The proj_z output is experimental to prevent breakage when caching
           of pair bias tensor is enabled in the next release.
+        - Tested for bf16, fp16, fp32 and tf32. torch.set_float32_matmul_precision maybe used to toggle between fp32/tf32.
 
     Examples:
         >>> import torch
@@ -335,27 +343,27 @@ def attention_pair_bias(
         ...     query_len, key_len, z_dim = 32, 32, 16
         ...     # Create input tensors on GPU
         ...     s = torch.randn(batch_size, seq_len, hidden_dim,
-        ...                     device=device, dtype=torch.float32)
+        ...                     device=device, dtype=torch.bfloat16)
         ...     q = torch.randn(batch_size, num_heads, query_len, heads_dim,
-        ...                     device=device, dtype=torch.float32)
+        ...                     device=device, dtype=torch.bfloat16)
         ...     k = torch.randn(batch_size, num_heads, key_len, heads_dim,
-        ...                     device=device, dtype=torch.float32)
+        ...                     device=device, dtype=torch.bfloat16)
         ...     v = torch.randn(batch_size, num_heads, key_len, heads_dim,
-        ...                     device=device, dtype=torch.float32)
+        ...                     device=device, dtype=torch.bfloat16)
         ...     z = torch.randn(batch_size, query_len, key_len, z_dim,
-        ...                     device=device, dtype=torch.float32)
+        ...                     device=device, dtype=torch.bfloat16)
         ...     mask = torch.rand(batch_size, key_len,
         ...                       device=device) < 0.5
         ...     w_proj_z = torch.randn(num_heads, z_dim,
-        ...                     device=device, dtype=torch.float32)
+        ...                     device=device, dtype=torch.bfloat16)
         ...     w_proj_g = torch.randn(hidden_dim, hidden_dim,
-        ...                     device=device, dtype=torch.float32)
+        ...                     device=device, dtype=torch.bfloat16)
         ...     w_proj_o = torch.randn(hidden_dim, hidden_dim,
-        ...                     device=device, dtype=torch.float32)
+        ...                     device=device, dtype=torch.bfloat16)
         ...     w_ln_z = torch.randn(z_dim,
-        ...                     device=device, dtype=torch.float32)
+        ...                     device=device, dtype=torch.bfloat16)
         ...     b_ln_z = torch.randn(z_dim,
-        ...                     device=device, dtype=torch.float32)
+        ...                     device=device, dtype=torch.bfloat16)
         ...     # Perform operation
         ...     output, proj_z = attention_pair_bias(
         ...         s=s,
@@ -403,6 +411,6 @@ def attention_pair_bias(
             inf=inf,
             eps=eps,
             attn_scale=attn_scale,
-            compute_pair_bias=compute_pair_bias,
-            multiplicity=multiplicity,
+            return_z_proj=return_z_proj,
+            is_cached_z_proj=is_cached_z_proj,
         )

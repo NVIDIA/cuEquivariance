@@ -59,7 +59,7 @@ try:
             batch_size: int,
             tensors: List[torch.Tensor],
         ) -> List[torch.Tensor]:
-            return torch.ops.cuequivariance_ops.tensor_product_uniform_1d_jit(
+            return torch.ops.cuequivariance.tensor_product_uniform_1d_jit(
                 name,
                 math_dtype,
                 operand_extent,
@@ -90,7 +90,7 @@ class SegmentedPolynomialFromUniform1dJit(nn.Module):
     def __init__(
         self,
         polynomial: cue.SegmentedPolynomial,
-        math_dtype: Optional[torch.dtype] = torch.float32,
+        math_dtype: Optional[str | torch.dtype] = None,
         output_dtype_map: List[int] = None,
         name: str = "segmented_polynomial",
     ):
@@ -150,6 +150,13 @@ class SegmentedPolynomialFromUniform1dJit(nn.Module):
         self.num_inputs = polynomial.num_inputs
         self.num_outputs = polynomial.num_outputs
         self.name = name
+        if type(math_dtype) is str:
+            try:
+                math_dtype = getattr(torch, math_dtype)
+            except AttributeError:
+                raise ValueError(
+                    f"Math_dtype {math_dtype} is not accepted for method `uniform_1d`."
+                )
         if math_dtype not in [None, torch.float32, torch.float64]:
             raise ValueError(
                 f"For method 'uniform_1d', math_dtype must be float32, float64, or None; got {math_dtype}"

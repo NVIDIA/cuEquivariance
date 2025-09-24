@@ -15,7 +15,6 @@
 
 import pytest
 import torch
-
 from cuequivariance_torch.benchmarking import measure_clock_ticks
 
 

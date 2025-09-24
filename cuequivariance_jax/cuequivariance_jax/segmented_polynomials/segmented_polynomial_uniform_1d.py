@@ -19,10 +19,10 @@ import warnings
 import jax
 import jax.numpy as jnp
 import numpy as np
+from cuequivariance_jax.segmented_polynomials.utils import reshape
 from packaging import version
 
 import cuequivariance as cue
-from cuequivariance_jax.segmented_polynomials.utils import reshape
 
 
 def sanitize_string(s):

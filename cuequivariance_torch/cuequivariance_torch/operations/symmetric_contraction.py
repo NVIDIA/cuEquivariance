@@ -16,9 +16,6 @@ import warnings
 from typing import Optional
 
 import torch
-
-import cuequivariance as cue
-import cuequivariance_torch as cuet
 from cuequivariance.group_theory.experimental.mace.symmetric_contractions import (
     symmetric_contraction,
 )
@@ -27,6 +24,9 @@ from cuequivariance.group_theory.irreps_array.misc_ui import (
     default_irreps,
     default_layout,
 )
+
+import cuequivariance as cue
+import cuequivariance_torch as cuet
 
 
 class SymmetricContraction(torch.nn.Module):
@@ -45,7 +45,8 @@ class SymmetricContraction(torch.nn.Module):
         layout_out (IrrepsLayout, optional): The layout of the output irreducible representations, by default ``layout``.
         device (torch.device, optional): The device to use for the operation.
         dtype (torch.dtype, optional): The dtype to use for the operation weights, by default ``torch.float32``.
-        math_dtype (torch.dtype, optional): The dtype to use for the math operations, by default it follows the dtype of the input tensors.
+        math_dtype (str or torch.dtype, optional): The dtype to use for the math operations, by default it follows the dtype of the input tensors,
+            if possible, or the torch default dtype (see SegmentedPolynomial for more details).
         original_mace (bool, optional): Whether to use the original MACE implementation, by default False.
         method (str, optional): The method to use for the operation, by default "uniform_1d" (using a CUDA kernel)
             if all segments have the same shape, otherwise "naive" (using a PyTorch implementation).
@@ -114,7 +115,7 @@ class SymmetricContraction(torch.nn.Module):
         layout_out: Optional[cue.IrrepsLayout] = None,
         device: Optional[torch.device] = None,
         dtype: Optional[torch.dtype] = None,
-        math_dtype: Optional[torch.dtype] = None,
+        math_dtype: Optional[str | torch.dtype] = None,
         original_mace: bool = False,
         use_fallback: Optional[bool] = None,
         method: Optional[str] = None,

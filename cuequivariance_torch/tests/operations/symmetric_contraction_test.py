@@ -17,13 +17,13 @@ import base64
 import numpy as np
 import pytest
 import torch
-
-import cuequivariance as cue
-import cuequivariance_torch as cuet
 from cuequivariance.group_theory.experimental.e3nn import O3_e3nn
 from cuequivariance_torch._tests.utils import (
     module_with_mode,
 )
+
+import cuequivariance as cue
+import cuequivariance_torch as cuet
 
 device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
 
@@ -130,7 +130,7 @@ export_modes = ["compile", "script", "jit"]
     "dtype, math_dtype, atol, rtol",
     [
         (torch.float64, torch.float64, 1e-10, 1e-10),
-        (torch.float32, torch.float32, 1e-5, 1e-5),
+        (torch.float32, "float32", 1e-5, 1e-5),
     ],
 )
 @pytest.mark.parametrize("layout", [cue.ir_mul, cue.mul_ir])

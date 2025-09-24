@@ -217,7 +217,7 @@ def _reference_backward(
     return grad_xw1, grad_xw2, grad_mask  # (M, N), (M, N), (M,)
 
 
-def _triton_forward(
+def fused_sigmoid_gated_dual_gemm_forward_kernel_wrapper(
     x1: jax.Array,
     x2: jax.Array,
     w1: jax.Array,
@@ -292,7 +292,7 @@ def _triton_forward(
     )
 
 
-def _triton_backward(
+def fused_sigmoid_gated_dual_gemm_backward_pregemm_kernel_wrapper(
     grad_out: jax.Array,
     x1: jax.Array,
     x2: jax.Array,
@@ -442,6 +442,7 @@ def _input_to_key(
     mask: jax.Array,
     two_inputs: bool,
     precision: Precision,
+    grad_out: jax.Array | None = None,
     **unused_kwargs,
 ):
     """Generate cache key from inputs."""
@@ -459,9 +460,12 @@ def _input_to_key(
     key_m, key_k, key_n = fn(M), fn(K), fn(N)
 
     # Normalize dtypes
+    arrays = [x1, x2, w1, w2, mask]
+    if grad_out is not None:
+        arrays = [grad_out] + arrays
     dtypes = [
-        str(t.dtype if t.dtype != jnp.bfloat16 else jnp.dtype(jnp.float16))
-        for t in [x1, x2, w1, w2, b1, b2, mask]
+        "torch." + str(t.dtype if t.dtype != jnp.bfloat16 else jnp.dtype(jnp.float16))
+        for t in arrays
     ]
 
     match precision:
@@ -474,7 +478,7 @@ def _input_to_key(
         case _:
             precision_key = "default"
 
-    return f"{key_m}_{key_k}_{key_n}_{'_'.join(dtypes)}_{two_inputs}_{precision_key}"
+    return f"{key_m}_{key_n}_{key_k}_{'_'.join(dtypes)}_{two_inputs}_False_False_{precision_key}"
 
 
 def _get_autotuned_kernel(is_forward: bool):
@@ -524,18 +528,18 @@ def _get_autotuned_kernel(is_forward: bool):
             prune_configs_fn=None,
             run_decoy=run_decoy,
             run_bench=run_bench,
-        )(_triton_forward)
+        )(fused_sigmoid_gated_dual_gemm_forward_kernel_wrapper)
 
     if not is_forward and _autotuned_backward is None:
         _autotuned_backward = autotune_aot(
             input_generator=lambda **k: _generate_inputs(**k, include_grad=True),
-            input_to_key=lambda grad_out, **k: _input_to_key(**k),
+            input_to_key=lambda grad_out, **k: _input_to_key(**k, grad_out=grad_out),
             input_configs=input_configs,
             tunable_configs=tunable_configs,
             prune_configs_fn=None,
             run_decoy=run_decoy,
             run_bench=run_bench,
-        )(_triton_backward)
+        )(fused_sigmoid_gated_dual_gemm_backward_pregemm_kernel_wrapper)
 
     return _autotuned_forward if is_forward else _autotuned_backward
 
