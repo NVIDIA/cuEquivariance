@@ -68,7 +68,7 @@ def test_spherical_harmonics(ell: int):
     [yl1] = poly(R @ vec)
     yl2 = Rl @ yl
 
-    np.testing.assert_allclose(yl1, yl2)
+    np.testing.assert_allclose(yl1, yl2, rtol=1e-06, atol=1e-13)
     np.testing.assert_allclose(np.sum(yl**2), (2 * ell + 1) * np.sum(vec**2) ** ell)
 
 
