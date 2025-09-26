@@ -152,7 +152,7 @@ def execute_uniform_1d(
         raise ValueError(f"Buffer shapes not compatible {[b.shape for b in buffers]}")
 
     if math_dtype is not None:
-        supported_dtypes = {"float32", "float64"}
+        supported_dtypes = {"float32", "float64", "float16", "bfloat16"}
         if math_dtype not in supported_dtypes:
             raise ValueError(
                 f"method='uniform_1d' only supports math_dtype equal to {supported_dtypes}, got '{math_dtype}'."
