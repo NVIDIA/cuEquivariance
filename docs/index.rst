@@ -34,6 +34,8 @@ The following benchmark compares cuEquivariance against e3nn on a MACE (Multi-At
    :align: center
    :width: 80%
 
+The crosses correspond to the largest number of atoms that we managed to simulate on a single device before running out of memory.
+
 Open Source
 -----------
 
