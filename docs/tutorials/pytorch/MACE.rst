@@ -636,12 +636,12 @@ We can also compare the speed of the two approaches (in their respective layouts
         m_tmp = torch.zeros(num_nodes, irreps_mid.dim, device=device, dtype=dtype)
         message = m_tmp.scatter_add(0, receivers.unsqueeze(-1).expand_as(mji), mji)
     for _ in range(repetitions):
-        if device=="cuda" torch.cuda.synchronize()
+        if device=="cuda": torch.cuda.synchronize()
         t1 = time.perf_counter()
         mji = conv_tp(node_feats[senders], edge_attrs, weights)
         m_tmp = torch.zeros(num_nodes, irreps_mid.dim, device=device, dtype=dtype)
         message = m_tmp.scatter_add(0, receivers.unsqueeze(-1).expand_as(mji), mji)
-        if device=="cuda" torch.cuda.synchronize()
+        if device=="cuda": torch.cuda.synchronize()
         e3nn_times.append(time.perf_counter()-t1)
     
     cuet_times = []
@@ -653,7 +653,7 @@ We can also compare the speed of the two approaches (in their respective layouts
             output_indices={0: receivers},
         )
     for _ in range(repetitions):
-        if device=="cuda" torch.cuda.synchronize()
+        if device=="cuda": torch.cuda.synchronize()
         t1 = time.perf_counter()
         cue_message = cue_tp(
             [weights, cue_node_feats, cue_edge_attrs],
@@ -661,7 +661,7 @@ We can also compare the speed of the two approaches (in their respective layouts
             output_shapes={0: cue_node_feats},
             output_indices={0: receivers},
         )
-        if device=="cuda" torch.cuda.synchronize()
+        if device=="cuda": torch.cuda.synchronize()
         cuet_times.append(time.perf_counter()-t1)
     e3nn_avg = 1000*np.mean(e3nn_times)
     cuet_avg = 1000*np.mean(cuet_times)
@@ -768,20 +768,20 @@ Here too we can compare the speed of the two approaches:
     for _ in range(throwaway):
         out_feats = sc(node_feats, species_1hot)
     for _ in range(repetitions):
-        if device=="cuda" torch.cuda.synchronize()
+        if device=="cuda": torch.cuda.synchronize()
         t1 = time.perf_counter()
         out_feats = sc(node_feats, species_1hot)
-        if device=="cuda" torch.cuda.synchronize()
+        if device=="cuda": torch.cuda.synchronize()
         e3nn_times.append(time.perf_counter()-t1)
     
     cuet_times = []
     for _ in range(throwaway):
         cue_out_feats = cue_sc(cue_node_feats, species)
     for _ in range(repetitions):
-        if device=="cuda" torch.cuda.synchronize()
+        if device=="cuda": torch.cuda.synchronize()
         t1 = time.perf_counter()
         cue_out_feats = cue_sc(cue_node_feats, species)
-        if device=="cuda" torch.cuda.synchronize()
+        if device=="cuda": torch.cuda.synchronize()
         cuet_times.append(time.perf_counter()-t1)
     e3nn_avg = 1000*np.mean(e3nn_times)
     cuet_avg = 1000*np.mean(cuet_times)
@@ -876,20 +876,20 @@ We can compare the speed, although the difference will not be large in this case
     for _ in range(throwaway):
         out_feats = lin(in_feats)
     for _ in range(repetitions):
-        if device=="cuda" torch.cuda.synchronize()
+        if device=="cuda": torch.cuda.synchronize()
         t1 = time.perf_counter()
         out_feats = lin(in_feats)
-        if device=="cuda" torch.cuda.synchronize()
+        if device=="cuda": torch.cuda.synchronize()
         e3nn_times.append(time.perf_counter()-t1)
     
     cuet_times = []
     for _ in range(throwaway):
         cue_lin(cue_in_feats, weight=lin.weight.unsqueeze(0))
     for _ in range(repetitions):
-        if device=="cuda" torch.cuda.synchronize()
+        if device=="cuda": torch.cuda.synchronize()
         t1 = time.perf_counter()
         cue_lin(cue_in_feats, weight=lin.weight.unsqueeze(0))
-        if device=="cuda" torch.cuda.synchronize()
+        if device=="cuda": torch.cuda.synchronize()
         cuet_times.append(time.perf_counter()-t1)
     e3nn_avg = 1000*np.mean(e3nn_times)
     cuet_avg = 1000*np.mean(cuet_times)
@@ -1024,30 +1024,30 @@ And we can compare the speed for the two implementations:
     for _ in range(throwaway):
         out_feats = skip_tp(in_feats, species_1hot)
     for _ in range(repetitions):
-        if device=="cuda" torch.cuda.synchronize()
+        if device=="cuda": torch.cuda.synchronize()
         t1 = time.perf_counter()
         out_feats = skip_tp(in_feats, species_1hot)
-        if device=="cuda" torch.cuda.synchronize()
+        if device=="cuda": torch.cuda.synchronize()
         e3nn_times.append(time.perf_counter()-t1)
     
     cuet_times = []
     for _ in range(throwaway):
         cue_out_feats = cue_lin(cue_in_feats, weight=cue_weight, weight_indices=species)
     for _ in range(repetitions):
-        if device=="cuda" torch.cuda.synchronize()
+        if device=="cuda": torch.cuda.synchronize()
         t1 = time.perf_counter()
         cue_out_feats = cue_lin(cue_in_feats, weight=cue_weight, weight_indices=species)
-        if device=="cuda" torch.cuda.synchronize()
+        if device=="cuda": torch.cuda.synchronize()
         cuet_times.append(time.perf_counter()-t1)
     
     cuet_v2_times = []
     for _ in range(throwaway):
         cue_out_feats = cue_indexed_lin(cue_in_feats, weight=cue_weight, weight_indices=species)
     for _ in range(repetitions):
-        if device=="cuda" torch.cuda.synchronize()
+        if device=="cuda": torch.cuda.synchronize()
         t1 = time.perf_counter()
         cue_out_feats = cue_indexed_lin(cue_in_feats, weight=cue_weight, weight_indices=species)
-        if device=="cuda" torch.cuda.synchronize()
+        if device=="cuda": torch.cuda.synchronize()
         cuet_v2_times.append(time.perf_counter()-t1)
     
     e3nn_avg = 1000*np.mean(e3nn_times)
