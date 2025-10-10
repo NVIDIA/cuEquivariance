@@ -486,7 +486,7 @@ The original implementation in `e3nn` makes use of a custom tensor product (the 
     multiplicity = 128
     num_nodes = 1000
     num_edges = 10000
-    device = "cuda"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     dtype = torch.float32
     irreps_node_input = o3.Irreps(f"{multiplicity}x0e + {multiplicity}x1o")
     irreps_edge_attr = o3.Irreps("1x0e + 1x1o")
@@ -556,13 +556,15 @@ For more information abou buildingt the descriptor itself, you can refer to the 
         irreps_in1,
         source=cue.mul_ir,
         target=cue.ir_mul,
-        device=device
+        device=device,
+        use_fallback=device=="cpu",
     )(node_feats)
     cue_edge_attrs = cuet.TransposeIrrepsLayout(
         irreps_in2,
         source=cue.mul_ir,
         target=cue.ir_mul,
-        device=device
+        device=device,
+        use_fallback=device=="cpu",
     )(edge_attrs)
     
     # Performing the TP
@@ -579,7 +581,8 @@ For more information abou buildingt the descriptor itself, you can refer to the 
         e.outputs[0].irreps,
         source=cue.ir_mul,
         target=cue.mul_ir,
-        device=device
+        device=device,
+        use_fallback=device=="cpu",
     )(cue_message[0])
     # Comparing the result
     print("Results match:", torch.allclose(message, cue_message_transp, atol=1e-5))
@@ -613,7 +616,8 @@ Alternatively, we can use the premade function for this particular tensor produc
         e.outputs[0].irreps,
         source=cue.ir_mul,
         target=cue.mul_ir,
-        device=device
+        device=device,
+        use_fallback=device=="cpu",
     )(cue_cw_message)
     
     # Comparing the results
@@ -624,7 +628,7 @@ We can also compare the speed of the two approaches (in their respective layouts
 .. jupyter-execute::
 
     throwaway = 10
-    repetitions = 1000
+    repetitions = 1000 if device=="cuda" else 10
     
     e3nn_times = []
     for _ in range(throwaway):
@@ -684,7 +688,6 @@ As in the previous case, we will first consider the original MACE implementation
     multiplicity = 128
     correlation = 3
     num_nodes = 1000
-    device = "cuda"
     dtype = torch.float32
     irreps_in = o3.Irreps(f"{multiplicity}x0e + {multiplicity}x1o + {multiplicity}x2e + {multiplicity}x3o")
     irreps_out = o3.Irreps(f"{multiplicity}x0e + {multiplicity}x1o")
@@ -749,6 +752,7 @@ We also need to use the `O3_e3nn` group for compatibility, but the standard `"O3
         source=cue.ir_mul,
         target=cue.mul_ir,
         device=device,
+        use_fallback=device=="cpu",
     )(cue_out_feats)
     # Comparing the result
     print("Results match:", torch.allclose(out_feats, cue_out_feats_transp, atol=1e-5))
@@ -757,8 +761,8 @@ Here too we can compare the speed of the two approaches:
 
 .. jupyter-execute::
 
-    throwaway = 10
-    repetitions = 100
+    throwaway = 10 if device=="cuda" else 1
+    repetitions = 100 if device=="cuda" else 2
     
     e3nn_times = []
     for _ in range(throwaway):
@@ -799,7 +803,6 @@ Let us start again from the original implementation:
     # Parameters
     multiplicity = 128
     num_nodes = 10000
-    device = "cuda"
     dtype = torch.float32
     irreps_in = o3.Irreps(f"{multiplicity}x0e + {multiplicity}x1o")
     irreps_out = o3.Irreps(f"{multiplicity}x0e + {multiplicity}x1o")
@@ -842,6 +845,7 @@ And the equivalent cuEquivariance code:
         source=cue.mul_ir,
         target=cue.ir_mul,
         device=device,
+        use_fallback=device=="cpu",
     )(in_feats)
     
     cue_out_feats = cue_lin(cue_in_feats, weight=lin.weight.unsqueeze(0))
@@ -854,6 +858,7 @@ And the equivalent cuEquivariance code:
         source=cue.ir_mul,
         target=cue.mul_ir,
         device=device,
+        use_fallback=device=="cpu",
     )(cue_out_feats)
     # Comparing the result
     print("Results match:", torch.allclose(out_feats, cue_out_feats_transp, atol=1e-5))
@@ -865,7 +870,7 @@ We can compare the speed, although the difference will not be large in this case
 .. jupyter-execute::
 
     throwaway = 10
-    repetitions = 1000
+    repetitions = 1000 if device=="cuda" else 10
     
     e3nn_times = []
     for _ in range(throwaway):
@@ -897,7 +902,7 @@ Skip_tp or Indexed Linear
 
 The last operation is an operation used in MACE in the `InteractionBlock` and typically called `skip_tp`, as it is used as a skip connection.
 
-However, in the context of cuEquivariance we will typically refer to this operation as _indexed linear_, as it consists of a linear operation where the weight matrix is indexed on the species of each input.
+However, in the context of cuEquivariance we will typically refer to this operation as *indexed linear*, as it consists of a linear operation where the weight matrix is indexed on the species of each input.
 
 We will first present the original implementation, which makes use of an expensive `FullyConnectedTensorProduct`.
 
@@ -907,7 +912,6 @@ We will first present the original implementation, which makes use of an expensi
     num_species = 20
     multiplicity = 128
     num_nodes = 10000
-    device = "cuda"
     dtype = torch.float32
     irreps_in = o3.Irreps(f"{multiplicity}x0e + {multiplicity}x1o")
     attr_irreps = o3.Irreps(f"{num_species}x0e")
@@ -962,7 +966,7 @@ While the first can work in any setting, the second can only be used when the at
         layout=cue.ir_mul,
         device=device,
         dtype=dtype,
-        method='indexed_linear'
+        method='indexed_linear' if device=="cuda" else "naive"
     )
     
     # Transposing the input
@@ -971,6 +975,7 @@ While the first can work in any setting, the second can only be used when the at
         source=cue.mul_ir,
         target=cue.ir_mul,
         device=device,
+        use_fallback=device=="cpu",
     )(in_feats)
     
     # Rearranging the weights by hand
@@ -987,6 +992,7 @@ While the first can work in any setting, the second can only be used when the at
         source=cue.ir_mul,
         target=cue.mul_ir,
         device=device,
+        use_fallback=device=="cpu",
     )(cue_out_feats)
     # Comparing the result
     print("Results match:", torch.allclose(out_feats, cue_out_feats_transp, atol=1e-3))
@@ -1002,6 +1008,7 @@ While the first can work in any setting, the second can only be used when the at
         source=cue.ir_mul,
         target=cue.mul_ir,
         device=device,
+        use_fallback=device=="cpu",
     )(cue_out_feats)
     # Comparing the result
     print("Results match:", torch.allclose(out_feats, cue_out_feats_transp, atol=1e-3))
@@ -1011,7 +1018,7 @@ And we can compare the speed for the two implementations:
 .. jupyter-execute::
 
     throwaway = 10
-    repetitions = 100
+    repetitions = 100 if device=="cuda" else 10
     
     e3nn_times = []
     for _ in range(throwaway):
