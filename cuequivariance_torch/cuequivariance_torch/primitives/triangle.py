@@ -323,6 +323,7 @@ def attention_pair_bias(
         - **proj_z** (:class:`torch.Tensor`): Projected z tensor of shape (B, H, U, V)
           containing the pairwise bias tensor with mask applied.
 
+
     Notes:
         - For short sequences (≤ CUEQ_ATTENTION_PAIR_BIAS_FALLBACK_THRESHOLD),
           uses PyTorch fallback implementation.
