@@ -61,6 +61,13 @@ def triangle_attention(
 
     where :math:`Q`, :math:`K`, and :math:`V` are the query, key, and value tensors,
     :math:`M` is the mask bias, and :math:`T` is the triangle bias.
+
+    .. note::
+        This operation uses a custom CUDA kernel for performance. When using this function
+        on multiple devices, manual sharding is required to achieve proper performance.
+        Without explicit sharding, performance will be significantly degraded. See
+        `JAX shard_map documentation <https://docs.jax.dev/en/latest/notebooks/shard_map.html>`_
+        for details on manual parallelism.
     """
     return triangle_attention_custom_vjp(
         q, k, v, bias, mask, scale=scale, precision=precision

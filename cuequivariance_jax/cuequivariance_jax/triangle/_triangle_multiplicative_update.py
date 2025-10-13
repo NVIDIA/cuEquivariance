@@ -239,6 +239,13 @@ def triangle_multiplicative_update(
         ... )
         >>> print(output_256.shape)
         (2, 3, 128, 128, 256)
+
+    .. note::
+        This operation uses a custom CUDA kernel for performance. When using this function
+        on multiple devices, manual sharding is required to achieve proper performance.
+        Without explicit sharding, performance will be significantly degraded. See
+        `JAX shard_map documentation <https://docs.jax.dev/en/latest/notebooks/shard_map.html>`_
+        for details on manual parallelism.
     """
     # Input validation
     if direction not in ["outgoing", "incoming"]:
