@@ -1,5 +1,16 @@
 ## Latest Changes
 
+## 0.7.0 (2025-10-13)
+
+### Added
+- [Torch] MACE example in the documentation
+- [JAX] MACE and NequIP examples in the folder `cuequivariance_jax/examples`
+- [Torch/JAX] The Segmented Polynomial operation's `math_dtype` argument now accepts method-specific string values, with each method supporting different options
+
+### Bug fix
+- Correct the documentation `CUEQ_TRITON_TUNING_MODE` -> `CUEQ_TRITON_TUNING`
+- [JAX] Make `triangle_multiplicative_update` use the same tuning cache files as it's PyTorch counterpart
+
 ## 0.6.1 (2025-09-04)
 
 ### Added
