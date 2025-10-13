@@ -146,6 +146,14 @@ def segmented_polynomial(
         ... )
         >>> y.shape
         (10, 80)
+
+
+    .. note::
+        This operation uses a custom CUDA kernel for performance. When using this function
+        on multiple devices, manual sharding is required to achieve proper performance.
+        Without explicit sharding, performance will be significantly degraded. See
+        `JAX shard_map documentation <https://docs.jax.dev/en/latest/notebooks/shard_map.html>`_
+        for details on manual parallelism.
     """
 
     if method == "":
