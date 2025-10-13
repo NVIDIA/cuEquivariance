@@ -9,7 +9,7 @@
 
 ### Bug fix
 - Correct the documentation `CUEQ_TRITON_TUNING_MODE` -> `CUEQ_TRITON_TUNING`
-- [JAX] Make `triangle_multiplicative_update` use the same tuning cache files as it's PyTorch counterpart
+- [JAX] Make `triangle_multiplicative_update` use the same tuning cache files as its PyTorch counterpart
 
 ## 0.6.1 (2025-09-04)
 
