@@ -3,9 +3,13 @@
 ## 0.7.0 (2025-10-13)
 
 ### Added
+- Support for CUDA 13
+- Support for Python 3.13
 - [Torch] MACE example in the documentation
 - [JAX] MACE and NequIP examples in the folder `cuequivariance_jax/examples`
 - [Torch/JAX] The Segmented Polynomial operation's `math_dtype` argument now accepts method-specific string values, with each method supporting different options
+- [Torch] ONNX export and TensorRT runtime plugin support for triangle attention, triangle multiplication and attention with pairwise bias
+- [Torch] Support for caching the "bias tensor z" calculated from the proj_z linear layer in the Attention with pairwise bias kernel (as implemented in the Boltz code)
 
 ### Bug fix
 - Correct the documentation `CUEQ_TRITON_TUNING_MODE` -> `CUEQ_TRITON_TUNING`
