@@ -21,16 +21,6 @@ from jax.interpreters import batching, mlir, xla
 
 from cuequivariance_jax.triangle._naive_batching import naive_batching_rule
 
-try:
-    from cuequivariance_ops_jax import (
-        triangle_attention_cuda_bwd,
-        triangle_attention_cuda_fwd,
-    )
-
-    HAS_CUE_OPS_JAX = True
-except ImportError:
-    HAS_CUE_OPS_JAX = False
-
 
 def triangle_attention(
     q: jax.Array,  # [B, N, H, S_qo, D]
@@ -157,9 +147,12 @@ def triangle_attention_fwd_impl(
     precision: jax.lax.Precision | None = None,
 ) -> tuple[jax.Array, jax.Array, jax.Array]:
     if platform == "cuda":
-        assert HAS_CUE_OPS_JAX, (
-            "Please install cuequivariance_ops_jax for CUDA support."
-        )
+        try:
+            from cuequivariance_ops_jax import triangle_attention_cuda_fwd
+        except ImportError as e:
+            raise ImportError(
+                "Please install cuequivariance_ops_jax for CUDA support."
+            ) from e
         return triangle_attention_cuda_fwd(q, k, v, mask, bias, scale, precision)
     else:
         return triangle_attention_jax_fwd(q, k, v, bias, mask, scale, precision)
@@ -180,9 +173,12 @@ def triangle_attention_bwd_impl(
     precision: jax.lax.Precision | None = None,
 ) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
     if platform == "cuda":
-        assert HAS_CUE_OPS_JAX, (
-            "Please install cuequivariance_ops_jax for CUDA support."
-        )
+        try:
+            from cuequivariance_ops_jax import triangle_attention_cuda_bwd
+        except ImportError as e:
+            raise ImportError(
+                "Please install cuequivariance_ops_jax for CUDA support."
+            ) from e
         return triangle_attention_cuda_bwd(
             da, a, lse, q, k, v, mask, bias, scale, precision
         )
