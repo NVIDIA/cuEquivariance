@@ -97,8 +97,7 @@ def execute_gemm_grouped(
     indices: list[jax.Array],
     index_configuration: tuple[tuple[int, ...], ...],
     polynomial: cue.SegmentedPolynomial,
-    math_dtype: jnp.dtype,
-    precision: jax.lax.Precision,
+    math_dtype: str | None,
     name: str,
 ) -> list[jax.Array]:
     index_configuration = np.array(index_configuration)
@@ -108,19 +107,7 @@ def execute_gemm_grouped(
     )
     assert polynomial.num_outputs == len(outputs_shape_dtype)
 
-    math_dtype = jnp.dtype(math_dtype)
-    if math_dtype.type not in {jnp.float32, jnp.float64}:
-        raise ValueError(f"Unsupported math_dtype: {math_dtype}")
-
-    if not all(x.dtype == math_dtype for x in inputs):
-        raise ValueError(
-            "method 'gemm_grouped' requires all inputs to have the same dtype as math_dtype"
-        )
-
-    if not all(x.dtype == math_dtype for x in outputs_shape_dtype):
-        raise ValueError(
-            "method 'gemm_grouped' requires all outputs to have the same dtype as math_dtype"
-        )
+    assert math_dtype is None
 
     if not all(x.dtype in {jnp.int32, jnp.int64} for x in indices):
         raise ValueError("All indices must have dtype int32 or int64")
@@ -227,7 +214,7 @@ def execute_gemm_grouped(
         gemms,
         [],
         np.full((2 * len(gemms), num_batch_axes), -1, np.int32),
-        use_tf32=(precision != jax.lax.Precision.HIGHEST),
+        use_tf32=False,
     )
     outputs = [jnp.zeros(x.shape, dtype=x.dtype) for x in outputs_shape_dtype]
 
