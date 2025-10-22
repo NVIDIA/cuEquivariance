@@ -17,10 +17,10 @@ from typing import Any
 import jax
 import jax.numpy as jnp
 import numpy as np  # noqa: F401
+from cuequivariance.group_theory.irreps_array.misc_ui import assert_same_group
 
 import cuequivariance as cue
 import cuequivariance_jax as cuex
-from cuequivariance.group_theory.irreps_array.misc_ui import assert_same_group
 
 
 def concatenate(arrays: list[cuex.RepArray]) -> cuex.RepArray:

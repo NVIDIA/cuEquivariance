@@ -12,17 +12,19 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import warnings
 from typing import Optional
 
 import torch
+from cuequivariance.group_theory.irreps_array.misc_ui import (
+    assert_same_group,
+    default_irreps,
+    default_layout,
+)
 
 import cuequivariance as cue
 import cuequivariance_torch as cuet
 from cuequivariance import descriptors
-from cuequivariance.group_theory.irreps_array.misc_ui import (
-    assert_same_group,
-    default_irreps,
-)
 
 
 class FullyConnectedTensorProduct(torch.nn.Module):
@@ -34,11 +36,19 @@ class FullyConnectedTensorProduct(torch.nn.Module):
         irreps_in2 (Irreps): Input irreps for the second operand.
         irreps_out (Irreps): Output irreps.
         layout (IrrepsLayout, optional): The layout of the input and output irreps. Default is ``cue.mul_ir`` which is the layout corresponding to e3nn.
+        layout_in1 (IrrepsLayout, optional): The layout of the first input irreducible representations, by default ``layout``.
+        layout_in2 (IrrepsLayout, optional): The layout of the second input irreducible representations, by default ``layout``.
+        layout_out (IrrepsLayout, optional): The layout of the output irreducible representations, by default ``layout``.
         shared_weights (bool, optional): Whether to share weights across the batch dimension. Default is True.
         internal_weights (bool, optional): Whether to create module parameters for weights. Default is None.
-        use_fallback (bool, optional): If `None` (default), a CUDA kernel will be used if available.
-                If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
-                If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
+        device (torch.device, optional): The device to use for the operation.
+        dtype (torch.dtype, optional): The dtype to use for the operation weights, by default the torch default dtype.
+        math_dtype (torch.dtype or string, optional): The dtype to use for the math operations, by default it follows the dtype of the input tensors,
+            if possible, or the torch default dtype (see SegmentedPolynomial for more details).
+        method (str, optional): The method to use for the linear layer, by default "fused_tp" (using a CUDA kernel).
+        use_fallback (bool, optional, deprecated): Whether to use a "fallback" implementation, now maps to method:
+            If `True`, the "naive" method is used.
+            If `False` or `None` (default), the "fused_tp" method is used.
 
     Note:
         In e3nn there was a irrep_normalization and path_normalization parameters.
@@ -59,8 +69,9 @@ class FullyConnectedTensorProduct(torch.nn.Module):
         internal_weights: bool = None,
         device: Optional[torch.device] = None,
         dtype: Optional[torch.dtype] = None,
-        math_dtype: Optional[torch.dtype] = None,
+        math_dtype: Optional[str | torch.dtype] = None,
         use_fallback: Optional[bool] = None,
+        method: Optional[str] = None,
     ):
         super().__init__()
         irreps_in1, irreps_in2, irreps_out = default_irreps(
@@ -68,7 +79,8 @@ class FullyConnectedTensorProduct(torch.nn.Module):
         )
         assert_same_group(irreps_in1, irreps_in2, irreps_out)
 
-        math_dtype = math_dtype or dtype
+        if dtype is None:
+            dtype = torch.get_default_dtype()
 
         e = descriptors.fully_connected_tensor_product(
             irreps_in1, irreps_in2, irreps_out
@@ -95,15 +107,54 @@ class FullyConnectedTensorProduct(torch.nn.Module):
         else:
             self.weight = None
 
-        self.f = cuet.EquivariantTensorProduct(
-            e,
-            layout=layout,
-            layout_in=(cue.ir_mul, layout_in1, layout_in2),
-            layout_out=layout_out,
+        layout_in1 = default_layout(layout_in1 or layout)
+        self.transpose_in1 = cuet.TransposeIrrepsLayout(
+            e.inputs[1].irreps,
+            source=layout_in1,
+            target=e.inputs[1].layout,
             device=device,
-            math_dtype=math_dtype,
             use_fallback=use_fallback,
         )
+
+        layout_in2 = default_layout(layout_in2 or layout)
+        self.transpose_in2 = cuet.TransposeIrrepsLayout(
+            e.inputs[2].irreps,
+            source=layout_in2,
+            target=e.inputs[2].layout,
+            device=device,
+            use_fallback=use_fallback,
+        )
+
+        layout_out = default_layout(layout_out or layout)
+        self.transpose_out = cuet.TransposeIrrepsLayout(
+            e.outputs[0].irreps,
+            source=e.outputs[0].layout,
+            target=layout_out,
+            device=device,
+            use_fallback=use_fallback,
+        )
+
+        if method is None:
+            if use_fallback is None:
+                # No warning here as it's the default behavior
+                self.method = "fused_tp"
+            else:
+                warnings.warn(
+                    "`use_fallback` is deprecated, please use `method` instead",
+                    DeprecationWarning,
+                )
+                self.method = "naive" if use_fallback else "fused_tp"
+        else:
+            self.method = method
+
+        if self.method == "fused_tp" and math_dtype is None:
+            math_dtype = dtype
+
+        self.f = cuet.SegmentedPolynomial(
+            e.polynomial,
+            method=self.method,
+            math_dtype=math_dtype,
+        ).to(device)
 
     def extra_repr(self) -> str:
         return (
@@ -138,14 +189,19 @@ class FullyConnectedTensorProduct(torch.nn.Module):
                 or if shared weights are used and weight is not a 1D tensor,
                 or if shared weights are not used and weight is not a 2D tensor.
         """
+        x1 = self.transpose_in1(x1)
+        x2 = self.transpose_in2(x2)
+
         if self.weight is not None:
             if weight is not None:
                 raise ValueError("Internal weights are used, weight should be None")
-            return self.f(self.weight, x1, x2)
+            output = self.f([self.weight, x1, x2])
         else:
             if weight is None:
                 raise ValueError(
                     "Internal weights are not used, weight should not be None"
                 )
             else:
-                return self.f(weight, x1, x2)
+                output = self.f([weight, x1, x2])
+
+        return self.transpose_out(output[0])

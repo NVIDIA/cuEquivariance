@@ -17,15 +17,15 @@
 import jax
 import jax.numpy as jnp
 import pytest
-
-import cuequivariance as cue
-import cuequivariance_jax as cuex
 from cuequivariance_jax.activation import (
     function_parity,
     normalize_function,
     normalspace,
     scalar_activation,
 )
+
+import cuequivariance as cue
+import cuequivariance_jax as cuex
 
 
 def test_normalspace():

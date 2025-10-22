@@ -12,16 +12,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import copy
 
 import pytest
 import torch
+from cuequivariance_torch._tests.utils import module_with_mode
 
 import cuequivariance as cue
 import cuequivariance_torch as cuet
-from cuequivariance_torch._tests.utils import (
-    module_with_mode,
-)
 
 device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
 
@@ -230,12 +229,12 @@ def test_export(
         pytest.skip("Skipping redundant layout test with fallback=True")
 
     # Skip compile mode entirely for speed - consistently takes time
-    if mode == "compile":
-        pytest.skip("Skipping compile mode for speed")
+    # if mode == "compile":
+    #     pytest.skip("Skipping compile mode for speed")
 
     # Skip script mode for speed
-    if mode == "script":
-        pytest.skip("Skipping script mode for speed")
+    # if mode == "script":
+    #     pytest.skip("Skipping script mode for speed")
 
     # Skip use_fallback=False for speed - only test fallback
     if use_fallback is False:
@@ -272,3 +271,61 @@ def test_export(
     m = module_with_mode(mode, m, inputs, torch.float32, tmp_path)
     out2 = m(*inputs)
     torch.testing.assert_close(out1, out2)
+
+
+@pytest.mark.parametrize("irreps_in", [cue.Irreps("SU2", "3x1/2 + 4x1")])
+@pytest.mark.parametrize("irreps_out", [cue.Irreps("SU2", "3x1/2 + 4x1")])
+@pytest.mark.parametrize("layout", [cue.mul_ir])
+@pytest.mark.parametrize("method", ["naive", "fused_tp", "indexed_linear"])
+@pytest.mark.parametrize("math_dtype", [None, torch.float32, "float64"])
+def test_linear_fwd_methods(
+    irreps_in: cue.Irreps,
+    irreps_out: cue.Irreps,
+    layout: cue.IrrepsLayout,
+    method: str,
+    math_dtype: str | torch.dtype | None,
+):
+    if math_dtype == torch.float32 and method == "fused_tp":
+        pytest.skip("fused_tp does not support float32 math_dtype with FP64 inputs")
+    if method == "indexed_linear" and math_dtype is not None:
+        pytest.skip("indexed_linear does not support non-None or CUBLAS math_dtype")
+
+    if not torch.cuda.is_available():
+        pytest.skip("CUDA is not available")
+
+    torch.manual_seed(0)
+    linear_indexed = cuet.Linear(
+        irreps_in,
+        irreps_out,
+        layout=layout,
+        shared_weights=True,
+        internal_weights=False,
+        weight_classes=3,
+        device=device,
+        dtype=torch.float64,
+        math_dtype=math_dtype,
+        method=method,
+    )
+
+    torch.manual_seed(0)
+    linear = cuet.Linear(
+        irreps_in,
+        irreps_out,
+        layout=layout,
+        shared_weights=False,
+        internal_weights=False,
+        device=device,
+        dtype=torch.float64,
+        math_dtype=math_dtype,
+        method="naive",
+    )
+
+    x = torch.randn(10, irreps_in.dim, dtype=torch.float64).cuda()
+    weights = torch.randn(3, linear_indexed.weight_numel, dtype=torch.float64).cuda()
+    indices, _ = torch.sort(torch.randint(0, 3, (10,), dtype=torch.int32).cuda())
+    pre_indexed_weights = weights[indices]
+
+    y_ind = linear_indexed(x, weights, indices)
+    y = linear(x, pre_indexed_weights)
+
+    torch.testing.assert_close(y_ind, y)

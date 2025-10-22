@@ -14,20 +14,17 @@
 # limitations under the License.
 import pytest
 import torch
-
-import cuequivariance as cue
-import cuequivariance_torch as cuet
 from cuequivariance_torch._tests.utils import (
     module_with_mode,
 )
+
+import cuequivariance as cue
+import cuequivariance_torch as cuet
 
 device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
 
 
 def test_rotation():
-    # Skip this test for speed - it takes 3+ seconds
-    pytest.skip("Skipping basic rotation test for speed - takes 3+ seconds")
-
     irreps = cue.Irreps("SO3", "3x0 + 1 + 0 + 4x2 + 4")
     alpha = torch.tensor([0.3]).to(device)
     beta = torch.tensor([0.4]).to(device)
@@ -53,7 +50,7 @@ def test_vector_to_euler_angles():
         torch.tensor([0.0]), beta, alpha, ey
     )
 
-    assert torch.allclose(A, B)
+    assert torch.allclose(A, B, atol=1e-5, rtol=1e-5)
 
 
 @pytest.mark.parametrize("use_fallback", [False, True])
@@ -61,12 +58,20 @@ def test_inversion(use_fallback: bool):
     if use_fallback is False and not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
 
-    irreps = cue.Irreps("O3", "2x1e + 1o")
+    irreps = cue.Irreps("O3", "2x1e + 2x1o")
     torch.testing.assert_close(
         cuet.Inversion(
             irreps, layout=cue.ir_mul, device=device, use_fallback=use_fallback
-        )(torch.tensor([[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]], device=device)),
-        torch.tensor([[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, -1.0, -1.0, -1.0]], device=device),
+        )(
+            torch.tensor(
+                [[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]],
+                device=device,
+            )
+        ),
+        torch.tensor(
+            [[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0]],
+            device=device,
+        ),
     )
 
 

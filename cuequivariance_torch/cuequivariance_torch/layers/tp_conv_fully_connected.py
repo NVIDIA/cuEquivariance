@@ -15,15 +15,15 @@
 from typing import Optional, Sequence, Union
 
 import torch
-from torch import nn
-
-import cuequivariance as cue
-import cuequivariance_torch as cuet
 from cuequivariance.group_theory.irreps_array.misc_ui import (
     assert_same_group,
     default_irreps,
     default_layout,
 )
+from torch import nn
+
+import cuequivariance as cue
+import cuequivariance_torch as cuet
 
 
 class FullyConnectedTensorProductConv(nn.Module):

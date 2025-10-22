@@ -39,9 +39,11 @@ from .activation import (
     scalar_activation,
 )
 from .spherical_harmonics import spherical_harmonics, normalize, norm
-
-from .triangle._triangle_attention import triangle_attention
-
+from .triangle import (
+    triangle_multiplicative_update,
+    Precision as TriMulPrecision,
+    triangle_attention,
+)
 from cuequivariance_jax import flax_linen
 from cuequivariance_jax import experimental
 
@@ -63,6 +65,8 @@ __all__ = [
     "spherical_harmonics",
     "normalize",
     "norm",
+    "triangle_multiplicative_update",
+    "TriMulPrecision",
     "triangle_attention",
     "flax_linen",
     "experimental",

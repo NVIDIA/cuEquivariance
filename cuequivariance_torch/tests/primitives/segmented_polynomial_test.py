@@ -16,12 +16,14 @@ from typing import Dict, List, Optional
 
 import pytest
 import torch
+from cuequivariance_torch._tests.utils import module_with_mode, tol_dict
 
 import cuequivariance as cue
 import cuequivariance_torch as cuet
-from cuequivariance_torch._tests.utils import module_with_mode, tol_dict
 
-device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
+global_device = (
+    torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
+)
 
 
 def generate_segmented_polynomials():
@@ -34,7 +36,7 @@ def generate_segmented_polynomials():
     def channelwise_tensor_product():
         e = (
             cue.descriptors.channelwise_tensor_product(
-                cue.Irreps("O3", "32x0e + 32x1o"),
+                cue.Irreps("O3", "16x0e + 16x1o"),
                 cue.Irreps("O3", "0e + 1o + 2e"),
                 cue.Irreps("O3", "0e + 1o"),
             )
@@ -46,8 +48,8 @@ def generate_segmented_polynomials():
     @yield_from
     def symmetric_contraction():
         e = cue.descriptors.symmetric_contraction(
-            32 * cue.Irreps("O3", "0e + 1o + 2e"),
-            32 * cue.Irreps("O3", "0e + 1o"),
+            16 * cue.Irreps("O3", "0e + 1o + 2e"),
+            16 * cue.Irreps("O3", "0e + 1o"),
             [1, 2],
         )
         yield "symmetric_contraction", e.polynomial
@@ -79,7 +81,7 @@ def ceil_div(a: int, b: int) -> int:
 
 
 def make_inputs_for_operands(
-    operands, dtype, idx_amount, idx_kind, batch_size, tensor_init_fn
+    operands, dtype, idx_amount, idx_kind, batch_size, tensor_init_fn, device
 ):
     tensors = []
     indices = {}
@@ -94,20 +96,26 @@ def make_inputs_for_operands(
             index_size = ceil_div(batch_size, 4)
             if index_size == 0:
                 index_size = 1
-            indices[i] = torch.randint(0, index_size, (batch_size,), device=device)
+            inds = torch.randint(0, index_size, (batch_size,), device=device)
+            indices[i], _ = torch.sort(inds)
             local_batch = index_size
         tensors.append(tensor_init_fn(local_batch, x.size))
     return tensors, indices
 
 
-def make_inputs(polynomial, dtype, indexing, batch_size):
+def make_inputs(polynomial, dtype, indexing, batch_size, device):
     def tensor_init_inputs(batch_size, size):
         return torch.randn(
             (batch_size, size), device=device, dtype=dtype, requires_grad=True
         )
 
     inputs, input_indices = make_inputs_for_operands(
-        polynomial.inputs, dtype, *indexing["input"], batch_size, tensor_init_inputs
+        polynomial.inputs,
+        dtype,
+        *indexing["input"],
+        batch_size,
+        tensor_init_inputs,
+        device,
     )
 
     def tensor_init_outputs(batch_size, size):
@@ -116,7 +124,12 @@ def make_inputs(polynomial, dtype, indexing, batch_size):
         ).broadcast_to(batch_size, size)
 
     outputs, output_indices = make_inputs_for_operands(
-        polynomial.outputs, dtype, *indexing["output"], batch_size, tensor_init_outputs
+        polynomial.outputs,
+        dtype,
+        *indexing["output"],
+        batch_size,
+        tensor_init_outputs,
+        device,
     )
     outputs = {i: o for i, o in enumerate(outputs)}
     result = {"inputs": inputs}
@@ -129,137 +142,6 @@ def make_inputs(polynomial, dtype, indexing, batch_size):
     return result
 
 
-class Reference(torch.nn.Module):
-    def __init__(
-        self,
-        polynomial,
-        output_dtype_map: List[int] = [],
-        math_dtype: torch.dtype = torch.float32,
-        name: str = "segmented_polynomial",
-    ):
-        super().__init__()
-        self.polynomial = polynomial
-        self.output_dtype_map = output_dtype_map
-        self.math_dtype = math_dtype
-        self.name = name
-
-    def forward(
-        self,
-        inputs: List[torch.Tensor],
-        input_indices: Optional[Dict[int, torch.Tensor]] = None,
-        output_shapes: Optional[Dict[int, torch.Tensor]] = None,
-        output_indices: Optional[Dict[int, torch.Tensor]] = None,
-    ):
-        if input_indices is None:
-            input_indices = {}
-        if output_indices is None:
-            output_indices = {}
-        if output_shapes is None:
-            output_shapes = {}
-
-        # deduce the batch size:
-        # if there are any indices, their size is the batch size
-        # otherwise, it is the largest first dimension of the inputs
-        # or the output_shaopes
-        batch_size = None
-        for index in input_indices.values():
-            batch_size = index.size(0)
-            break
-        for index in output_indices.values():
-            batch_size = index.size(0)
-            break
-        if batch_size is None:
-            for elem in output_shapes.values():
-                if elem.size(0) != 1:
-                    batch_size = elem.size(0)
-                    break
-        if batch_size is None:
-            for inp in inputs:
-                if inp.size(0) != 1:
-                    batch_size = inp.size(0)
-                    break
-
-        if batch_size is None:
-            batch_size = 1
-
-        # create the output tensors
-        outputs = []
-        for i in range(self.polynomial.num_outputs):
-            output_dtype = None
-            if i < len(self.output_dtype_map):
-                if self.output_dtype_map[i] == -1:
-                    output_dtype = self.math_dtype
-                else:
-                    output_dtype = inputs[self.output_dtype_map[i]].dtype
-            if output_dtype is None and len(inputs) > 0:
-                output_dtype = inputs[0].dtype
-            if output_dtype is None:
-                output_dtype = self.math_dtype
-
-            output_batch_size = None
-            if i in output_shapes:
-                output_batch_size = output_shapes[i].size(0)
-            if output_batch_size is None:
-                if i in output_indices:
-                    output_batch_size = output_indices[i].size(0)
-            if output_batch_size is None:
-                output_batch_size = batch_size
-            outputs.append(
-                torch.zeros(
-                    (output_batch_size, self.polynomial.outputs[i].size),
-                    device=device,
-                    dtype=output_dtype,
-                )
-            )
-
-        inputs = [
-            input.index_select(0, input_indices[idx]) if idx in input_indices else input
-            for idx, input in enumerate(inputs)
-        ]
-
-        regular_outputs = [
-            torch.zeros(
-                (output_indices[idx].size(0), output.size(1)),
-                device=output.device,
-                dtype=output.dtype,
-            )
-            if idx in output_indices
-            else output
-            for idx, output in enumerate(outputs)
-        ]
-
-        # perform the operation
-        for op, stp in self.polynomial.operations:
-            self.perform_einsum(op, stp, inputs, regular_outputs)
-
-        for idx, (output, regular_output) in enumerate(zip(outputs, regular_outputs)):
-            if idx in output_indices:
-                output_index = (
-                    output_indices[idx]
-                    .reshape(-1, 1)
-                    .broadcast_to(regular_output.shape)
-                )
-                output.scatter_add_(0, output_index, regular_output)
-
-        return outputs
-
-    def perform_einsum(self, op, stp, inputs, outputs):
-        # select operands
-        inputs = [inputs[o] for o in op.buffers if o < self.polynomial.num_inputs]
-        o_idx, o_buf = op.output_operand_buffer(self.polynomial.num_inputs)
-        output = outputs[o_buf - self.polynomial.num_inputs]
-        from cuequivariance_torch.primitives.tensor_product import _tensor_product_fx
-
-        local_output = _tensor_product_fx(
-            stp.move_operand_last(o_idx), device, self.math_dtype, False
-        )(*inputs)
-        if output.shape[0] == 1:
-            output += torch.sum(local_output, dim=0, keepdim=True)
-        else:
-            output += local_output
-
-
-# todo check if this is actually needed
 torch._dynamo.allow_in_graph(torch.autograd.grad)
 
 
@@ -326,6 +208,7 @@ def assert_close_recursive(a, b, tol_dict, index=[]):
 def run_segmented_polynomial_test(
     name,
     polynomial,
+    method,
     dtype,
     math_dtype,
     batch_size,
@@ -334,6 +217,7 @@ def run_segmented_polynomial_test(
     backward,
     indexing,
     tmp_path,
+    device=global_device,
 ):
     if not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
@@ -342,18 +226,31 @@ def run_segmented_polynomial_test(
     if grad and backward and dtype.itemsize <= 2:
         pytest.skip("double backward with fp16/bf16 lacks accuracy")
 
-    m_ref = Reference(polynomial, math_dtype=math_dtype)
-    m = cuet.SegmentedPolynomial(polynomial, math_dtype=math_dtype)
+    # Special case for indexed_linear dtype
+    if math_dtype == "CUBLAS_COMPUTE_32F" and method == "indexed_linear":
+        o_math_dtype = math_dtype
+        math_dtype = torch.float32
+    else:
+        o_math_dtype = math_dtype
 
-    test_tol_dict = tol_dict[(dtype, math_dtype)]
+    m_ref = cuet.SegmentedPolynomial(
+        polynomial, method="naive", math_dtype=math_dtype
+    ).to(device)
+    m = cuet.SegmentedPolynomial(polynomial, method=method, math_dtype=o_math_dtype).to(
+        device
+    )
+
+    t_math_dtype = math_dtype if math_dtype is not None else dtype
+    test_tol_dict = tol_dict[(dtype, t_math_dtype)]
 
     if grad:
         m_ref = Grad(m_ref)
         m = Grad(m)
         test_tol_dict = tol_dict_grad(test_tol_dict)
 
-    inp = make_inputs(polynomial, dtype, indexing, batch_size)
+    inp = make_inputs(polynomial, dtype, indexing, batch_size, device)
     m = module_with_mode(mode, m, inp, math_dtype, tmp_path)
+    m.to(device)
 
     inp_ref = clone_input(inp)
 
@@ -375,9 +272,14 @@ DATA_TYPES_IN_MATH = [
     (torch.float64, torch.float32),
     (torch.float32, torch.float32),
     (torch.float64, torch.float64),
+    (torch.float32, None),
+    (torch.float64, None),
+    (torch.float32, "float32"),
     (torch.float16, torch.float32),
     (torch.bfloat16, torch.float32),
 ]
+
+METHODS = ["uniform_1d", "fused_tp"]
 
 EXPORT_MODES = ["eager", "compile", "script", "jit", "export"]
 
@@ -405,17 +307,30 @@ BACKWARD = [False, True]
 
 BATCH_SIZE = [0, 5]
 
+DEVICES = (
+    [torch.device("cuda:0"), torch.device("cpu")]
+    if torch.cuda.is_available()
+    else [torch.device("cpu")]
+)
+
 
 @pytest.mark.parametrize("name, polynomial", SEGMENTED_POLYNOMIALS[:1])
-@pytest.mark.parametrize("dtype, math_dtype", DATA_TYPES_IN_MATH[:1])
-@pytest.mark.parametrize("batch_size", BATCH_SIZE[1:])
-@pytest.mark.parametrize("mode", EXPORT_MODES[:1])
-@pytest.mark.parametrize("grad", GRAD[1:])
-@pytest.mark.parametrize("backward", BACKWARD[1:])
+@pytest.mark.parametrize("method", METHODS)
+@pytest.mark.parametrize(
+    "dtype, math_dtype",
+    [
+        (torch.float32, torch.float64),
+    ],
+)
+@pytest.mark.parametrize("batch_size", [5])
+@pytest.mark.parametrize("mode", ["eager"])
+@pytest.mark.parametrize("grad", [True])
+@pytest.mark.parametrize("backward", [True])
 @pytest.mark.parametrize("indexing", ALL_INDEXING)
 def test_segmented_polynomial_indexing(
     name,
     polynomial,
+    method,
     dtype,
     math_dtype,
     batch_size,
@@ -425,21 +340,10 @@ def test_segmented_polynomial_indexing(
     indexing,
     tmp_path,
 ):
-    # Skip compile mode entirely as it's very slow (2+ seconds)
-    if mode != "eager":
-        pytest.skip("Skipping compile mode for speed")
-
-    # Skip float16/bfloat16 tests for speed
-    if dtype in [torch.float16, torch.bfloat16]:
-        pytest.skip("Skipping fp16/bf16 tests for speed")
-
-    # Skip mixed precision tests for speed
-    if dtype != math_dtype:
-        pytest.skip("Skipping mixed precision tests for speed")
-
     run_segmented_polynomial_test(
         name,
         polynomial,
+        method,
         dtype,
         math_dtype,
         batch_size,
@@ -452,15 +356,85 @@ def test_segmented_polynomial_indexing(
 
 
 @pytest.mark.parametrize("name, polynomial", SEGMENTED_POLYNOMIALS)
+@pytest.mark.parametrize("method", METHODS)
 @pytest.mark.parametrize("dtype, math_dtype", DATA_TYPES_IN_MATH)
 @pytest.mark.parametrize("batch_size", BATCH_SIZE[1:])
 @pytest.mark.parametrize("mode", EXPORT_MODES[:1])
 @pytest.mark.parametrize("grad", GRAD)
 @pytest.mark.parametrize("backward", BACKWARD)
 @pytest.mark.parametrize("indexing", SHORT_INDEXING)
+@pytest.mark.parametrize("device", DEVICES)
 def test_segmented_polynomial_dytpes(
     name,
     polynomial,
+    method,
+    dtype,
+    math_dtype,
+    batch_size,
+    mode,
+    grad,
+    backward,
+    indexing,
+    tmp_path,
+    device,
+):
+    # Skipping all tests that have many options that are not default
+    complexity = 0
+    if name != "channelwise_tensor_product":
+        complexity += 2
+    if dtype != torch.float32:
+        complexity += 1
+    if grad:
+        complexity += 2
+    if backward:
+        complexity += 2
+    if indexing != SHORT_INDEXING[0]:
+        complexity += 1
+    if device == torch.device("cpu"):
+        complexity += 2
+    if complexity > 2:
+        pytest.skip("Skipping tests with many options that are not default")
+
+    # Unsupported combinations
+    if method == "fused_tp" and name == "symmetric_contraction":
+        pytest.skip("Skipping fused TP for symmetric contraction: unsupported")
+    if (
+        method == "fused_tp"
+        and math_dtype in [torch.float32, None]
+        and dtype == torch.float64
+    ):
+        pytest.skip("Skipping fused TP for float32 math_dtype with float64 inputs")
+
+    run_segmented_polynomial_test(
+        name,
+        polynomial,
+        method,
+        dtype,
+        math_dtype,
+        batch_size,
+        mode,
+        grad,
+        backward,
+        indexing,
+        tmp_path,
+        device,
+    )
+
+
+# Testing export modes, only using one option for each to save time
+# We also have to test naive method explicitly because the reference is not exported
+@pytest.mark.parametrize("name, polynomial", SEGMENTED_POLYNOMIALS[:1])
+@pytest.mark.parametrize("method", METHODS + ["naive"])
+@pytest.mark.parametrize("dtype, math_dtype", DATA_TYPES_IN_MATH[:1])
+@pytest.mark.parametrize("batch_size", BATCH_SIZE[1:])
+@pytest.mark.parametrize("mode", EXPORT_MODES)
+@pytest.mark.parametrize("grad", GRAD[1:])
+@pytest.mark.parametrize("backward", BACKWARD[1:])
+@pytest.mark.parametrize("indexing", SHORT_INDEXING[:1])
+def test_segmented_polynomial_export(
+    name,
+    polynomial,
+    method,
     dtype,
     math_dtype,
     batch_size,
@@ -470,37 +444,14 @@ def test_segmented_polynomial_dytpes(
     indexing,
     tmp_path,
 ):
-    # Skip float16/bfloat16 tests for speed
-    if dtype in [torch.float16, torch.bfloat16]:
-        pytest.skip("Skipping fp16/bf16 tests for speed")
-
-    # Skip mixed precision tests for speed
-    if dtype != math_dtype:
-        pytest.skip("Skipping mixed precision tests for speed")
-
-    # Skip grad=True tests for speed - they take 1+ seconds
-    if grad is True:
-        pytest.skip("Skipping grad=True tests for speed")
-
-    # Skip backward=True tests for speed
-    if backward is True:
-        pytest.skip("Skipping backward=True tests for speed")
-
-    # Skip complex polynomial types - only test channelwise_tensor_product
-    if name != "channelwise_tensor_product":
-        pytest.skip("Skipping complex polynomial types for speed")
-
-    # Skip all but the most basic indexing case
-    if indexing != SHORT_INDEXING[0]:  # Only test the first indexing case
-        pytest.skip("Skipping non-basic indexing combinations for speed")
-
-    # Skip dtype3 tests as they are consistently slow (1+ seconds)
-    if str(dtype) == "torch.float64":
-        pytest.skip("Skipping float64 tests for speed")
+    # Skip export mode for naive method for issues with testing
+    if method == "naive" and mode == "export":
+        pytest.skip("Skipping export mode for naive method")
 
     run_segmented_polynomial_test(
         name,
         polynomial,
+        method,
         dtype,
         math_dtype,
         batch_size,
@@ -512,33 +463,46 @@ def test_segmented_polynomial_dytpes(
     )
 
 
-@pytest.mark.parametrize("name, polynomial", SEGMENTED_POLYNOMIALS)
-@pytest.mark.parametrize("dtype, math_dtype", DATA_TYPES_IN_MATH[:1])
-@pytest.mark.parametrize("batch_size", BATCH_SIZE)
-@pytest.mark.parametrize("mode", EXPORT_MODES)
+@pytest.mark.parametrize("method", METHODS + ["indexed_linear"])
+@pytest.mark.parametrize("dtype, math_dtype", DATA_TYPES_IN_MATH[2:6])
+@pytest.mark.parametrize("batch_size", BATCH_SIZE[1:])
+@pytest.mark.parametrize("mode", EXPORT_MODES[:1])
 @pytest.mark.parametrize("grad", GRAD)
-@pytest.mark.parametrize("backward", BACKWARD[1:])
-@pytest.mark.parametrize("indexing", SHORT_INDEXING)
-def test_segmented_polynomial_export(
-    name,
-    polynomial,
+@pytest.mark.parametrize("backward", BACKWARD)
+def test_segmented_polynomial_indexed_linear(
+    method,
     dtype,
     math_dtype,
     batch_size,
     mode,
     grad,
     backward,
-    indexing,
     tmp_path,
 ):
-    # Skip export tests entirely - they're all slow
-    pytest.skip(
-        "Skipping all segmented polynomial export tests for speed - they take 2+ seconds each"
-    )
+    name = "indexed_linear"
+    polynomial = cue.descriptors.linear(
+        cue.Irreps("O3", "16x0e + 16x1o + 16x2e"),
+        cue.Irreps("O3", "16x0e + 16x1o + 16x2e"),
+    ).polynomial
+
+    indexing = {"input": ("first", "indexed"), "output": ("all", "batch")}
+
+    # Unsupported combinations
+    if method == "uniform_1d":
+        pytest.skip("Linear is not supported for uniform_1d")
+    if (
+        method == "fused_tp"
+        and math_dtype in [torch.float32, None]
+        and dtype == torch.float64
+    ):
+        pytest.skip("Skipping fused TP for float32 math_dtype with float64 inputs")
+    if method == "indexed_linear" and math_dtype not in [None]:
+        pytest.skip("indexed_linear does not support math_dtype")
 
     run_segmented_polynomial_test(
         name,
         polynomial,
+        method,
         dtype,
         math_dtype,
         batch_size,

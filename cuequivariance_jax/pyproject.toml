@@ -42,3 +42,12 @@ classifiers = [
 [tool.hatch.version]
 path = "cuequivariance_jax/VERSION"
 pattern = "(?P<version>\\d+\\.\\d+\\.\\d+(?:[a-z]+\\d+)?)"
+
+[tool.hatch.build.targets.wheel]
+packages = ["cuequivariance_jax"]
+force-include = { "Third_party_attr.txt" = "Third_party_attr.txt" }
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]

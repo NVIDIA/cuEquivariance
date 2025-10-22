@@ -23,3 +23,4 @@ Tutorials
    layout
    poly
    stp
+   pytorch/index

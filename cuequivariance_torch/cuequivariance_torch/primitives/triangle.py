@@ -12,14 +12,23 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Any, Optional, Tuple
+from typing import Optional, Tuple
 
 import torch
 
 try:
     from cuequivariance_ops_torch import TriMulPrecision
 except ImportError:
-    TriMulPrecision = Any  # type: ignore
+    import enum
+
+    class TriMulPrecision(enum.IntEnum):  # type: ignore
+        """Fallback precision enum when cuequivariance_ops_torch is not available."""
+
+        NONE = -1
+        DEFAULT = 0
+        TF32 = 1
+        TF32x3 = 2
+        IEEE = 3
 
 
 def triangle_attention(
@@ -70,7 +79,7 @@ def triangle_attention(
     Notes:
         (1) Context is saved for backward pass. You don't need to save it manually.
         (2) Kernel precision (fp32, bf16, fp16) is based on input dtypes. For tf32, set it from torch global scope
-        (3) **Limitation**: Full FP32 is not supported for backward pass. Please set `torch.backends.cuda.matmul.allow_tf32=True`.
+        (3) Triangle attention kernel supports: all hidden_dim<=32 and divisible by 4 for tf32/fp32, and for all hidden_dim<=128 and divisible by 8 for bf16/fp16. In the rare instance that the kernel does not support an input config, fallback to torch is enabled instead of erroring out.
 
     Example:
         >>> import torch
@@ -130,11 +139,15 @@ def triangle_multiplicative_update(
     norm_in_weight: Optional[torch.Tensor] = None,
     norm_in_bias: Optional[torch.Tensor] = None,
     p_in_weight: Optional[torch.Tensor] = None,
+    p_in_bias: Optional[torch.Tensor] = None,
     g_in_weight: Optional[torch.Tensor] = None,
+    g_in_bias: Optional[torch.Tensor] = None,
     norm_out_weight: Optional[torch.Tensor] = None,
     norm_out_bias: Optional[torch.Tensor] = None,
     p_out_weight: Optional[torch.Tensor] = None,
+    p_out_bias: Optional[torch.Tensor] = None,
     g_out_weight: Optional[torch.Tensor] = None,
+    g_out_bias: Optional[torch.Tensor] = None,
     eps: float = 1e-5,
     precision: Optional[TriMulPrecision] = None,
 ) -> torch.Tensor:
@@ -151,8 +164,8 @@ def triangle_multiplicative_update(
     Auto-tuning behavior can be controlled through environment variables:
 
     - Quick testing: Default configuration where tuning configs, if existent, are looked-up. If not, then falls back to default kernel parameters. No tuning is performed.
-    - On-Demand tuning: Set `CUEQ_TRITON_TUNING_MODE = "ONDEMAND"` to auto-tune for new shapes encountered on first run (may take several minutes)
-    - AOT tuning: Set `CUEQ_TRITON_TUNING_MODE = "AOT"` to perform full ahead-of-time tuning for optimal performance **(may take several hours)**
+    - On-Demand tuning: Set `CUEQ_TRITON_TUNING= "ONDEMAND"` to auto-tune for new shapes encountered on first run (may take several minutes)
+    - AOT tuning: Set `CUEQ_TRITON_TUNING= "AOT"` to perform full ahead-of-time tuning for optimal performance **(may take several hours)**
     - Ignore user cache: Set CUEQ_TRITON_IGNORE_EXISTING_CACHE to ignore both the default settings that come with the package and any user-local settings previously saved with AOT/ONDEMAND tuning. May be used to regenerate optimal settings for a particular setup.
     - Cache directory: Set `CUEQ_TRITON_CACHE_DIR` to specify where tuning configurations are stored
     - Note: When using Docker with default or on-demand tuning enabled, commit the container to persist tuning changes
@@ -164,20 +177,22 @@ def triangle_multiplicative_update(
             D is the hidden dimension
         direction (str): Direction of the triangular projection. Must be either "outgoing" or "incoming".
         mask (torch.Tensor): Optional Mask tensor of shape (B, N, N) for masking the output.
-        norm_in_weight (torch.Tensor): Weight tensor for input normalization of shape (D,).
-        norm_in_bias (torch.Tensor): Bias tensor for input normalization of shape (D,).
-        p_in_weight (torch.Tensor): Weight tensor for input projection of shape (2D, D).
-        g_in_weight (torch.Tensor): Weight tensor for input gating of shape (2D, D).
-        norm_out_weight (torch.Tensor): Weight tensor for output normalization of shape (D,).
-        norm_out_bias (torch.Tensor): Bias tensor for output normalization of shape (D,).
-        p_out_weight (torch.Tensor): Weight tensor for output projection of shape (D, D).
-        g_out_weight (torch.Tensor): Weight tensor for output gating of shape (D, D).
+        norm_in_weight (torch.Tensor): Optional weight tensor for input normalization of shape (D,).
+        norm_in_bias (torch.Tensor): Optional bias tensor for input normalization of shape (D,).
+        p_in_weight (torch.Tensor): Optional weight tensor for input projection of shape (2D, D).
+        p_in_bias (torch.Tensor): Optional bias tensor for input projection of shape (2D,).
+        g_in_weight (torch.Tensor): Optional weight tensor for input gating of shape (2D, D).
+        g_in_bias (torch.Tensor): Optional bias tensor for input gating of shape (2D,).
+        norm_out_weight (torch.Tensor): Optional weight tensor for output normalization of shape (D,).
+        norm_out_bias (torch.Tensor): Optional bias tensor for output normalization of shape (D,).
+        p_out_weight (torch.Tensor): Optional weight tensor for output projection of shape (D, D).
+        p_out_bias (torch.Tensor): Optional bias tensor for output projection of shape (D,).
+        g_out_weight (torch.Tensor): Optional weight tensor for output gating of shape (D, D).
+        g_out_bias (torch.Tensor): Optional bias tensor for output gating of shape (D,).
         eps (float, optional): Small constant for numerical stability in normalization. Defaults to 1e-5.
-        precision (Precision, optional): Precision mode for matrix multiplications. If None, uses TF32 if enabled in PyTorch using torch.backends.cuda.matmul.allow_tf32, otherwise uses default precision.
+        precision (TriMulPrecision, optional): Precision mode for matrix multiplications.
             Available options:
-            - DEFAULT: Use default precision setting of triton.language.dot
-            - TF32: Use TensorFloat-32 precision
-            - TF32x3: Use TensorFloat-32 precision with 3x accumulation
+            - None: Defaults to triton language dot's default for non-32b input and for 32b input, tf32/tf32x3 based on 1/0 value set in torch.backends.cuda.matmul.allow_tf32
             - IEEE: Use IEEE 754 precision
 
     Returns:
@@ -187,6 +202,9 @@ def triangle_multiplicative_update(
         (1) Context is saved for backward pass. You don't need to save it manually.
         (2) Kernel precision (fp32, bf16, fp16) is based on input dtypes. For tf32, set it from torch global scope using torch.backends.cuda.matmul.allow_tf32
         (3) **Limitation**: Currently only supports hidden_dim values that are multiples of 32.
+        (4) We have moved away from the default round-towards-zero (RZ) implementation to round-nearest (RN) for better tf32 accuracy in cuex.triangle_multiplicative_update. In rare circumstances, this may cause minor differences in results observed.
+        (5) When using torch compile, use `cueuivariance_ops_torch.init_triton_cache()` to initialize triton cache before calling torch compiled triangular multiplicative update.
+        (6) Although the example demonstrates the most common case of one batch dimension, the API supports variable number of leading batch dimensions.
 
     Example:
         >>> import torch
@@ -223,15 +241,176 @@ def triangle_multiplicative_update(
         return f(
             x,
             direction,
+            mask=mask,
+            norm_in_weight=norm_in_weight,
+            norm_in_bias=norm_in_bias,
+            p_in_weight=p_in_weight,
+            p_in_bias=p_in_bias,
+            g_in_weight=g_in_weight,
+            g_in_bias=g_in_bias,
+            norm_out_weight=norm_out_weight,
+            norm_out_bias=norm_out_bias,
+            p_out_weight=p_out_weight,
+            p_out_bias=p_out_bias,
+            g_out_weight=g_out_weight,
+            g_out_bias=g_out_bias,
+            eps=eps,
+            precision=precision,
+        )
+
+
+def attention_pair_bias(
+    s: torch.Tensor,
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    z: torch.Tensor,
+    mask: torch.Tensor,
+    num_heads: int,
+    w_proj_z: Optional[torch.Tensor],
+    w_proj_g: torch.Tensor,
+    w_proj_o: torch.Tensor,
+    w_ln_z: Optional[torch.Tensor] = None,
+    b_ln_z: Optional[torch.Tensor] = None,
+    b_proj_z: Optional[torch.Tensor] = None,
+    b_proj_g: Optional[torch.Tensor] = None,
+    b_proj_o: Optional[torch.Tensor] = None,
+    inf: float = 1e6,
+    eps: float = 1e-5,
+    attn_scale: Optional[float] = None,
+    return_z_proj: bool = True,
+    is_cached_z_proj: bool = False,
+):
+    """Compute attention with pairwise bias for diffusion models.
+
+    This function implements attention with pairwise bias, which is commonly used
+    in diffusion models. The function automatically chooses between optimized
+    Triton kernels (for long sequences) and PyTorch fallback (for short sequences)
+    based on sequence length.
+
+    Args:
+        s: Input sequence tensor of shape (B * M, S, D) where B is batch size,
+            M is multiplicity (diffusion steps), S is sequence length, and D is
+            feature dimension.
+        q: Query tensor of shape (B * M, H, U, DH) where H is number of heads,
+            U is query sequence length, and DH is head dimension.
+        k: Key tensor of shape (B * M, H, V, DH) where V is key sequence length.
+        v: Value tensor of shape (B * M, H, V, DH).
+        z: Pairwise tensor of shape (B, U, V, z_dim) containing pairwise interactions,
+            where z_dim can be arbitrary. This is the main input for the pairwise bias computation. If return_z_proj is True, z should be of shape (B, H, U, V).
+        mask: Attention mask of shape (B, V) or (B * M, V) indicating which positions
+            should be masked (0 = masked, 1 = unmasked).
+        num_heads: Number of attention heads.
+        w_proj_z: Weight matrix for z projection of shape (H, z_dim).
+        w_proj_g: Weight matrix for gating projection of shape (D, D).
+        w_proj_o: Weight matrix for output projection of shape (D, D).
+        w_ln_z: Weight for layer normalization of z tensor of shape (z_dim,).
+        b_ln_z: Bias for layer normalization of z tensor of shape (z_dim,).
+        b_proj_z: Bias for z projection of shape (H,). Defaults to None.
+        b_proj_g: Bias for gating projection of shape (D,). Defaults to None.
+        b_proj_o: Bias for output projection of shape (D,). Defaults to None.
+        inf: Large value used for masking invalid attention positions. Defaults to 1e6.
+        eps: Epsilon value for layer normalization. Defaults to 1e-5.
+        attn_scale: Scaling factor for attention scores. If None, uses 1/sqrt(head_dim).
+            Defaults to None.
+        return_z_proj: Whether to return the projected z tensor as the second output. Defaults to True.
+        is_cached_z_proj: Whether the z tensor is already projected and cached.
+            If True, z should be of shape (B, H, U, V). Defaults to False.
+
+    Returns:
+        - **output** (:class:`torch.Tensor`): Attention output of shape (B * M, S, D)
+          with pairwise bias applied.
+        - **proj_z** (:class:`torch.Tensor`): Projected z tensor of shape (B, H, U, V)
+          containing the pairwise bias tensor with mask applied.
+
+    Notes:
+        - For short sequences (≤ CUEQ_ATTENTION_PAIR_BIAS_FALLBACK_THRESHOLD),
+          uses PyTorch fallback implementation.
+        - For long sequences, uses optimized Triton kernels with automatic
+          backend selection (CUDNN, Flash Attention, Efficient Attention).
+        - Multiplicity (M) is computed automatically from tensor shapes to allow
+          processing multiple diffusion timesteps in a single forward pass.
+        - The proj_z output is experimental to prevent breakage when caching
+          of pair bias tensor is enabled in the next release.
+        - Tested for bf16, fp16, fp32 and tf32. torch.set_float32_matmul_precision maybe used to toggle between fp32/tf32.
+
+    Examples:
+        >>> import torch
+        >>> from cuequivariance_torch import attention_pair_bias
+        >>> if torch.cuda.is_available():  # doctest: +SKIP
+        ...     device = torch.device("cuda")
+        ...     batch_size, seq_len, num_heads, heads_dim, hidden_dim = 1, 32, 2, 32, 64
+        ...     query_len, key_len, z_dim = 32, 32, 16
+        ...     # Create input tensors on GPU
+        ...     s = torch.randn(batch_size, seq_len, hidden_dim,
+        ...                     device=device, dtype=torch.bfloat16)
+        ...     q = torch.randn(batch_size, num_heads, query_len, heads_dim,
+        ...                     device=device, dtype=torch.bfloat16)
+        ...     k = torch.randn(batch_size, num_heads, key_len, heads_dim,
+        ...                     device=device, dtype=torch.bfloat16)
+        ...     v = torch.randn(batch_size, num_heads, key_len, heads_dim,
+        ...                     device=device, dtype=torch.bfloat16)
+        ...     z = torch.randn(batch_size, query_len, key_len, z_dim,
+        ...                     device=device, dtype=torch.bfloat16)
+        ...     mask = torch.rand(batch_size, key_len,
+        ...                       device=device) < 0.5
+        ...     w_proj_z = torch.randn(num_heads, z_dim,
+        ...                     device=device, dtype=torch.bfloat16)
+        ...     w_proj_g = torch.randn(hidden_dim, hidden_dim,
+        ...                     device=device, dtype=torch.bfloat16)
+        ...     w_proj_o = torch.randn(hidden_dim, hidden_dim,
+        ...                     device=device, dtype=torch.bfloat16)
+        ...     w_ln_z = torch.randn(z_dim,
+        ...                     device=device, dtype=torch.bfloat16)
+        ...     b_ln_z = torch.randn(z_dim,
+        ...                     device=device, dtype=torch.bfloat16)
+        ...     # Perform operation
+        ...     output, proj_z = attention_pair_bias(
+        ...         s=s,
+        ...         q=q,
+        ...         k=k,
+        ...         v=v,
+        ...         z=z,
+        ...         mask=mask,
+        ...         num_heads=num_heads,
+        ...         w_proj_z=w_proj_z,
+        ...         w_proj_g=w_proj_g,
+        ...         w_proj_o=w_proj_o,
+        ...         w_ln_z=w_ln_z,
+        ...         b_ln_z=b_ln_z,
+        ...     )
+        ...     print(output.shape)  # torch.Size([1, 32, 64])
+        torch.Size([1, 32, 64])
+    """
+
+    try:
+        from cuequivariance_ops_torch.attention_pair_bias_torch import (
+            attention_pair_bias as f,
+        )
+    except Exception:
+        raise ImportError(
+            "Error importing attention_pair_bias from cuequivariance_ops_torch."
+        )
+    else:
+        return f(
+            s,
+            q,
+            k,
+            v,
+            z,
             mask,
-            norm_in_weight,
-            norm_in_bias,
-            p_in_weight,
-            g_in_weight,
-            norm_out_weight,
-            norm_out_bias,
-            p_out_weight,
-            g_out_weight,
-            eps,
-            precision,
+            num_heads,
+            w_proj_z=w_proj_z,
+            w_proj_g=w_proj_g,
+            w_proj_o=w_proj_o,
+            w_ln_z=w_ln_z,
+            b_ln_z=b_ln_z,
+            b_proj_z=b_proj_z,
+            b_proj_g=b_proj_g,
+            b_proj_o=b_proj_o,
+            inf=inf,
+            eps=eps,
+            attn_scale=attn_scale,
+            return_z_proj=return_z_proj,
+            is_cached_z_proj=is_cached_z_proj,
         )

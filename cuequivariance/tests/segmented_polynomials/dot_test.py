@@ -12,11 +12,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import cuequivariance.segmented_polynomials as sp
 import numpy as np
+from cuequivariance.group_theory import descriptors
 
 import cuequivariance as cue
-import cuequivariance.segmented_polynomials as sp
-from cuequivariance.group_theory import descriptors
 
 
 def test_dot1():

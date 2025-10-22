@@ -33,7 +33,7 @@ def create_test_data(
 ):
     """Create test data for triangle attention."""
     key = jax.random.PRNGKey(42)
-    keys = jax.random.split(key, 6)
+    keys = jax.random.split(key, 5)
     dtype = jnp.float32
 
     q = jax.random.normal(
@@ -46,9 +46,9 @@ def create_test_data(
         keys[2], (batch_size, n_nodes, n_heads, seq_len_kv, d_model), dtype
     )
     bias = jax.random.normal(
-        keys[4], (batch_size, 1, n_heads, seq_len_qo, seq_len_kv), dtype
+        keys[3], (batch_size, 1, n_heads, seq_len_qo, seq_len_kv), dtype
     )
-    mask = jax.random.bernoulli(keys[3], 0.8, (batch_size, n_nodes, 1, 1, seq_len_kv))
+    mask = jax.random.bernoulli(keys[4], 0.8, (batch_size, n_nodes, 1, 1, seq_len_kv))
     scale = d_model**-0.5
 
     [q, k, v, mask, bias] = jax.tree.map(
@@ -123,3 +123,54 @@ def test_basic_functionality(
     assert output.shape == q.shape
     assert lse.shape == q.shape[:-1] + (1,)
     assert amax.shape == q.shape[:-1] + (1,)
+
+
+@pytest.mark.parametrize("platform", ["cpu", "cuda"])
+def test_vmap(platform):
+    require_platform(platform)
+
+    batch_size = 2
+    vmap_size = 2
+    n_nodes = 2
+    n_heads = 2
+    seq_len_qo = 3
+    seq_len_kv = 4
+    d_model = 8
+
+    key = jax.random.PRNGKey(123)
+    keys = jax.random.split(key, 5)
+    dtype = jnp.float32
+
+    # Create data with extra vmap dimension
+    q = jax.random.normal(
+        keys[0], (vmap_size, batch_size, n_nodes, n_heads, seq_len_qo, d_model), dtype
+    )
+    k = jax.random.normal(
+        keys[1], (vmap_size, batch_size, n_nodes, n_heads, seq_len_kv, d_model), dtype
+    )
+    # purpusfully not vmapping v to test
+    v = jax.random.normal(
+        keys[2], (batch_size, n_nodes, n_heads, seq_len_kv, d_model), dtype
+    )
+    bias = jax.random.normal(
+        keys[3], (vmap_size, batch_size, 1, n_heads, seq_len_qo, seq_len_kv), dtype
+    )
+    mask = jax.random.bernoulli(
+        keys[4], 0.8, (vmap_size, batch_size, n_nodes, 1, 1, seq_len_kv)
+    )
+    scale = d_model**-0.5
+
+    def grad_fn(q, k, v, bias, mask):
+        def loss_fn(q, k, v, bias):
+            output, _, _ = cuex.triangle_attention(
+                q, k, v, bias, mask, scale, precision=jax.lax.Precision.HIGH
+            )
+            return jnp.sum(output)
+
+        return jax.grad(loss_fn, argnums=(0, 1, 2, 3))(q, k, v, bias)
+
+    dq, dk, dv, dbias = jax.vmap(grad_fn, (0, 0, None, 0, 0))(q, k, v, bias, mask)
+    assert dq.shape == q.shape
+    assert dk.shape == k.shape
+    assert dv.shape == (vmap_size,) + v.shape
+    assert dbias.shape == bias.shape

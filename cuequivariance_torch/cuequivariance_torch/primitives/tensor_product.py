@@ -84,8 +84,7 @@ class TensorProduct(torch.nn.Module):
                 logger.warning(f"CUDA implementation not available: {e}")
                 logger.warning(
                     "Did you forget to install the CUDA version of cuequivariance-ops-torch?\n"
-                    "Install it with one of the following commands:\n"
-                    "pip install cuequivariance-ops-torch-cu11\n"
+                    "Install it with the following command:\n"
                     "pip install cuequivariance-ops-torch-cu12"
                 )
 
@@ -326,13 +325,15 @@ def _tensor_product_fx(
 
             def forward(self):
                 output = torch.zeros(
-                    (descriptor.operands[-1].size,), device=device, dtype=math_dtype
+                    (descriptor.operands[-1].size,),
+                    device=self.c0.device,
+                    dtype=math_dtype,
                 )
                 for pid in range(descriptor.num_paths):
                     output += torch.einsum(
                         descriptor.coefficient_subscripts
                         + "->"
-                        + descriptor.operands[0].subscripts,
+                        + descriptor.subscripts.operands[0],
                         getattr(self, f"c{pid}"),
                     )
                 return output

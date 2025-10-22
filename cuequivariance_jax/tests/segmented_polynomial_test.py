@@ -219,41 +219,75 @@ def test_compare_uniform_1d_with_naive(dtype):
     )
 
 
-@pytest.mark.skipif(
-    not importlib.util.find_spec("cuequivariance_ops_jax"),
-    reason="cuequivariance_ops_jax is not installed",
-)
-@pytest.mark.parametrize("batches", [(1, 1, 1), (1, 3, 3)], ids=lambda x: str(x))
-@pytest.mark.parametrize("backward", [False, True])
-def test_compare_gemm_grouped_with_naive(batches: tuple[int, int, int], backward: bool):
-    poly = cue.descriptors.linear(
-        cue.Irreps("SO3", "10x0 + 20x1"), cue.Irreps("SO3", "15x0 + 10x1")
-    ).polynomial
+@pytest.mark.parametrize("dtype", [jnp.float32, jnp.float16, jnp.bfloat16, jnp.float64])
+def test_indexed_linear_method(dtype):
+    jax.config.update("jax_enable_x64", True)
+    method = "indexed_linear" if jax.default_backend() == "gpu" else "naive"
 
-    ope = [
-        jax.random.normal(
-            jax.random.key(i), (batches[i], poly.operands[i].size), dtype=jnp.float32
-        )
-        for i in range(3)
-    ]
-    ins, outs = ope[:2], ope[2:]
+    num_species_total = 3
+    batch_size = 10
+    input_dim = 8
+    output_dim = 16
+    num_species = jnp.array([3, 4, 3], dtype=jnp.int32)
+    input_array = jax.random.normal(jax.random.key(0), (batch_size, input_dim), dtype)
+    input_irreps = cue.Irreps(cue.O3, f"{input_dim}x0e")
+    output_irreps = cue.Irreps(cue.O3, f"{output_dim}x0e")
+    e = cue.descriptors.linear(input_irreps, output_irreps)
+    w = jax.random.normal(
+        jax.random.key(1), (num_species_total, e.inputs[0].dim), dtype
+    )
 
-    if backward:
-        poly, m = poly.backward([True, True], [True])
-        (ins, outs) = m((ins, outs))
+    [result] = cuex.segmented_polynomial(
+        e.polynomial,
+        [w, input_array],
+        [jax.ShapeDtypeStruct((batch_size, output_dim), dtype)],
+        [cuex.Repeats(num_species), None, None],
+        method=method,
+    )
+    assert result.shape == (batch_size, output_dim)
 
-    naive_outs = cuex.segmented_polynomial(poly, ins, outs, method="naive")
-    grouped_outs = cuex.segmented_polynomial(poly, ins, outs, method="gemm_grouped")
+    [ref] = cuex.segmented_polynomial(
+        e.polynomial,
+        [w, input_array],
+        [jax.ShapeDtypeStruct((batch_size, output_dim), dtype)],
+        [jnp.repeat(jnp.arange(num_species_total), num_species), None, None],
+        method="naive",
+    )
 
-    assert len(naive_outs) == len(grouped_outs)
-    for naive_out, grouped_out in zip(naive_outs, grouped_outs):
-        assert naive_out.shape == grouped_out.shape
-        assert naive_out.dtype == grouped_out.dtype
-        naive_out = np.asarray(naive_out, dtype=np.float64)
-        grouped_out = np.asarray(grouped_out, dtype=np.float64)
-        np.testing.assert_allclose(
-            naive_out,
-            grouped_out,
-            atol=1e-4,
-            rtol=0,
-        )
+    result = np.asarray(result, dtype=np.float64)
+    ref = np.asarray(ref, dtype=np.float64)
+
+    match dtype:
+        case jnp.float16 | jnp.bfloat16:
+            atol, rtol = 1e-2, 1e-2
+        case jnp.float32:
+            atol, rtol = 1e-3, 1e-3
+        case jnp.float64:
+            atol, rtol = 1e-6, 1e-6
+    np.testing.assert_allclose(result, ref, rtol=rtol, atol=atol)
+
+
+def test_math_dtype_backward_compatibility():
+    """Test that jnp.dtype objects work for math_dtype (backward compatibility)."""
+    poly = cue.descriptors.spherical_harmonics(cue.SO3(1), [0, 1]).polynomial
+    x = jnp.array([0.0, 1.0, 0.0])
+
+    # Test with jnp.dtype object (backward compatibility)
+    [result_dtype] = cuex.segmented_polynomial(
+        poly,
+        [x],
+        [jax.ShapeDtypeStruct((-1,), jnp.float32)],
+        method="naive",
+        math_dtype=jnp.float32,
+    )
+
+    # Test with string (official API)
+    [result_str] = cuex.segmented_polynomial(
+        poly,
+        [x],
+        [jax.ShapeDtypeStruct((-1,), jnp.float32)],
+        method="naive",
+        math_dtype="float32",
+    )
+
+    np.testing.assert_allclose(result_dtype, result_str, rtol=1e-12, atol=1e-12)

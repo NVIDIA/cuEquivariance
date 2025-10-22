@@ -21,13 +21,17 @@ import jax
 import jax.lax
 import jax.numpy as jnp
 import numpy as np
-
-import cuequivariance as cue
 from cuequivariance_jax.segmented_polynomials.indexing_mode import IndexingMode
 from cuequivariance_jax.segmented_polynomials.segmented_polynomial_indexed_linear import (
     execute_indexed_linear,
 )
-from cuequivariance_jax.segmented_polynomials.utils import batch_size, indexing
+from cuequivariance_jax.segmented_polynomials.utils import (
+    batch_size,
+    indexing,
+    math_dtype_for_naive_method,
+)
+
+import cuequivariance as cue
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +43,7 @@ def execute_naive(
     index_configuration: tuple[tuple[int, ...], ...],
     index_mode: tuple[tuple[IndexingMode, ...], ...],
     polynomial: cue.SegmentedPolynomial,
-    math_dtype: jnp.dtype,
-    precision: jax.lax.Precision,
+    math_dtype: str | None,
     name: str,
 ) -> list[jax.Array]:  # output buffers
     if any(mode == IndexingMode.REPEATED for modes in index_mode for mode in modes):
@@ -52,10 +55,17 @@ def execute_naive(
             index_mode,
             polynomial,
             math_dtype,
-            precision,
             name,
             run_kernel=False,
         )
+
+    compute_dtype, precision = math_dtype_for_naive_method(
+        jnp.result_type(
+            *[x.dtype for x in inputs] + [x.dtype for x in outputs_shape_dtype]
+        ),
+        math_dtype,
+    )
+    del math_dtype
 
     num_inputs = len(index_configuration) - len(outputs_shape_dtype)
 
@@ -101,7 +111,7 @@ def execute_naive(
             out_batch_shape=out.shape[:-1],
             d=d.move_operand_last(ope_out),
             output_dtype=out.dtype,
-            math_dtype=math_dtype,
+            compute_dtype=compute_dtype,
             precision=precision,
             algorithm="compact_stacked" if d.all_same_segment_shape() else "sliced",
         )
@@ -165,7 +175,7 @@ def tp_list_list(
     out_batch_shape: tuple[int, ...],
     d: cue.SegmentedTensorProduct,
     output_dtype: jnp.dtype,
-    math_dtype: jnp.dtype,
+    compute_dtype: jnp.dtype,
     precision: jax.lax.Precision,
     algorithm: str,
 ) -> list[list[jax.Array]]:
@@ -245,7 +255,7 @@ def tp_list_list(
             for ope, input in zip(d.operands, inputs)
         ]
         indices = jnp.asarray(d.indices)
-        coefficients = jnp.asarray(d.stacked_coefficients, dtype=math_dtype)
+        coefficients = jnp.asarray(d.stacked_coefficients, dtype=compute_dtype)
         return reshaped_inputs, indices, coefficients
 
     if algorithm == "stacked":
@@ -369,7 +379,7 @@ def tp_list_list(
         return [
             [
                 ein(
-                    jnp.asarray(path.coefficients, dtype=math_dtype),
+                    jnp.asarray(path.coefficients, dtype=compute_dtype),
                     [
                         jnp.reshape(
                             jax.lax.slice_in_dim(

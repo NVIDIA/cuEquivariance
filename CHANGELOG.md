@@ -1,5 +1,43 @@
 ## Latest Changes
 
+## 0.6.1 (2025-09-04)
+
+### Added
+- [Torch/JAX] Support for variable leading batch dimensions in triangle multiplicative update
+- [Torch/JAX] Triangle attention kernel support for additional input configs: all hidden_dim<=32 and divisible by 4 for tf32/fp32, and for all hidden_dim<=128 and divisible by 8 for bf16/fp16. In the rare instance that the kernel does not support an input config, fallback to torch is enabled instead of erroring out.
+- [Torch/JAX] Tuned config for RTX PRO 6000 GPUs for triangle multiplicative update.
+- [JAX] vmap support for triangle multiplicative update and triangle attention
+- [Torch] Improved error reporting on import failure with traceback information for stacktrace
+
+### Bug fix
+- [Torch/JAX] Fixed illegal memory access issue stemming from int32 indexing for longer sequences in triangle multiplicative update and attention with pair bias.
+- [JAX] Moved to using nondiff_argnums instead of nondiff_argnames to be compatible with older JAX versions
+
+## 0.6.0 (2025-08-11)
+
+### Added
+- [Torch] New feature: Added `cuet.attention_pair_bias` (support for caching the pair bias tensor & further kernel acceleration coming up soon. There maybe API related changes for this in the next release)
+- [Torch/JAX] Added `method` argument to `cuet.SegmentedPolynomial`/`cuex.segmented_polynomial` to give users control over which backend solution is used (naive, uniform_1d, fused_tp, indexed_linear).
+- [Torch/JAX] Added torch fallback option based on sequence lengths for triangle kernels and attention pair bias. The user may control this by setting env vars: `CUEQ_TRIMUL_FALLBACK_THRESHOLD`, `CUEQ_TRIATTN_FALLBACK_THRESHOLD`, `CUEQ_ATTENTION_PAIR_BIAS_FALLBACK_THRESHOLD`. The corresponding APIs default to torch fallback for seq_lens < 100 for optimal performances.
+- [Torch/JAX] Added support for the optional projection and gating biases in the input and output of `cuex.triangle_multiplicative_update`
+- [JAX] Added JAX bindings for triangle operations with `cuex.triangle_attention` and `cuex.triangle_multiplicative_update`
+
+### Bug fix
+- [Torch] Added `cueuivariance_ops_torch.init_triton_cache()` for users to initialize triton cache before calling torch compiled triangular multiplicative update. If not used, Torch compile would break if directly applied on `cuex.triangle_multiplicative_update`.
+- [Torch/JAX] Fixed the illegal memory access error for long sequences in triangle attention. This increases the usable limits on sequence lengths.
+
+
+### Breaking Changes
+- Dropped support for CUDA 11. Only CUDA 12 is now supported (`cuequivariance-ops-torch-cu12`, `cuequivariance-ops-jax-cu12`).
+- [Torch/JAX] Simplified precision arg of triangular multiplicative update to just two: None (defaults to triton language dot's default for non-32b input and for 32b input, tf32/tf32x3 based on 1/0 value set in torch.backends.cuda.matmul.allow_tf32) and IEEE-754.
+- [Torch/JAX] We have moved away from the default round-towards-zero (RZ) implementation to round-nearest (RN) for better tf32 accuracy in cuex.triangle_multiplicative_update. In rare circumstances, this may cause minor differences in results observed. 
+
+### Known Issues
+- [JAX] The function `cuex.triangle_multiplicative_update` requires `triton<=3.3.1`. We are waiting for an update of the package `jax-triton`.
+- [PyTorch] The function `cuet.triangle_multiplicative_update` requires `triton>=3.4.0` on Blackwell GPUs.
+- As a consequence of the two last point, `cuex.triangle_multiplicative_update` can't run on Blackwell GPUs.
+- `cuet.attention_pair_bias` does not support caching of projected pairwise tensor. We are working on adding support for this.
+
 ## 0.5.1 (2025-06-18)
 
 This release includes improvements to triangle multiplicative update with torch.compile support and enhanced tuning configuration options.
