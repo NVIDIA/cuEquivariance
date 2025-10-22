@@ -34,6 +34,9 @@ from cuequivariance_jax.segmented_polynomials.segmented_polynomial_naive import 
 from cuequivariance_jax.segmented_polynomials.segmented_polynomial_uniform_1d import (
     execute_uniform_1d,
 )
+from cuequivariance_jax.segmented_polynomials.segmented_polynomial_gemm_grouped import (
+    execute_gemm_grouped,
+)
 from cuequivariance_jax.segmented_polynomials.utils import (
     batch_size,
     reshape,
@@ -293,7 +296,6 @@ def segmented_polynomial(
         polynomial=polynomial,
         math_dtype=math_dtype,
         name=name,
-        precision=precision,
     )
 
     outputs = segmented_polynomial_prim(**kwargs, method=method)
