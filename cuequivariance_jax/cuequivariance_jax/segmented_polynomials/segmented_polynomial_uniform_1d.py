@@ -38,7 +38,7 @@ def execute_uniform_1d(
     indices: list[jax.Array],
     index_configuration: tuple[tuple[int, ...], ...],
     polynomial: cue.SegmentedPolynomial,
-    math_dtype: str | None,
+    options: dict,
     name: str,
 ) -> list[jax.Array]:
     error_message = f"Failed to execute 'uniform_1d' method for the following polynomial:\n{polynomial}\n"
@@ -151,8 +151,9 @@ def execute_uniform_1d(
     if len({b.shape[-1] for b in buffers}.union({1})) > 2:
         raise ValueError(f"Buffer shapes not compatible {[b.shape for b in buffers]}")
 
-    if math_dtype is not None:
+    if "math_dtype" in options:
         supported_dtypes = {"float32", "float64", "float16", "bfloat16"}
+        math_dtype = options["math_dtype"]
         if math_dtype not in supported_dtypes:
             raise ValueError(
                 f"method='uniform_1d' only supports math_dtype equal to {supported_dtypes}, got '{math_dtype}'."
