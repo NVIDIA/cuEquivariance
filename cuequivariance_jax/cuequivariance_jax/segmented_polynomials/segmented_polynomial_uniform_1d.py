@@ -190,8 +190,8 @@ def execute_uniform_1d(
         for path in stp.paths:
             paths.append(Path(path.indices, path.coefficients.item()))
 
-    if options.get("indptr"):
-        outputs = indptr_optimization_outer(
+    if options.get("auto_deterministic_indexing"):
+        outputs = deterministic_indexing_grouped(
             buffers[: polynomial.num_inputs],
             buffers[polynomial.num_inputs :],
             list(indices),
@@ -215,7 +215,7 @@ def execute_uniform_1d(
     return [jnp.reshape(x, y.shape) for x, y in zip(outputs, outputs_shape_dtype)]
 
 
-def indptr_optimization_outer(
+def deterministic_indexing_grouped(
     inputs: list[jax.Array],
     outputs: list[jax.Array],
     indices: list[jax.Array],
@@ -244,7 +244,7 @@ def indptr_optimization_outer(
 
     if os.environ.get("CUEQUIVARIANCE_DEBUG_UNIFORM_1D"):
         print(f"\n{'=' * 80}")
-        print(f"🎯 indptr_optimization_outer: {name}")
+        print(f"🎯 deterministic_indexing_grouped: {name}")
         print(f"{'=' * 80}")
         print(
             f"📊 {ni} inputs, {no} outputs, {len(indices)} indices, {len(operations)} ops, {len(paths)} paths"
@@ -321,7 +321,7 @@ def indptr_optimization_outer(
             group_indices
         )
 
-        group_result = indptr_optimization_inner(
+        group_result = deterministic_indexing(
             inputs,
             group_outputs,
             group_indices,
@@ -338,7 +338,7 @@ def indptr_optimization_outer(
     return result_outputs
 
 
-def indptr_optimization_inner(
+def deterministic_indexing(
     inputs: list[jax.Array],
     outputs: list[jax.Array],
     indices: list[jax.Array],
@@ -358,13 +358,13 @@ def indptr_optimization_inner(
         if os.environ.get("CUEQUIVARIANCE_DEBUG_UNIFORM_1D"):
             print(f"\n{'=' * 80}")
             print(
-                f"🎯 indptr_optimization_inner: {name} (early return - all outputs unindexed)"
+                f"🎯 deterministic_indexing: {name} (early return - all outputs unindexed)"
             )
             print(f"{'=' * 80}")
             print(
                 f"📊 {ni} inputs, {no} outputs, {len(indices)} indices, {len(operations)} ops, {len(paths)} paths"
             )
-            print("⏭️  Skipping indptr optimization (all outputs have -1 indices)")
+            print("⏭️  Skipping deterministic indexing (all outputs have -1 indices)")
             print(f"{'=' * 80}\n")
         return tensor_product_uniform_1d_jit(
             inputs,
@@ -435,7 +435,7 @@ def indptr_optimization_inner(
 
     if os.environ.get("CUEQUIVARIANCE_DEBUG_UNIFORM_1D"):
         print(f"\n{'=' * 80}")
-        print(f"🎯 indptr_optimization_inner: {name}")
+        print(f"🎯 deterministic_indexing: {name}")
         print(f"{'=' * 80}")
         print(
             f"📊 {ni} inputs, {no} outputs, {len(new_indices)} indices, {len(operations)} ops, {len(paths)} paths"
