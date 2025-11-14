@@ -118,6 +118,8 @@ class IWeightedSymmetricTensorProduct(torch.nn.Module):
         use_fallback: Optional[bool] = None,
     ):
         super().__init__()
+        logger.warning("SymmetricTensorProduct is deprecated and will be removed soon.")
+        logger.warning("Please use SegmentedPolynomial instead.")
 
         if math_dtype is None:
             math_dtype = torch.get_default_dtype()
