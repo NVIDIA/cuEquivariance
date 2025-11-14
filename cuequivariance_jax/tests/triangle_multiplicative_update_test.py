@@ -69,6 +69,7 @@ def create_weights(hidden_dim, seed=42, device=None, include_bias=False):
 @pytest.mark.parametrize("include_bias", [False, True])
 def test_compare_with_pytorch(direction, use_mask, include_bias):
     """Compare JAX and PyTorch implementations with and without bias."""
+    pytest.skip("Hard to get JAX and PyTorch to run in the same environment.")
     try:
         import torch
         from cuequivariance_ops_torch import (
