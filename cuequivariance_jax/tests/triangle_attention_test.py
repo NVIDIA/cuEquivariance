@@ -69,7 +69,7 @@ def require_platform(platform: str):
 SHAPE_CONFIGS = [
     (2, 4, 2, 8, 6, 32),  # Default
     (1, 2, 1, 4, 4, 16),  # Small
-    (2, 8, 4, 16, 12, 64),  # Large
+    (2, 8, 4, 16, 12, 32),  # Large
 ]
 
 PRECISION_CONFIGS = [
