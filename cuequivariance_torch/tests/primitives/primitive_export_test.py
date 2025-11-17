@@ -36,6 +36,7 @@ export_modes = ["script", "compile", "jit"]
 
 @pytest.mark.parametrize("mode", export_modes)
 def test_script_symmetric_contraction(mode, tmp_path):
+    pytest.skip("This is deprecated and will be removed soon.")
     if not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
 

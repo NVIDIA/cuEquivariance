@@ -165,6 +165,12 @@ class SegmentedPolynomial(nn.Module):
             )
             method = "uniform_1d"
 
+        if not isinstance(polynomial, cue.SegmentedPolynomial):
+            raise ValueError(
+                f"The polynomial is not a cue.SegmentedPolynomial, but a {type(polynomial)}",
+                "Did you forget to call `.polynomial` on the descriptor?",
+            )
+
         if method != "naive" and not HAS_CUE_OPS:
             method = "naive"
             warnings.warn(
@@ -252,32 +258,51 @@ class SegmentedPolynomial(nn.Module):
             output_indices = dict(empty_dict)
 
         inputs = list(inputs)
-        torch._assert(
-            len(inputs) == self.num_inputs,
-            "the number of inputs must match the number of inputs of the polynomial",
-        )
+        if not torch.jit.is_scripting():
+            if (
+                not torch.jit.is_tracing()
+                and not torch.compiler.is_compiling()
+                and not torch.fx._symbolic_trace.is_fx_tracing()
+            ):
+                torch._assert(
+                    len(inputs) == self.num_inputs,
+                    "the number of inputs must match the number of inputs of the polynomial",
+                )
 
-        for k, v in input_indices.items():
-            torch._assert(0 <= k < self.num_inputs, "input index must be in range")
-            torch._assert(v.ndim == 1, "input index must be one-dimensional")
-            torch._assert(
-                v.dtype in [torch.int32, torch.int64], "input index must be integral"
-            )
-        for k, v in output_indices.items():
-            torch._assert(0 <= k < self.num_outputs, "output index must be in range")
-            torch._assert(v.ndim == 1, "input index must be one-dimensional")
-            torch._assert(
-                v.dtype in [torch.int32, torch.int64], "input index must be integral"
-            )
-        for k, v in output_shapes.items():
-            torch._assert(0 <= k < self.num_outputs, "output index must be in range")
-            torch._assert(v.ndim == 2, "output shape must be two-dimensional")
+                for k, v in input_indices.items():
+                    torch._assert(
+                        0 <= k < self.num_inputs, "input index must be in range"
+                    )
+                    torch._assert(v.ndim == 1, "input index must be one-dimensional")
+                    torch._assert(
+                        v.dtype in [torch.int32, torch.int64],
+                        "input index must be integral",
+                    )
+                for k, v in output_indices.items():
+                    torch._assert(
+                        0 <= k < self.num_outputs, "output index must be in range"
+                    )
+                    torch._assert(v.ndim == 1, "input index must be one-dimensional")
+                    torch._assert(
+                        v.dtype in [torch.int32, torch.int64],
+                        "input index must be integral",
+                    )
+                for k, v in output_shapes.items():
+                    torch._assert(
+                        0 <= k < self.num_outputs, "output index must be in range"
+                    )
+                    torch._assert(v.ndim == 2, "output shape must be two-dimensional")
 
-        # If the input is on the CPU and we're using fused_tp, we need to fall back to naive
-        if inputs[0].device == torch.device("cpu") and self.method == "fused_tp":
-            warnings.warn(
-                "Fused TP is not supported on CPU. Falling back to naive implementation."
-            )
-            return self.fallback(inputs, input_indices, output_shapes, output_indices)
+                # If the input is on the CPU and we're using fused_tp, we need to fall back to naive
+                if (
+                    inputs[0].device == torch.device("cpu")
+                    and self.method == "fused_tp"
+                ):
+                    warnings.warn(
+                        "Fused TP is not supported on CPU. Falling back to naive implementation."
+                    )
+                    return self.fallback(
+                        inputs, input_indices, output_shapes, output_indices
+                    )
 
         return self.m(inputs, input_indices, output_shapes, output_indices)
