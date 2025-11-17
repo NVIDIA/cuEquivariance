@@ -87,7 +87,6 @@ def triangle_attention_jax_fwd(
     r"""JAX reference implementation for triangle attention."""
     dtype = q.dtype
     assert k.dtype == dtype and v.dtype == dtype
-    assert bias.dtype == jnp.float32 or bias.dtype == jnp.float64
 
     q = scale * q
     a = jnp.einsum("...ai,...bi->...ab", q, k, precision=precision)
