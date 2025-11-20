@@ -58,7 +58,7 @@ def test_script_symmetric_contraction(mode, tmp_path):
     torch.testing.assert_close(out1, out2)
 
 
-@pytest.mark.parametrize("mode", export_modes)
+@pytest.mark.parametrize("mode", export_modes + ["trt"])
 def test_script_fused_tp_3(mode, tmp_path):
     if not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
@@ -91,7 +91,7 @@ def test_script_fused_tp_3(mode, tmp_path):
     torch.testing.assert_close(out11, out22)
 
 
-@pytest.mark.parametrize("mode", export_modes)
+@pytest.mark.parametrize("mode", export_modes + ["trt"])
 def test_script_fused_tp_4(mode, tmp_path):
     if not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
