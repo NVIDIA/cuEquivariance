@@ -54,9 +54,9 @@ def onnx_custom_translation_table():
      to be passed to torch.onnx.export as 'custom_translation_table' argument.
      
      Example:
+     >>> import cuequivariance_torch
      >>> cueq_custon_onnx_table = cuequivariance_torch.onnx_custom_translation_table()
-     >>> onnx_program = torch.onnx.export(module, inputs, dynamo=True, 
-     >>>                                  custom_translation_table=cueq_custom_onnx_table)
+     >>> # onnx_program = torch.onnx.export(module, inputs, custom_translation_table=cueq_custom_onnx_table)
     """
     from cuequivariance_ops_torch.onnx import op_table
     return op_table
@@ -65,8 +65,9 @@ def register_tensorrt_plugins():
     r"""
     Registers TensorRT plugins for custom operations from cuequivariance_ops_torch
 
-    Example: 
-    >>> cuequivariance_torch.register_plugins()
+    Example:
+    >>> import cuequivariance_torch
+    >>> # cuequivariance_torch.register_plugins()
     """
     from cuequivariance_ops_torch.tensorrt import register_plugins
     register_plugins()
