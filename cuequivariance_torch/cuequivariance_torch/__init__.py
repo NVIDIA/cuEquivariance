@@ -55,7 +55,7 @@ def onnx_custom_translation_table():
      
      Example:
      >>> import cuequivariance_torch
-     >>> cueq_custon_onnx_table = cuequivariance_torch.onnx_custom_translation_table()
+     >>> # cueq_custon_onnx_table = cuequivariance_torch.onnx_custom_translation_table()
      >>> # onnx_program = torch.onnx.export(module, inputs, custom_translation_table=cueq_custom_onnx_table)
     """
     from cuequivariance_ops_torch.onnx import op_table
