@@ -46,10 +46,11 @@ def execute_indexed_linear(
     index_configuration: tuple[tuple[int, ...], ...],
     index_mode: tuple[tuple[IndexingMode, ...], ...],
     polynomial: cue.SegmentedPolynomial,
-    math_dtype: str | None,
+    options,
     name: str,
     run_kernel: bool = True,
 ) -> list[jax.Array]:  # output buffers
+    math_dtype = options.get("math_dtype")
     num_inputs = len(index_configuration) - len(outputs_shape_dtype)
 
     io_buffers = list(inputs) + [

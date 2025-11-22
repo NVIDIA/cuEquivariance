@@ -18,8 +18,33 @@ import dataclasses
 import itertools
 from collections import defaultdict
 
-IVARS = "abcdefghijklmnopqrstuvwxyz"
-OVARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+class _IndexableList:
+    """A list-like object that uses a function to map indices to strings."""
+
+    def __init__(self, func):
+        self._func = func
+
+    def __getitem__(self, index: int | slice) -> str | list[str]:
+        if isinstance(index, slice):
+            start = index.start if index.start is not None else 0
+            assert index.stop is not None
+            stop = index.stop
+            step = index.step if index.step is not None else 1
+
+            result = []
+            for i in range(start, stop, step):
+                result.append(self._func(i))
+            return result
+        return self._func(index)
+
+
+IVARS = _IndexableList(
+    lambda i: "abcdefghijklmnopqrstuvwxyz"[i] if 0 <= i < 26 else str(i)
+)
+OVARS = _IndexableList(
+    lambda i: "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[i] if 0 <= i < 26 else str(i)
+)
 
 
 @dataclasses.dataclass(init=False, frozen=True)

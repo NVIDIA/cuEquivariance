@@ -14,7 +14,7 @@
 # limitations under the License.
 
 import warnings
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import torch
 import torch.nn as nn
@@ -84,6 +84,9 @@ class SegmentedPolynomial(nn.Module):
             -1 means the math_dtype is used.
             Default is 0 if there are input tensors, otherwise -1.
         name: Optional name for the operation. Defaults to "segmented_polynomial".
+        options: Optional dictionary of method-specific options. Currently supported:
+            - ``auto_deterministic_indexing`` (bool): For method ``"uniform_1d"``, enables
+              automatic deterministic indexing optimization. Defaults to False.
 
     Examples:
         Basic usage with spherical harmonics:
@@ -143,6 +146,7 @@ class SegmentedPolynomial(nn.Module):
         math_dtype: str | torch.dtype = None,
         output_dtype_map: List[int] = None,
         name: str = "segmented_polynomial",
+        options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__()
 
@@ -150,6 +154,7 @@ class SegmentedPolynomial(nn.Module):
         self.num_outputs = polynomial.num_outputs
         self.method = method
         self.repr = polynomial.__repr__()
+        self.options = options if options is not None else {}
 
         if method == "":
             warnings.warn(
@@ -179,7 +184,7 @@ class SegmentedPolynomial(nn.Module):
 
         if method == "uniform_1d":
             self.m = SegmentedPolynomialFromUniform1dJit(
-                polynomial, math_dtype, output_dtype_map, name
+                polynomial, math_dtype, output_dtype_map, name, self.options
             )
             self.fallback = self.m
         elif method == "naive":
