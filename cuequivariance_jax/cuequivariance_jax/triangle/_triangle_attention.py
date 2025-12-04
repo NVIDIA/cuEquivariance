@@ -189,9 +189,10 @@ def triangle_attention_bwd_impl(
         assert HAS_CUE_OPS_JAX, (
             "Please install cuequivariance_ops_jax for CUDA support."
         )
-        return triangle_attention_cuda_bwd(
+        dq, dk, dv, dbias = triangle_attention_cuda_bwd(
             da, a, lse, q, k, v, mask, bias, scale, precision
         )
+        return dq, dk, dv, dbias.astype(bias.dtype)
     else:
         # Use JAX autodiff for backward pass
         def forward_fn(q, k, v, bias):
