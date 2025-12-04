@@ -17,6 +17,7 @@ import math
 import os
 import warnings
 from functools import partial
+from typing import Any
 
 import jax
 import jax.core
@@ -55,6 +56,7 @@ def segmented_polynomial(
     *,
     method: str = "",
     math_dtype: str | None = None,
+    options: dict[str, Any] | None = None,
     name: str | None = None,
     precision: jax.lax.Precision = "undefined",
 ) -> list[jax.Array]:
@@ -79,15 +81,19 @@ def segmented_polynomial(
 
             .. note::
                The ``"fused_tp"`` method is only available in the PyTorch implementation.
-        math_dtype: Data type for computational operations. If None, automatically determined from input types. Defaults to None.
+        math_dtype: (Deprecated) Data type for computational operations. Prefer using ``options`` instead. Defaults to None.
+        options: Optional dictionary of method-specific options. Defaults to None.
 
-            Supported options vary by method:
+            Common options:
 
-            - ``"naive"``: String dtype names (e.g., ``"float32"``, ``"float64"``, ``"float16"``, ``"bfloat16"``).
-              Also supports ``"tensor_float32"`` for TensorFloat-32 mode.
-            - ``"uniform_1d"``: String dtype names (e.g., ``"float32"``, ``"float64"``, ``"float16"``, ``"bfloat16"``).
-            - ``"indexed_linear"``: CUBLAS compute type strings such as ``"CUBLAS_COMPUTE_32F"``, ``"CUBLAS_COMPUTE_32F_FAST_TF32"``,
-              ``"CUBLAS_COMPUTE_32F_PEDANTIC"``, ``"CUBLAS_COMPUTE_64F"``, etc.
+            - ``"math_dtype"``: Data type for computational operations. If None, automatically determined from input types.
+              Supported values vary by method:
+
+              - ``"naive"``: String dtype names (e.g., ``"float32"``, ``"float64"``, ``"float16"``, ``"bfloat16"``).
+                Also supports ``"tensor_float32"`` for TensorFloat-32 mode.
+              - ``"uniform_1d"``: String dtype names (e.g., ``"float32"``, ``"float64"``, ``"float16"``, ``"bfloat16"``).
+              - ``"indexed_linear"``: CUBLAS compute type strings such as ``"CUBLAS_COMPUTE_32F"``, ``"CUBLAS_COMPUTE_32F_FAST_TF32"``,
+                ``"CUBLAS_COMPUTE_32F_PEDANTIC"``, ``"CUBLAS_COMPUTE_64F"``, etc.
 
         name: Optional name for the operation.
 
@@ -171,9 +177,24 @@ def segmented_polynomial(
     if name is None:
         name = "segmented_polynomial"
 
-    if math_dtype is not None and not isinstance(math_dtype, str):
-        math_dtype = jnp.dtype(math_dtype).name
-    assert isinstance(math_dtype, str) or math_dtype is None
+    if options is None:
+        options = {}
+    else:
+        options = dict(options)
+
+    if math_dtype is not None:
+        if "math_dtype" in options:
+            raise ValueError(
+                "math_dtype provided both as argument and in options dict. "
+                "Please use only options['math_dtype']."
+            )
+        options["math_dtype"] = math_dtype
+
+    if "math_dtype" in options:
+        math_dtype_val = options["math_dtype"]
+        if math_dtype_val is not None and not isinstance(math_dtype_val, str):
+            options["math_dtype"] = jnp.dtype(math_dtype_val).name
+        assert isinstance(options["math_dtype"], str) or options["math_dtype"] is None
 
     if precision != "undefined":
         raise ValueError(
@@ -297,7 +318,7 @@ def segmented_polynomial(
         index_configuration=index_configuration,
         index_mode=index_mode,
         polynomial=polynomial,
-        math_dtype=math_dtype,
+        options=tuple(sorted(options.items())),
         name=name,
     )
 
@@ -360,7 +381,7 @@ def segmented_polynomial_prim(
     index_configuration: list[list[int]],  # maps: buffer index -> unique indices index
     index_mode: list[list[IndexingMode]],  # shared, batched, indexed, repeated
     polynomial: cue.SegmentedPolynomial,
-    math_dtype: str | None,
+    options: tuple[tuple[str, Any], ...],
     name: str,
     method: str,
     return_none_if_empty: bool = False,
@@ -391,7 +412,7 @@ def segmented_polynomial_prim(
             x for x, used in zip(outputs_shape_dtype, used_outputs) if used
         ),
         polynomial=polynomial.filter_keep_operands(used_inputs + used_outputs),
-        math_dtype=math_dtype,
+        options=options,
         name=str(name),
         method=method,
     )
@@ -449,7 +470,7 @@ def segmented_polynomial_abstract_eval(
     index_mode: tuple[tuple[IndexingMode, ...], ...],
     outputs_shape_dtype: tuple[jax.ShapeDtypeStruct, ...],
     polynomial: cue.SegmentedPolynomial,
-    math_dtype: str | None,
+    options: tuple[tuple[str, Any], ...],
     name: str,
     method: str,
 ) -> tuple[jax.core.ShapedArray, ...]:
@@ -465,7 +486,7 @@ def segmented_polynomial_impl(
     index_mode: tuple[tuple[IndexingMode, ...], ...],
     outputs_shape_dtype: tuple[jax.ShapeDtypeStruct, ...],
     polynomial: cue.SegmentedPolynomial,
-    math_dtype: str | None,
+    options: tuple[tuple[str, Any], ...],
     name: str,
     method: str,
 ) -> tuple[jax.Array, ...]:
@@ -509,7 +530,7 @@ def segmented_polynomial_impl(
         indices=indices,
         index_configuration=index_configuration,
         polynomial=polynomial,
-        math_dtype=math_dtype,
+        options=dict(options),
         name=name,
     )
 
@@ -536,7 +557,7 @@ def segmented_polynomial_jvp(
     index_mode: tuple[tuple[IndexingMode, ...], ...],
     outputs_shape_dtype: tuple[jax.ShapeDtypeStruct, ...],
     polynomial: cue.SegmentedPolynomial,
-    math_dtype: str | None,
+    options: tuple[tuple[str, Any], ...],
     name: str,
     method: str,
 ) -> tuple[tuple[jax.Array, ...], tuple[jax.Array | ad.Zero, ...]]:
@@ -557,7 +578,7 @@ def segmented_polynomial_jvp(
         index_configuration,
         index_mode,
         polynomial,
-        math_dtype,
+        options,
         name,
         method=method,
     )
@@ -579,7 +600,7 @@ def segmented_polynomial_jvp(
         jvp_index_configuration,
         jvp_index_mode,
         jvp_poly,
-        math_dtype,
+        options,
         name
         + "_jvp"
         + "".join("0" if isinstance(t, ad.Zero) else "1" for t in tangents),
@@ -596,7 +617,7 @@ def segmented_polynomial_transpose(
     index_mode: tuple[tuple[IndexingMode, ...], ...],
     outputs_shape_dtype: tuple[jax.ShapeDtypeStruct, ...],
     polynomial: cue.SegmentedPolynomial,
-    math_dtype: str | None,
+    options: tuple[tuple[str, Any], ...],
     name: str,
     method: str,
 ) -> tuple[jax.Array | ad.Zero | None, ...]:
@@ -637,7 +658,7 @@ def segmented_polynomial_transpose(
         tr_index_configuration,
         tr_index_mode,
         tr_poly,
-        math_dtype,
+        options,
         name + "_T",
         method=method,
         return_none_if_empty=True,
@@ -660,7 +681,7 @@ def segmented_polynomial_batching(
     index_mode: tuple[tuple[IndexingMode, ...], ...],
     outputs_shape_dtype: tuple[jax.ShapeDtypeStruct, ...],
     polynomial: cue.SegmentedPolynomial,
-    math_dtype: str | None,
+    options: tuple[tuple[str, Any], ...],
     name: str,
     method: str,
 ) -> tuple[tuple[jax.Array, ...], tuple[int, ...]]:
@@ -700,7 +721,7 @@ def segmented_polynomial_batching(
         index_mode=index_mode,
         outputs_shape_dtype=outputs_shape_dtype,
         polynomial=polynomial,
-        math_dtype=math_dtype,
+        options=options,
         name=name + "_batching",
         method=method,
     )

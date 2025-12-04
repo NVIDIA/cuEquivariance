@@ -43,9 +43,10 @@ def execute_naive(
     index_configuration: tuple[tuple[int, ...], ...],
     index_mode: tuple[tuple[IndexingMode, ...], ...],
     polynomial: cue.SegmentedPolynomial,
-    math_dtype: str | None,
+    options,
     name: str,
 ) -> list[jax.Array]:  # output buffers
+    math_dtype = options.get("math_dtype")
     if any(mode == IndexingMode.REPEATED for modes in index_mode for mode in modes):
         return execute_indexed_linear(
             inputs,
