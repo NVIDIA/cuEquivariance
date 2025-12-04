@@ -121,6 +121,11 @@ class SegmentedTensorProduct:
     def assert_valid(self):
         assert Subscripts.is_valid(self.subscripts)
 
+        if not all(map(lambda u: u.lower() == u, self.subscripts.modes())):
+            raise ValueError(
+                f"subscripts {self.subscripts} must contain only lowercase letters. (Capital letters are reserved for internal use.)"
+            )
+
         for m in self.subscripts.modes():
             if self.subscripts.count(m) == 1:
                 raise ValueError(
@@ -170,6 +175,11 @@ class SegmentedTensorProduct:
         operands = [
             cue.SegmentedOperand(ndim=len(operand)) for operand in subscripts.operands
         ]
+
+        if not all(map(lambda u: u.lower() == u, subscripts.modes())):
+            raise ValueError(
+                f"subscripts {subscripts} must contain only lowercase letters. (Capital letters are reserved for internal use.)"
+            )
 
         return cls(
             operands_and_subscripts=list(zip(operands, subscripts.operands)),

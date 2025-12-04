@@ -34,6 +34,9 @@ from cuequivariance_jax.segmented_polynomials.segmented_polynomial_naive import 
 from cuequivariance_jax.segmented_polynomials.segmented_polynomial_uniform_1d import (
     execute_uniform_1d,
 )
+from cuequivariance_jax.segmented_polynomials.segmented_polynomial_gemm_grouped import (
+    execute_gemm_grouped,
+)
 from cuequivariance_jax.segmented_polynomials.utils import (
     batch_size,
     reshape,
@@ -76,6 +79,7 @@ def segmented_polynomial(
             - ``"naive"``: Uses a naive JAX implementation. It always works but is not optimized.
             - ``"uniform_1d"``: Uses a CUDA implementation for polynomials with a single uniform mode.
             - ``"indexed_linear"``: Uses a CUDA implementation for linear layers with indexed weights.
+            - ``"gemm_grouped"``: Uses a CUDA implementation for polynomials mappable to matrix multiplications.
 
             .. note::
                The ``"fused_tp"`` method is only available in the PyTorch implementation.
@@ -164,6 +168,7 @@ def segmented_polynomial(
             "To fix this, simply add a `method` parameter to your function call. Here are the available options:\n"
             "• 'naive' - Works everywhere but not optimized (good for testing)\n"
             "• 'uniform_1d' - Fast CUDA implementation for single uniform mode polynomials\n"
+            "• 'gemm_grouped' - Fast CUDA implementation for matrix multiplication patterns\n"
             "• 'indexed_linear' - Fast CUDA implementation for linear layers with indexed weights\n\n"
             "Example: outputs = segmented_polynomial(poly, inputs, outputs, method='naive')"
         )
@@ -494,7 +499,7 @@ def segmented_polynomial_impl(
             f"{name}: {fl / 1e9:.2f} GFLOP, {mem / 1e9:.2f} GB, arithmetic intensity: {fl / mem:.2f} FLOP/byte"
         )
 
-    assert method in ("naive", "uniform_1d", "indexed_linear")
+    assert method in ("naive", "uniform_1d", "gemm_grouped", "indexed_linear")
     if platform != "cuda" and method != "naive":
         warnings.warn(
             f"Method '{method}' requires CUDA, but platform is '{platform}'. "
@@ -526,6 +531,8 @@ def segmented_polynomial_impl(
             return execute_uniform_1d(**kwargs)
         case "indexed_linear":
             return execute_indexed_linear(**kwargs, index_mode=index_mode)
+        case "gemm_grouped":
+            return execute_gemm_grouped(**kwargs)
 
 
 def segmented_polynomial_jvp(
