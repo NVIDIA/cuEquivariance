@@ -389,8 +389,8 @@ def attention_pair_bias(
 
         Example with caching (recommended for inference when z doesn't change):
 
-        >>> # Check cache and determine if z is already projected  # doctest: +SKIP
-        >>> if model_cache is not None and "proj_z" in model_cache:
+        >>> # Check cache and determine if z is already projected
+        >>> if model_cache is not None and "proj_z" in model_cache:  # doctest: +SKIP
         ...     z = model_cache["proj_z"]
         ...     is_cached_z = True
         ... else:
