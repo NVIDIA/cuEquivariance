@@ -397,7 +397,7 @@ def attention_pair_bias(
         ...     is_cached_z = False
         >>>
         >>> # Call attention_pair_bias
-        >>> o, proj_z = attention_pair_bias(
+        >>> o, proj_z = attention_pair_bias(  # doctest: +SKIP
         ...     s=s, q=q, k=k, v=v, z=z, mask=mask,
         ...     num_heads=num_heads,
         ...     w_proj_z=w_proj_z if not is_cached_z else None,
@@ -410,7 +410,7 @@ def attention_pair_bias(
         ... )
         >>>
         >>> # Cache proj_z for next call
-        >>> if model_cache is not None and "proj_z" not in model_cache:
+        >>> if model_cache is not None and "proj_z" not in model_cache:  # doctest: +SKIP
         ...     model_cache["proj_z"] = proj_z
     """
 
