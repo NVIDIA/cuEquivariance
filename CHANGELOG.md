@@ -1,5 +1,17 @@
 ## Latest Changes
 
+## 0.8.0 (2025-12-05)
+
+### Added
+- [Torch/JAX] Blackwell-optimized BF16/FP16 forward and backward kernels for `cuet.triangle_attention` (runs on compute capabilities 10.0 and 10.3). These kernels provide superior performance especially for long sequences and higher head dimensions. This is only supported on cu13 builds as of this release.
+
+### Bug fix
+- [Torch/JAX] Fixed index overflow and out of bound issues leading to illegal memory access in `cuet.triangle_attention` 
+
+### Notes
+- [Torch/JAX] Blackwell-optimized kernels require the sequence length N to be a multiple of 8 for the forward pass; pad the sequence if necessary
+- [Torch/JAX] Blackwell-optimized kernels are currently supported only for CUDA 13 builds
+
 ## 0.7.0 (2025-10-13)
 
 ### Added
