@@ -333,8 +333,12 @@ def attention_pair_bias(
         - The proj_z output is experimental to prevent breakage when caching
           of pair bias tensor is enabled in the next release.
         - Tested for bf16, fp16, fp32 and tf32. torch.set_float32_matmul_precision maybe used to toggle between fp32/tf32.
+        - Currently, the kernel provides superior performance only when DH (head dimension) is a multiple of 32.
+          For non-multiples of 32, we also recommend using graph compilation techniques like torch.compile, in addition.
 
     Examples:
+        Basic usage without caching:
+
         >>> import torch
         >>> from cuequivariance_torch import attention_pair_bias
         >>> if torch.cuda.is_available():  # doctest: +SKIP
@@ -365,7 +369,7 @@ def attention_pair_bias(
         ...     b_ln_z = torch.randn(z_dim,
         ...                     device=device, dtype=torch.bfloat16)
         ...     # Perform operation
-        ...     output, proj_z = attention_pair_bias(
+        ...     output = attention_pair_bias(
         ...         s=s,
         ...         q=q,
         ...         k=k,
@@ -378,9 +382,36 @@ def attention_pair_bias(
         ...         w_proj_o=w_proj_o,
         ...         w_ln_z=w_ln_z,
         ...         b_ln_z=b_ln_z,
+        ...         return_z_proj=False,
         ...     )
         ...     print(output.shape)  # torch.Size([1, 32, 64])
         torch.Size([1, 32, 64])
+
+        Example with caching (recommended for inference when z doesn't change):
+
+        >>> # Check cache and determine if z is already projected  # doctest: +SKIP
+        >>> if model_cache is not None and "proj_z" in model_cache:
+        ...     z = model_cache["proj_z"]
+        ...     is_cached_z = True
+        ... else:
+        ...     is_cached_z = False
+        >>>
+        >>> # Call attention_pair_bias
+        >>> o, proj_z = attention_pair_bias(
+        ...     s=s, q=q, k=k, v=v, z=z, mask=mask,
+        ...     num_heads=num_heads,
+        ...     w_proj_z=w_proj_z if not is_cached_z else None,
+        ...     w_proj_g=w_proj_g,
+        ...     w_proj_o=w_proj_o,
+        ...     w_ln_z=w_ln_z if not is_cached_z else None,
+        ...     b_ln_z=b_ln_z if not is_cached_z else None,
+        ...     return_z_proj=True,
+        ...     is_cached_z_proj=is_cached_z,
+        ... )
+        >>>
+        >>> # Cache proj_z for next call
+        >>> if model_cache is not None and "proj_z" not in model_cache:
+        ...     model_cache["proj_z"] = proj_z
     """
 
     try:
