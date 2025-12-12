@@ -30,4 +30,6 @@ If applicable, add screenshots to help explain your problem.
   -For performance issues, please also add memory, power limit, clock
 
 **Additional context**
+If failing at some CUDA source file, please run compute-sanitizer and share CUDA coredump for us to analyze the exact problem. Please do this especially if you don't have a reproducer to share with us.
+
 Add any other context about the problem here.
