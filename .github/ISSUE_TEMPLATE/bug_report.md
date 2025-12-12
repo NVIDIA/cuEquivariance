@@ -23,10 +23,12 @@ A clear and concise description of what you expected to happen.
 **Screenshots**
 If applicable, add screenshots to help explain your problem.
 
-**GPU (please complete the following information):**
+**GPU HW/SW(please complete the following information):**
  - CUDA toolkit version
+ - torch or ngc docker version
+ - triton, jax, jax_triton version when applicable
  - Driver version
- - full name 
+ - full name of GPU
   -For performance issues, please also add memory, power limit, clock
 
 **Additional context**
