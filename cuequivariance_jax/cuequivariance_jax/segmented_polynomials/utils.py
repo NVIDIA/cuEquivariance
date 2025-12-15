@@ -146,8 +146,10 @@ def group_by_index(
         >>> primary_idx = jnp.array([1, 0, 2, 1, 0])
         >>> secondary_idx = jnp.array([10, 20, 30, 40, 50])
         >>> indptr, reordered = group_by_index(primary_idx, secondary_idx, max_primary_idx=3)
-        >>> reordered[indptr[0]:indptr[1]]  # Elements where primary_idx == 0: [20, 50]
-        >>> reordered[indptr[1]:indptr[2]]  # Elements where primary_idx == 1: [10, 40]
+        >>> print(reordered[indptr[0]:indptr[1]])  # Elements where primary_idx == 0
+        [20 50]
+        >>> print(reordered[indptr[1]:indptr[2]])  # Elements where primary_idx == 1
+        [10 40]
     """
     assert primary_idx.ndim == secondary_idx.ndim
     assert primary_idx.shape[axis] == secondary_idx.shape[axis]
