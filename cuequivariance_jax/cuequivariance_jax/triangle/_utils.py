@@ -27,13 +27,13 @@ class Precision(enum.IntEnum):
     TF32x3 = 2
     IEEE = 3
 
-    def _to_jax(self) -> jax.lax.Precision:
+    def _to_jax(self) -> jax.lax.PrecisionLike:
         """Convert Precision enum to JAX precision."""
         if self == Precision.DEFAULT:
             return jax.lax.Precision.DEFAULT
         elif self == Precision.TF32:
-            return jax.lax.Precision.HIGH
+            return jax.lax.DotAlgorithmPreset.TF32_TF32_F32
         elif self == Precision.TF32x3:
-            return jax.lax.Precision.HIGHEST
+            return jax.lax.DotAlgorithmPreset.TF32_TF32_F32_X3
         elif self == Precision.IEEE:
-            return jax.lax.Precision.HIGHEST
+            return jax.lax.DotAlgorithmPreset.F32_F32_F32

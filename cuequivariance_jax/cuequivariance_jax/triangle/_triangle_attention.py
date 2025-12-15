@@ -87,7 +87,6 @@ def triangle_attention_jax_fwd(
     r"""JAX reference implementation for triangle attention."""
     dtype = q.dtype
     assert k.dtype == dtype and v.dtype == dtype
-    assert bias.dtype == jnp.float32 or bias.dtype == jnp.float64
 
     q = scale * q
     a = jnp.einsum("...ai,...bi->...ab", q, k, precision=precision)
@@ -190,9 +189,10 @@ def triangle_attention_bwd_impl(
         assert HAS_CUE_OPS_JAX, (
             "Please install cuequivariance_ops_jax for CUDA support."
         )
-        return triangle_attention_cuda_bwd(
+        dq, dk, dv, dbias = triangle_attention_cuda_bwd(
             da, a, lse, q, k, v, mask, bias, scale, precision
         )
+        return dq, dk, dv, dbias.astype(bias.dtype)
     else:
         # Use JAX autodiff for backward pass
         def forward_fn(q, k, v, bias):
