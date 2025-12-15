@@ -46,7 +46,6 @@ def execute_naive(
     options,
     name: str,
 ) -> list[jax.Array]:  # output buffers
-    math_dtype = options.get("math_dtype")
     if any(mode == IndexingMode.REPEATED for modes in index_mode for mode in modes):
         return execute_indexed_linear(
             inputs,
@@ -55,7 +54,7 @@ def execute_naive(
             index_configuration,
             index_mode,
             polynomial,
-            math_dtype,
+            options,
             name,
             run_kernel=False,
         )
@@ -64,9 +63,8 @@ def execute_naive(
         jnp.result_type(
             *[x.dtype for x in inputs] + [x.dtype for x in outputs_shape_dtype]
         ),
-        math_dtype,
+        options.get("math_dtype"),
     )
-    del math_dtype
 
     num_inputs = len(index_configuration) - len(outputs_shape_dtype)
 
