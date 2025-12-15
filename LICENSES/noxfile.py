@@ -14,7 +14,6 @@ def third_party_attributions(session: nox.Session):
     session.install("../cuequivariance")
     session.install("../cuequivariance_jax")
     session.install("../cuequivariance_torch")
-    # session.install("../cuequivariance_warp")
     session.install("pip-licenses")
     session.run(
         "pip-licenses",
@@ -23,7 +22,6 @@ def third_party_attributions(session: nox.Session):
         "cuequivariance",
         "cuequivariance_jax",
         "cuequivariance_torch",
-        # "cuequivariance_warp",
         "pip-licenses",
         "prettytable",
         "wcwidth",
