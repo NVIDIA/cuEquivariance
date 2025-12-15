@@ -36,4 +36,4 @@ class Precision(enum.IntEnum):
         elif self == Precision.TF32x3:
             return jax.lax.DotAlgorithmPreset.TF32_TF32_F32_X3
         elif self == Precision.IEEE:
-            return jax.lax.Precision.HIGHEST
+            return jax.lax.DotAlgorithmPreset.F32_F32_F32
