@@ -211,3 +211,26 @@ For more complex examples:
 
     graph = visualize_polynomial(tp_poly, input_names=["weights", "x1", "x2"], output_names=["y"])
     graph
+
+Visualizing Backward Pass
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+You can also visualize the backward pass of a polynomial. The mapping function returned by :meth:`cue.SegmentedPolynomial.backward <cuequivariance.SegmentedPolynomial.backward>` accepts an optional `into_grad` parameter that can transform operand names, which is useful for labeling gradients:
+
+.. jupyter-execute::
+
+    # Create a polynomial and compute its backward pass
+    irreps = cue.Irreps("O3", "0e + 1o")
+    tp_poly = cue.descriptors.channelwise_tensor_product(irreps, irreps, irreps).polynomial
+    
+    # Compute backward pass (all inputs require gradients, output has cotangent)
+    poly_bwd, m = tp_poly.backward([True, True, True], [True])
+    
+    # Transform operand names using the mapping function with into_grad
+    # The mapping function takes (inputs, outputs) and returns (new_inputs, new_outputs)
+    operand_names = (["weights", "x1", "x2"], ["y"])
+    operand_names_bwd = m(operand_names, lambda n: f"d{n}")
+    
+    # Visualize the backward polynomial
+    graph = visualize_polynomial(poly_bwd, input_names=operand_names_bwd[0], output_names=operand_names_bwd[1])
+    graph

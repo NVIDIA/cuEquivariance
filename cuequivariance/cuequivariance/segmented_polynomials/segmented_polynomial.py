@@ -17,7 +17,7 @@ from __future__ import annotations
 import copy
 import dataclasses
 import itertools
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, Optional, Sequence
 
 import numpy as np
 
@@ -998,7 +998,10 @@ class SegmentedPolynomial:
         self, has_tangent: list[bool]
     ) -> tuple[
         SegmentedPolynomial,
-        Callable[[tuple[list[Any], list[Any]]], tuple[list[Any], list[Any]]],
+        Callable[
+            [tuple[list[Any], list[Any]], Optional[Callable[[Any], Any]]],
+            tuple[list[Any], list[Any]],
+        ],
     ]:
         """Compute the Jacobian-vector product of the polynomial.
 
@@ -1023,14 +1026,20 @@ class SegmentedPolynomial:
             ):
                 new_operations.append((ope, multiplicator * stp))
 
-        def mapping(x: tuple[list[Any], list[Any]]) -> tuple[list[Any], list[Any]]:
+        def mapping(
+            x: tuple[list[Any], list[Any]],
+            into_grad: Optional[Callable[[Any], Any]] = None,
+        ) -> tuple[list[Any], list[Any]]:
             inputs, outputs = x
             inputs, outputs = list(inputs), list(outputs)
             assert len(inputs) == self.num_inputs
             assert len(outputs) == self.num_outputs
+            into_grad = into_grad if callable(into_grad) else lambda x: x
 
-            new_inputs = inputs + [x for has, x in zip(has_tangent, inputs) if has]
-            new_outputs = outputs
+            new_inputs = inputs + [
+                into_grad(x) for has, x in zip(has_tangent, inputs) if has
+            ]
+            new_outputs = [into_grad(x) for x in outputs]
 
             return new_inputs, new_outputs
 
@@ -1088,7 +1097,10 @@ class SegmentedPolynomial:
         self, requires_gradient: list[bool], has_cotangent: list[bool]
     ) -> tuple[
         SegmentedPolynomial,
-        Callable[[tuple[list[Any], list[Any]]], tuple[list[Any], list[Any]]],
+        Callable[
+            [tuple[list[Any], list[Any]], Optional[Callable[[Any], Any]]],
+            tuple[list[Any], list[Any]],
+        ],
     ]:
         """Compute the backward pass of the polynomial for gradient computation.
 
@@ -1106,7 +1118,10 @@ class SegmentedPolynomial:
             has_cotangent,
         )
 
-        def mapping(x: tuple[list[Any], list[Any]]) -> tuple[list[Any], list[Any]]:
-            return map2(map1(x))
+        def mapping(
+            x: tuple[list[Any], list[Any]],
+            into_grad: Optional[Callable[[Any], Any]] = None,
+        ) -> tuple[list[Any], list[Any]]:
+            return map2(map1(x, into_grad))
 
         return p, mapping
