@@ -1,4 +1,4 @@
-.. SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+.. SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
    SPDX-License-Identifier: Apache-2.0
 
    Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,8 +26,9 @@ Tensor Products
    :toctree: generated/
    :template: pytorch_module_template.rst
 
-   EquivariantTensorProduct
-   TensorProduct
+   SegmentedPolynomial
+   .. EquivariantTensorProduct
+   .. TensorProduct
 
 Special Cases of Tensor Products
 --------------------------------
@@ -41,12 +42,7 @@ Special Cases of Tensor Products
    Linear
    SymmetricContraction
    TransposeIrrepsLayout
-
-.. autosummary::
-   :toctree: generated/
-   :template: function_template.rst
-
-   spherical_harmonics
+   SphericalHarmonics
 
 Euclidean Operations
 --------------------
@@ -64,6 +60,17 @@ Euclidean Operations
 
    encode_rotation_angle
    vector_to_euler_angles
+
+Triangle
+--------
+
+.. autosummary::
+   :toctree: generated/
+   :template: function_template.rst
+
+   triangle_attention
+   triangle_multiplicative_update
+   attention_pair_bias
 
 Extra Modules
 -------------

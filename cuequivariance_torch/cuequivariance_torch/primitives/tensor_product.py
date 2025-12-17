@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,14 +15,28 @@
 import logging
 import math
 import warnings
-from typing import *
+from functools import partial
+from typing import List, Optional, OrderedDict, Tuple
 
 import torch
 import torch.fx
 
-from cuequivariance import segmented_tensor_product as stp
+import cuequivariance as cue
 
 logger = logging.getLogger(__name__)
+
+
+def prod(numbers: List[int]):
+    """
+    This method is a workaround for script() not recognizing math.prod()
+    """
+    if torch.jit.is_scripting():
+        product = 1
+        for num in numbers:
+            product *= num
+        return product
+    else:
+        return math.prod(numbers)
 
 
 class TensorProduct(torch.nn.Module):
@@ -33,87 +47,159 @@ class TensorProduct(torch.nn.Module):
         descriptor (SegmentedTensorProduct): The descriptor of the segmented tensor product.
         math_dtype (torch.dtype, optional): The data type of the coefficients and calculations.
         device (torch.device, optional): The device on which the calculations are performed.
-        optimize_fallback (bool, optional): If `True`, the fallback method is optimized. If `False`, the fallback method is used without optimization.
+        use_fallback (bool, optional):  Determines the computation method. If `None` (default), a CUDA kernel will be used if available. If `False`, a CUDA kernel will be used, and an exception is raised if it's not available. If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
+
+        Raises:
+            RuntimeError: If `use_fallback` is `False` and no CUDA kernel is available.
+
     """
 
     def __init__(
         self,
-        descriptor: stp.SegmentedTensorProduct,
+        descriptor: cue.SegmentedTensorProduct,
         *,
         device: Optional[torch.device] = None,
         math_dtype: Optional[torch.dtype] = None,
-        optimize_fallback: Optional[bool] = None,
+        use_fallback: Optional[bool] = None,
     ):
         super().__init__()
         self.descriptor = descriptor
+        if math_dtype is None:
+            math_dtype = torch.get_default_dtype()
 
-        try:
-            self.f_cuda = _tensor_product_cuda(descriptor, device, math_dtype)
-        except NotImplementedError as e:
-            logger.info(f"CUDA implementation not available: {e}")
-            self.f_cuda = None
-        except ImportError as e:
-            logger.warning(f"CUDA implementation not available: {e}")
-            self.f_cuda = None
+        self.has_cuda = False
+        self.f = None
+        self.num_operands = descriptor.num_operands
 
-        self.f_fx = _tensor_product_fx(
-            descriptor, device, math_dtype, optimize_fallback is True
-        )
-        self._optimize_fallback = optimize_fallback
+        if use_fallback is False:
+            self.f = _tensor_product_cuda(descriptor, device, math_dtype)
+            self.has_cuda = True
+        elif use_fallback is None:
+            try:
+                self.f = _tensor_product_cuda(descriptor, device, math_dtype)
+                self.has_cuda = True
+            except NotImplementedError as e:
+                logger.info(f"CUDA implementation not available: {e}")
+            except ImportError as e:
+                logger.warning(f"CUDA implementation not available: {e}")
+                logger.warning(
+                    "Did you forget to install the CUDA version of cuequivariance-ops-torch?\n"
+                    "Install it with the following command:\n"
+                    "pip install cuequivariance-ops-torch-cu12"
+                )
 
+        if self.f is None:
+            self.f = _tensor_product_fx(descriptor, device, math_dtype, True)
+
+        self.f = _Wrapper(self.f, descriptor)
+
+        self.operands_dims = [ope.size for ope in descriptor.operands]
+
+    @torch.jit.ignore
     def __repr__(self):
         has_cuda_kernel = (
-            "(with CUDA kernel)" if self.f_cuda is not None else "(without CUDA kernel)"
+            "(with CUDA kernel)" if self.has_cuda else "(without CUDA kernel)"
         )
         return f"TensorProduct({self.descriptor} {has_cuda_kernel})"
 
-    def forward(self, *args, use_fallback: Optional[bool] = None):
+    def forward(
+        self,
+        x0: torch.Tensor,
+        x1: Optional[torch.Tensor] = None,
+        x2: Optional[torch.Tensor] = None,
+        x3: Optional[torch.Tensor] = None,
+        x4: Optional[torch.Tensor] = None,
+        x5: Optional[torch.Tensor] = None,
+        x6: Optional[torch.Tensor] = None,
+    ):
         r"""
         Perform the tensor product based on the specified descriptor.
 
         Args:
-            args (list of torch.Tensor): The input tensors. The number of input tensors should match the number of operands in the descriptor minus one.
-                Each input tensor should have a shape of ((batch,) operand_size), where `operand_size` corresponds to the size
-                of each operand as defined in the tensor product descriptor.
-            use_fallback (bool, optional):  Determines the computation method. If `None` (default), a CUDA kernel will be used if available and the input
-                is on CUDA. If `False`, a CUDA kernel will be used, and an exception is raised if it's not available or the
-                input is not on CUDA. If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
+            x0, x1[, x2, x3, x4, x5, x6]: The input tensors. The number of input tensors should match the number of operands in the descriptor minus one.
+                Each input tensor should have a shape of (batch, operand_size) or (1, operand_size)
+                where `operand_size` corresponds to the size of each operand as defined in
+                the tensor product descriptor.
 
         Returns:
             torch.Tensor:
                 The output tensor resulting from the tensor product.
                 It has a shape of (batch, last_operand_size), where
                 `last_operand_size` is the size of the last operand in the descriptor.
-
-        Raises:
-            RuntimeError: If `use_fallback` is `False` and either no CUDA kernel is available or the input tensor is not on CUDA.
         """
+
         if (
-            args
-            and args[0].device.type == "cuda"
-            and self.f_cuda is not None
-            and (use_fallback is not True)
+            x6 is not None
+            and x5 is not None
+            and x4 is not None
+            and x3 is not None
+            and x2 is not None
+            and x1 is not None
         ):
-            return self.f_cuda(*args)
+            inputs = [x0, x1, x2, x3, x4, x5, x6]
+        elif (
+            x5 is not None
+            and x4 is not None
+            and x3 is not None
+            and x2 is not None
+            and x1 is not None
+        ):
+            inputs = [x0, x1, x2, x3, x4, x5]
+        elif x4 is not None and x3 is not None and x2 is not None and x1 is not None:
+            inputs = [x0, x1, x2, x3, x4]
+        elif x3 is not None and x2 is not None and x1 is not None:
+            inputs = [x0, x1, x2, x3]
+        elif x2 is not None and x1 is not None:
+            inputs = [x0, x1, x2]
+        elif x1 is not None:
+            inputs = [x0, x1]
+        else:
+            inputs = [x0]
 
-        if use_fallback is False:
-            if self.f_cuda is not None:
-                raise RuntimeError("CUDA kernel available but input is not on CUDA")
-            else:
-                raise RuntimeError("No CUDA kernel available")
+        if (
+            not torch.jit.is_scripting()
+            and not torch.jit.is_tracing()
+            and not torch.compiler.is_compiling()
+        ):
+            if len(inputs) != self.num_operands - 1:
+                raise ValueError(
+                    f"Expected {self.num_operands - 1} input tensors, got {len(inputs)}"
+                )
+            for oid, input in enumerate(inputs):
+                torch._assert(
+                    input.ndim == 2,
+                    f"input {oid} should have ndim=2",
+                )
+                torch._assert(
+                    input.shape[1] == self.operands_dims[oid],
+                    f"input {oid} should have shape (batch, {self.operands_dims[oid]}), got {input.shape}",
+                )
 
-        if self._optimize_fallback is None:
-            warnings.warn(
-                "The fallback method is used but it has not been optimized. "
-                "Consider setting optimize_fallback=True when creating the TensorProduct module."
-            )
-        return self.f_fx(*args)
+        return self.f(inputs)
+
+
+def to_notypeconv(t, *args, **kwargs):
+    new_kwargs = kwargs.copy()
+    new_kwargs.pop("dtype", None)
+    new_args = [None if isinstance(a, torch.dtype) else a for a in args]
+    result = t.__original_to(*new_args, **new_kwargs)
+    return result
+
+
+def disable_type_conv(t):
+    """
+    This modifier can be used on Tensors or whole Modules
+    to prevent them from being modified during to(dtype=x) calls
+    """
+    t.__original_to = t.to
+    t.to = partial(to_notypeconv, t)
+    return t
 
 
 def _tensor_product_fx(
-    descriptor: stp.SegmentedTensorProduct,
+    descriptor: cue.SegmentedTensorProduct,
     device: Optional[torch.device],
-    math_dtype: Optional[torch.dtype],
+    math_dtype: torch.dtype,
     optimize_einsums: bool,
 ) -> torch.nn.Module:
     """
@@ -121,10 +207,6 @@ def _tensor_product_fx(
     - at least one input operand should have a batch dimension (ndim=2)
     - the output operand will have a batch dimension (ndim=2)
     """
-
-    if math_dtype is None:
-        math_dtype = torch.get_default_dtype()
-
     descriptor = descriptor.remove_zero_paths()
     descriptor = descriptor.remove_empty_segments()
 
@@ -139,11 +221,8 @@ def _tensor_product_fx(
             torch.fx.Proxy(graph.placeholder(f"input_{i}"), tracer)
             for i in range(num_inputs)
         ]
-        for input in inputs:
-            torch._assert(input.ndim == 2, "input should have ndim=2")
-        operand_subscripts = [
-            f"Z{operand.subscripts}" for operand in descriptor.operands
-        ]
+
+        operand_subscripts = [f"Z{ss}" for ss in descriptor.subscripts.operands]
 
         formula = (
             ",".join([descriptor.coefficient_subscripts] + operand_subscripts[:-1])
@@ -154,40 +233,41 @@ def _tensor_product_fx(
 
         outputs = []
         for path_idx, path in enumerate(descriptor.paths):
-            segments = [
-                inputs[oid][..., slices[oid][path.indices[oid]]]
-                .reshape(
-                    inputs[oid].shape[:-1] + descriptor.get_segment_shape(oid, path)
-                )
-                .to(dtype=math_dtype)
-                for oid in range(num_inputs)
-            ]
-            constants[f"c{path_idx}"] = torch.tensor(
-                path.coefficients, dtype=math_dtype, device=device
-            ).view(
-                {
-                    2: torch.int16,
-                    4: torch.int32,
-                    8: torch.int64,
-                }[math_dtype.itemsize]
+            segments = []
+            for oid in range(num_inputs):
+                seg_shape = descriptor.get_segment_shape(oid, path)
+                inp = inputs[oid][..., slices[oid][path.indices[oid]]]
+                if len(seg_shape) > 0:
+                    inp = inp.reshape(inputs[oid].shape[:-1] + seg_shape)
+                else:
+                    inp = inp.reshape(inputs[oid].shape[:-1])
+
+                segments.append(inp.to(dtype=math_dtype))
+
+            c_tensor = disable_type_conv(
+                torch.tensor(path.coefficients, dtype=math_dtype, device=device)
             )
-            c = (
-                torch.fx.Proxy(graph.get_attr(f"c{path_idx}"), tracer=tracer)
-                .view(math_dtype)
-                .clone()
-            )
+            constants[f"c{path_idx}"] = c_tensor
+
+            c = torch.fx.Proxy(graph.get_attr(f"c{path_idx}"), tracer=tracer).clone()
             out = torch.einsum(formula, c, *segments)
             out = out.to(dtype=inputs[0].dtype)
 
             seg_shape = descriptor.get_segment_shape(-1, path)
             outputs += [
-                out.reshape(
-                    out.shape[: out.ndim - len(seg_shape)] + (math.prod(seg_shape),)
-                )
+                out.reshape(out.shape[: out.ndim - len(seg_shape)] + (prod(seg_shape),))
             ]
 
         if len(outputs) == 0:
             raise NotImplementedError("No FX implementation for empty paths")
+
+        def _sum(tensors, *, shape=None, like=None):
+            if len(tensors) == 0:
+                return like.new_zeros(shape)
+            out = tensors[0]
+            for t in tensors[1:]:
+                out = torch.add(out, t)
+            return out
 
         batch_shape = outputs[0].shape[:-1]
         output = torch.cat(
@@ -198,7 +278,7 @@ def _tensor_product_fx(
                         for out, path in zip(outputs, descriptor.paths)
                         if path.indices[-1] == i
                     ],
-                    shape=batch_shape + (math.prod(descriptor.operands[-1][i]),),
+                    shape=batch_shape + (prod(descriptor.operands[-1][i]),),
                     like=outputs[0],
                 )
                 for i in range(descriptor.operands[-1].num_segments)
@@ -229,10 +309,10 @@ def _tensor_product_fx(
                     for operand in descriptor.operands[:num_inputs]
                 ]
                 graphmod = opt_einsum_fx.optimize_einsums_full(graphmod, example_inputs)
-    else:
+    elif num_inputs == 0:
 
-        class _no_input_or_no_paths(torch.nn.Module):
-            def __init__(self, descriptor: stp.SegmentedTensorProduct):
+        class _no_input(torch.nn.Module):
+            def __init__(self, descriptor: cue.SegmentedTensorProduct):
                 super().__init__()
 
                 for pid, path in enumerate(descriptor.paths):
@@ -243,74 +323,105 @@ def _tensor_product_fx(
                         ),
                     )
 
-            def forward(self, *args):
-                shape = torch.broadcast_shapes(*[arg.shape[:-1] for arg in args])
+            def forward(self):
                 output = torch.zeros(
-                    shape + (descriptor.operands[-1].size,),
-                    device=device,
+                    (descriptor.operands[-1].size,),
+                    device=self.c0.device,
                     dtype=math_dtype,
                 )
                 for pid in range(descriptor.num_paths):
                     output += torch.einsum(
                         descriptor.coefficient_subscripts
                         + "->"
-                        + descriptor.operands[0].subscripts,
+                        + descriptor.subscripts.operands[0],
                         getattr(self, f"c{pid}"),
                     )
                 return output
 
-        graphmod = _no_input_or_no_paths(descriptor)
+        graphmod = _no_input(descriptor)
 
-    return _Wrapper(graphmod, descriptor)
+    else:
+        raise NotImplementedError(
+            "No FX implementation for empty paths and non-empty inputs"
+        )
+
+    return graphmod
+
+
+class _Caller(torch.nn.Module):
+    def __init__(self, module: torch.nn.Module):
+        super().__init__()
+        self.module = module
+
+
+class _NoArgCaller(_Caller):
+    def forward(self, args: List[torch.Tensor]):
+        return self.module()
+
+
+class _OneArgCaller(_Caller):
+    def forward(self, args: List[torch.Tensor]):
+        return self.module(args[0])
+
+
+class _TwoArgCaller(_Caller):
+    def forward(self, args: List[torch.Tensor]):
+        return self.module(args[0], args[1])
+
+
+class _ThreeArgCaller(_Caller):
+    def forward(self, args: List[torch.Tensor]):
+        return self.module(args[0], args[1], args[2])
+
+
+class _FourArgCaller(_Caller):
+    def forward(self, args: List[torch.Tensor]):
+        return self.module(args[0], args[1], args[2], args[3])
+
+
+class _FiveArgCaller(_Caller):
+    def forward(self, args: List[torch.Tensor]):
+        return self.module(args[0], args[1], args[2], args[3], args[4])
+
+
+class _SixArgCaller(_Caller):
+    def forward(self, args: List[torch.Tensor]):
+        return self.module(args[0], args[1], args[2], args[3], args[4], args[5])
+
+
+class _SevenArgCaller(_Caller):
+    def forward(self, args: List[torch.Tensor]):
+        return self.module(
+            args[0], args[1], args[2], args[3], args[4], args[5], args[6]
+        )
+
+
+CALL_DISPATCHERS = [
+    _NoArgCaller,
+    _OneArgCaller,
+    _TwoArgCaller,
+    _ThreeArgCaller,
+    _FourArgCaller,
+    _FiveArgCaller,
+    _SixArgCaller,
+    _SevenArgCaller,
+]
 
 
 class _Wrapper(torch.nn.Module):
-    def __init__(self, module: torch.nn.Module, descriptor: stp.SegmentedTensorProduct):
+    def __init__(self, module: torch.nn.Module, descriptor: cue.SegmentedTensorProduct):
         super().__init__()
-        self.module = module
+        self.module = CALL_DISPATCHERS[descriptor.num_operands - 1](module)
         self.descriptor = descriptor
 
-    def forward(self, *args):
-        for oid, arg in enumerate(args):
-            torch._assert(
-                arg.shape[-1] == self.descriptor.operands[oid].size,
-                "input shape[-1] does not match operand size",
-            )
-
-        shape = torch.broadcast_shapes(*[arg.shape[:-1] for arg in args])
-
-        args = [
-            (
-                arg.expand(shape + (arg.shape[-1],)).reshape(
-                    (math.prod(shape), arg.shape[-1])
-                )
-                if math.prod(arg.shape[:-1]) > 1
-                else arg.reshape((1, arg.shape[-1]))
-            )
-            for arg in args
-        ]
-
-        logger.debug(
-            f"Calling torch.fx tensor product: {self.descriptor}, input shapes: {', '.join(str(arg.shape) for arg in args)}"
-        )
-        out = self.module(*args)
-
-        return out.reshape(shape + (out.shape[-1],))
-
-
-def _sum(tensors, *, shape=None, like=None):
-    if len(tensors) == 0:
-        return like.new_zeros(shape)
-    out = tensors[0]
-    for t in tensors[1:]:
-        out += t
-    return out
+    def forward(self, args: List[torch.Tensor]):
+        return self.module(args)
 
 
 def _tensor_product_cuda(
-    descriptor: stp.SegmentedTensorProduct,
+    descriptor: cue.SegmentedTensorProduct,
     device: Optional[torch.device],
-    math_dtype: Optional[torch.dtype],
+    math_dtype: torch.dtype,
 ) -> torch.nn.Module:
     logger.debug(f"Starting search for a cuda kernel for {descriptor}")
 
@@ -322,9 +433,6 @@ def _tensor_product_cuda(
             "Only descriptors with 3 or 4 operands are supported."
             f" Got {descriptor.subscripts}."
         )
-
-    if math_dtype is None:
-        math_dtype = torch.get_default_dtype()
 
     if not torch.cuda.is_available():
         raise NotImplementedError("CUDA is not available.")
@@ -356,7 +464,7 @@ def _tensor_product_cuda(
                     return TensorProductUniform4x1d(d, device, math_dtype)
 
     supported_targets = [
-        stp.Subscripts(subscripts)
+        cue.segmented_polynomials.Subscripts(subscripts)
         for subscripts in [
             "u__uw_w",
             "_v_vw_w",
@@ -374,7 +482,9 @@ def _tensor_product_cuda(
 
     try:
         descriptor, perm = next(
-            stp.dispatch(descriptor, supported_targets, "permute_all_but_last")
+            cue.segmented_polynomials.dispatch(
+                descriptor, supported_targets, "permute_all_but_last"
+            )
         )
     except StopIteration:
         raise NotImplementedError(
@@ -388,20 +498,17 @@ def _tensor_product_cuda(
         return FusedTensorProductOp4(descriptor, perm[:3], device, math_dtype)
 
 
-def _reshape(x: torch.Tensor, leading_shape: tuple[int, ...]) -> torch.Tensor:
-    # Make x have shape (Z, x.shape[-1]) or (x.shape[-1],)
-    if math.prod(leading_shape) > 1 and math.prod(x.shape[:-1]) == 1:
-        return x.reshape((x.shape[-1],))
-    else:
-        return x.expand(leading_shape + (x.shape[-1],)).reshape(
-            (math.prod(leading_shape), x.shape[-1])
-        )
+def _permutation_module(permutation: Tuple[int, ...]):
+    graph = torch.fx.Graph()
+    inputs = [graph.placeholder(f"input_{i}") for i in range(len(permutation))]
+    graph.output([inputs[i] for i in permutation])
+    return torch.fx.GraphModule(dict(), graph, class_name="perm")
 
 
 class FusedTensorProductOp3(torch.nn.Module):
     def __init__(
         self,
-        descriptor: stp.SegmentedTensorProduct,
+        descriptor: cue.SegmentedTensorProduct,
         perm: Tuple[int, int],
         device: Optional[torch.device],
         math_dtype: torch.dtype,
@@ -421,7 +528,7 @@ class FusedTensorProductOp3(torch.nn.Module):
         import cuequivariance_ops_torch as ops
 
         self._f = ops.FusedTensorProductOp3(
-            operand_segment_modes=[ope.subscripts for ope in descriptor.operands],
+            operand_segment_modes=descriptor.subscripts.operands,
             operand_segment_offsets=[
                 [s.start for s in ope.segment_slices()] for ope in descriptor.operands
             ],
@@ -431,37 +538,32 @@ class FusedTensorProductOp3(torch.nn.Module):
             math_dtype=math_dtype,
         ).to(device=device)
 
+    @torch.jit.ignore
     def __repr__(self) -> str:
-        return f"TensorProductCUDA({self.descriptor} (output last operand))"
+        return f"FusedTensorProductOp3({self.descriptor} (output last operand))"
 
-    def forward(
-        self,
-        x0: torch.Tensor,
-        x1: torch.Tensor,
-        b2: Optional[torch.Tensor] = None,
-    ) -> torch.Tensor:
+    def forward(self, x0: torch.Tensor, x1: torch.Tensor) -> torch.Tensor:
         x0, x1 = self._perm(x0, x1)
-        assert x0.ndim >= 1, x0.ndim
-        assert x1.ndim >= 1, x1.ndim
-        assert b2 is None
 
-        shape = torch.broadcast_shapes(x0.shape[:-1], x1.shape[:-1])
-        x0 = _reshape(x0, shape)
-        x1 = _reshape(x1, shape)
+        if (
+            not torch.jit.is_scripting()
+            and not torch.jit.is_tracing()
+            and not torch.compiler.is_compiling()
+        ):
+            logger.debug(
+                f"Calling FusedTensorProductOp3: {self.descriptor}, input shapes: {x0.shape}, {x1.shape}"
+            )
 
-        logger.debug(
-            f"Calling FusedTensorProductOp3: {self.descriptor}, input shapes: {x0.shape}, {x1.shape}"
-        )
+        torch._assert(x0.ndim == 2, "input should be (batch, dim) or (1, dim)")
+        torch._assert(x1.ndim == 2, "input should be (batch, dim) or (1, dim)")
 
-        out = self._f(x0, x1)
-
-        return out.reshape(shape + (out.shape[-1],))
+        return self._f(x0, x1)
 
 
 class FusedTensorProductOp4(torch.nn.Module):
     def __init__(
         self,
-        descriptor: stp.SegmentedTensorProduct,
+        descriptor: cue.SegmentedTensorProduct,
         perm: Tuple[int, int, int],
         device: Optional[torch.device],
         math_dtype: torch.dtype,
@@ -481,7 +583,7 @@ class FusedTensorProductOp4(torch.nn.Module):
         import cuequivariance_ops_torch as ops
 
         self._f = ops.FusedTensorProductOp4(
-            operand_segment_modes=[ope.subscripts for ope in descriptor.operands],
+            operand_segment_modes=descriptor.subscripts.operands,
             operand_segment_offsets=[
                 [s.start for s in ope.segment_slices()] for ope in descriptor.operands
             ],
@@ -491,144 +593,218 @@ class FusedTensorProductOp4(torch.nn.Module):
             math_dtype=math_dtype,
         ).to(device=device)
 
+    @torch.jit.ignore
     def __repr__(self) -> str:
-        return f"TensorProductCUDA({self.descriptor} (output last operand))"
+        return f"FusedTensorProductOp4({self.descriptor} (output last operand))"
+
+    def forward(
+        self, x0: torch.Tensor, x1: torch.Tensor, x2: torch.Tensor
+    ) -> torch.Tensor:
+        x0, x1, x2 = self._perm(x0, x1, x2)
+
+        if (
+            not torch.jit.is_scripting()
+            and not torch.jit.is_tracing()
+            and not torch.compiler.is_compiling()
+        ):
+            logger.debug(
+                f"Calling FusedTensorProductOp4: {self.descriptor}, input shapes: {x0.shape}, {x1.shape}, {x2.shape}"
+            )
+
+        torch._assert(x0.ndim == 2, "input should be (batch, dim) or (1, dim)")
+        torch._assert(x1.ndim == 2, "input should be (batch, dim) or (1, dim)")
+        torch._assert(x2.ndim == 2, "input should be (batch, dim) or (1, dim)")
+
+        return self._f(x0, x1, x2)
+
+
+class TensorProductUniform1d(torch.nn.Module):
+    def __init__(
+        self,
+        descriptor: cue.SegmentedTensorProduct,
+        device: Optional[torch.device],
+        math_dtype: torch.dtype,
+    ):
+        super().__init__()
+        import cuequivariance_ops_torch as ops
+
+        self.descriptor = descriptor
+
+        assert len(descriptor.subscripts.modes()) == 1
+        assert descriptor.all_same_segment_shape()
+        assert descriptor.coefficient_subscripts == ""
+        u = next(iter(descriptor.get_dims(descriptor.subscripts.modes()[0])))
+
+        self._f = ops.TensorProductUniform1d(
+            operand_dim=[ope.ndim for ope in descriptor.operands],
+            operand_extent=u,
+            operand_num_segments=[ope.num_segments for ope in descriptor.operands],
+            path_indices=[path.indices for path in descriptor.paths],
+            path_coefficients=[float(path.coefficients) for path in descriptor.paths],
+            math_dtype=math_dtype,
+        ).to(device=device)
+
+
+class TensorProductUniform3x1d(TensorProductUniform1d):
+    @torch.jit.ignore
+    def __repr__(self):
+        return f"TensorProductUniform3x1d({self.descriptor} (output last operand))"
+
+    def forward(self, x0: torch.Tensor, x1: torch.Tensor) -> torch.Tensor:
+        if (
+            not torch.jit.is_scripting()
+            and not torch.jit.is_tracing()
+            and not torch.compiler.is_compiling()
+        ):
+            logger.debug(
+                f"Calling TensorProductUniform3x1d: {self.descriptor}, input shapes: {x0.shape}, {x1.shape}"
+            )
+        torch._assert(x0.ndim == 2, "input should be (batch, dim) or (1, dim)")
+        torch._assert(x1.ndim == 2, "input should be (batch, dim) or (1, dim)")
+
+        # ops.TensorProductUniform1d expects inputs
+        # of shape (Z, dim) or (1, dim)
+        return self._f(x0, x1)
+
+
+class TensorProductUniform4x1d(TensorProductUniform1d):
+    @torch.jit.ignore
+    def __repr__(self):
+        return f"TensorProductUniform4x1d({self.descriptor} (output last operand))"
+
+    def forward(
+        self, x0: torch.Tensor, x1: torch.Tensor, x2: torch.Tensor
+    ) -> torch.Tensor:
+        if (
+            not torch.jit.is_scripting()
+            and not torch.jit.is_tracing()
+            and not torch.compiler.is_compiling()
+        ):
+            logger.debug(
+                f"Calling TensorProductUniform4x1d: {self.descriptor}, input shapes: {x0.shape}, {x1.shape}, {x2.shape}"
+            )
+        torch._assert(x0.ndim == 2, "input should be (batch, dim) or (1, dim)")
+        torch._assert(x1.ndim == 2, "input should be (batch, dim) or (1, dim)")
+        torch._assert(x2.ndim == 2, "input should be (batch, dim) or (1, dim)")
+
+        # ops.TensorProductUniform1d expects inputs
+        # of shape (Z, dim) or (1, dim)
+        return self._f(x0, x1, x2)
+
+
+class TensorProductUniform3x1dIndexed(torch.nn.Module):
+    def __init__(
+        self,
+        descriptor: cue.SegmentedTensorProduct,
+        device: Optional[torch.device],
+        math_dtype: torch.dtype,
+    ):
+        super().__init__()
+        import cuequivariance_ops_torch as ops
+
+        self.descriptor = descriptor
+
+        assert len(descriptor.subscripts.modes()) == 1
+        assert descriptor.all_same_segment_shape()
+        assert descriptor.coefficient_subscripts == ""
+        u = next(iter(descriptor.get_dims(descriptor.subscripts.modes()[0])))
+
+        self._f = ops.TensorProductUniform3x1dIndexed(
+            operand_dim=[ope.ndim for ope in descriptor.operands],
+            operand_extent=u,
+            operand_num_segments=[ope.num_segments for ope in descriptor.operands],
+            path_indices=[path.indices for path in descriptor.paths],
+            path_coefficients=[float(path.coefficients) for path in descriptor.paths],
+            math_dtype=math_dtype,
+        ).to(device=device)
+
+    @torch.jit.ignore
+    def __repr__(self):
+        return (
+            f"TensorProductUniform3x1dIndexed({self.descriptor} (output last operand))"
+        )
+
+    def forward(
+        self,
+        x0: torch.Tensor,
+        x1: torch.Tensor,
+        op_idx0: Optional[torch.Tensor],
+        op_idx1: Optional[torch.Tensor],
+        op_idx_out: Optional[torch.Tensor],
+        num_output_rows: int,
+    ) -> torch.Tensor:
+        if (
+            not torch.jit.is_scripting()
+            and not torch.jit.is_tracing()
+            and not torch.compiler.is_compiling()
+        ):
+            logger.debug(
+                f"Calling TensorProductUniform3x1d: {self.descriptor}, input shapes: {x0.shape}, {x1.shape}"
+            )
+        torch._assert(x0.ndim == 2, "input should be (batch, dim) or (1, dim)")
+        torch._assert(x1.ndim == 2, "input should be (batch, dim) or (1, dim)")
+
+        # ops.TensorProductUniform1d expects inputs
+        # of shape (Z, dim) or (1, dim)
+        return self._f(x0, x1, op_idx0, op_idx1, op_idx_out, num_output_rows)
+
+
+class TensorProductUniform4x1dIndexed(torch.nn.Module):
+    def __init__(
+        self,
+        descriptor: cue.SegmentedTensorProduct,
+        device: Optional[torch.device],
+        math_dtype: torch.dtype,
+    ):
+        super().__init__()
+        import cuequivariance_ops_torch as ops
+
+        self.descriptor = descriptor
+
+        assert len(descriptor.subscripts.modes()) == 1
+        assert descriptor.all_same_segment_shape()
+        assert descriptor.coefficient_subscripts == ""
+        u = next(iter(descriptor.get_dims(descriptor.subscripts.modes()[0])))
+
+        self._f = ops.TensorProductUniform4x1dIndexed(
+            operand_dim=[ope.ndim for ope in descriptor.operands],
+            operand_extent=u,
+            operand_num_segments=[ope.num_segments for ope in descriptor.operands],
+            path_indices=[path.indices for path in descriptor.paths],
+            path_coefficients=[float(path.coefficients) for path in descriptor.paths],
+            math_dtype=math_dtype,
+        ).to(device=device)
+
+    @torch.jit.ignore
+    def __repr__(self):
+        return (
+            f"TensorProductUniform4x1dIndexed({self.descriptor} (output last operand))"
+        )
 
     def forward(
         self,
         x0: torch.Tensor,
         x1: torch.Tensor,
         x2: torch.Tensor,
-        b3: Optional[torch.Tensor] = None,
+        op_idx0: Optional[torch.Tensor],
+        op_idx1: Optional[torch.Tensor],
+        op_idx2: Optional[torch.Tensor],
+        op_idx_out: Optional[torch.Tensor],
+        num_output_rows,
     ) -> torch.Tensor:
-        x0, x1, x2 = self._perm(x0, x1, x2)
-        assert x0.ndim >= 1, x0.ndim
-        assert x1.ndim >= 1, x1.ndim
-        assert x2.ndim >= 1, x2.ndim
-        assert b3 is None
+        if (
+            not torch.jit.is_scripting()
+            and not torch.jit.is_tracing()
+            and not torch.compiler.is_compiling()
+        ):
+            logger.debug(
+                f"Calling TensorProductUniform4x1d: {self.descriptor}, input shapes: {x0.shape}, {x1.shape}"
+            )
+        torch._assert(x0.ndim == 2, "input should be (batch, dim) or (1, dim)")
+        torch._assert(x1.ndim == 2, "input should be (batch, dim) or (1, dim)")
 
-        shape = torch.broadcast_shapes(x0.shape[:-1], x1.shape[:-1], x2.shape[:-1])
-        x0 = _reshape(x0, shape)
-        x1 = _reshape(x1, shape)
-        x2 = _reshape(x2, shape)
-
-        logger.debug(
-            f"Calling FusedTensorProductOp4: {self.descriptor}, input shapes: {x0.shape}, {x1.shape}, {x2.shape}"
+        # ops.TensorProductUniform1d expects inputs
+        # of shape (Z, dim) or (1, dim)
+        return self._f(
+            x0, x1, x2, op_idx0, op_idx1, op_idx2, op_idx_out, num_output_rows
         )
-
-        out = self._f(x0, x1, x2)
-
-        return out.reshape(shape + (out.shape[-1],))
-
-
-class TensorProductUniform3x1d(torch.nn.Module):
-    def __init__(
-        self,
-        descriptor: stp.SegmentedTensorProduct,
-        device: Optional[torch.device],
-        math_dtype: torch.dtype,
-    ):
-        super().__init__()
-        import cuequivariance_ops_torch as ops
-
-        self.descriptor = descriptor
-
-        assert len(descriptor.subscripts.modes()) == 1
-        assert descriptor.all_same_segment_shape()
-        assert descriptor.coefficient_subscripts == ""
-        u = next(iter(descriptor.get_dims(descriptor.subscripts.modes()[0])))
-
-        self._f = ops.TensorProductUniform1d(
-            operand_dim=[ope.ndim for ope in descriptor.operands],
-            operand_extent=u,
-            operand_num_segments=[ope.num_segments for ope in descriptor.operands],
-            path_indices=[path.indices for path in descriptor.paths],
-            path_coefficients=[float(path.coefficients) for path in descriptor.paths],
-            math_dtype=math_dtype,
-        ).to(device=device)
-
-    def __repr__(self):
-        return f"TensorProductCUDA({self.descriptor} (output last operand))"
-
-    def forward(self, x0, x1):
-        assert x0.ndim >= 1, x0.ndim
-        assert x1.ndim >= 1, x1.ndim
-
-        shape = torch.broadcast_shapes(x0.shape[:-1], x1.shape[:-1])
-        x0 = _reshape(x0, shape)
-        x1 = _reshape(x1, shape)
-
-        if x0.ndim == 1:
-            x0 = x0.unsqueeze(0)
-        if x1.ndim == 1:
-            x1 = x1.unsqueeze(0)
-
-        logger.debug(
-            f"Calling TensorProductUniform3x1d: {self.descriptor}, input shapes: {x0.shape}, {x1.shape}"
-        )
-
-        out = self._f(x0, x1)
-
-        return out.reshape(shape + (out.shape[-1],))
-
-
-class TensorProductUniform4x1d(torch.nn.Module):
-    def __init__(
-        self,
-        descriptor: stp.SegmentedTensorProduct,
-        device: Optional[torch.device],
-        math_dtype: torch.dtype,
-    ):
-        super().__init__()
-        import cuequivariance_ops_torch as ops
-
-        self.descriptor = descriptor
-
-        assert len(descriptor.subscripts.modes()) == 1
-        assert descriptor.all_same_segment_shape()
-        assert descriptor.coefficient_subscripts == ""
-        u = next(iter(descriptor.get_dims(descriptor.subscripts.modes()[0])))
-
-        self._f = ops.TensorProductUniform1d(
-            operand_dim=[ope.ndim for ope in descriptor.operands],
-            operand_extent=u,
-            operand_num_segments=[ope.num_segments for ope in descriptor.operands],
-            path_indices=[path.indices for path in descriptor.paths],
-            path_coefficients=[float(path.coefficients) for path in descriptor.paths],
-            math_dtype=math_dtype,
-        ).to(device=device)
-
-    def __repr__(self):
-        return f"TensorProductCUDA({self.descriptor} (output last operand))"
-
-    def forward(self, x0, x1, x2):
-        assert x0.ndim >= 1, x0.ndim
-        assert x1.ndim >= 1, x1.ndim
-        assert x2.ndim >= 1, x2.ndim
-
-        shape = torch.broadcast_shapes(x0.shape[:-1], x1.shape[:-1], x2.shape[:-1])
-        x0 = _reshape(x0, shape)
-        x1 = _reshape(x1, shape)
-        x2 = _reshape(x2, shape)
-
-        if x0.ndim == 1:
-            x0 = x0.unsqueeze(0)
-        if x1.ndim == 1:
-            x1 = x1.unsqueeze(0)
-        if x2.ndim == 1:
-            x2 = x2.unsqueeze(0)
-
-        logger.debug(
-            f"Calling TensorProductUniform4x1d: {self.descriptor}, input shapes: {x0.shape}, {x1.shape}, {x2.shape}"
-        )
-
-        out = self._f(x0, x1, x2)
-
-        return out.reshape(shape + (out.shape[-1],))
-
-
-def _permutation_module(permutation: Tuple[int, ...]):
-    graph = torch.fx.Graph()
-    inputs = [graph.placeholder(f"input_{i}") for i in range(len(permutation))]
-    graph.output([inputs[i] for i in permutation])
-    return torch.fx.GraphModule(dict(), graph, class_name="perm")

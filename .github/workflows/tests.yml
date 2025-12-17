@@ -2,81 +2,98 @@ name: Run Tests
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "release" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "release" ]
 
 
 jobs:
+
   cuequivariance:
 
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.12"]
 
     steps:
     - uses: actions/checkout@v4
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v3
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        python -m pip install pytest
-        python -m pip install ./cuequivariance
+        python -m pip install --upgrade uv
+        python -m uv pip install pytest
+        python -m uv pip install -e ./cuequivariance 
     - name: Test with pytest
       run: |
-        pytest --doctest-modules cuequivariance
+        pytest --doctest-modules -x -m "not slow" cuequivariance
+    - name: Downgrade numpy
+      run: |
+        python -m uv pip install -U "numpy==1.26.*"
+    - name: Test with pytest (numpy 1.26)
+      run: |
+        pytest --doctest-modules -x -m "not slow" cuequivariance
+
 
   cuequivariance-jax:
-
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.12"]
 
     steps:
     - uses: actions/checkout@v4
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v3
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        python -m pip install pytest
-        python -m pip install ./cuequivariance
-        python -m pip install ./cuequivariance_jax
+        python -m pip install --upgrade uv
+        python -m uv pip install -U pytest "jax[cuda12]"
+        python -m uv pip install nvidia-cusolver-cu12==11.7.3.90
+        python -m uv pip install jax-triton triton==3.3.1
+        python -m uv pip install flax
+        python -m uv pip uninstall cuequivariance cuequivariance_jax cuequivariance_torch
+        python -m uv pip install -e ./cuequivariance 
+        python -m uv pip install -e ./cuequivariance_jax 
+        python -c "import cuequivariance; print('cue', cuequivariance.__version__)"
+        python -c "import cuequivariance_jax; print('cuex', cuequivariance_jax.__version__)"
     - name: Test with pytest
       run: |
-        pytest --doctest-modules cuequivariance_jax
+        XLA_PYTHON_CLIENT_PREALLOCATE=false pytest --doctest-modules -x -m "not slow" cuequivariance_jax
+
 
   cuequivariance-torch:
-
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.12"]
+        python-version: ["3.10", "3.12"]
 
     steps:
     - uses: actions/checkout@v4
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v3
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        python -m pip install pytest
-        python -m pip install torch
-        python -m pip install ./cuequivariance
-        python -m pip install ./cuequivariance_torch
-        python -m pip install e3nn
+        python -m pip install --upgrade uv
+        python -m uv pip install -U pytest torch e3nn
+        python -m uv pip uninstall cuequivariance cuequivariance_jax cuequivariance_torch
+        python -m uv pip install -e ./cuequivariance 
+        python -m uv pip install -e ./cuequivariance_torch 
+        python -c "import cuequivariance; print('cue', cuequivariance.__version__)"
+        python -c "import cuequivariance_torch; print('cuet', cuequivariance_torch.__version__)"
     - name: Test with pytest
       run: |
-        pytest --doctest-modules cuequivariance_torch
+        pytest --doctest-modules -x -m "not slow" cuequivariance_torch

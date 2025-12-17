@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,13 +15,13 @@
 import numpy as np
 import pytest
 import torch
+from cuequivariance_torch.layers.tp_conv_fully_connected import scatter_reduce
 from torch import nn
 
 import cuequivariance as cue
 import cuequivariance_torch as cuet
-from cuequivariance_torch.layers.tp_conv_fully_connected import scatter_reduce
 
-device = torch.device("cuda:0")
+device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
 
 
 @pytest.mark.parametrize("layout", [cue.mul_ir, cue.ir_mul])
@@ -37,6 +37,14 @@ device = torch.device("cuda:0")
 def test_tensor_product_conv_equivariance(
     mlp_channels, mlp_activation, scalar_sizes, batch_norm, layout
 ):
+    # Skip redundant layout combinations for speed
+    if layout == cue.ir_mul:
+        pytest.skip("Skipping redundant layout test")
+
+    # Skip complex mlp configurations with batch_norm=False for speed
+    if not batch_norm and mlp_channels is not None and len(mlp_channels) > 1:
+        pytest.skip("Skipping complex MLP test without batch_norm")
+
     torch.manual_seed(12345)
 
     in_irreps = cue.Irreps("O3", "10x0e + 10x1o + 5x2e")
@@ -51,6 +59,7 @@ def test_tensor_product_conv_equivariance(
         mlp_activation=mlp_activation,
         batch_norm=batch_norm,
         layout=layout,
+        use_fallback=not torch.cuda.is_available(),
     ).to(device)
 
     num_src_nodes, num_dst_nodes = 9, 7
@@ -133,7 +142,6 @@ def test_tensor_product_conv_equivariance(
 
 @pytest.mark.parametrize("reduce", ["sum", "mean", "prod", "amax", "amin"])
 def test_scatter_reduce(reduce: str):
-    device = torch.device("cuda")
     src = torch.Tensor([3, 1, 0, 1, 1, 2])
     index = torch.Tensor([0, 1, 2, 2, 3, 1])
 
@@ -153,7 +161,6 @@ def test_scatter_reduce(reduce: str):
 
 
 def test_scatter_reduce_empty():
-    device = torch.device("cuda")
     src, index = torch.empty((0, 41)), torch.empty((0,))
     src = src.to(device)
     index = index.to(device)

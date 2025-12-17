@@ -1,4 +1,4 @@
-.. SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+.. SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
    SPDX-License-Identifier: Apache-2.0
 
    Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,6 +18,18 @@
 
 cuequivariance
 ==============
+
+Segmented Polynomials
+---------------------
+
+.. autosummary::
+   :toctree: generated/
+   :template: class_template.rst
+
+   Operation
+   SegmentedOperand
+   SegmentedTensorProduct
+   SegmentedPolynomial
 
 Group Representations
 ---------------------
@@ -41,7 +53,7 @@ Group Representations
 Equivariant Tensor Products
 ---------------------------
 
-These classes represent tensor products.
+These classes represent tensor products and polynomials.
 
 .. autosummary::
    :toctree: generated/
@@ -49,8 +61,8 @@ These classes represent tensor products.
 
    Irreps
    IrrepsLayout
-   SegmentedTensorProduct
-   EquivariantTensorProduct
+   IrrepsAndLayout
+   EquivariantPolynomial
 
 Descriptors
 -----------
@@ -61,3 +73,12 @@ Descriptors
    :hidden:
 
    cuequivariance.descriptors
+
+Utilities
+---------
+
+.. autosummary::
+   :toctree: generated/
+   :template: class_template.rst
+
+   assume

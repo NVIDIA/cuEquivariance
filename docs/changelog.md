@@ -1,3 +1,6 @@
-# Change Log
+# Release Notes
 
 ```{include} ../CHANGELOG.md
+:relative-docs: ../
+:relative-images:
+```

@@ -12,7 +12,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import *
 
 import jax
 import jax.numpy as jnp
@@ -37,8 +36,8 @@ class LayerNorm(nn.Module):
     epsilon: float = 0.01
 
     @nn.compact
-    def __call__(self, input: cuex.IrrepsArray) -> cuex.IrrepsArray:
-        assert input.is_simple()
+    def __call__(self, input: cuex.RepArray) -> cuex.RepArray:
+        assert input.is_irreps_array()
 
         def rms(v: jax.Array) -> jax.Array:
             # v [..., ir, mul] or [..., mul, ir]
@@ -55,8 +54,8 @@ class LayerNorm(nn.Module):
             return rmsn
 
         return cuex.from_segments(
-            input.irreps(),
-            [x / (rms(x) + self.epsilon) for x in input.segments()],
+            input.irreps,
+            [x / (rms(x) + self.epsilon) for x in input.segments],
             input.shape,
             input.layout,
             input.dtype,

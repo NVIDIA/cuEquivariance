@@ -8,7 +8,10 @@
 
 ## Coding Guidelines
 
-- To maintain consistency in code formatting and style, you should run `black` or `ruff` on the modified sources.
+
+- We use [pre-commit](https://pre-commit.com/) to ensure code consistency and quality. Before contributing, please set it up locally:
+  - Install `pre-commit`: `pip install pre-commit`
+  - Install the pre-commit hooks: `pre-commit install`
 
 - Avoid introducing unnecessary complexity into existing code so that maintainability and readability are preserved.
 
@@ -28,12 +31,12 @@ Developer workflow for code contributions is as follows:
 
 2. Git clone the forked repository and push changes to the personal fork.
 
-  ```bash
+```bash
 git clone https://github.com/YOUR_USERNAME/YOUR_FORK.git cuequivariance
 # Checkout the targeted branch and commit changes
 # Push the commits to a branch on the fork (remote).
 git push -u origin <local-branch>:<remote-branch>
-  ```
+```
 
 3. Once the code changes are staged on the fork and ready for review, a [Pull Request](https://help.github.com/en/articles/about-pull-requests) (PR) can be [requested](https://help.github.com/en/articles/creating-a-pull-request) to merge the changes from a branch of the fork into a selected branch of upstream.
   * Exercise caution when selecting the source and target branches for the PR.
@@ -49,7 +52,7 @@ To sign off on a commit you simply use the `--signoff` (or `-s`) option when com
 ```bash
 $ git commit -s -m "Add cool feature."
 ```
-  
+
 This will append the following to your commit message:
 ```
 Signed-off-by: Your Name <your@email.com>

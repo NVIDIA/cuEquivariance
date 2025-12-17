@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,37 +19,45 @@ __version__ = (
 )
 
 
-from .irreps_array.jax_irreps_array import (
-    IrrepsArray,
-    from_segments,
-    vmap,
+from .rep_array.rep_array_ import RepArray, from_segments
+from .rep_array.vmap import vmap
+from .rep_array.rep_array_utils import (
+    concatenate,
+    randn,
+    as_irreps_array,
+    clebsch_gordan,
 )
-from .irreps_array.utils import concatenate, randn, as_irreps_array
 
-from .primitives.tensor_product import tensor_product
-from .primitives.symmetric_tensor_product import symmetric_tensor_product
-from .primitives.equivariant_tensor_product import equivariant_tensor_product
+from .segmented_polynomials.utils import Repeats
+from .segmented_polynomials.segmented_polynomial import segmented_polynomial
+from .equivariant_polynomial import equivariant_polynomial
 
-from .operations.activation import (
+from .activation import (
     normalspace,
     normalize_function,
     function_parity,
     scalar_activation,
 )
-from .operations.spherical_harmonics import spherical_harmonics, normalize, norm
-
+from .spherical_harmonics import spherical_harmonics, normalize, norm
+from .triangle import (
+    triangle_multiplicative_update,
+    Precision as TriMulPrecision,
+    triangle_attention,
+)
 from cuequivariance_jax import flax_linen
+from cuequivariance_jax import experimental
 
 __all__ = [
-    "IrrepsArray",
+    "RepArray",
     "from_segments",
-    "as_irreps_array",
     "vmap",
     "concatenate",
     "randn",
-    "tensor_product",
-    "symmetric_tensor_product",
-    "equivariant_tensor_product",
+    "as_irreps_array",
+    "clebsch_gordan",
+    "Repeats",
+    "segmented_polynomial",
+    "equivariant_polynomial",
     "normalspace",
     "normalize_function",
     "function_parity",
@@ -57,5 +65,9 @@ __all__ = [
     "spherical_harmonics",
     "normalize",
     "norm",
+    "triangle_multiplicative_update",
+    "TriMulPrecision",
+    "triangle_attention",
     "flax_linen",
+    "experimental",
 ]

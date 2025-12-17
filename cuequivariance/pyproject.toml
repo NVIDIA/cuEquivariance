@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,10 +21,10 @@ build-backend = "hatchling.build"
 name = "cuequivariance"
 dynamic = ["version"]
 description = "CUDA accelerated equivariant operations"
-readme = "../README.md"
-license = { file = "../LICENSES/LICENSE" }
+readme = "README.md"
+license = { file = "LICENSE" }
 authors = [{ name = "NVIDIA Corporation" }]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "numpy",
     "scipy",
@@ -35,13 +35,20 @@ dependencies = [
 classifiers = [
     "Intended Audience :: Developers",
     "Programming Language :: Python",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
 ]
 
 [tool.hatch.version]
 path = "cuequivariance/VERSION"
-pattern = "(?P<version>\\d+\\.\\d+\\.\\d+)"
+pattern = "(?P<version>\\d+\\.\\d+\\.\\d+(?:[a-z]+\\d+)?)"
+
+[tool.hatch.build.targets.wheel]
+packages = ["cuequivariance"]
+force-include = { "Third_party_attr.txt" = "Third_party_attr.txt" }
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]

@@ -1,4 +1,4 @@
-.. SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+.. SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
    SPDX-License-Identifier: Apache-2.0
 
    Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,8 +13,8 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 
-.. module:: cuequivariance.descriptors
-.. currentmodule:: cuequivariance.descriptors
+.. module:: cuequivariance.group_theory.descriptors
+.. currentmodule:: cuequivariance.group_theory.descriptors
 
 Descriptors
 ===========
@@ -34,7 +34,3 @@ These functions create specific instances of tensor products.
    x_rotation
    y_rotation
    yxy_rotation
-   escn_tp
-   gatr_linear
-   gatr_geometric_product
-   gatr_outer_product

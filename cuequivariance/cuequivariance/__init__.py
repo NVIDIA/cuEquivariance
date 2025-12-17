@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +18,14 @@ __version__ = (
     importlib.resources.files(__package__).joinpath("VERSION").read_text().strip()
 )
 
-from cuequivariance.representation import (
+from .segmented_polynomials import (
+    Operation,
+    SegmentedOperand,
+    SegmentedTensorProduct,
+    SegmentedPolynomial,
+)
+
+from .group_theory import (
     Rep,
     Irrep,
     clebsch_gordan,
@@ -27,15 +34,13 @@ from cuequivariance.representation import (
     SU2,
     SO3,
     O3,
-)
-
-from cuequivariance.irreps_array import (
     get_irrep_scope,
     MulIrrep,
     Irreps,
     IrrepsLayout,
     mul_ir,
     ir_mul,
+    IrrepsAndLayout,
     get_layout_scope,
     assume,
     NumpyIrrepsArray,
@@ -44,19 +49,20 @@ from cuequivariance.irreps_array import (
     reduced_tensor_product_basis,
     reduced_symmetric_tensor_product_basis,
     reduced_antisymmetric_tensor_product_basis,
+    EquivariantPolynomial,
+    EquivariantTensorProduct,  # deprecated
 )
 
-from cuequivariance.segmented_tensor_product import SegmentedTensorProduct
-from cuequivariance.equivariant_tensor_product import EquivariantTensorProduct
-from cuequivariance.tensor_product_execution import TensorProductExecution
-
-from cuequivariance import (
-    segmented_tensor_product,
-    descriptors,
-    tensor_product_execution,
-)
+from cuequivariance import segmented_polynomials as segmented_polynomials
+from cuequivariance import group_theory as group_theory
+from cuequivariance.group_theory import descriptors as descriptors
 
 __all__ = [
+    "__version__",
+    "Operation",
+    "SegmentedOperand",
+    "SegmentedTensorProduct",
+    "SegmentedPolynomial",
     "Rep",
     "Irrep",
     "clebsch_gordan",
@@ -71,6 +77,7 @@ __all__ = [
     "IrrepsLayout",
     "mul_ir",
     "ir_mul",
+    "IrrepsAndLayout",
     "get_layout_scope",
     "assume",
     "NumpyIrrepsArray",
@@ -79,10 +86,9 @@ __all__ = [
     "reduced_tensor_product_basis",
     "reduced_symmetric_tensor_product_basis",
     "reduced_antisymmetric_tensor_product_basis",
-    "SegmentedTensorProduct",
+    "EquivariantPolynomial",
     "EquivariantTensorProduct",
-    "TensorProductExecution",
-    "segmented_tensor_product",
+    "segmented_polynomials",
+    "group_theory",
     "descriptors",
-    "tensor_product_execution",
 ]

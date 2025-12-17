@@ -1,4 +1,4 @@
-.. SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+.. SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
    SPDX-License-Identifier: Apache-2.0
 
    Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,14 +19,14 @@
 cuequivariance-jax
 ==================
 
-IrrepsArray
------------
+RepArray
+--------
 
 .. autosummary::
    :toctree: generated/
    :template: class_template.rst
 
-   IrrepsArray
+   RepArray
 
 .. autosummary::
    :toctree: generated/
@@ -44,8 +44,8 @@ Tensor Products
    :toctree: generated/
    :template: function_template.rst
 
-   equivariant_tensor_product
-   tensor_product
+   equivariant_polynomial
+   segmented_polynomial
 
 Extra Modules
 -------------
@@ -54,5 +54,29 @@ Extra Modules
    :toctree: generated/
    :template: class_template.rst
 
-   flax_linen.Linear
    flax_linen.LayerNorm
+
+.. autosummary::
+   :toctree: generated/
+   :template: function_template.rst
+
+   spherical_harmonics
+
+Triangle
+--------
+
+.. autosummary::
+   :toctree: generated/
+   :template: function_template.rst
+
+   triangle_multiplicative_update
+   triangle_attention
+
+Experimental
+------------
+
+.. autosummary::
+   :toctree: generated/
+   :template: function_template.rst
+
+   experimental.indexed_linear

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import *
+from typing import Optional
 
 import torch
 import torch.fx
@@ -36,19 +36,24 @@ class TransposeIrrepsLayout(torch.nn.Module):
         source: cue.IrrepsLayout,
         target: cue.IrrepsLayout,
         device: Optional[torch.device] = None,
+        use_fallback: Optional[bool] = None,
     ):
         super().__init__()
 
         if (source, target) == (cue.mul_ir, cue.ir_mul):
             self.f = TransposeSegments(
-                [(mul, ir.dim) for mul, ir in irreps], device=device
+                [(mul, ir.dim) for mul, ir in irreps],
+                device=device,
+                use_fallback=use_fallback,
             )
         elif (source, target) == (cue.ir_mul, cue.mul_ir):
             self.f = TransposeSegments(
-                [(ir.dim, mul) for mul, ir in irreps], device=device
+                [(ir.dim, mul) for mul, ir in irreps],
+                device=device,
+                use_fallback=use_fallback,
             )
         else:
-            self.f = _Identity()
+            self.f = torch.nn.Identity()
 
         self.source, self.target = source, target
 
@@ -58,9 +63,7 @@ class TransposeIrrepsLayout(torch.nn.Module):
     def __repr__(self):
         return f"TransposeIrrepsLayout({self.source} -> {self.target})"
 
-    def forward(
-        self, x: torch.Tensor, *, use_fallback: Optional[bool] = None
-    ) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         r"""
         Perform the transposition.
 
@@ -74,41 +77,46 @@ class TransposeIrrepsLayout(torch.nn.Module):
             torch.Tensor: The transposed tensor.
         """
 
-        return self.f(x, use_fallback=use_fallback)
-
-
-class _Identity(torch.nn.Module):
-    def forward(self, x: torch.Tensor, **kwargs):
-        return x
+        return self.f(x)
 
 
 class TransposeSegments(torch.nn.Module):
     def __init__(
-        self, segments: list[tuple[int, int]], device: Optional[torch.device] = None
+        self,
+        segments: list[tuple[int, int]],
+        device: Optional[torch.device] = None,
+        use_fallback: Optional[bool] = None,
     ):
         super().__init__()
 
         info = _transpose_info(segments, device=device)
+        self.f = None
 
         if info is not None:
-            try:
-                import cuequivariance_ops_torch
-            except ImportError:
-                self.f_cuda = None
-            else:
-                self.f_cuda = _transpose(info).to(device=device)
+            import_error = None
+            if use_fallback is False or use_fallback is None:
+                try:
+                    import cuequivariance_ops_torch  # noqa: F401
+                except ImportError as e:
+                    import_error = e
+                else:
+                    if torch.cuda.is_available():
+                        self.f = _transpose(info).to(device=device)
 
-            self.f = _transpose_segments_fx(segments).to(device=device)
+            if use_fallback is False and self.f is None:
+                raise RuntimeError(
+                    f"CUDA kernel not available for TransposeSegments: {import_error}"
+                )
+
+            if self.f is None:
+                self.f = _transpose_segments_fx(segments).to(device=device)
         else:
-            self.f_cuda = torch.nn.Identity()
             self.f = torch.nn.Identity()
 
     def __repr__(self):
-        return f"TransposeSegments()"
+        return "TransposeSegments()"
 
-    def forward(
-        self, x: torch.Tensor, *, use_fallback: Optional[bool] = None
-    ) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Perform the transposition of the input tensor using either a CUDA kernel or a PyTorch fallback.
 
@@ -131,19 +139,6 @@ class TransposeSegments(torch.nn.Module):
         RuntimeError
             If `use_fallback` is `False` and a CUDA kernel is not available or the input is not on CUDA.
         """
-        if (
-            x.device.type == "cuda"
-            and self.f_cuda is not None
-            and (use_fallback is not True)
-        ):
-            return self.f_cuda(x)
-
-        if use_fallback is False:
-            if self.f_cuda is not None:
-                raise RuntimeError("CUDA kernel available but input is not on CUDA")
-            else:
-                raise RuntimeError("No CUDA kernel available")
-
         return self.f(x)
 
 
@@ -153,7 +148,7 @@ def _transpose_segments_fx(segments: list[tuple[int, int]]) -> torch.nn.Module:
     x = torch.fx.Proxy(graph.placeholder("input"), tracer)
     outputs = []
 
-    source = cue.segmented_tensor_product.Operand(subscripts="ij", segments=segments)
+    source = cue.SegmentedOperand(ndim=2, segments=segments)
     for sl, (u, v) in zip(source.segment_slices(), source.segments):
         outputs += [
             x[..., sl]
@@ -184,12 +179,16 @@ def _transpose_info(
     return torch.IntTensor(info).to(device=device)
 
 
+try:
+    from cuequivariance_ops_torch import segmented_transpose
+except ImportError:
+    pass
+
+
 class _transpose(torch.nn.Module):
     def __init__(self, info: torch.IntTensor):
         super().__init__()
         self.register_buffer("_info", info, persistent=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        from cuequivariance_ops_torch import segmented_transpose
-
         return segmented_transpose(x, self._info, True)

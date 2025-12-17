@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import *
+from typing import Callable
 
 import jax
 import jax.numpy as jnp
@@ -98,12 +98,7 @@ def bessel(x: jax.Array, n: int, x_max: float = 1.0) -> jax.Array:
 
     x = x[..., None]
     n = jnp.arange(1, n + 1, dtype=x.dtype)
-    x_nonzero = jnp.where(x == 0.0, 1.0, x)
-    return jnp.sqrt(2.0 / x_max) * jnp.where(
-        x == 0,
-        n * jnp.pi / x_max,
-        jnp.sin(n * jnp.pi / x_max * x_nonzero) / x_nonzero,
-    )
+    return jnp.sqrt(2.0 / x_max) * jnp.pi * n / x_max * jnp.sinc(n * x / x_max)
 
 
 def sus(x: jax.Array) -> jax.Array:
@@ -132,8 +127,9 @@ def smooth_bump(x: jax.Array) -> jax.Array:
 
 
 def gather(
-    i: jax.Array, x: cuex.IrrepsArray, n: int, indices_are_sorted: bool = False
-) -> cuex.IrrepsArray:
+    i: jax.Array, x: cuex.RepArray, n: int, indices_are_sorted: bool = False
+) -> cuex.RepArray:
+    assert 0 not in x.reps
     y = jnp.zeros((n,) + x.shape[1:], dtype=x.dtype)
     y = y.at[i].add(x.array, indices_are_sorted=indices_are_sorted)
-    return cuex.IrrepsArray(x.irreps(), y, x.layout)
+    return cuex.RepArray(x.reps, y)

@@ -7,6 +7,5 @@ myst-parser
 ipykernel
 matplotlib
 jupyter-sphinx
-python-gitlab
 e3nn
 flax
