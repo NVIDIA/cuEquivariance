@@ -17,6 +17,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    import graphviz
+
     import cuequivariance as cue
 
 
@@ -41,7 +43,7 @@ def visualize_polynomial(
         >>> from cuequivariance.segmented_polynomials.visualization import visualize_polynomial
         >>> poly = cue.descriptors.spherical_harmonics(cue.SO3(1), [1, 2, 3]).polynomial
         >>> graph = visualize_polynomial(poly, ["x"], ["Y"])
-        >>> graph.render("spherical_harmonics", format="png")  # Saves to file
+        >>> graph.render("spherical_harmonics", format="png", cleanup=True)  # doctest: +SKIP
         >>> # Or in Jupyter:
         >>> # graph  # Displays inline
 
