@@ -93,9 +93,8 @@ graph.edge_attr.update(color="gray")
 graph.render("output", format="svg", cleanup=True)
 ```
 
-## Demo Scripts
+## Documentation
 
-See the repository for example scripts:
-- `demo_visualization.py` - Shows DOT source output for various polynomial types
-- `example_visualization.py` - Generates PNG files for multiple examples
-- `test_visualization.py` - Tests the API without requiring Graphviz installed
+For complete examples with rendered output, see the [Segmented Polynomials tutorial](docs/tutorials/poly.rst) in the documentation.
+
+For API testing without requiring Graphviz installed, see `test_visualization.py`.
