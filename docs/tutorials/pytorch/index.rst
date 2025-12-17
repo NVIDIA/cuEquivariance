@@ -20,3 +20,4 @@ PyTorch Examples
    :maxdepth: 1
 
    MACE
+   poly
