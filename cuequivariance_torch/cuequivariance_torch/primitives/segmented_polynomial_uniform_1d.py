@@ -58,7 +58,6 @@ try:
             path_coefficients: List[float],
             batch_size: int,
             tensors: List[torch.Tensor],
-            auto_deterministic_indexing: bool = False,
         ) -> List[torch.Tensor]:
             return torch.ops.cuequivariance.tensor_product_uniform_1d_jit(
                 name,
@@ -82,7 +81,6 @@ try:
                 path_coefficients,
                 batch_size,
                 tensors,
-                auto_deterministic_indexing=auto_deterministic_indexing,
             )
 except ImportError:
     tensor_product_uniform_1d_jit = None
@@ -227,13 +225,6 @@ class SegmentedPolynomialFromUniform1dJit(nn.Module):
         self.BATCH_DIM_BATCHED = BATCH_DIM_BATCHED
         self.BATCH_DIM_INDEXED = BATCH_DIM_INDEXED
 
-        # Extract auto_deterministic_indexing from options
-        self.auto_deterministic_indexing = False
-        if options is not None:
-            self.auto_deterministic_indexing = options.get(
-                "auto_deterministic_indexing", False
-            )
-
     def forward(
         self,
         inputs: List[torch.Tensor],
@@ -308,5 +299,4 @@ class SegmentedPolynomialFromUniform1dJit(nn.Module):
             self.path_coefficients,
             batch_size,
             tensors,
-            auto_deterministic_indexing=self.auto_deterministic_indexing,
         )

@@ -84,9 +84,7 @@ class SegmentedPolynomial(nn.Module):
             -1 means the math_dtype is used.
             Default is 0 if there are input tensors, otherwise -1.
         name: Optional name for the operation. Defaults to "segmented_polynomial".
-        options: Optional dictionary of method-specific options. Currently supported:
-            - ``auto_deterministic_indexing`` (bool): For method ``"uniform_1d"``, enables
-              automatic deterministic indexing optimization. Defaults to False.
+        options: Optional dictionary of method-specific options.
 
     Examples:
         Basic usage with spherical harmonics:
