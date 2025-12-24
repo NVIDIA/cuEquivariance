@@ -168,12 +168,7 @@ def execute_uniform_1d(
             compute_dtype = jnp.float32
 
     try:
-        from cuequivariance_ops_jax import (
-            Operation,
-            Path,
-            __version__,
-            tensor_product_uniform_1d_jit,
-        )
+        from cuequivariance_ops_jax import Operation, Path, __version__, uniform_1d
     except ImportError as e:
         raise ValueError(f"cuequivariance_ops_jax is not installed: {e}")
 
@@ -189,7 +184,7 @@ def execute_uniform_1d(
         for path in stp.paths:
             paths.append(Path(path.indices, path.coefficients.item()))
 
-    outputs = tensor_product_uniform_1d_jit(
+    outputs = uniform_1d(
         buffers[: polynomial.num_inputs],
         buffers[polynomial.num_inputs :],
         list(indices),
