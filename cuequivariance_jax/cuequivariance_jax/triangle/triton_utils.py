@@ -37,7 +37,15 @@ from jax.interpreters import mlir
 from packaging import version
 from triton.backends.nvidia import compiler as cb
 from triton.compiler import compiler as tc
+from triton.compiler.errors import CompilationError
 from triton.runtime import cache as triton_cache
+
+try:
+    import triton
+
+    TRITON_VERSION = version.parse(triton.__version__)
+except (ImportError, AttributeError):
+    TRITON_VERSION = None
 
 # Configure Triton cache directory
 try:
@@ -117,28 +125,46 @@ def _compile_triton(
         enable_fp_fusion=False,
     )
 
-    signature_with_constexpr = {**signature, **{k: "constexpr" for k in constants}}
+    # Handle different Triton API versions
+    compiled = None
 
-    # Try both Triton 3.1.0+ (constexprs) and Triton 3.0.0 (constants) APIs
-    try:
-        src = tc.ASTSource(
-            fn=kernel_fn,
-            constexprs=constants,
-            signature=signature_with_constexpr,
-        )
-    except TypeError:
-        # Triton 3.0.0 uses 'constants' instead of 'constexprs'
-        src = tc.ASTSource(
-            fn=kernel_fn,
-            constants=constants,
-            signature=signature_with_constexpr,
+    # Triton 3.3.x is known to be incompatible due to constexpr handling bugs
+    if TRITON_VERSION is not None and (
+        TRITON_VERSION.major == 3 and TRITON_VERSION.minor == 3
+    ):
+        raise ImportError(
+            f"Triton version {TRITON_VERSION} is not supported due to known issues. "
+            "Please upgrade to Triton 3.4+ or downgrade to Triton 3.2.x."
         )
 
-    compiled = tc.compile(
-        src,
-        target=tc.GPUTarget("cuda", compute_capability, 32),
-        options=options.__dict__,
-    )
+    # Helper to try compilation with specific arguments
+    def try_compile(signature_dict, **kwargs):
+        try:
+            src = tc.ASTSource(fn=kernel_fn, signature=signature_dict, **kwargs)
+            return tc.compile(
+                src,
+                target=tc.GPUTarget("cuda", compute_capability, 32),
+                options=options.__dict__,
+            )
+        except (TypeError, AttributeError, CompilationError):
+            return None
+
+    # 1. Try Triton 3.4.0+ API: constexprs should not be in signature
+    compiled = try_compile(signature, constexprs=constants)
+
+    # 2. Try Triton 3.1.0-3.2.0: constexprs should be in signature as "constexpr"
+    if compiled is None:
+        signature_with_constexpr = {**signature, **{k: "constexpr" for k in constants}}
+        compiled = try_compile(signature_with_constexpr, constexprs=constants)
+
+    # 3. Try Triton 3.0.0: uses 'constants' instead of 'constexprs'
+    if compiled is None:
+        # Re-create signature_with_constexpr just to be safe/clear
+        signature_with_constexpr = {**signature, **{k: "constexpr" for k in constants}}
+        compiled = try_compile(signature_with_constexpr, constants=constants)
+
+    if compiled is None:
+        raise RuntimeError("Failed to compile Triton kernel with any API version")
 
     args = (
         (
