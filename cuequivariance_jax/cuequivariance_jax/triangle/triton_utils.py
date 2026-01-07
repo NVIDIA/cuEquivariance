@@ -25,6 +25,8 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
+import subprocess
 import zlib
 from typing import Any, Callable, Mapping, Sequence
 
@@ -84,6 +86,47 @@ _DTYPE_MAP = {
 }
 
 
+_PTXAS_VERSION_CACHE = None
+
+
+def _get_max_ptx_version():
+    """Detects the maximum PTX version supported by the available ptxas."""
+    global _PTXAS_VERSION_CACHE
+    if _PTXAS_VERSION_CACHE is not None:
+        return _PTXAS_VERSION_CACHE
+
+    try:
+        # Check ptxas version
+        result = subprocess.run(
+            ["ptxas", "--version"], capture_output=True, text=True, check=False
+        )
+        if result.returncode == 0:
+            # Example output: "Cuda compilation tools, release 12.6, V12.6.68"
+            match = re.search(r"release (\d+)\.(\d+)", result.stdout)
+            if match:
+                major, minor = int(match.group(1)), int(match.group(2))
+                # Map CUDA version to PTX version
+                if major == 12:
+                    if minor >= 8:
+                        version = 87
+                    elif minor >= 5:
+                        version = 85
+                    else:
+                        version = 80 + minor
+                elif major == 11:
+                    if minor >= 8:
+                        version = 78
+                    else:
+                        version = 70 + minor
+                else:
+                    version = None
+                _PTXAS_VERSION_CACHE = version
+    except Exception:
+        pass
+
+    return _PTXAS_VERSION_CACHE
+
+
 def _get_triton_dtype(aval: core.ShapedArray) -> str:
     """Convert JAX dtype to Triton type string."""
     return f"*{_DTYPE_MAP[aval.dtype]}"
@@ -124,6 +167,12 @@ def _compile_triton(
         debug=False,
         enable_fp_fusion=False,
     )
+
+    # Force Triton to generate PTX compatible with the available ptxas
+    # The CI environment uses CUDA 12.6 (PTX 8.5), but Triton might default to 8.7
+    max_ptx_version = _get_max_ptx_version()
+    if max_ptx_version is not None and hasattr(options, "ptx_version"):
+        options.ptx_version = max_ptx_version
 
     # Handle different Triton API versions
     compiled = None
