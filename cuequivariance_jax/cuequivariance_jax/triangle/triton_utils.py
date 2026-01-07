@@ -21,6 +21,8 @@ This implementation was inspired by NVIDIA TransformerEngine
 (https://github.com/NVIDIA/TransformerEngine).
 """
 
+from __future__ import annotations
+
 import hashlib
 import os
 import zlib
@@ -86,7 +88,7 @@ def _compile_triton(
     num_warps: int,
     num_stages: int,
     compute_capability: int,
-) -> gpu_triton.TritonKernel:
+):
     """Compile a Triton kernel to PTX with caching."""
     # Include source code in cache key to handle edits
     cache_key = hashlib.md5(
