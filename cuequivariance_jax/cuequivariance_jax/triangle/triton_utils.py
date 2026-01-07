@@ -159,20 +159,29 @@ def _compile_triton(
     if cache_key in _TRITON_KERNEL_CACHE:
         return _TRITON_KERNEL_CACHE[cache_key]
 
-    options = cb.CUDAOptions(
-        num_warps=num_warps,
-        num_stages=num_stages,
-        num_ctas=1,
-        cluster_dims=(1, 1, 1),
-        debug=False,
-        enable_fp_fusion=False,
-    )
-
-    # Force Triton to generate PTX compatible with the available ptxas
-    # The CI environment uses CUDA 12.6 (PTX 8.5), but Triton might default to 8.7
+    # Detect maximum supported PTX version
     max_ptx_version = _get_max_ptx_version()
-    if max_ptx_version is not None and hasattr(options, "ptx_version"):
-        options.ptx_version = max_ptx_version
+
+    cuda_options_kwargs = {
+        "num_warps": num_warps,
+        "num_stages": num_stages,
+        "num_ctas": 1,
+        "cluster_dims": (1, 1, 1),
+        "debug": False,
+        "enable_fp_fusion": False,
+    }
+
+    # Try adding ptx_version if detected and supported by Triton
+    if max_ptx_version is not None:
+        try:
+            # Check if CUDAOptions accepts ptx_version
+            cb.CUDAOptions(**cuda_options_kwargs, ptx_version=max_ptx_version)
+            cuda_options_kwargs["ptx_version"] = max_ptx_version
+        except TypeError:
+            # Argument not supported by this Triton version
+            pass
+
+    options = cb.CUDAOptions(**cuda_options_kwargs)
 
     # Handle different Triton API versions
     compiled = None
