@@ -55,14 +55,7 @@ from .group_theory import (
 
 from cuequivariance import segmented_polynomials as segmented_polynomials
 from cuequivariance import group_theory as group_theory
-
-
-def __getattr__(name):
-    if name == "descriptors":
-        from cuequivariance.group_theory import descriptors
-
-        return descriptors
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+from cuequivariance.group_theory import descriptors as descriptors
 
 
 __all__ = [
