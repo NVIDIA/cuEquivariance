@@ -1,0 +1,279 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""Minimal Triton utilities for JAX primitives.
+
+This module provides a lightweight helper for integrating Triton kernels into JAX.
+
+This implementation was inspired by NVIDIA TransformerEngine
+(https://github.com/NVIDIA/TransformerEngine).
+"""
+
+import hashlib
+import os
+import zlib
+from typing import Any, Callable, Mapping, Sequence
+
+import jax
+import jax.extend.core as jex_core
+import jax.numpy as jnp
+from jax import core
+from jax._src.lib import gpu_triton
+from jax.interpreters import mlir
+from packaging import version
+from triton.backends.nvidia import compiler as cb
+from triton.compiler import compiler as tc
+from triton.runtime import cache as triton_cache
+
+# Configure Triton cache directory
+try:
+    cache_dir = (
+        triton_cache.knobs.cache.dir
+        if hasattr(triton_cache, "knobs")
+        else triton_cache.default_cache_dir()
+    )
+    if not cache_dir:
+        cache_dir = os.path.join(os.path.expanduser("~"), ".triton", "cache")
+        if hasattr(triton_cache, "knobs"):
+            triton_cache.knobs.cache.dir = cache_dir
+    os.makedirs(cache_dir, exist_ok=True)
+except Exception:
+    cache_dir = os.path.join(os.path.expanduser("~"), ".triton", "cache")
+    os.makedirs(cache_dir, exist_ok=True)
+
+__all__ = ["triton_call_lowering", "triton_call"]
+
+_TRITON_KERNEL_CACHE = {}
+
+_DTYPE_MAP = {
+    jnp.dtype("bfloat16"): "bf16",
+    jnp.dtype("float64"): "fp64",
+    jnp.dtype("float32"): "fp32",
+    jnp.dtype("float16"): "fp16",
+    jnp.dtype("int64"): "i64",
+    jnp.dtype("int32"): "i32",
+    jnp.dtype("int16"): "i16",
+    jnp.dtype("int8"): "i8",
+    jnp.dtype("uint64"): "u64",
+    jnp.dtype("uint32"): "u32",
+    jnp.dtype("uint16"): "u16",
+    jnp.dtype("uint8"): "u8",
+    jnp.dtype("bool"): "i1",
+}
+
+
+def _get_triton_dtype(aval: core.ShapedArray) -> str:
+    """Convert JAX dtype to Triton type string."""
+    return f"*{_DTYPE_MAP[aval.dtype]}"
+
+
+def _compile_triton(
+    kernel_fn: Callable,
+    signature: Mapping[str, str],
+    constants: Mapping[str, Any],
+    num_warps: int,
+    num_stages: int,
+    compute_capability: int,
+) -> gpu_triton.TritonKernel:
+    """Compile a Triton kernel to PTX with caching."""
+    # Include source code in cache key to handle edits
+    cache_key = hashlib.md5(
+        str(
+            (
+                kernel_fn.__name__,
+                getattr(kernel_fn, "src", ""),
+                tuple(sorted(signature.items())),
+                tuple(sorted(constants.items())),
+                num_warps,
+                num_stages,
+                compute_capability,
+            )
+        ).encode()
+    ).hexdigest()
+
+    if cache_key in _TRITON_KERNEL_CACHE:
+        return _TRITON_KERNEL_CACHE[cache_key]
+
+    options = cb.CUDAOptions(
+        num_warps=num_warps,
+        num_stages=num_stages,
+        num_ctas=1,
+        cluster_dims=(1, 1, 1),
+        debug=False,
+        enable_fp_fusion=False,
+    )
+
+    signature_with_constexpr = {**signature, **{k: "constexpr" for k in constants}}
+
+    # Try both Triton 3.1.0+ (constexprs) and Triton 3.0.0 (constants) APIs
+    try:
+        src = tc.ASTSource(
+            fn=kernel_fn,
+            constexprs=constants,
+            signature=signature_with_constexpr,
+        )
+    except TypeError:
+        # Triton 3.0.0 uses 'constants' instead of 'constexprs'
+        src = tc.ASTSource(
+            fn=kernel_fn,
+            constants=constants,
+            signature=signature_with_constexpr,
+        )
+
+    compiled = tc.compile(
+        src,
+        target=tc.GPUTarget("cuda", compute_capability, 32),
+        options=options.__dict__,
+    )
+
+    args = (
+        (
+            compiled.name,
+            num_warps,
+            1,
+            compiled.metadata.shared,
+            compiled.asm["ptx"],
+            "",
+            compute_capability,
+        )
+        if version.parse(jax.__version__) >= version.parse("0.8.2")
+        else (
+            compiled.name,
+            num_warps,
+            compiled.metadata.shared,
+            compiled.asm["ptx"],
+            "",
+            compute_capability,
+            1,
+            1,
+            1,
+        )
+    )
+    kernel = gpu_triton.TritonKernel(*args)
+
+    _TRITON_KERNEL_CACHE[cache_key] = kernel
+    return kernel
+
+
+def triton_call_lowering(
+    ctx,
+    kernel_fn: Callable,
+    *array_args,
+    grid,
+    num_warps: int = 4,
+    num_stages: int = 3,
+    input_output_aliases: Mapping[int, int] | None = None,
+    constexprs: Mapping[str, Any] | None = None,
+):
+    """Helper for MLIR lowering that calls a Triton kernel."""
+    compute_capability = gpu_triton.get_compute_capability(0)
+
+    all_avals = list(ctx.avals_in) + list(ctx.avals_out)
+    constexprs = constexprs or {}
+    tensor_arg_names = [n for n in kernel_fn.arg_names if n not in constexprs]
+
+    signature = {n: _get_triton_dtype(a) for n, a in zip(tensor_arg_names, all_avals)}
+
+    # Normalize grid to tuple of 3 ints
+    g = tuple(grid) if isinstance(grid, (tuple, list)) else (grid,)
+    grid_tuple = g[:3] + (1,) * (3 - len(g[:3]))
+
+    kernel = _compile_triton(
+        kernel_fn,
+        signature,
+        constexprs,
+        num_warps,
+        num_stages,
+        compute_capability,
+    )
+
+    kernel_params = [gpu_triton.create_array_parameter(0, 16) for _ in all_avals]
+
+    # WARNING: Must use explicit indexing (grid_tuple[0], grid_tuple[1], grid_tuple[2])
+    # instead of unpacking (*grid_tuple). Unpacking causes UnexpectedTracerError.
+    call_proto = gpu_triton.TritonKernelCall(
+        kernel, grid_tuple[0], grid_tuple[1], grid_tuple[2], kernel_params
+    ).to_proto(kernel_fn.__name__, b"")
+
+    return jax.ffi.ffi_lowering(
+        "triton_kernel_call",
+        api_version=2,
+        backend_config=zlib.compress(call_proto),
+        operand_output_aliases=input_output_aliases or {},
+    )(ctx, *array_args)
+
+
+# Define global Triton kernel call primitive
+_triton_kernel_call_p = jex_core.Primitive("triton_kernel_call")
+_triton_kernel_call_p.multiple_results = True
+
+
+def _triton_abstract_eval(*avals, out_shape, **unused_kwargs):
+    """Abstract evaluation for Triton kernel call."""
+    return tuple(core.ShapedArray(s.shape, s.dtype) for s in out_shape)
+
+
+def _triton_lowering_rule(
+    ctx, *mlir_args, kernel, grid, num_warps, num_stages, constexprs, out_shape
+):
+    """Lowering rule for Triton kernel call."""
+    return triton_call_lowering(
+        ctx,
+        kernel,
+        *mlir_args,
+        grid=grid,
+        num_warps=num_warps,
+        num_stages=num_stages,
+        constexprs=dict(constexprs),
+    )
+
+
+# Register primitive
+_triton_kernel_call_p.def_abstract_eval(_triton_abstract_eval)
+mlir.register_lowering(_triton_kernel_call_p, _triton_lowering_rule, platform="gpu")
+
+
+def triton_call(
+    *args,
+    kernel: Callable,
+    out_shape: Sequence[jax.ShapeDtypeStruct],
+    grid,
+    num_warps: int = 4,
+    num_stages: int = 3,
+    **kwargs,
+):
+    """High-level API to call a Triton kernel from JAX."""
+    # WARNING: Do NOT inline these variables into the bind() call below.
+    # Inlining causes UnexpectedTracerError because JAX tracers leak into
+    # primitive parameters. These intermediate variables must be created
+    # separately to avoid tracer leaks during JAX transformations.
+    constexprs_tuple = tuple(sorted(kwargs.items()))
+    out_shape_tuple = tuple(out_shape)
+    grid_tuple = tuple(grid) if isinstance(grid, (list, tuple)) else (grid,)
+
+    result = _triton_kernel_call_p.bind(
+        *args,
+        kernel=kernel,
+        grid=grid_tuple,
+        num_warps=num_warps,
+        num_stages=num_stages,
+        constexprs=constexprs_tuple,
+        out_shape=out_shape_tuple,
+    )
+
+    num_outputs = len(out_shape)
+    if num_outputs == 1:
+        return result[0] if isinstance(result, tuple) else result
+    return result
