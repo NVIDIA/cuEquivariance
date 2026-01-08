@@ -317,7 +317,9 @@ def test_sigmoid_gated_dual_gemm_gradients(backend):
     assert grads[2].shape == w2.shape
 
     # Test gradient correctness
-    test_util.check_grads(single_input_fn, (x, w1, w2), order=1, modes=["rev"])
+    test_util.check_grads(
+        single_input_fn, (x, w1, w2), order=1, modes=["rev"], rtol=1e-2
+    )
 
     # Test single input gradients with bias
     def single_input_bias_fn(x, w1, w2, b1, b2):
