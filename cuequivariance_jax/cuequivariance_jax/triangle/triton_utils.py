@@ -42,6 +42,8 @@ from triton.compiler import compiler as tc
 from triton.compiler.errors import CompilationError
 from triton.runtime import cache as triton_cache
 
+__all__ = ["triton_call_lowering", "triton_call"]
+
 try:
     import triton
 
@@ -50,6 +52,7 @@ except (ImportError, AttributeError):
     TRITON_VERSION = None
 
 # Configure Triton cache directory
+default_cache_dir = os.path.join(os.path.expanduser("~"), ".triton", "cache")
 try:
     cache_dir = (
         triton_cache.knobs.cache.dir
@@ -57,15 +60,12 @@ try:
         else triton_cache.default_cache_dir()
     )
     if not cache_dir:
-        cache_dir = os.path.join(os.path.expanduser("~"), ".triton", "cache")
+        cache_dir = default_cache_dir
         if hasattr(triton_cache, "knobs"):
             triton_cache.knobs.cache.dir = cache_dir
-    os.makedirs(cache_dir, exist_ok=True)
 except Exception:
-    cache_dir = os.path.join(os.path.expanduser("~"), ".triton", "cache")
-    os.makedirs(cache_dir, exist_ok=True)
-
-__all__ = ["triton_call_lowering", "triton_call"]
+    cache_dir = default_cache_dir
+os.makedirs(cache_dir, exist_ok=True)
 
 _TRITON_KERNEL_CACHE = {}
 
@@ -84,7 +84,6 @@ _DTYPE_MAP = {
     jnp.dtype("uint8"): "u8",
     jnp.dtype("bool"): "i1",
 }
-
 
 _PTXAS_VERSION_CACHE = None
 
@@ -139,6 +138,7 @@ def _compile_triton(
     num_warps: int,
     num_stages: int,
     compute_capability: int,
+    enable_fp_fusion: bool = False,
 ):
     """Compile a Triton kernel to PTX with caching."""
     # Include source code in cache key to handle edits
@@ -152,6 +152,7 @@ def _compile_triton(
                 num_warps,
                 num_stages,
                 compute_capability,
+                enable_fp_fusion,
             )
         ).encode()
     ).hexdigest()
@@ -168,7 +169,7 @@ def _compile_triton(
         "num_ctas": 1,
         "cluster_dims": (1, 1, 1),
         "debug": False,
-        "enable_fp_fusion": False,
+        "enable_fp_fusion": enable_fp_fusion,
     }
 
     # Try adding ptx_version if detected and supported by Triton
@@ -176,15 +177,12 @@ def _compile_triton(
         try:
             # Check if CUDAOptions accepts ptx_version
             cb.CUDAOptions(**cuda_options_kwargs, ptx_version=max_ptx_version)
-            cuda_options_kwargs["ptx_version"] = max_ptx_version
         except TypeError:
-            # Argument not supported by this Triton version
             pass
+        else:
+            cuda_options_kwargs["ptx_version"] = max_ptx_version
 
     options = cb.CUDAOptions(**cuda_options_kwargs)
-
-    # Handle different Triton API versions
-    compiled = None
 
     # Triton 3.3.x is known to be incompatible due to constexpr handling bugs
     if TRITON_VERSION is not None and (
@@ -210,43 +208,26 @@ def _compile_triton(
     # 1. Try Triton 3.4.0+ API: constexprs should not be in signature
     compiled = try_compile(signature, constexprs=constants)
 
+    signature_with_constexpr = {**signature, **{k: "constexpr" for k in constants}}
+
     # 2. Try Triton 3.1.0-3.2.0: constexprs should be in signature as "constexpr"
     if compiled is None:
-        signature_with_constexpr = {**signature, **{k: "constexpr" for k in constants}}
         compiled = try_compile(signature_with_constexpr, constexprs=constants)
 
     # 3. Try Triton 3.0.0: uses 'constants' instead of 'constexprs'
     if compiled is None:
-        # Re-create signature_with_constexpr just to be safe/clear
-        signature_with_constexpr = {**signature, **{k: "constexpr" for k in constants}}
         compiled = try_compile(signature_with_constexpr, constants=constants)
 
     if compiled is None:
         raise RuntimeError("Failed to compile Triton kernel with any API version")
 
+    # fmt: off
     args = (
-        (
-            compiled.name,
-            num_warps,
-            1,
-            compiled.metadata.shared,
-            compiled.asm["ptx"],
-            "",
-            compute_capability,
-        )
-        if version.parse(jax.__version__) >= version.parse("0.8.2")
-        else (
-            compiled.name,
-            num_warps,
-            compiled.metadata.shared,
-            compiled.asm["ptx"],
-            "",
-            compute_capability,
-            1,
-            1,
-            1,
-        )
+        (compiled.name, num_warps, 1, compiled.metadata.shared, compiled.asm["ptx"], "", compute_capability)
+        if version.parse(jax.__version__) >= version.parse("0.8.2") else
+        (compiled.name, num_warps, compiled.metadata.shared, compiled.asm["ptx"], "", compute_capability, 1, 1, 1)
     )
+    # fmt: on
     kernel = gpu_triton.TritonKernel(*args)
 
     _TRITON_KERNEL_CACHE[cache_key] = kernel
@@ -262,6 +243,7 @@ def triton_call_lowering(
     num_stages: int = 3,
     input_output_aliases: Mapping[int, int] | None = None,
     constexprs: Mapping[str, Any] | None = None,
+    enable_fp_fusion: bool = False,
 ):
     """Helper for MLIR lowering that calls a Triton kernel."""
     compute_capability = gpu_triton.get_compute_capability(0)
@@ -283,6 +265,7 @@ def triton_call_lowering(
         num_warps,
         num_stages,
         compute_capability,
+        enable_fp_fusion,
     )
 
     kernel_params = [gpu_triton.create_array_parameter(0, 16) for _ in all_avals]
@@ -312,7 +295,15 @@ def _triton_abstract_eval(*avals, out_shape, **unused_kwargs):
 
 
 def _triton_lowering_rule(
-    ctx, *mlir_args, kernel, grid, num_warps, num_stages, constexprs, out_shape
+    ctx,
+    *mlir_args,
+    kernel,
+    grid,
+    num_warps,
+    num_stages,
+    constexprs,
+    out_shape,
+    enable_fp_fusion,
 ):
     """Lowering rule for Triton kernel call."""
     return triton_call_lowering(
@@ -323,6 +314,7 @@ def _triton_lowering_rule(
         num_warps=num_warps,
         num_stages=num_stages,
         constexprs=dict(constexprs),
+        enable_fp_fusion=enable_fp_fusion,
     )
 
 
@@ -338,6 +330,7 @@ def triton_call(
     grid,
     num_warps: int = 4,
     num_stages: int = 3,
+    enable_fp_fusion: bool = False,
     **kwargs,
 ):
     """High-level API to call a Triton kernel from JAX."""
@@ -357,6 +350,7 @@ def triton_call(
         num_stages=num_stages,
         constexprs=constexprs_tuple,
         out_shape=out_shape_tuple,
+        enable_fp_fusion=enable_fp_fusion,
     )
 
     num_outputs = len(out_shape)
