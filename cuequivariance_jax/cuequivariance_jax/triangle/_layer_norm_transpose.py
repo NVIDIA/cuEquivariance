@@ -23,12 +23,13 @@ from jax.interpreters import batching, mlir, xla
 from cuequivariance_jax.triangle._naive_batching import naive_batching_rule
 
 try:
-    import jax_triton as jt
     import triton
 
-    HAS_JAX_TRITON = True
+    from .triton_utils import triton_call
+
+    HAS_TRITON = True
 except ImportError:
-    HAS_JAX_TRITON = False
+    HAS_TRITON = False
 
 
 # copy from cuequivariance_ops to avoid requiring cuequivariance_ops to be installed
@@ -228,8 +229,8 @@ def layer_norm_transpose_reference_forward(x, w, b, eps, elementwise_affine, lay
 
 def _layer_norm_forward_impl(x, w, b, eps, elementwise_affine, layout):
     """Triton implementation of forward pass."""
-    if not HAS_JAX_TRITON:
-        raise ImportError("jax_triton is required for GPU implementation")
+    if not HAS_TRITON:
+        raise ImportError("triton is required for GPU implementation")
 
     from cuequivariance_ops.triton import layer_norm_transpose_forward_kernel
 
@@ -241,7 +242,7 @@ def _layer_norm_forward_impl(x, w, b, eps, elementwise_affine, layout):
 
     NEEDS_INT64 = B * N * D >= 2**31 - 1
 
-    out, mean, rstd = jt.triton_call(
+    out, mean, rstd = triton_call(
         x,
         w,
         b,
@@ -271,8 +272,8 @@ def _layer_norm_backward_impl(
     grad_out, x, w, b, mean, rstd, eps, elementwise_affine, layout
 ):
     """Triton implementation of backward pass."""
-    if not HAS_JAX_TRITON:
-        raise ImportError("jax_triton is required for GPU implementation")
+    if not HAS_TRITON:
+        raise ImportError("triton is required for GPU implementation")
 
     from cuequivariance_ops.triton import layer_norm_transpose_backward_kernel
 
@@ -286,7 +287,7 @@ def _layer_norm_backward_impl(
 
     NEEDS_INT64 = B * N * D >= 2**31 - 1
 
-    grad_x, grad_w_tiles, grad_b_tiles = jt.triton_call(
+    grad_x, grad_w_tiles, grad_b_tiles = triton_call(
         grad_out,
         x,
         w,
