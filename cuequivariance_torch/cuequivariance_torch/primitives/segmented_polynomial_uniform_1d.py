@@ -14,7 +14,7 @@
 # limitations under the License.
 
 from itertools import accumulate
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import torch
 import torch.nn as nn
@@ -93,6 +93,7 @@ class SegmentedPolynomialFromUniform1dJit(nn.Module):
         math_dtype: Optional[str | torch.dtype] = None,
         output_dtype_map: List[int] = None,
         name: str = "segmented_polynomial",
+        options: Optional[Dict[str, Any]] = None,
     ):
         super().__init__()
 
