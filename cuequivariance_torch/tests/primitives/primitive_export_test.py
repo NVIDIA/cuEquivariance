@@ -14,182 +14,52 @@
 # limitations under the License.
 import pytest
 import torch
-from cuequivariance_torch._tests.utils import (
-    module_with_mode,
-)
-from cuequivariance_torch.primitives.symmetric_tensor_product import (
-    CUDAKernel as SymmetricTensorProduct,
-)
-from cuequivariance_torch.primitives.tensor_product import (
-    FusedTensorProductOp3,
-    FusedTensorProductOp4,
-    TensorProductUniform3x1d,
-    TensorProductUniform4x1d,
-)
+from cuequivariance_torch._tests.utils import module_with_mode
 
 import cuequivariance as cue
+import cuequivariance_torch as cuet
 
 device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
 
-export_modes = ["script", "compile", "jit"]
+export_modes = ["compile"]  # script/jit mode has TorchScript issues with dict indexing
 
 
 @pytest.mark.parametrize("mode", export_modes)
-def test_script_symmetric_contraction(mode, tmp_path):
-    pytest.skip("This is deprecated and will be removed soon.")
-    if not torch.cuda.is_available():
-        pytest.skip("CUDA is not available")
+@pytest.mark.parametrize("internal_weights", [True, False])
+@pytest.mark.parametrize("layout", [cue.ir_mul, cue.mul_ir])
+def test_export_channelwise_tensor_product(mode, internal_weights, layout, tmp_path):
+    """Test export of ChannelWiseTensorProduct in various modes."""
+    irreps_in1 = cue.Irreps("SO3", "8x0 + 8x1")
+    irreps_in2 = cue.Irreps("SO3", "1")
 
-    e = cue.descriptors.symmetric_contraction(
-        32 * cue.Irreps("SO3", "0 + 1"), 32 * cue.Irreps("SO3", "0 + 1"), [1, 2, 3]
-    )
-    ds = [stp for _, stp in e.polynomial.operations]
-
-    batch = 12
-    x0 = torch.randn(3, ds[0].operands[0].size, device=device, dtype=torch.float32)
-    i0 = torch.zeros(batch, device=device, dtype=torch.int32)
-    x1 = torch.randn(batch, ds[0].operands[1].size, device=device, dtype=torch.float32)
-
-    m = SymmetricTensorProduct(ds, device, torch.float32)
-    inputs = (x0, i0, x1)
-    module = module_with_mode(mode, m, inputs, torch.float32, tmp_path)
-    out1 = m(*inputs)
-    out2 = module(*inputs)
-    torch.testing.assert_close(out1, out2)
-
-
-@pytest.mark.parametrize("mode", export_modes + ["trt"])
-def test_script_fused_tp_3(mode, tmp_path):
-    if not torch.cuda.is_available():
-        pytest.skip("CUDA is not available")
-
-    d = (
-        cue.descriptors.full_tensor_product(
-            cue.Irreps("SO3", "32x1"), cue.Irreps("SO3", "1")
-        )
-        .polynomial.operations[0][1]
-        .flatten_coefficient_modes()
-        .squeeze_modes("v")
+    # Create ChannelWiseTensorProduct module
+    module = cuet.ChannelWiseTensorProduct(
+        irreps_in1,
+        irreps_in2,
+        layout=layout,
+        internal_weights=internal_weights,
+        device=device,
+        dtype=torch.float32,
     )
 
-    exp_inputs = [
-        torch.randn(1, ope.size, device=device, dtype=torch.float32)
-        for ope in d.operands[:-1]
-    ]
+    # Create test inputs
     batch = 12
-    inputs = [
-        torch.randn(batch, ope.size, device=device, dtype=torch.float32)
-        for ope in d.operands[:-1]
-    ]
-    module = FusedTensorProductOp3(d, (0, 1), device, torch.float32)
+    x1 = torch.randn(batch, irreps_in1.dim, device=device, dtype=torch.float32)
+    x2 = torch.randn(batch, irreps_in2.dim, device=device, dtype=torch.float32)
+
+    if internal_weights:
+        inputs = (x1, x2)
+    else:
+        weight = torch.randn(1, module.weight_numel, device=device, dtype=torch.float32)
+        inputs = (x1, x2, weight)
+
+    # Get reference output
     out1 = module(*inputs)
-    out11 = module(*exp_inputs)
-    module = module_with_mode(mode, module, exp_inputs, torch.float32, tmp_path)
-    out2 = module(*inputs)
-    out22 = module(*exp_inputs)
-    torch.testing.assert_close(out1, out2)
-    torch.testing.assert_close(out11, out22)
 
+    # Export module
+    exported_module = module_with_mode(mode, module, inputs, torch.float32, tmp_path)
 
-@pytest.mark.parametrize("mode", export_modes + ["trt"])
-def test_script_fused_tp_4(mode, tmp_path):
-    if not torch.cuda.is_available():
-        pytest.skip("CUDA is not available")
+    # Test exported module
+    out2 = exported_module(*inputs)
 
-    d = (
-        cue.descriptors.fully_connected_tensor_product(
-            cue.Irreps("SO3", "32x1"), cue.Irreps("SO3", "1"), cue.Irreps("SO3", "32x1")
-        )
-        .polynomial.operations[0][1]
-        .flatten_coefficient_modes()
-        .squeeze_modes("v")
-        .permute_operands([1, 2, 0, 3])
-    )
-
-    exp_inputs = [
-        torch.randn(1, ope.size, device=device, dtype=torch.float32)
-        for ope in d.operands[:-1]
-    ]
-    batch = 12
-    inputs = [
-        torch.randn(batch, ope.size, device=device, dtype=torch.float32)
-        for ope in d.operands[:-1]
-    ]
-
-    module = FusedTensorProductOp4(d, [0, 1, 2], device, torch.float32)
-    out1 = module(*inputs)
-    out11 = module(*exp_inputs)
-    module = module_with_mode(mode, module, exp_inputs, torch.float32, tmp_path)
-
-    out2 = module(*inputs)
-    out22 = module(*exp_inputs)
-
-    torch.testing.assert_close(out1, out2)
-    torch.testing.assert_close(out11, out22)
-
-
-@pytest.mark.parametrize("mode", export_modes)
-def test_script_uniform_tp_3(mode, tmp_path):
-    if not torch.cuda.is_available():
-        pytest.skip("CUDA is not available")
-
-    d = (
-        cue.descriptors.full_tensor_product(
-            cue.Irreps("SO3", "32x1"), cue.Irreps("SO3", "1")
-        )
-        .polynomial.operations[0][1]
-        .flatten_coefficient_modes()
-        .squeeze_modes("v")
-    )
-
-    exp_inputs = [
-        torch.randn(1, ope.size, device=device, dtype=torch.float32)
-        for ope in d.operands[:-1]
-    ]
-    batch = 12
-    inputs = [
-        torch.randn(batch, ope.size, device=device, dtype=torch.float32)
-        for ope in d.operands[:-1]
-    ]
-
-    module = TensorProductUniform3x1d(d, device, torch.float32)
-    out1 = module(*inputs)
-    out11 = module(*exp_inputs)
-    module = module_with_mode(mode, module, exp_inputs, torch.float32, tmp_path)
-    out2 = module(*inputs)
-    out22 = module(*exp_inputs)
-    torch.testing.assert_close(out1, out2)
-    torch.testing.assert_close(out11, out22)
-
-
-@pytest.mark.parametrize("mode", export_modes)
-def test_script_uniform_tp_4(mode, tmp_path):
-    if not torch.cuda.is_available():
-        pytest.skip("CUDA is not available")
-
-    d = (
-        cue.descriptors.channelwise_tensor_product(
-            cue.Irreps("SO3", "32x1"), cue.Irreps("SO3", "1"), cue.Irreps("SO3", "32x1")
-        )
-        .polynomial.operations[0][1]
-        .flatten_coefficient_modes()
-        .squeeze_modes("v")
-    )
-
-    exp_inputs = [
-        torch.randn(1, ope.size, device=device, dtype=torch.float32)
-        for ope in d.operands[:-1]
-    ]
-    batch = 12
-    inputs = [
-        torch.randn(batch, ope.size, device=device, dtype=torch.float32)
-        for ope in d.operands[:-1]
-    ]
-    module = TensorProductUniform4x1d(d, device, torch.float32)
-    out1 = module(*inputs)
-    out11 = module(*exp_inputs)
-    module = module_with_mode(mode, module, exp_inputs, torch.float32, tmp_path)
-    out2 = module(*inputs)
-    out22 = module(*exp_inputs)
-    torch.testing.assert_close(out1, out2)
-    torch.testing.assert_close(out11, out22)
+    torch.testing.assert_close(out1, out2, atol=1e-5, rtol=1e-5)

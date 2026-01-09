@@ -82,8 +82,11 @@ def test_channel_wise_fwd(
     assert d.subscripts == "u,iu,j,ku+ijk"
     if layout == cue.mul_ir:
         d = d.add_or_transpose_modes("u,ui,j,uk+ijk")
-    m2 = cuet.TensorProduct(d, math_dtype=torch.float64, use_fallback=True).to(device)
-    out2 = m2(m1.weight, x1, x2)
+    poly = cue.SegmentedPolynomial.eval_last_operand(d)
+    m2 = cuet.SegmentedPolynomial(poly, method="naive", math_dtype=torch.float64).to(
+        device
+    )
+    out2 = m2([m1.weight, x1, x2])[0]
 
     torch.testing.assert_close(out1, out2, atol=1e-5, rtol=1e-5)
 

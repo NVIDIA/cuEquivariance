@@ -18,15 +18,14 @@ __version__ = (
     importlib.resources.files(__package__).joinpath("VERSION").read_text().strip()
 )
 
-from .primitives.tensor_product import TensorProduct, _Wrapper
-from .primitives.symmetric_tensor_product import (
+from .primitives.transpose import TransposeSegments, TransposeIrrepsLayout
+from .primitives.segmented_polynomial import SegmentedPolynomial
+from .primitives.deprecated import (
+    TensorProduct,
+    EquivariantTensorProduct,
     SymmetricTensorProduct,
     IWeightedSymmetricTensorProduct,
 )
-from .primitives.transpose import TransposeSegments, TransposeIrrepsLayout
-
-from .primitives.equivariant_tensor_product import EquivariantTensorProduct
-from .primitives.segmented_polynomial import SegmentedPolynomial
 from .operations.tp_channel_wise import ChannelWiseTensorProduct
 from .operations.tp_fully_connected import FullyConnectedTensorProduct
 from .operations.linear import Linear
@@ -50,16 +49,18 @@ from cuequivariance_torch import layers
 
 def onnx_custom_translation_table():
     r"""
-     Returns ONNX translation table for custom operations from cuequivariance_ops_torch
-     to be passed to torch.onnx.export as 'custom_translation_table' argument.
-     
-     Example:
-     >>> import cuequivariance_torch
-     >>> # cueq_custon_onnx_table = cuequivariance_torch.onnx_custom_translation_table()
-     >>> # onnx_program = torch.onnx.export(module, inputs, custom_translation_table=cueq_custom_onnx_table)
+    Returns ONNX translation table for custom operations from cuequivariance_ops_torch
+    to be passed to torch.onnx.export as 'custom_translation_table' argument.
+
+    Example:
+    >>> import cuequivariance_torch
+    >>> # cueq_custon_onnx_table = cuequivariance_torch.onnx_custom_translation_table()
+    >>> # onnx_program = torch.onnx.export(module, inputs, custom_translation_table=cueq_custom_onnx_table)
     """
     from cuequivariance_ops_torch.onnx import op_table
+
     return op_table
+
 
 def register_tensorrt_plugins():
     r"""
@@ -70,18 +71,18 @@ def register_tensorrt_plugins():
     >>> # cuequivariance_torch.register_plugins()
     """
     from cuequivariance_ops_torch.tensorrt import register_plugins
+
     register_plugins()
 
 
 __all__ = [
-    "TensorProduct",
-    "_Wrapper",
-    "SymmetricTensorProduct",
-    "IWeightedSymmetricTensorProduct",
     "TransposeSegments",
     "TransposeIrrepsLayout",
-    "EquivariantTensorProduct",
     "SegmentedPolynomial",
+    "TensorProduct",
+    "EquivariantTensorProduct",
+    "SymmetricTensorProduct",
+    "IWeightedSymmetricTensorProduct",
     "ChannelWiseTensorProduct",
     "FullyConnectedTensorProduct",
     "Linear",
