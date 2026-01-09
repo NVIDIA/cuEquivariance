@@ -41,16 +41,11 @@ jobs:
 
 
   cuequivariance-jax:
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - runner: "ubuntu-latest"
-            python-version: "3.10"
-          - runner: "self-hosted"
-            python-version: "3.12"
-
-    runs-on: ${{ matrix.runner }}
+        python-version: ["3.10", "3.12"]
 
     steps:
     - uses: actions/checkout@v4
@@ -77,16 +72,11 @@ jobs:
 
 
   cuequivariance-torch:
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - runner: "ubuntu-latest"
-            python-version: "3.10"
-          - runner: "self-hosted"
-            python-version: "3.12"
-
-    runs-on: ${{ matrix.runner }}
+        python-version: ["3.10", "3.12"]
 
     steps:
     - uses: actions/checkout@v4

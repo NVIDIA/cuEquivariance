@@ -382,6 +382,12 @@ def test_sigmoid_gated_dual_gemm_gradients(backend):
 )
 def test_sigmoid_gated_dual_gemm_precision_modes(precision):
     """Test different precision modes."""
+    if precision == Precision.TF32:
+        try:
+            jax.devices("gpu")[0]
+        except RuntimeError:
+            pytest.skip("No GPU available for testing TF32 precision")
+
     M, N, K = 32, 64, 128
 
     # Create test data

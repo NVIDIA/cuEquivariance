@@ -22,11 +22,14 @@ import torch._dynamo
 torch._dynamo.config.cache_size_limit = 100
 
 try:
-    import cuequivariance_ops_torch.onnx  # noqa: F401
     import onnx  # noqa: F401
     import onnxruntime  # noqa: F401
     import onnxscript  # noqa: F401
-    from cuequivariance_ops_torch.tensorrt import register_plugins
+
+    from cuequivariance_torch import (
+        onnx_custom_translation_table,
+        register_tensorrt_plugins,
+    )
 
     ONNX_AVAILABLE = True
 except Exception:
@@ -89,7 +92,7 @@ def verify_trt(module, onnx_module, inputs, dtype):
     )
     from polygraphy.comparator import Comparator, DataLoader
 
-    register_plugins()
+    register_tensorrt_plugins()
 
     network = network_from_onnx_path(onnx_module)
     trt_engine = engine_from_network(network, config=CreateConfig())
@@ -139,6 +142,8 @@ def module_with_mode(
     torch._dynamo.reset()
     with torch.set_grad_enabled(mode in grad_modes):
         if mode == "compile":
+            torch._dynamo.allow_in_graph(torch.autograd.grad)
+            # mfx = make_fx(module)(*inputs)
             module = torch.compile(module, fullgraph=True)
         elif mode == "fx":
             module = torch.fx.symbolic_trace(module)
@@ -167,7 +172,7 @@ def module_with_mode(
         elif mode == "torch_trt":
             if not TORCH_TRT_AVAILABLE:
                 pytest.skip("torch_tensorrt is not installed!")
-            register_plugins()
+            register_tensorrt_plugins()
             exp_program = torch.export.export(module, tuple(inputs))
             module = torch_tensorrt.dynamo.compile(
                 exp_program,
@@ -181,7 +186,11 @@ def module_with_mode(
             try:
                 onnx_path = os.path.join(tmp_path, "test.onnx")
                 torch.onnx.export(
-                    module, tuple(inputs), onnx_path, opset_version=17, verbose=False
+                    module,
+                    tuple(inputs),
+                    onnx_path,
+                    dynamo=True,
+                    custom_translation_table=onnx_custom_translation_table(),
                 )
                 if mode == "trt":
                     verify_trt(module, onnx_path, inputs, dtype)
@@ -189,24 +198,6 @@ def module_with_mode(
                     verify_onnx(module, onnx_path, inputs, dtype)
             except ImportError:
                 pytest.skip("ONNX/TRT is not available")
-
-        elif mode == "onnx_dynamo":
-            try:
-                from cuequivariance_ops_torch.onnx import (
-                    cuequivariance_ops_torch_onnx_registry,
-                )
-
-                export_options = torch.onnx.ExportOptions(
-                    onnx_registry=cuequivariance_ops_torch_onnx_registry
-                )
-                onnx_program = torch.onnx.dynamo_export(
-                    module, *inputs, export_options=export_options
-                )
-                onnx_path = os.path.join(tmp_path, "test.onnx")
-                onnx_program.save(onnx_path)
-                verify_onnx(module, onnx_path, inputs, dtype)
-            except ImportError:
-                pytest.skip("ONNX is not available")
         elif mode == "eager":
             pass
         else:

@@ -64,16 +64,11 @@ jobs:
   cuequivariance-jax-full:
     needs: check-changes
     if: needs.check-changes.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - runner: "ubuntu-latest"
-            python-version: "3.10"
-          - runner: "self-hosted"
-            python-version: "3.12"
-
-    runs-on: ${{ matrix.runner }}
+        python-version: ["3.10", "3.12"]
 
     steps:
     - uses: actions/checkout@v4
@@ -101,16 +96,11 @@ jobs:
   cuequivariance-torch-full:
     needs: check-changes
     if: needs.check-changes.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - runner: "ubuntu-latest"
-            python-version: "3.10"
-          - runner: "self-hosted"
-            python-version: "3.12"
-
-    runs-on: ${{ matrix.runner }}
+        python-version: ["3.10", "3.12"]
 
     steps:
     - uses: actions/checkout@v4

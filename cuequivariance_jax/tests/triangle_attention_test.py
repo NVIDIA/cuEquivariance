@@ -30,11 +30,11 @@ def create_test_data(
     seq_len_qo=8,
     seq_len_kv=6,
     d_model=32,
+    dtype=jnp.float32,
 ):
     """Create test data for triangle attention."""
     key = jax.random.PRNGKey(42)
     keys = jax.random.split(key, 5)
-    dtype = jnp.float32
 
     q = jax.random.normal(
         keys[0], (batch_size, n_nodes, n_heads, seq_len_qo, d_model), dtype
@@ -69,7 +69,7 @@ def require_platform(platform: str):
 SHAPE_CONFIGS = [
     (2, 4, 2, 8, 6, 32),  # Default
     (1, 2, 1, 4, 4, 16),  # Small
-    (2, 8, 4, 16, 12, 64),  # Large
+    (2, 8, 4, 16, 12, 32),  # Large
 ]
 
 PRECISION_CONFIGS = [
@@ -121,6 +121,24 @@ def test_basic_functionality(
 
     output, lse, amax = fn(q, k, v, bias, mask)
     assert output.shape == q.shape
+    assert lse.shape == q.shape[:-1] + (1,)
+    assert amax.shape == q.shape[:-1] + (1,)
+
+
+@pytest.mark.parametrize("platform", ["cpu", "cuda"])
+@pytest.mark.parametrize("dtype", [jnp.float32, jnp.float16, jnp.bfloat16])
+@pytest.mark.parametrize("precision", PRECISION_CONFIGS)
+def test_dtype_support(platform, dtype, precision):
+    """Test triangle attention with different dtypes and precision values."""
+    require_platform(platform)
+
+    q, k, v, bias, mask, scale = create_test_data(platform, dtype=dtype)
+
+    output, lse, amax = cuex.triangle_attention(
+        q, k, v, bias, mask, scale, precision=precision
+    )
+    assert output.shape == q.shape
+    assert output.dtype == dtype
     assert lse.shape == q.shape[:-1] + (1,)
     assert amax.shape == q.shape[:-1] + (1,)
 

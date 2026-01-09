@@ -85,7 +85,7 @@ def segmented_polynomial(
 
             - ``"naive"``: String dtype names (e.g., ``"float32"``, ``"float64"``, ``"float16"``, ``"bfloat16"``).
               Also supports ``"tensor_float32"`` for TensorFloat-32 mode.
-            - ``"uniform_1d"``: String values ``"float32"`` or ``"float64"`` only.
+            - ``"uniform_1d"``: String dtype names (e.g., ``"float32"``, ``"float64"``, ``"float16"``, ``"bfloat16"``).
             - ``"indexed_linear"``: CUBLAS compute type strings such as ``"CUBLAS_COMPUTE_32F"``, ``"CUBLAS_COMPUTE_32F_FAST_TF32"``,
               ``"CUBLAS_COMPUTE_32F_PEDANTIC"``, ``"CUBLAS_COMPUTE_64F"``, etc.
 

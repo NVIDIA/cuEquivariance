@@ -69,6 +69,7 @@ def create_weights(hidden_dim, seed=42, device=None, include_bias=False):
 @pytest.mark.parametrize("include_bias", [False, True])
 def test_compare_with_pytorch(direction, use_mask, include_bias):
     """Compare JAX and PyTorch implementations with and without bias."""
+    pytest.skip("Hard to get JAX and PyTorch to run in the same environment.")
     try:
         import torch
         from cuequivariance_ops_torch import (
@@ -206,6 +207,12 @@ def test_errors(error_match, test_input):
 )
 def test_precision_modes(precision):
     """Test different precision modes."""
+    if precision == Precision.TF32:
+        try:
+            jax.devices("gpu")[0]
+        except RuntimeError:
+            pytest.skip("No GPU available for testing TF32 precision")
+
     x = jax.random.normal(jax.random.key(0), (1, 4, 4, 64), dtype=jnp.float32)
     weights = create_weights(64)
     output = triangle_multiplicative_update_jax(

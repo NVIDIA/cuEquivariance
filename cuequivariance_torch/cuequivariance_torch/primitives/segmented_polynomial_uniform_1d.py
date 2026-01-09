@@ -98,7 +98,10 @@ class SegmentedPolynomialFromUniform1dJit(nn.Module):
 
         if tensor_product_uniform_1d_jit is None:
             raise ImportError(
-                "The cuequivariance_ops_torch.tensor_product_uniform_1d_jit module is not available."
+                "Failed to construct SegmentedPolynomialFromUniform1dJit: "
+                "the 'cuequivariance_ops_torch.tensor_product_uniform_1d_jit' extension "
+                "is not available. Please install 'cuequivariance_ops_torch' "
+                "for method 'uniform_1d'."
             )
 
         if not torch.jit.is_scripting():
@@ -106,7 +109,11 @@ class SegmentedPolynomialFromUniform1dJit(nn.Module):
                 polynomial = polynomial.flatten_coefficient_modes()
             except ValueError as e:
                 raise ValueError(
-                    f"This method does not support coefficient modes. Flattening them failed:\n{e}"
+                    "Failed to prepare polynomial for method 'uniform_1d': this method "
+                    "does not support coefficient modes and automatic flattening with "
+                    "'flatten_coefficient_modes()' failed.\n"
+                    f"Original error:\n{e}\n"
+                    f"Problematic polynomial:\n{polynomial}"
                 ) from e
         else:
             polynomial = polynomial.flatten_coefficient_modes()
@@ -117,15 +124,25 @@ class SegmentedPolynomialFromUniform1dJit(nn.Module):
         for o in polynomial.operands:
             torch._assert(
                 o.ndim in [0, 1],
-                "only 0 or 1 dimensional operands are supported by this method",
+                "For method 'uniform_1d', only 0D (scalar) or 1D operands are supported.",
             )
             torch._assert(
                 all(len(s) == o.ndim for s in o.segments),
-                "all segments must have the same number of dimensions as the operand for this method",
+                "For method 'uniform_1d', all segments of an operand must have the same "
+                "number of dimensions as the operand.",
             )
             torch._assert(
                 o.all_same_segment_shape(),
-                "all segments must have the same shape for this method",
+                "For method 'uniform_1d', all segments of a given operand must have the "
+                "same shape. If segment extents differ but share a non-trivial greatest "
+                "common divisor, you may preprocess the polynomial with 'split_mode()' "
+                "on the corresponding mode to factor out this divisor and obtain "
+                "uniform segment extents. Using 'split_mode()' in this way increases "
+                "the number of segments and tensor-product paths, which can degrade "
+                "performance. In particular, choosing a very small common divisor "
+                "relative to the largest extent (for example, extents [64, 128, 2] "
+                "with gcd=2) creates many short segments, and segment extents smaller "
+                "than 32 or not divisible by 32 are generally inefficient on the GPU.",
             )
             if o.ndim == 1 and len(o.segments) > 0:
                 if operand_extent is None:
@@ -133,7 +150,8 @@ class SegmentedPolynomialFromUniform1dJit(nn.Module):
                 else:
                     torch._assert(
                         (operand_extent,) == o.segment_shape,
-                        "all operands must have the same extent for this method",
+                        "For method 'uniform_1d', all 1D operands must share the same "
+                        "segment extent (a single uniform mode across operands).",
                     )
         if operand_extent is None:
             operand_extent = 1
@@ -141,32 +159,39 @@ class SegmentedPolynomialFromUniform1dJit(nn.Module):
         for o, stp in polynomial.operations:
             torch._assert(
                 stp.num_operands == len(o.buffers),
-                "the number of operands must match the number of buffers",
+                "In method 'uniform_1d', the number of STP operands must match the "
+                "number of buffers referenced by each operation.",
             )
             torch._assert(
-                stp.coefficient_subscripts == "", "the coefficients must be scalar"
+                stp.coefficient_subscripts == "",
+                "In method 'uniform_1d', coefficients must be scalar "
+                "(coefficient_subscripts must be empty).",
             )
 
         self.num_inputs = polynomial.num_inputs
         self.num_outputs = polynomial.num_outputs
         self.name = name
-        if type(math_dtype) is str:
+        if isinstance(math_dtype, str):
             try:
+                # Accept string names like "float32" or "float64"
                 math_dtype = getattr(torch, math_dtype)
             except AttributeError:
                 raise ValueError(
-                    f"Math_dtype {math_dtype} is not accepted for method `uniform_1d`."
+                    f"Invalid math_dtype '{math_dtype}' for method 'uniform_1d'. "
+                    "Expected 'float32', 'float64', or None."
                 )
         if math_dtype not in [None, torch.float32, torch.float64]:
             raise ValueError(
-                f"For method 'uniform_1d', math_dtype must be float32, float64, or None; got {math_dtype}"
+                "For method 'uniform_1d', math_dtype must be 'float32', "
+                "'float64', or None; got "
+                f"{math_dtype}"
             )
         self.math_dtype = math_dtype
         self.operand_extent = operand_extent
         self.buffer_dim = [o.ndim for o in polynomial.operands]
         torch._assert(
             all(buffer_dim in [0, 1] for buffer_dim in self.buffer_dim),
-            "buffer dimensions must be 0 or 1",
+            "For method 'uniform_1d', buffer dimensions must be 0 or 1.",
         )
         self.buffer_num_segments = [len(o.segments) for o in polynomial.operands]
         default_dtype_map = [
