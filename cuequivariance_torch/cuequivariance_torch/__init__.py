@@ -20,6 +20,12 @@ __version__ = (
 
 from .primitives.transpose import TransposeSegments, TransposeIrrepsLayout
 from .primitives.segmented_polynomial import SegmentedPolynomial
+from .primitives.deprecated import (
+    TensorProduct,
+    EquivariantTensorProduct,
+    SymmetricTensorProduct,
+    IWeightedSymmetricTensorProduct,
+)
 from .operations.tp_channel_wise import ChannelWiseTensorProduct
 from .operations.tp_fully_connected import FullyConnectedTensorProduct
 from .operations.linear import Linear
@@ -73,6 +79,10 @@ __all__ = [
     "TransposeSegments",
     "TransposeIrrepsLayout",
     "SegmentedPolynomial",
+    "TensorProduct",
+    "EquivariantTensorProduct",
+    "SymmetricTensorProduct",
+    "IWeightedSymmetricTensorProduct",
     "ChannelWiseTensorProduct",
     "FullyConnectedTensorProduct",
     "Linear",
