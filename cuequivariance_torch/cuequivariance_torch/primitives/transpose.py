@@ -70,7 +70,7 @@ class TransposeIrrepsLayout(torch.nn.Module):
         Args:
             x (torch.Tensor): The input tensor.
             use_fallback (bool, optional): If `None` (default), a CUDA kernel will be used if available.
-                If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
+                If `False`, a CUDA kernel will be attempted, falling back to PyTorch if not available.
                 If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
 
         Returns:
@@ -93,20 +93,14 @@ class TransposeSegments(torch.nn.Module):
         self.f = None
 
         if info is not None:
-            import_error = None
             if use_fallback is False or use_fallback is None:
                 try:
                     import cuequivariance_ops_torch  # noqa: F401
-                except ImportError as e:
-                    import_error = e
+                except ImportError:
+                    pass
                 else:
                     if torch.cuda.is_available():
                         self.f = _transpose(info).to(device=device)
-
-            if use_fallback is False and self.f is None:
-                raise RuntimeError(
-                    f"CUDA kernel not available for TransposeSegments: {import_error}"
-                )
 
             if self.f is None:
                 self.f = _transpose_segments_fx(segments).to(device=device)
@@ -126,18 +120,13 @@ class TransposeSegments(torch.nn.Module):
             The input tensor to be transposed.
         use_fallback : Optional[bool], optional
             If `None` (default), a CUDA kernel will be used if available.
-            If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
+            If `False`, a CUDA kernel will be attempted, falling back to PyTorch if not available.
             If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
 
         Returns
         -------
         torch.Tensor
             The transposed tensor.
-
-        Raises
-        ------
-        RuntimeError
-            If `use_fallback` is `False` and a CUDA kernel is not available or the input is not on CUDA.
         """
         return self.f(x)
 

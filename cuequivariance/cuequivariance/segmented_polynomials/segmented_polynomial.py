@@ -74,6 +74,7 @@ class SegmentedPolynomial:
             assert len(opt.buffers) == stp.num_operands
             for i, operand in zip(opt.buffers, stp.operands):
                 assert operand == operands[i]
+            assert all(b < len(inputs) + len(outputs) for b in opt.buffers)
 
             bid = opt.output_buffer(len(inputs))
             perm = list(range(stp.num_operands))
