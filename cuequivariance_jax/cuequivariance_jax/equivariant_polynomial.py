@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Any
+
 import jax
 import jax.numpy as jnp
 
@@ -30,6 +32,7 @@ def equivariant_polynomial(
     *,
     method: str = "",
     math_dtype: str | None = None,
+    options: dict[str, Any] | None = None,
     name: str | None = None,
     precision: jax.lax.Precision = "undefined",
 ) -> list[cuex.RepArray] | cuex.RepArray:
@@ -51,6 +54,7 @@ def equivariant_polynomial(
             operands. Defaults to None. Note that indices are not supported for all methods.
         method: Method to use for computation. See :func:`cuex.segmented_polynomial <cuequivariance_jax.segmented_polynomial>` for available methods.
         math_dtype: See :func:`cuex.segmented_polynomial <cuequivariance_jax.segmented_polynomial>` for supported options.
+        options: Optional dictionary of method-specific options. See :func:`cuex.segmented_polynomial <cuequivariance_jax.segmented_polynomial>` for supported options.
         name: Optional name for the operation. Defaults to None.
 
     Returns:
@@ -186,8 +190,10 @@ def equivariant_polynomial(
         outputs_shape_dtype,
         indices,
         math_dtype=math_dtype,
+        options=options,
         name=name,
         method=method,
+        precision=precision,
     )
     outputs = [cuex.RepArray(rep, x) for rep, x in zip(poly.outputs, outputs)]
 
