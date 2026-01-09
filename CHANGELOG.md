@@ -1,5 +1,10 @@
 ## Latest Changes
 
+## 0.8.1 (2026-01-09)
+
+### Bug fix
+- [Torch] Fixed `torch.compile` compatibility for non-contiguous tensors in backward pass for `cuet.triangle_attention`, `cuet.triangle_multiplicative_update`, and `cuet.attention_pair_bias`. This resolves stride mismatch errors in TorchInductor when compiling models using these operations ([#223](https://github.com/NVIDIA/cuEquivariance/issues/223))
+
 ## 0.8.0 (2025-12-05)
 
 ### Added
