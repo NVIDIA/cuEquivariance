@@ -57,6 +57,7 @@ from cuequivariance import segmented_polynomials as segmented_polynomials
 from cuequivariance import group_theory as group_theory
 from cuequivariance.group_theory import descriptors as descriptors
 
+
 __all__ = [
     "__version__",
     "Operation",
