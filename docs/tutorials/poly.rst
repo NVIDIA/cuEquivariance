@@ -151,4 +151,86 @@ This hierarchical structure allows for efficient representation and computation 
 .. jupyter-execute::
 
     p.operations
+
+Visualization
+-------------
+
+You can visualize the dataflow of a :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>` using graphviz. This creates a diagram showing how inputs flow through segmented tensor products to produce outputs.
+
+First, install graphviz:
+
+.. code-block:: bash
+
+    pip install graphviz
+
+Then create a visualization:
+
+.. jupyter-execute::
+
+    from cuequivariance.segmented_polynomials import visualize_polynomial
+
+    # Visualize the spherical harmonics polynomial
+    sh_poly = cue.descriptors.spherical_harmonics(cue.SO3(1), [1, 2]).polynomial
+    graph = visualize_polynomial(sh_poly, input_names=["x"], output_names=["Y"])
+
+    # Display the graph (in Jupyter it renders inline)
+    graph
+
+The diagram shows:
+
+* **Input nodes** (blue): Display the input name, number of segments, and total size
+* **STP nodes** (yellow): Show the subscripts and number of computation paths
+* **Output nodes** (green): Display the output name, number of segments, and total size
+* **Edges**: Represent the dataflow, with multiple edges drawn when an input is used multiple times
+
+You can save the diagram to a file:
+
+.. jupyter-execute::
+    :hide-output:
+
+    # Save as PNG (or 'svg', 'pdf', etc.)
+    graph.render('spherical_harmonics', format='png', cleanup=True)
+
+For more complex examples:
+
+.. jupyter-execute::
+
+    # Visualize a linear layer
+    irreps_in = cue.Irreps("O3", "8x0e + 8x1o")
+    irreps_out = cue.Irreps("O3", "4x0e + 4x1o")
+    linear_poly = cue.descriptors.linear(irreps_in, irreps_out).polynomial
+
+    graph = visualize_polynomial(linear_poly, input_names=["weights", "input"], output_names=["output"])
+    graph
+
+.. jupyter-execute::
+
+    # Visualize a tensor product
+    irreps = cue.Irreps("O3", "0e + 1o")
+    tp_poly = cue.descriptors.channelwise_tensor_product(irreps, irreps, irreps).polynomial
+
+    graph = visualize_polynomial(tp_poly, input_names=["weights", "x1", "x2"], output_names=["y"])
+    graph
+
+Visualizing Backward Pass
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+You can also visualize the backward pass of a polynomial. The mapping function returned by :meth:`cue.SegmentedPolynomial.backward <cuequivariance.SegmentedPolynomial.backward>` accepts an optional `into_grad` parameter that can transform operand names, which is useful for labeling gradients:
+
+.. jupyter-execute::
+
+    # Create a polynomial and compute its backward pass
+    irreps = cue.Irreps("O3", "0e + 1o")
+    tp_poly = cue.descriptors.channelwise_tensor_product(irreps, irreps, irreps).polynomial
     
+    # Compute backward pass (all inputs require gradients, output has cotangent)
+    poly_bwd, m = tp_poly.backward([True, True, True], [True])
+    
+    # Transform operand names using the mapping function with into_grad
+    # The mapping function takes (inputs, outputs) and returns (new_inputs, new_outputs)
+    operand_names = (["weights", "x1", "x2"], ["y"])
+    operand_names_bwd = m(operand_names, lambda n: f"d{n}")
+    
+    # Visualize the backward polynomial
+    graph = visualize_polynomial(poly_bwd, input_names=operand_names_bwd[0], output_names=operand_names_bwd[1])
+    graph
