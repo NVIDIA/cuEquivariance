@@ -42,6 +42,12 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "graphviz",
+]
+
 [tool.hatch.version]
 path = "cuequivariance/VERSION"
 pattern = "(?P<version>\\d+\\.\\d+\\.\\d+(?:[a-z]+\\d+)?)"
