@@ -16,178 +16,126 @@
 Segmented Tensor Product
 ========================
 
-In this example, we are showing how to create a custom tensor product descriptor and execute it.
-First, we need to import the necessary modules.
+What Is a Segmented Tensor Product?
+-----------------------------------
+
+Imagine you want to perform a tensor contraction (like matrix multiplication or `np.einsum`), but your tensors are not just simple grids of numbers. Instead, they are composed of multiple distinct blocks, or **segments**, potentially of different sizes.
+
+The :class:`cue.SegmentedTensorProduct <cuequivariance.SegmentedTensorProduct>` (STP) is a **blueprint** for such an operation. It describes exactly how these segments should be multiplied and summed together.
+
+Crucially, **STP is agnostic to group theory**. It doesn't know about rotations, irreps, or symmetry. It is a pure mathematical descriptor for sparse, segmented linear algebra. The group theory (the "magic" of equivariance) is hidden inside the numerical values of the coefficients that we put into this blueprint.
+
+Anatomy of a Descriptor
+-----------------------
+
+An STP descriptor is like a recipe. It doesn't hold the ingredients (the input data), but it tells you what to do with them. It consists of three main parts:
+
+1.  **Subscripts**: A rule like ``"uv,ui,vj+ij"`` that tells us how indices contract (similar to `einsum`).
+2.  **Operands**: Definitions of the input and output tensors structure (how many segments they have and their shapes).
+3.  **Paths**: The specific connections between segments. A "path" says: "Take segment 0 from input A, segment 1 from input B, multiply them by this coefficient matrix, and add the result to segment 0 of output C."
+
+Let's build one step by step.
+
+Building a Descriptor
+---------------------
+
+First, we define the contraction rule using subscripts.
 
 .. jupyter-execute::
 
-   import itertools
-   import numpy as np
-   import torch
-   import jax
-   import jax.numpy as jnp
+    import numpy as np
+    import cuequivariance as cue
 
-   import cuequivariance as cue
-   import cuequivariance_torch as cuet  # to execute the tensor product with PyTorch
-   import cuequivariance_jax as cuex    # to execute the tensor product with JAX
+    # Define the rule: A_uv * B_ui * C_vj -> D_ij
+    # This looks complicated, but it's just a specific way to contract indices.
+    d = cue.SegmentedTensorProduct.from_subscripts("uv,ui,vj+ij")
+    print(d)
 
-Basic Tools
------------
+At this point, our blueprint is empty. We need to define the shape of our data.
 
-Creating a tensor product descriptor using the :class:`cue.SegmentedTensorProduct <cuequivariance.SegmentedTensorProduct>` class.
+Adding Segments
+~~~~~~~~~~~~~~~
 
-.. jupyter-execute::
-
-   d = cue.SegmentedTensorProduct.from_subscripts("a,ia,ja+ij")
-   print(d.to_text())
-
-This descriptor has 3 operands.
+We define the structure of our operands by adding **segments**.
+Think of an operand as a list of tensors.
+For example, if Operand 1 has two segments—one of shape (2, 5) and one of shape (2, 4)—we add them as follows.
 
 .. jupyter-execute::
 
-   d.num_operands
+    # Operand 0: One segment of shape (2, 3)
+    d.add_segment(0, (2, 3))
 
-Its coefficients have indices "ij".
+    # Operand 1: Two segments of shape (2, 5) and (2, 4)
+    d.add_segments(1, [(2, 5), (2, 4)])
 
-.. jupyter-execute::
+    # Operand 2: One segment of shape (3, 6)
+    d.add_segment(2, (3, 6))
 
-   d.coefficient_subscripts
+    print(d)
 
-Adding segments to the two operands.
+Adding Paths
+~~~~~~~~~~~~
 
-.. jupyter-execute::
+Now for the connectivity. A **path** defines a single term in our sparse calculation.
+It specifies which segments interact.
 
-   d.add_segment(0, (200,))
-   d.add_segments(1, [(3, 100), (5, 200)])
-   d.add_segments(2, [(1, 200), (1, 100)])
-   print(d.to_text())
+If we want to connect:
+*   Segment 0 from Operand 0
+*   Segment 1 from Operand 1
+*   Segment 0 from Operand 2
 
-Observing that "j" is always set to 1, squeezing it.
-
-.. jupyter-execute::
-
-   d = d.squeeze_modes("j")
-   print(d.to_text())
-
-Adding paths between the segments.
+We add a path. We also need to provide a **coefficient** array that weights this interaction. The shape of this coefficient is determined by the subscripts we defined earlier (indices `i` and `j` are not contracted, so they form the coefficient dimensions).
 
 .. jupyter-execute::
 
-   d.add_path(0, 1, 0, c=np.array([1.0, 2.0, 0.0, 0.0, 0.0]))
-   print(d.to_text())
+    # Connect: Op0[0], Op1[1], Op2[0]
+    # The coefficient shape matches the free indices (i=4, j=6)
+    coeff = np.ones((4, 6))
+    d.add_path(0, 1, 0, c=coeff)
 
-Flattening the index "i" of the coefficients.
+    print(d.to_text())
 
-.. jupyter-execute::
+The output shows ``num_paths=1``. We have successfully described one specific multiplication operation between these blocks.
 
-   d = d.flatten_modes("i")
-   # d = d.flatten_coefficient_modes()
-   print(d.to_text())
+Normalization
+-------------
 
-Equivalently, :meth:`flatten_coefficient_modes <cuequivariance.SegmentedTensorProduct.flatten_coefficient_modes>` can be used.
+In deep learning, keeping the scale of signals under control is vital. If we multiply many random numbers, values can explode or vanish.
+STP helps us by providing tools to normalize these paths automatically.
 
-
-
-Equivariant Linear Layer
-------------------------
-
-Now, we are creating a custom tensor product descriptor that represents the tensor product of the two representations. See :ref:`tuto_irreps` for more information on irreps.
+:meth:`cue.SegmentedTensorProduct.normalize_paths_for_operand` adjusts the coefficients so that the output variance remains stable (usually close to 1), assuming the inputs are standard normal variables.
 
 .. jupyter-execute::
 
-   irreps1 = cue.Irreps("O3", "32x0e + 32x1o")
-   irreps2 = cue.Irreps("O3", "16x0e + 48x1o")
+    # Normalize assuming Operand 1 is the input signal
+    d = d.normalize_paths_for_operand(1)
+    
+    # The coefficients are now scaled down
+    print(d.paths[0].coefficients[0, 0])
 
-The tensor product descriptor is created step by step. First, we are creating an empty descriptor given its subscripts.
-In the case of the linear layer, we have 3 operands: the weight, the input, and the output.
-The subscripts of this tensor product are "uv,iu,iv" where "uv" represents the modes of the weight, "iu" represents the modes of the input, and "iv" represents the modes of the output.
+Optimization
+------------
 
-.. jupyter-execute::
+Before executing this blueprint, we can optimize it. Just like compiling code, we can simplify the descriptor to make it run faster.
 
-   d = cue.SegmentedTensorProduct.from_subscripts("uv,iu,iv")
-   d
-
-Each operand of the tensor product descriptor has a list of segments.
-We can add segments to the descriptor using the :meth:`add_segment <cuequivariance.SegmentedTensorProduct.add_segment>` method.
-We are adding the segments of the input and output representations to the descriptor.
+*   :meth:`cue.SegmentedTensorProduct.consolidate_paths`: Merges duplicate paths.
+*   :meth:`cue.SegmentedTensorProduct.flatten_modes`: Merges dimensions (e.g., treating a 3x3 matrix as a size-9 vector) to simplify the underlying loops.
 
 .. jupyter-execute::
 
-   for mul, ir in irreps1:
-      d.add_segment(1, (ir.dim, mul))
-   for mul, ir in irreps2:
-      d.add_segment(2, (ir.dim, mul))
+    # Example: Consolidate paths (merge duplicates and remove zeros)
+    d_consolidated = d.consolidate_paths()
+    print(d_consolidated)
+    
+    # Example: Flatten the 'u' mode (must be at the beginning of subscripts)
+    d_flat = d.flatten_modes("u")
+    print(d_flat)
 
-   d
+Summary
+-------
 
-Enumerating all the possible pairs of irreps and adding weight segments and paths between them when the irreps are the same.
+*   **STP is a Blueprint**: It describes the math of the contraction.
+*   **Segments & Paths**: It handles data that comes in chunks, connected sparsely.
+*   **General Purpose**: It works for any sparse tensor algebra, not just equivariant ones.
 
-.. jupyter-execute::
-
-   for (i1, (mul1, ir1)), (i2, (mul2, ir2)) in itertools.product(
-      enumerate(irreps1), enumerate(irreps2)
-   ):
-      if ir1 == ir2:
-         d.add_path(None, i1, i2, c=1.0)
-
-   d
-
-Printing the paths.
-
-.. jupyter-execute::
-
-      d.paths
-
-
-Normalizing the paths for the last operand such that the output is normalized to variance 1.
-
-.. jupyter-execute::
-
-   d = d.normalize_paths_for_operand(-1)
-   d.paths
-
-As we can see, the paths coefficients have been normalized.
-
-Now we are creating a tensor product from the descriptor and executing it. In PyTorch, we can use the :class:`cuet.SegmentedPolynomial <cuequivariance_torch.SegmentedPolynomial>` class.
-
-.. jupyter-execute::
-
-   linear_torch = cuet.SegmentedPolynomial(cue.SegmentedPolynomial.eval_last_operand(d), method="naive")
-   linear_torch
-
-
-Now we can execute the linear layer with random input and weight tensors.
-
-.. jupyter-execute::
-
-   w = torch.randn(1, d.operands[0].size)
-   x1 = torch.randn(3000, irreps1.dim)
-
-   [x2] = linear_torch([w, x1])
-
-   assert x2.shape == (3000, irreps2.dim)
-
-Now we are verifying that the output is well normalized.
-
-.. jupyter-execute::
-
-   x2.var()
-
-
-
-In JAX, we can use the :func:`cuex.segmented_polynomial <cuequivariance_jax.segmented_polynomial>` function.
-
-.. jupyter-execute::
-
-   w = jax.random.normal(jax.random.key(0), (d.operands[0].size,))
-   x1 = jax.random.normal(jax.random.key(1), (3000, irreps1.dim))
-
-   [x2] = cuex.segmented_polynomial(
-      cue.SegmentedPolynomial.eval_last_operand(d),
-      [w, x1],
-      [jax.ShapeDtypeStruct((3000, irreps2.dim), jnp.float32)],
-      method="naive",
-   )
-
-   assert x2.shape == (3000, irreps2.dim)
-   x2.var()
+Now that we have the math descriptor, how do we actually run it on data? That is the job of the :doc:`Segmented Polynomial <poly>`.

@@ -9,3 +9,4 @@ matplotlib
 jupyter-sphinx
 e3nn
 flax
+graphviz
