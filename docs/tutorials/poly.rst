@@ -43,6 +43,7 @@ Example: Wiring a Square Function
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Let's say we want to compute :math:`y = x \otimes x` (the tensor product of :math:`x` with itself).
+
 *   **The Math (STP)**: Requires two input operands (Left, Right) and produces one output.
 *   **The Circuit (SP)**: Has only *one* global input (:math:`x`). We need to wire this single input to *both* the Left and Right operands of the STP.
 
@@ -77,24 +78,24 @@ Let's say we want to compute :math:`y = x \otimes x` (the tensor product of :mat
 
     print(sp)
 
-Visualization
--------------
-
-Dataflow can be hard to read from text. Visualizing the graph makes the "wiring" obvious.
+Visualizing the dataflow makes the wiring obvious:
 
 .. jupyter-execute::
 
-    # Visualize the polynomial
-    # Blue nodes: Inputs
-    # Yellow nodes: The STP computation
-    # Green nodes: Outputs
     graph = visualize_polynomial(sp, input_names=["x"], output_names=["y"])
     graph
 
-In the diagram, you can clearly see the single input node ``x`` splitting into two branches to feed the yellow computation node. This visually confirms we are computing a quadratic function :math:`x^2`.
+In the diagram, the single input node ``x`` splits into two branches to feed the yellow computation node—confirming we are computing a quadratic function :math:`x^2`.
 
-Automatic Differentiation (AD)
-------------------------------
+The diagram shows:
+
+* **Input nodes** (blue): Display the input name, number of segments, and total size
+* **STP nodes** (yellow): Show the subscripts and number of computation paths
+* **Output nodes** (green): Display the output name, number of segments, and total size
+* **Edges**: Represent the dataflow, with multiple edges when an input is used multiple times
+
+Automatic Differentiation
+-------------------------
 
 One of the most powerful features of SP is that it knows how to differentiate itself.
 Since SP defines the entire dataflow graph, it can apply the rules of calculus (like the product rule) to generate new SPs that compute gradients.
@@ -146,11 +147,13 @@ While SP can handle complex, ragged, sparse data, there is a special case that i
 
 We call it **Uniform 1D**.
 This happens when every operand is made of segments that are:
+
 1.  **Uniform**: All segments in the operand have the same shape.
 2.  **1D**: That shape is just a vector ``(d,)`` (or a scalar ``()``).
 
 **Why does this matter?**
 If your data is "Uniform 1D", it fits into regular tensors. This means we don't need slow, sparse lookups. We can use highly optimized code:
+
 *   **Vectorization**: Using ``vmap`` in JAX or PyTorch.
 *   **CUDA Kernels**: We provide specialized GPU kernels for this case that are very fast.
 
@@ -159,7 +162,6 @@ Most standard Neural Network layers (Linear, Convolution, Tensor Product) fall i
 .. jupyter-execute::
 
     # Check if our example is Uniform 1D
-    # Uniform 1D means: all segments have same shape AND shape is 1D (or scalar)
     is_uniform_1d = all(
         op.all_same_segment_shape() and op.ndim <= 1 
         for op in sp.operands
@@ -240,8 +242,8 @@ The same descriptor can be used in PyTorch using the class :class:`cuet.Segmente
 
     module([w, x])
 
-Details
--------
+Structure Details
+-----------------
 
 An :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>` is composed of two main components:
 
@@ -273,86 +275,3 @@ This hierarchical structure allows for efficient representation and computation 
 .. jupyter-execute::
 
     p.operations
-
-Visualization
--------------
-
-You can visualize the dataflow of a :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>` using graphviz. This creates a diagram showing how inputs flow through segmented tensor products to produce outputs.
-
-First, install graphviz:
-
-.. code-block:: bash
-
-    pip install graphviz
-
-Then create a visualization:
-
-.. jupyter-execute::
-
-    from cuequivariance.segmented_polynomials import visualize_polynomial
-
-    # Visualize the spherical harmonics polynomial
-    sh_poly = cue.descriptors.spherical_harmonics(cue.SO3(1), [1, 2]).polynomial
-    graph = visualize_polynomial(sh_poly, input_names=["x"], output_names=["Y"])
-
-    # Display the graph (in Jupyter it renders inline)
-    graph
-
-The diagram shows:
-
-* **Input nodes** (blue): Display the input name, number of segments, and total size
-* **STP nodes** (yellow): Show the subscripts and number of computation paths
-* **Output nodes** (green): Display the output name, number of segments, and total size
-* **Edges**: Represent the dataflow, with multiple edges drawn when an input is used multiple times
-
-You can save the diagram to a file:
-
-.. jupyter-execute::
-    :hide-output:
-
-    # Save as PNG (or 'svg', 'pdf', etc.)
-    graph.render('spherical_harmonics', format='png', cleanup=True)
-
-For more complex examples:
-
-.. jupyter-execute::
-
-    # Visualize a linear layer
-    irreps_in = cue.Irreps("O3", "8x0e + 8x1o")
-    irreps_out = cue.Irreps("O3", "4x0e + 4x1o")
-    linear_poly = cue.descriptors.linear(irreps_in, irreps_out).polynomial
-
-    graph = visualize_polynomial(linear_poly, input_names=["weights", "input"], output_names=["output"])
-    graph
-
-.. jupyter-execute::
-
-    # Visualize a tensor product
-    irreps = cue.Irreps("O3", "0e + 1o")
-    tp_poly = cue.descriptors.channelwise_tensor_product(irreps, irreps, irreps).polynomial
-
-    graph = visualize_polynomial(tp_poly, input_names=["weights", "x1", "x2"], output_names=["y"])
-    graph
-
-Visualizing Backward Pass
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
-You can also visualize the backward pass of a polynomial. The mapping function returned by :meth:`cue.SegmentedPolynomial.backward <cuequivariance.SegmentedPolynomial.backward>` accepts an optional `into_grad` parameter that can transform operand names, which is useful for labeling gradients:
-
-.. jupyter-execute::
-
-    # Create a polynomial and compute its backward pass
-    irreps = cue.Irreps("O3", "0e + 1o")
-    tp_poly = cue.descriptors.channelwise_tensor_product(irreps, irreps, irreps).polynomial
-    
-    # Compute backward pass (all inputs require gradients, output has cotangent)
-    poly_bwd, m = tp_poly.backward([True, True, True], [True])
-    
-    # Transform operand names using the mapping function with into_grad
-    # The mapping function takes (inputs, outputs) and returns (new_inputs, new_outputs)
-    operand_names = (["weights", "x1", "x2"], ["y"])
-    operand_names_bwd = m(operand_names, lambda n: f"d{n}")
-    
-    # Visualize the backward polynomial
-    graph = visualize_polynomial(poly_bwd, input_names=operand_names_bwd[0], output_names=operand_names_bwd[1])
-    graph
