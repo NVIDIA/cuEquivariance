@@ -23,6 +23,7 @@ from .dispatch import dispatch
 
 from .operation import Operation
 from .segmented_polynomial import SegmentedPolynomial
+from .visualization import visualize_polynomial
 
 
 __all__ = [
@@ -37,4 +38,5 @@ __all__ = [
     "dispatch",
     "Operation",
     "SegmentedPolynomial",
+    "visualize_polynomial",
 ]
