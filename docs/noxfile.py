@@ -16,9 +16,6 @@ def docs(session: nox.Session):
     session.run("python", "-m", "uv", "pip", "install", "../cuequivariance_jax")
     session.run("python", "-m", "uv", "pip", "install", "../cuequivariance_torch")
 
-    # Explicitly install jax-triton (workaround for dependency resolution issue)
-    session.run("python", "-m", "pip", "install", "jax-triton")
-
     # Install docs requirements - now in same directory
     session.run("python", "-m", "uv", "pip", "install", "-r", "requirements.txt")
 

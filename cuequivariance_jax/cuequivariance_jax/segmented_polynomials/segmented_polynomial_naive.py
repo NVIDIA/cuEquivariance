@@ -43,7 +43,7 @@ def execute_naive(
     index_configuration: tuple[tuple[int, ...], ...],
     index_mode: tuple[tuple[IndexingMode, ...], ...],
     polynomial: cue.SegmentedPolynomial,
-    math_dtype: str | None,
+    options,
     name: str,
 ) -> list[jax.Array]:  # output buffers
     if any(mode == IndexingMode.REPEATED for modes in index_mode for mode in modes):
@@ -54,7 +54,7 @@ def execute_naive(
             index_configuration,
             index_mode,
             polynomial,
-            math_dtype,
+            options,
             name,
             run_kernel=False,
         )
@@ -63,9 +63,8 @@ def execute_naive(
         jnp.result_type(
             *[x.dtype for x in inputs] + [x.dtype for x in outputs_shape_dtype]
         ),
-        math_dtype,
+        options.get("math_dtype"),
     )
-    del math_dtype
 
     num_inputs = len(index_configuration) - len(outputs_shape_dtype)
 

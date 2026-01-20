@@ -27,12 +27,13 @@ from ._naive_batching import naive_batching_rule
 from ._utils import Precision
 
 try:
-    import jax_triton as jt
     import triton
 
-    HAS_JAX_TRITON = True
+    from .triton_utils import triton_call
+
+    HAS_TRITON = True
 except ImportError:
-    HAS_JAX_TRITON = False
+    HAS_TRITON = False
 
 
 # Unified JAX primitives
@@ -239,8 +240,8 @@ def fused_sigmoid_gated_dual_gemm_forward_kernel_wrapper(
     num_warps: int = 4,
 ):
     """Triton implementation of forward pass."""
-    if not HAS_JAX_TRITON:
-        raise ImportError("jax_triton is required for GPU implementation")
+    if not HAS_TRITON:
+        raise ImportError("triton is required for GPU implementation")
 
     from cuequivariance_ops.triton import fused_sigmoid_gated_dual_gemm_forward_kernel
 
@@ -263,7 +264,7 @@ def fused_sigmoid_gated_dual_gemm_forward_kernel_wrapper(
     out_shape = (N, M) if transpose_out else (M, N)
     dummy = jnp.zeros((), dtype=dtype)
 
-    return jt.triton_call(
+    return triton_call(
         x1,
         x2 if two_inputs else dummy,
         w1,
@@ -271,12 +272,12 @@ def fused_sigmoid_gated_dual_gemm_forward_kernel_wrapper(
         b1 if has_b1 else dummy,
         b2 if has_b2 else dummy,
         mask if has_mask else dummy,
-        M,
-        N,
-        K,
         kernel=fused_sigmoid_gated_dual_gemm_forward_kernel,
         out_shape=[jax.ShapeDtypeStruct(shape=out_shape, dtype=x1.dtype)],
         grid=(triton.cdiv(M, TILE_M), triton.cdiv(N, TILE_N), 1),
+        M=M,
+        N=N,
+        K=K,
         TILE_M=TILE_M,
         TILE_N=TILE_N,
         TILE_K=TILE_K,
@@ -314,8 +315,8 @@ def fused_sigmoid_gated_dual_gemm_backward_pregemm_kernel_wrapper(
     num_warps: int = 4,
 ):
     """Triton implementation of backward pass."""
-    if not HAS_JAX_TRITON:
-        raise ImportError("jax_triton is required for GPU implementation")
+    if not HAS_TRITON:
+        raise ImportError("triton is required for GPU implementation")
 
     from cuequivariance_ops.triton import (
         fused_sigmoid_gated_dual_gemm_backward_pregemm_kernel,
@@ -346,7 +347,7 @@ def fused_sigmoid_gated_dual_gemm_backward_pregemm_kernel_wrapper(
     ]
 
     dummy = jnp.zeros((), dtype=dtype)
-    grad_xw1, grad_xw2, grad_mask = jt.triton_call(
+    grad_xw1, grad_xw2, grad_mask = triton_call(
         grad_out,
         x1,
         x2 if two_inputs else dummy,
@@ -355,12 +356,12 @@ def fused_sigmoid_gated_dual_gemm_backward_pregemm_kernel_wrapper(
         b1 if has_b1 else dummy,
         b2 if has_b2 else dummy,
         mask if has_mask else dummy,
-        M,
-        N,
-        K,
         kernel=fused_sigmoid_gated_dual_gemm_backward_pregemm_kernel,
         out_shape=out_shapes,
         grid=(triton.cdiv(M, TILE_M), triton.cdiv(N, TILE_N), 1),
+        M=M,
+        N=N,
+        K=K,
         TILE_M=TILE_M,
         TILE_N=TILE_N,
         TILE_K=TILE_K,

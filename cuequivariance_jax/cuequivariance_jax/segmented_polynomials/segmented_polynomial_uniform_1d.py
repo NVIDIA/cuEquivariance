@@ -38,16 +38,13 @@ def execute_uniform_1d(
     indices: list[jax.Array],
     index_configuration: tuple[tuple[int, ...], ...],
     polynomial: cue.SegmentedPolynomial,
-    math_dtype: str | None,
+    options: dict,
     name: str,
 ) -> list[jax.Array]:
     error_message = f"Failed to execute 'uniform_1d' method for the following polynomial:\n{polynomial}\n"
 
     index_configuration = np.array(index_configuration)
     num_batch_axes = index_configuration.shape[1]
-    assert (
-        polynomial.num_inputs + len(outputs_shape_dtype) == index_configuration.shape[0]
-    )
     assert polynomial.num_outputs == len(outputs_shape_dtype)
 
     try:
@@ -69,9 +66,14 @@ def execute_uniform_1d(
 
     polynomial = polynomial.apply_fn(fn)
 
-    # We don't use the feature that indices can index themselves
-    index_configuration = np.concatenate(
-        [index_configuration, np.full((len(indices), num_batch_axes), -1, np.int32)]
+    if polynomial.num_inputs + len(outputs_shape_dtype) == index_configuration.shape[0]:
+        index_configuration = np.concatenate(
+            [index_configuration, np.full((len(indices), num_batch_axes), -1, np.int32)]
+        )
+
+    assert (
+        polynomial.num_inputs + len(outputs_shape_dtype) + len(indices)
+        == index_configuration.shape[0]
     )
 
     buffers = list(inputs) + list(outputs_shape_dtype)
@@ -151,8 +153,9 @@ def execute_uniform_1d(
     if len({b.shape[-1] for b in buffers}.union({1})) > 2:
         raise ValueError(f"Buffer shapes not compatible {[b.shape for b in buffers]}")
 
-    if math_dtype is not None:
+    if "math_dtype" in options:
         supported_dtypes = {"float32", "float64", "float16", "bfloat16"}
+        math_dtype = options["math_dtype"]
         if math_dtype not in supported_dtypes:
             raise ValueError(
                 f"method='uniform_1d' only supports math_dtype equal to {supported_dtypes}, got '{math_dtype}'."
@@ -165,12 +168,7 @@ def execute_uniform_1d(
             compute_dtype = jnp.float32
 
     try:
-        from cuequivariance_ops_jax import (
-            Operation,
-            Path,
-            __version__,
-            tensor_product_uniform_1d_jit,
-        )
+        from cuequivariance_ops_jax import Operation, Path, __version__, uniform_1d
     except ImportError as e:
         raise ValueError(f"cuequivariance_ops_jax is not installed: {e}")
 
@@ -186,7 +184,7 @@ def execute_uniform_1d(
         for path in stp.paths:
             paths.append(Path(path.indices, path.coefficients.item()))
 
-    outputs = tensor_product_uniform_1d_jit(
+    outputs = uniform_1d(
         buffers[: polynomial.num_inputs],
         buffers[polynomial.num_inputs :],
         list(indices),
