@@ -319,10 +319,11 @@ def attention_pair_bias(
             If True, z should be of shape (B, H, U, V). Defaults to False.
 
     Returns:
-        - **output** (:class:`torch.Tensor`): Attention output of shape (B * M, S, D)
-          with pairwise bias applied.
-        - **proj_z** (:class:`torch.Tensor`): Projected z tensor of shape (B, H, U, V)
-          containing the pairwise bias tensor with mask applied.
+        Tuple[torch.Tensor, torch.Tensor]:
+            - **output**: Attention output of shape (B * M, S, D) with pairwise bias applied.
+            - **proj_z**: Projected z tensor of shape (B, H, U, V) containing the pairwise
+              bias tensor with mask applied.
+
 
     Notes:
         - For short sequences (≤ CUEQ_ATTENTION_PAIR_BIAS_FALLBACK_THRESHOLD),

@@ -191,7 +191,23 @@ If you are building standard models, you will mostly stay in this high-performan
 Framework Guides
 ----------------
 
-Now that you understand the concepts, see how to run these polynomials in your framework of choice:
+Now that you understand the concepts, see how to run these polynomials in your framework of choice.
+
+First, let's create a linear layer descriptor that we'll use in the following examples:
+
+.. jupyter-execute::
+
+    # Create a linear layer descriptor
+    e = cue.descriptors.linear(
+        cue.Irreps("SO3", "4x0"),
+        cue.Irreps("SO3", "2x0")
+    )
+    print(e)
+
+Execution on JAX
+~~~~~~~~~~~~~~~~
+
+.. code-block:: python
 
     import jax
     import jax.numpy as jnp
@@ -207,16 +223,14 @@ The function :func:`cuex.randn <cuequivariance_jax.randn>` generates random :cla
 The function :func:`cuex.equivariant_polynomial <cuequivariance_jax.equivariant_polynomial>` executes the tensor product.
 The output is a :class:`cuex.RepArray <cuequivariance_jax.RepArray>` object.
 
-
 Execution on PyTorch
---------------------
+~~~~~~~~~~~~~~~~~~~~
 
 The same descriptor can be used in PyTorch using the class :class:`cuet.SegmentedPolynomial <cuequivariance_torch.SegmentedPolynomial>`.
 
 .. jupyter-execute::
 
     import torch
-    import cuequivariance as cue
     import cuequivariance_torch as cuet
 
     module = cuet.SegmentedPolynomial(e.polynomial, method="uniform_1d")
@@ -321,7 +335,7 @@ For more complex examples:
     graph
 
 Visualizing Backward Pass
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 You can also visualize the backward pass of a polynomial. The mapping function returned by :meth:`cue.SegmentedPolynomial.backward <cuequivariance.SegmentedPolynomial.backward>` accepts an optional `into_grad` parameter that can transform operand names, which is useful for labeling gradients:
 
