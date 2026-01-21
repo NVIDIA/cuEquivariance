@@ -24,6 +24,7 @@ This implementation was inspired by NVIDIA TransformerEngine
 from __future__ import annotations
 
 import hashlib
+import inspect
 import os
 import re
 import subprocess
@@ -163,23 +164,22 @@ def _compile_triton(
     # Detect maximum supported PTX version
     max_ptx_version = _get_max_ptx_version()
 
+    # Base options supported by all Triton versions
     cuda_options_kwargs = {
         "num_warps": num_warps,
         "num_stages": num_stages,
         "num_ctas": 1,
-        "cluster_dims": (1, 1, 1),
         "debug": False,
         "enable_fp_fusion": enable_fp_fusion,
     }
 
-    # Try adding ptx_version if detected and supported by Triton
+    # cluster_dims: supported in Triton 3.2.0-3.5.x, removed in 3.6.0+
+    if "cluster_dims" in inspect.signature(cb.CUDAOptions.__init__).parameters:
+        cuda_options_kwargs["cluster_dims"] = (1, 1, 1)
+
+    # ptx_version: add if detected and supported
     if max_ptx_version is not None:
-        try:
-            # Check if CUDAOptions accepts ptx_version
-            cb.CUDAOptions(**cuda_options_kwargs, ptx_version=max_ptx_version)
-        except TypeError:
-            pass
-        else:
+        if "ptx_version" in inspect.signature(cb.CUDAOptions.__init__).parameters:
             cuda_options_kwargs["ptx_version"] = max_ptx_version
 
     options = cb.CUDAOptions(**cuda_options_kwargs)
