@@ -649,17 +649,12 @@ class SegmentedPolynomial:
         """
 
         def f(ope: cue.Operation, stp: cue.SegmentedTensorProduct):
-            stp = (
-                stp.consolidate_modes()
-                .squeeze_modes()
-                .remove_empty_segments()
-                .consolidate_paths()
-            )
+            stp = stp.consolidate_modes().remove_empty_segments().consolidate_paths()
             if stp.num_paths == 0:
                 return None
             return ope, stp
 
-        return self.fuse_stps().apply_fn(f)
+        return self.fuse_stps().apply_fn(f).squeeze_modes()
 
     def flatten_modes(self, modes: list[str]) -> SegmentedPolynomial:
         """Flatten specified modes in the polynomial.
@@ -688,20 +683,16 @@ class SegmentedPolynomial:
             [(ope, stp.canonicalize_subscripts()) for ope, stp in self.operations],
         )
 
-    def squeeze_modes(self, modes: str | None = None) -> SegmentedPolynomial:
-        """Squeeze specified modes in the polynomial.
-
-        Args:
-            modes (str | None, optional): Modes to squeeze. If None, squeezes all modes.
+    def squeeze_modes(self) -> SegmentedPolynomial:
+        """Squeeze modes that are always 1 in all operations.
 
         Returns:
             :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: Polynomial with squeezed modes.
         """
-        return SegmentedPolynomial._from_default_operands(
-            self.inputs,
-            self.outputs,
-            [(ope, stp.squeeze_modes(modes)) for ope, stp in self.operations],
-        )
+        ops = [(ope, stp.squeeze_modes()) for ope, stp in self.operations]
+        inputs = tuple(op.squeeze() for op in self.inputs)
+        outputs = tuple(op.squeeze() for op in self.outputs)
+        return SegmentedPolynomial._from_default_operands(inputs, outputs, ops)
 
     def split_mode(self, mode: str, size: int) -> SegmentedPolynomial:
         """Split specified mode in the polynomial.

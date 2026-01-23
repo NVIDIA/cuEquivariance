@@ -29,6 +29,7 @@ dependencies = [
     "cuequivariance",
     "jax",
     "packaging",
+    "einops",
 ]
 classifiers = [
     "Intended Audience :: Developers",

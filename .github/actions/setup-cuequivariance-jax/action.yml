@@ -1,0 +1,44 @@
+name: 'Setup cuequivariance-jax'
+description: 'Install cuequivariance-jax with all JAX dependencies'
+
+inputs:
+  use-gpu:
+    description: 'Install GPU dependencies (jax[cuda12], CUDA ops packages)'
+    required: false
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install JAX (CPU)
+      if: inputs.use-gpu != 'true'
+      shell: bash
+      run: |
+        python -m uv pip install -U pytest jax
+    
+    - name: Install JAX (GPU)
+      if: inputs.use-gpu == 'true'
+      shell: bash
+      run: |
+        python -m uv pip install -U pytest "jax[cuda12]"
+        python -m uv pip install nvidia-cusolver-cu12==11.7.3.90
+        python -m uv pip install nvidia-cublas-cu12
+    
+    - name: Install common dependencies
+      shell: bash
+      run: |
+        python -m uv pip install triton
+        python -m uv pip install "flax>=0.12.0"
+    
+    - name: Clean and install packages
+      shell: bash
+      run: |
+        python -m uv pip uninstall cuequivariance cuequivariance_jax cuequivariance_torch 2>/dev/null || true
+        python -m uv pip install -e ./cuequivariance
+        python -m uv pip install -e ./cuequivariance_jax
+    
+    - name: Verify installation
+      shell: bash
+      run: |
+        python -c "import cuequivariance; print('cue', cuequivariance.__version__)"
+        python -c "import cuequivariance_jax; print('cuex', cuequivariance_jax.__version__)"

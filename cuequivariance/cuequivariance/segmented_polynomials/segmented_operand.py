@@ -203,6 +203,14 @@ class SegmentedOperand:
             raise ValueError("Segments do not have the same shape.")
         return math.prod(self.segments[0])
 
+    def squeeze(self) -> SegmentedOperand:
+        """Remove dimensions that are always 1 across all segments."""
+        keep = [i for i in range(self.ndim) if self.get_dims(i) != {1}]
+        if len(keep) == self.ndim:
+            return self
+        segs = tuple(tuple(s[i] for i in keep) for s in self.segments)
+        return SegmentedOperand(ndim=len(keep), segments=segs)
+
     def __add__(self, other: SegmentedOperand) -> SegmentedOperand:
         if self.ndim != other.ndim:
             raise ValueError("ndim do not match.")

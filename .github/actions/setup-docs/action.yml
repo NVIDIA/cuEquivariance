@@ -1,0 +1,32 @@
+name: 'Setup Documentation Build'
+description: 'Install all packages needed for building documentation'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install system dependencies
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y graphviz
+    
+    - name: Install JAX and PyTorch dependencies
+      shell: bash
+      run: |
+        python -m uv pip install -U pytest jax torch e3nn
+        python -m uv pip install "flax>=0.12.0"
+    
+    - name: Install packages
+      shell: bash
+      run: |
+        python -m uv pip install -e ./cuequivariance
+        python -m uv pip install -e ./cuequivariance_jax
+        python -m uv pip install -e ./cuequivariance_torch
+        python -m uv pip install -r docs/requirements.txt
+    
+    - name: Verify installation
+      shell: bash
+      run: |
+        python -c "import cuequivariance; print('cue', cuequivariance.__version__)"
+        python -c "import cuequivariance_jax; print('cuex', cuequivariance_jax.__version__)"
+        python -c "import cuequivariance_torch; print('cuet', cuequivariance_torch.__version__)"
