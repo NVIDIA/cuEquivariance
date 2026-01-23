@@ -23,10 +23,13 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install --upgrade uv
           python -m uv pip install pytest
-          python -m uv pip install ./cuequivariance
-          python -m uv pip install ./cuequivariance_jax
-          python -m uv pip install ./cuequivariance_torch
+          python -m uv pip install -e ./cuequivariance
+          python -m uv pip install -e ./cuequivariance_jax
+          python -m uv pip install -e ./cuequivariance_torch
           python -m uv pip install -r docs/requirements.txt
+          python -c "import cuequivariance; print('cue', cuequivariance.__version__)"
+          python -c "import cuequivariance_jax; print('cuex', cuequivariance_jax.__version__)"
+          python -c "import cuequivariance_torch; print('cuet', cuequivariance_torch.__version__)"
       - name: Build sphinx
         run: |
           sphinx-build -b html docs docs/public
