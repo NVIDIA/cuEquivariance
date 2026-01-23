@@ -434,13 +434,15 @@ def _generate_inputs(
 
 
 def _to_key(
-    M: int, K: int, N: int,
+    M: int,
+    K: int,
+    N: int,
     dtypes,
     two_inputs: bool,
     precision: Precision,
 ):
     """Generate cache key from inputs."""
-    
+
     # round mantissa
     def fn(x):
         a = math.floor(math.log2(x))
@@ -464,7 +466,7 @@ def _to_key(
 
     if not two_inputs:
         dtypes[-4] = "None"
- 
+
     return f"{key_m}_{key_n}_{key_k}_{'_'.join(dtypes)}_{two_inputs}_False_False_{precision_key}"
 
 
@@ -494,6 +496,7 @@ def _input_to_key(
     ]
     return _to_key(M, K, N, dtypes, two_inputs, precision)
 
+
 def _config_to_key(
     M: int,
     N: int,
@@ -504,10 +507,10 @@ def _config_to_key(
     include_grad: bool,
 ):
     dtypes = [
-        "torch." + str(dtype_input if dtype_input != jnp.bfloat16 else jnp.dtype(jnp.float16))
-    ]*(6 if two_inputs else 5)
+        "torch."
+        + str(dtype_input if dtype_input != jnp.bfloat16 else jnp.dtype(jnp.float16))
+    ] * (6 if two_inputs else 5)
     return _to_key(M, K, N, dtypes, two_inputs, precision)
-
 
 
 def _get_autotuned_kernel(is_forward: bool):
