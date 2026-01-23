@@ -32,6 +32,8 @@ from .segmented_polynomials.utils import Repeats
 from .segmented_polynomials.segmented_polynomial import segmented_polynomial
 from .equivariant_polynomial import equivariant_polynomial
 
+from . import ir_dict
+
 from .activation import (
     normalspace,
     normalize_function,
@@ -44,8 +46,9 @@ from .triangle import (
     Precision as TriMulPrecision,
     triangle_attention,
 )
-from cuequivariance_jax import flax_linen
-from cuequivariance_jax import experimental
+from . import flax_linen
+from . import experimental
+from . import nnx
 
 __all__ = [
     "RepArray",
@@ -58,6 +61,7 @@ __all__ = [
     "Repeats",
     "segmented_polynomial",
     "equivariant_polynomial",
+    "ir_dict",
     "normalspace",
     "normalize_function",
     "function_parity",
@@ -70,4 +74,5 @@ __all__ = [
     "triangle_attention",
     "flax_linen",
     "experimental",
+    "nnx",
 ]
