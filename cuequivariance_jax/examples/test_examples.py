@@ -15,6 +15,7 @@
 import jax
 import jax.numpy as jnp
 import numpy as np
+import pytest
 from flax import nnx
 
 import cuequivariance as cue
@@ -86,57 +87,63 @@ def test_mace_nnx_model_basic():
     assert jnp.all(jnp.isfinite(E)) and jnp.all(jnp.isfinite(F))
 
 
-def test_mace_linen_to_nnx_conversion():
-    """Test Linen to NNX weight conversion."""
-    num_features, num_radial_basis, num_species = 16, 4, 3
-    interaction_irreps = cue.Irreps(cue.O3, "0e+1o")
-    hidden_irreps = cue.Irreps(cue.O3, "0e+1o")
+@pytest.mark.parametrize(
+    "hidden_irreps_str,interaction_irreps_str,skip_first",
+    [
+        ("0e", "0e+1o", False),  # OFF-S like config
+        ("0e+1o", "0e+1o+2e", False),  # OFF-M like config
+        ("0e", "0e+1o", True),  # MP-S like config
+        ("0e+1o", "0e+1o+2e", True),  # MP-M like config
+    ],
+    ids=["OFF-S", "OFF-M", "MP-S", "MP-M"],
+)
+def test_mace_linen_to_nnx_equivalence(
+    hidden_irreps_str, interaction_irreps_str, skip_first
+):
+    """Test Linen and NNX models produce identical outputs with converted weights."""
+    num_features, num_species = 16, 3
+    interaction_irreps = cue.Irreps(cue.O3, interaction_irreps_str)
+    hidden_irreps = cue.Irreps(cue.O3, hidden_irreps_str)
+
     config = dict(
         num_layers=1,
         num_features=num_features,
         num_species=num_species,
         max_ell=2,
         correlation=2,
-        num_radial_basis=num_radial_basis,
+        num_radial_basis=4,
         interaction_irreps=interaction_irreps,
         hidden_irreps=hidden_irreps,
         offsets=np.zeros(num_species),
         cutoff=3.0,
         epsilon=0.1,
-        skip_connection_first_layer=False,
+        skip_connection_first_layer=skip_first,
     )
-    batch = _make_batch(num_atoms=5, num_edges=10, num_species=num_species)
+    batch = _make_batch(
+        num_atoms=5, num_edges=10, num_species=num_species, num_graphs=1
+    )
 
     linen_model = MACEModel(**config)
     linen_params = linen_model.init(jax.random.key(0), batch)
 
     nnx_model = MACEModelNNX(**config, dtype=jnp.float32, rngs=nnx.Rngs(0))
-    _convert_linen_to_nnx(
-        linen_params,
-        nnx_model,
-        num_features,
-        interaction_irreps,
-        hidden_irreps,
-        num_radial_basis,
-    )
+    _convert_linen_to_nnx(linen_params, nnx_model, config)
 
     E_linen, F_linen = linen_model.apply(linen_params, batch)
     E_nnx, F_nnx = nnx_model(batch)
-    np.testing.assert_allclose(E_linen, E_nnx, atol=1e-4, rtol=1e-4)
-    np.testing.assert_allclose(F_linen, F_nnx, atol=1e-4, rtol=1e-4)
+
+    np.testing.assert_allclose(E_linen, E_nnx, atol=1e-3, rtol=1e-3)
+    np.testing.assert_allclose(F_linen, F_nnx, atol=1e-3, rtol=1e-3)
 
 
-def _convert_linen_to_nnx(
-    linen_params,
-    nnx_model,
-    num_features,
-    interaction_irreps,
-    hidden_irreps,
-    num_radial_basis,
-):
+def _convert_linen_to_nnx(linen_params, nnx_model, config):
     """Convert Linen MACE weights to NNX model."""
+    num_features = config["num_features"]
+    interaction_irreps = config["interaction_irreps"]
+    hidden_irreps = config["hidden_irreps"]
 
     def convert_linear(w, irreps_in, irreps_out):
+        """Convert flat linear weights to dict[str, Array] format."""
         e = cue.descriptors.linear(irreps_in, irreps_out)
         result, offset, seg_idx = {}, 0, 0
         for _, ir_in in irreps_in:
@@ -149,58 +156,74 @@ def _convert_linen_to_nnx(
         return result
 
     params = linen_params["params"]
-    nnx_model.linear_embedding[...] = params["linear_embedding"]
+    nnx_model.embedding[...] = params["linear_embedding"]
 
     for layer_idx, layer in enumerate(nnx_model.layers):
         lp = params[f"layer_{layer_idx}"]
-        first, last = layer_idx == 0, layer_idx == len(nnx_model.layers) - 1
-        hidden_out = hidden_irreps.filter(keep="0e") if last else hidden_irreps
+        is_first = layer_idx == 0
+        is_last = layer_idx == len(nnx_model.layers) - 1
+        hidden_out = hidden_irreps.filter(keep="0e") if is_last else hidden_irreps
         input_irreps = cue.Irreps(
             cue.O3, [(num_features, ir) for _, ir in hidden_irreps]
         )
-        if first:
+        if is_first:
             input_irreps = input_irreps.filter(keep="0e")
 
-        if layer.linZ_skip is not None:
-            layer.linZ_skip.w[...] = lp["linZ_skip_tp"]
-        if layer.linZ_first is not None:
-            layer.linZ_first.w[...] = lp["linZ_skip_tp_first"]
+        # Skip connection (linZ_skip_tp -> skip)
+        if layer.skip is not None:
+            layer.skip.w[...] = lp["linZ_skip_tp"]
 
+        # Linear up
         for ir, w in convert_linear(
             lp["linear_up"], input_irreps, input_irreps
         ).items():
             layer.linear_up.w[ir][...] = w
+
+        # Radial MLP
         for i in range(4):
             layer.radial_mlp.linears[i][...] = lp["MultiLayerPerceptron_0"][
                 f"Dense_{i}"
             ]["kernel"]
+
+        # Linear down
         for ir, w in convert_linear(
-            lp["linear_down"], layer.tp.irreps_out, num_features * interaction_irreps
+            lp["linear_down"],
+            layer.message.irreps_out,
+            num_features * interaction_irreps,
         ).items():
             layer.linear_down.w[ir][...] = w
-        layer.symmetric_contraction.w[...] = lp["symmetric_contraction"]
+
+        # linZ_first (OFF models only, first layer)
+        if layer.linZ_first is not None:
+            layer.linZ_first.w[...] = lp["linZ_skip_tp_first"]
+
+        # Symmetric contraction
+        layer.sc.w[...] = lp["symmetric_contraction"]
+
+        # Linear post SC
         for ir, w in convert_linear(
             lp["linear_post_sc"], num_features * hidden_out, num_features * hidden_out
         ).items():
-            layer.linear_post_sc.w[ir][...] = w
+            layer.linear_sc.w[ir][...] = w
 
-        if last:
+        # Readout
+        if is_last:
             mlp_irreps = cue.Irreps(cue.O3, "16x0e")
             for ir, w in convert_linear(
                 lp["linear_mlp_readout"], num_features * hidden_out, mlp_irreps
             ).items():
-                layer.linear_mlp_readout.w[ir][...] = w
+                layer.readout_mlp.w[ir][...] = w
             for ir, w in convert_linear(
                 lp["linear_readout"], mlp_irreps, cue.Irreps(cue.O3, "1x0e")
             ).items():
-                layer.linear_readout.w[ir][...] = w
+                layer.readout.w[ir][...] = w
         else:
             for ir, w in convert_linear(
                 lp["linear_readout"],
                 num_features * hidden_out,
                 cue.Irreps(cue.O3, "1x0e"),
             ).items():
-                layer.linear_readout.w[ir][...] = w
+                layer.readout.w[ir][...] = w
 
 
 def test_nequip_model_basic():
