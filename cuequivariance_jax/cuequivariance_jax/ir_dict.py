@@ -30,6 +30,7 @@ where the last two dimensions are (mul, ir.dim).
 Example:
     >>> import cuequivariance as cue
     >>> irreps = cue.Irreps(cue.O3, "128x0e + 64x1o")
+    >>> batch = 32
     >>> # Create dict representation
     >>> x = {cue.O3(0, 1): jnp.ones((batch, 128, 1)),
     ...      cue.O3(1, -1): jnp.ones((batch, 64, 3))}
@@ -93,9 +94,9 @@ def segmented_polynomial_uniform_1d(
 
     Example:
         >>> # After split_operand_by_irrep, inputs/outputs are dict[Irrep, Array]
-        >>> e = descriptor.split_operand_by_irrep(1).split_operand_by_irrep(-1)
-        >>> p = e.polynomial
-        >>> y = segmented_polynomial_uniform_1d(
+        >>> e = descriptor.split_operand_by_irrep(1).split_operand_by_irrep(-1)  # doctest: +SKIP
+        >>> p = e.polynomial  # doctest: +SKIP
+        >>> y = segmented_polynomial_uniform_1d(  # doctest: +SKIP
         ...     p, [w, x], y,
         ...     input_indices=[None, senders],
         ...     output_indices=receivers,
@@ -234,8 +235,9 @@ def mul_ir_dict(irreps: cue.Irreps, data: Any) -> dict[Irrep, Any]:
         Dictionary with irrep keys, each value set to data.
 
     Example:
+        >>> import cuequivariance as cue
         >>> irreps = cue.Irreps(cue.O3, "128x0e + 64x1o")
-        >>> # Create zeros template
+        >>> batch = 32
         >>> template = mul_ir_dict(irreps, jax.ShapeDtypeStruct((batch,), jnp.float32))
     """
     return jax.tree.broadcast(data, {ir: None for _, ir in irreps}, lambda v: v is None)
@@ -260,11 +262,15 @@ def irreps_to_dict(
         Dictionary mapping each irrep to array with shape (..., mul, ir.dim).
 
     Example:
+        >>> import cuequivariance as cue
         >>> irreps = cue.Irreps(cue.O3, "128x0e + 64x1o")
-        >>> flat = jnp.ones((batch, irreps.dim))  # shape (batch, 128*1 + 64*3)
+        >>> batch = 32
+        >>> flat = jnp.ones((batch, irreps.dim))
         >>> d = irreps_to_dict(irreps, flat)
-        >>> d[cue.O3(0, 1)].shape  # (batch, 128, 1)
-        >>> d[cue.O3(1, -1)].shape  # (batch, 64, 3)
+        >>> d[cue.O3(0, 1)].shape
+        (32, 128, 1)
+        >>> d[cue.O3(1, -1)].shape
+        (32, 64, 3)
     """
     assert layout in ("mul_ir", "ir_mul")
     result = {}
@@ -294,10 +300,14 @@ def dict_to_irreps(irreps: cue.Irreps, x: dict[Irrep, Array]) -> Array:
         Flat array with shape (..., irreps.dim).
 
     Example:
+        >>> import cuequivariance as cue
+        >>> irreps = cue.Irreps(cue.O3, "128x0e + 64x1o")
+        >>> batch = 32
         >>> d = {cue.O3(0, 1): jnp.ones((batch, 128, 1)),
         ...      cue.O3(1, -1): jnp.ones((batch, 64, 3))}
         >>> flat = dict_to_irreps(irreps, d)
-        >>> flat.shape  # (batch, 128*1 + 64*3)
+        >>> flat.shape
+        (32, 320)
     """
     arrays = []
     for mul, ir in irreps:
