@@ -433,6 +433,41 @@ def _generate_inputs(
     return inputs
 
 
+def _to_key(
+    M: int, K: int, N: int,
+    dtypes,
+    two_inputs: bool,
+    precision: Precision,
+):
+    """Generate cache key from inputs."""
+    
+    # round mantissa
+    def fn(x):
+        a = math.floor(math.log2(x))
+        x = x / 2**a
+        n = 64
+        x = round(x * n) / n
+        return int(x * 2**a)
+
+    assert (fn(1000), fn(1006), fn(8000), fn(8033)) == (1000, 1008, 8000, 8064)
+    key_m, key_k, key_n = fn(M), fn(K), fn(N)
+
+    match precision:
+        case Precision.TF32:
+            precision_key = "tf32"
+        case Precision.TF32x3:
+            precision_key = "tf32x3"
+        case Precision.IEEE:
+            precision_key = "ieee"
+        case _:
+            precision_key = "default"
+
+    if not two_inputs:
+        dtypes[-4] = "None"
+ 
+    return f"{key_m}_{key_n}_{key_k}_{'_'.join(dtypes)}_{two_inputs}_False_False_{precision_key}"
+
+
 def _input_to_key(
     x1: jax.Array,
     x2: jax.Array,
@@ -449,17 +484,6 @@ def _input_to_key(
     """Generate cache key from inputs."""
     M, K, N = x1.shape[0], x1.shape[1], w1.shape[0]
 
-    # round mantissa
-    def fn(x):
-        a = math.floor(math.log2(x))
-        x = x / 2**a
-        n = 64
-        x = round(x * n) / n
-        return int(x * 2**a)
-
-    assert (fn(1000), fn(1006), fn(8000), fn(8033)) == (1000, 1008, 8000, 8064)
-    key_m, key_k, key_n = fn(M), fn(K), fn(N)
-
     # Normalize dtypes
     arrays = [x1, x2, w1, w2, mask]
     if grad_out is not None:
@@ -468,18 +492,22 @@ def _input_to_key(
         "torch." + str(t.dtype if t.dtype != jnp.bfloat16 else jnp.dtype(jnp.float16))
         for t in arrays
     ]
+    return _to_key(M, K, N, dtypes, two_inputs, precision)
 
-    match precision:
-        case Precision.TF32:
-            precision_key = "tf32"
-        case Precision.TF32x3:
-            precision_key = "tf32x3"
-        case Precision.IEEE:
-            precision_key = "ieee"
-        case _:
-            precision_key = "default"
+def _config_to_key(
+    M: int,
+    N: int,
+    K: int,
+    dtype_input: jnp.dtype,
+    two_inputs: bool,
+    precision: Precision,
+    include_grad: bool,
+):
+    dtypes = [
+        "torch." + str(dtype_input if dtype_input != jnp.bfloat16 else jnp.dtype(jnp.float16))
+    ]*(6 if two_inputs else 5)
+    return _to_key(M, K, N, dtypes, two_inputs, precision)
 
-    return f"{key_m}_{key_n}_{key_k}_{'_'.join(dtypes)}_{two_inputs}_False_False_{precision_key}"
 
 
 def _get_autotuned_kernel(is_forward: bool):
@@ -524,6 +552,7 @@ def _get_autotuned_kernel(is_forward: bool):
         _autotuned_forward = autotune_aot(
             input_generator=lambda **k: _generate_inputs(**k, include_grad=False),
             input_to_key=_input_to_key,
+            config_to_key=_config_to_key,
             input_configs=input_configs,
             tunable_configs=tunable_configs,
             prune_configs_fn=None,
@@ -535,6 +564,7 @@ def _get_autotuned_kernel(is_forward: bool):
         _autotuned_backward = autotune_aot(
             input_generator=lambda **k: _generate_inputs(**k, include_grad=True),
             input_to_key=lambda grad_out, **k: _input_to_key(**k, grad_out=grad_out),
+            config_to_key=lambda grad_out, **k: _config_to_key(**k, grad_out=grad_out),
             input_configs=input_configs,
             tunable_configs=tunable_configs,
             prune_configs_fn=None,
