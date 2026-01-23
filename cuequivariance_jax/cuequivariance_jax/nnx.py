@@ -28,7 +28,7 @@ import cuequivariance as cue
 from cuequivariance import Irrep
 
 from .activation import normalize_function
-from .ir_dict import assert_mul_ir_dict, dict_to_irreps
+from .ir_dict import assert_mul_ir_dict, dict_to_irreps, irreps_to_dict
 from .rep_array.rep_array_ import RepArray
 from .segmented_polynomials.segmented_polynomial import segmented_polynomial
 from .segmented_polynomials.utils import Repeats
@@ -243,12 +243,6 @@ class IrrepsIndexedLinear(nnx.Module):
         )
 
         # Convert ir_mul flat -> dict (batch, mul, ir.dim)
-        y = {}
-        offset = 0
-        for mul, ir in self.irreps_out:
-            size = mul * ir.dim
-            segment = y_flat[..., offset : offset + size]
-            y[ir] = rearrange(segment, "... (i m) -> ... m i", i=ir.dim, m=mul)
-            offset += size
+        y = irreps_to_dict(self.irreps_out, y_flat, layout="ir_mul")
         assert_mul_ir_dict(self.irreps_out, y)
         return y

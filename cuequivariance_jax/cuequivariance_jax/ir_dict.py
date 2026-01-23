@@ -111,18 +111,40 @@ def segmented_polynomial_uniform_1d(
     input_indices = jax.tree.broadcast(input_indices, inputs, is_none)
     output_indices = jax.tree.broadcast(output_indices, outputs, is_none)
 
-    def flatten_input(desc: cue.SegmentedOperand, x: Array) -> Array:
-        assert desc.all_same_segment_shape()
-        assert x.ndim >= 1 + desc.ndim, f"desc: {desc}, x.shape: {x.shape}"
-        assert (
-            x.shape[-(1 + desc.ndim) :] == (desc.num_segments,) + desc.segment_shape
-        ), f"desc: {desc}, x.shape: {x.shape}"
+    def flatten_input(i: int, desc: cue.SegmentedOperand, x: Array) -> Array:
+        if not desc.all_same_segment_shape():
+            raise ValueError(
+                f"Input operand {i}: segments must have uniform shape.\n"
+                f"  Descriptor: {desc}\n"
+                f"  Segment shapes: {desc.segments}"
+            )
+        expected_suffix = (desc.num_segments,) + desc.segment_shape
+        min_ndim = 1 + desc.ndim
+        if x.ndim < min_ndim:
+            raise ValueError(
+                f"Input operand {i}: array has too few dimensions.\n"
+                f"  Expected at least {min_ndim} dims (batch... + {expected_suffix})\n"
+                f"  Got shape {x.shape} with {x.ndim} dims\n"
+                f"  Descriptor: num_segments={desc.num_segments}, "
+                f"segment_shape={desc.segment_shape}"
+            )
+        actual_suffix = x.shape[-(1 + desc.ndim) :]
+        if actual_suffix != expected_suffix:
+            raise ValueError(
+                f"Input operand {i}: shape mismatch in trailing dimensions.\n"
+                f"  Expected trailing dims: {expected_suffix} "
+                f"(num_segments={desc.num_segments}, segment_shape={desc.segment_shape})\n"
+                f"  Got trailing dims: {actual_suffix}\n"
+                f"  Full array shape: {x.shape}\n"
+                f"  Descriptor: {desc}"
+            )
         return jnp.reshape(x, x.shape[: -(1 + desc.ndim)] + (desc.size,))
 
     list_inputs = jax.tree.leaves(inputs, is_none)
     assert all(isinstance(x, Array) for x in list_inputs)
     list_inputs = [
-        flatten_input(desc, x) for desc, x in zip(polynomial.inputs, list_inputs)
+        flatten_input(i, desc, x)
+        for i, (desc, x) in enumerate(zip(polynomial.inputs, list_inputs))
     ]
 
     shapes = []
@@ -219,7 +241,9 @@ def mul_ir_dict(irreps: cue.Irreps, data: Any) -> dict[Irrep, Any]:
     return jax.tree.broadcast(data, {ir: None for _, ir in irreps}, lambda v: v is None)
 
 
-def irreps_to_dict(irreps: cue.Irreps, data: Array) -> dict[Irrep, Array]:
+def irreps_to_dict(
+    irreps: cue.Irreps, data: Array, *, layout: str = "mul_ir"
+) -> dict[Irrep, Array]:
     """Convert a flat array to dict[Irrep, Array] with shape (..., mul, ir.dim).
 
     Splits a contiguous array along the last axis into separate arrays per irrep,
@@ -228,6 +252,9 @@ def irreps_to_dict(irreps: cue.Irreps, data: Array) -> dict[Irrep, Array]:
     Args:
         irreps: Irreps specification for splitting.
         data: Flat array with shape (..., irreps.dim).
+        layout: Memory layout of the flat data. Either "mul_ir" (default) where
+            data is ordered as (mul, ir.dim), or "ir_mul" where data is ordered
+            as (ir.dim, mul).
 
     Returns:
         Dictionary mapping each irrep to array with shape (..., mul, ir.dim).
@@ -239,12 +266,17 @@ def irreps_to_dict(irreps: cue.Irreps, data: Array) -> dict[Irrep, Array]:
         >>> d[cue.O3(0, 1)].shape  # (batch, 128, 1)
         >>> d[cue.O3(1, -1)].shape  # (batch, 64, 3)
     """
+    assert layout in ("mul_ir", "ir_mul")
     result = {}
     offset = 0
     for mul, ir in irreps:
         size = mul * ir.dim
         segment = data[..., offset : offset + size]
-        result[ir] = jnp.reshape(segment, data.shape[:-1] + (mul, ir.dim))
+        if layout == "mul_ir":
+            result[ir] = jnp.reshape(segment, data.shape[:-1] + (mul, ir.dim))
+        else:  # ir_mul
+            result[ir] = jnp.reshape(segment, data.shape[:-1] + (ir.dim, mul))
+            result[ir] = jnp.swapaxes(result[ir], -2, -1)
         offset += size
     return result
 

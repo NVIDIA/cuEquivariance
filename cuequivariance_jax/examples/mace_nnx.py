@@ -98,6 +98,7 @@ class ChannelwiseTensorProduct(nnx.Module):
         irreps_in2: cue.Irreps,
         irreps_out: cue.Irreps,
         *,
+        epsilon: float = 1.0,
         name: str = "channelwise_tp",
     ):
         assert irreps_in1.regroup() == irreps_in1
@@ -108,8 +109,11 @@ class ChannelwiseTensorProduct(nnx.Module):
         self.irreps_in2 = irreps_in2
         self.name = name
 
-        e = cue.descriptors.channelwise_tensor_product(
-            irreps_in1, irreps_in2, irreps_out, True
+        e = (
+            cue.descriptors.channelwise_tensor_product(
+                irreps_in1, irreps_in2, irreps_out, True
+            )
+            * epsilon
         )
         self.weight_dim = e.inputs[0].dim
         self.irreps_out = e.outputs[0].irreps
@@ -130,7 +134,6 @@ class ChannelwiseTensorProduct(nnx.Module):
         senders: Array | None = None,
         receivers: Array | None = None,
         num_nodes: int | None = None,
-        epsilon: float = 1.0,
     ) -> dict[Irrep, Array]:
         """
         Args:
@@ -140,33 +143,13 @@ class ChannelwiseTensorProduct(nnx.Module):
             senders: indices for gathering x1
             receivers: indices for scattering output
             num_nodes: number of nodes for output shape
-            epsilon: scaling factor (typically 1/avg_num_neighbors)
         """
         cuex.ir_dict.assert_mul_ir_dict(self.irreps_in1, x1)
         cuex.ir_dict.assert_mul_ir_dict(self.irreps_in2, x2)
 
-        w_desc = self.p.inputs[0]
-        w = jnp.reshape(
-            weights * epsilon,
-            weights.shape[:-1] + (w_desc.num_segments,) + w_desc.segment_shape,
-        )
-
-        # x1: dict with (batch, mul, ir.dim) -> swap to (batch, ir.dim, mul) for polynomial
+        w = rearrange(weights, "... (x m) -> ... x m", x=self.p.inputs[0].num_segments)
         x1 = jax.tree.map(lambda v: rearrange(v, "... m i -> ... i m"), x1)
-
-        # x2: dict with (batch, mul=1, ir.dim) -> format according to polynomial descriptor
-        # Each x2 irrep maps to a polynomial input with specific num_segments and segment_shape
-        num_x1_inputs = len(self.irreps_in1)
-        x2_formatted = {}
-        for idx, (mul, ir) in enumerate(self.irreps_in2):
-            desc = self.p.inputs[1 + num_x1_inputs + idx]
-            v = x2[ir]
-            # v has shape (batch, mul=1, ir.dim), squeeze mul and reshape to descriptor
-            v = jnp.squeeze(v, axis=-2)  # (batch, ir.dim)
-            # Reshape to (batch, num_segments) + segment_shape
-            v = jnp.reshape(v, v.shape[:-1] + (desc.num_segments,) + desc.segment_shape)
-            x2_formatted[ir] = v
-        x2 = x2_formatted
+        x2 = jax.tree.map(lambda v: rearrange(v, "... 1 i -> ... i"), x2)
 
         y = {
             ir: jax.ShapeDtypeStruct(
@@ -183,13 +166,10 @@ class ChannelwiseTensorProduct(nnx.Module):
             name=self.name,
         )
 
-        y_out: dict[Irrep, Array] = {}
-        for (mul, ir), desc in zip(self.irreps_out, self.p.outputs):
-            v = y[ir]
-            prefix = v.shape[: -(1 + desc.ndim)]
-            v = jnp.reshape(v, prefix + (desc.size,))
-            y_out[ir] = rearrange(v, "... (i m) -> ... m i", i=ir.dim, m=mul)
-        y = y_out
+        y = {
+            ir: rearrange(v, "... (i x) m -> ... (x m) i", i=ir.dim)
+            for ir, v in y.items()
+        }
 
         cuex.ir_dict.assert_mul_ir_dict(self.irreps_out, y)
         return y
@@ -236,10 +216,6 @@ class SymmetricContraction(nnx.Module):
         cuex.ir_dict.assert_mul_ir_dict(self.irreps_in, x)
 
         w = jnp.einsum("zau,ab->zbu", self.w[...], self.projection)
-        w_desc = self.p.inputs[0]
-        w = jnp.reshape(
-            w, (self.num_species, w_desc.num_segments) + w_desc.segment_shape
-        )
 
         num_nodes = jax.tree.leaves(x)[0].shape[0]
         i = jnp.repeat(
@@ -289,20 +265,8 @@ class MACELayer(nnx.Module):
         dtype: Any = jnp.float32,
         rngs: nnx.Rngs,
     ):
-        self.first = first
         self.last = last
-        self.num_species = num_species
-        self.num_features = num_features
-        self.interaction_irreps = interaction_irreps
-        self.hidden_irreps = hidden_irreps
         self.activation = activation
-        self.epsilon = epsilon
-        self.max_ell = max_ell
-        self.correlation = correlation
-        self.output_irreps = output_irreps
-        self.readout_mlp_irreps = readout_mlp_irreps
-        self.skip_connection_first_layer = skip_connection_first_layer
-        self.name = name
 
         hidden_out = hidden_irreps.filter(keep=output_irreps) if last else hidden_irreps
 
@@ -311,10 +275,7 @@ class MACELayer(nnx.Module):
             [(1, cue.O3(L, (-1) ** L)) for L in range(max_ell + 1)],
         )
 
-        input_irreps = cue.Irreps(
-            cue.O3,
-            [(num_features, ir) for _, ir in hidden_irreps],
-        )
+        input_irreps = hidden_irreps.set_mul(num_features)
         if first:
             input_irreps = input_irreps.filter(keep="0e")
 
@@ -326,6 +287,7 @@ class MACELayer(nnx.Module):
             input_irreps,
             sph_irreps,
             num_features * interaction_irreps,
+            epsilon=epsilon,
             name=f"{name}_tp",
         )
 
@@ -438,7 +400,6 @@ class MACELayer(nnx.Module):
             senders=senders,
             receivers=receivers,
             num_nodes=num_nodes,
-            epsilon=self.epsilon,
         )
 
         node_feats = self.linear_down(node_feats)
