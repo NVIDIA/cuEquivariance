@@ -81,6 +81,7 @@ def irreps_scalar_activation(
     x: dict[Irrep, Array], activation: Callable
 ) -> dict[Irrep, Array]:
     """Apply activation to scalar components only."""
+    activation = cuex.normalize_function(activation)
     return {ir: activation(v) if ir.is_scalar() else v for ir, v in x.items()}
 
 

@@ -228,7 +228,6 @@ class IrrepsIndexedLinear(nnx.Module):
         assert_mul_ir_dict(self.irreps_in, x)
 
         # Convert dict (batch, mul, ir.dim) -> ir_mul flat order
-        # Swap to (batch, ir.dim, mul) then flatten
         x_ir_mul = jax.tree.map(lambda v: rearrange(v, "... m i -> ... i m"), x)
         x_flat = dict_to_irreps(self.irreps_in, x_ir_mul)
         num_elements = x_flat.shape[0]
@@ -244,17 +243,12 @@ class IrrepsIndexedLinear(nnx.Module):
         )
 
         # Convert ir_mul flat -> dict (batch, mul, ir.dim)
-        # The flat output is in ir_mul order, so reshape to (ir.dim, mul) then swap
         y = {}
         offset = 0
         for mul, ir in self.irreps_out:
             size = mul * ir.dim
             segment = y_flat[..., offset : offset + size]
-            # Reshape to ir_mul layout (ir.dim, mul) then swap to (mul, ir.dim)
-            y[ir] = rearrange(
-                jnp.reshape(segment, y_flat.shape[:-1] + (ir.dim, mul)),
-                "... i m -> ... m i",
-            )
+            y[ir] = rearrange(segment, "... (i m) -> ... m i", i=ir.dim, m=mul)
             offset += size
         assert_mul_ir_dict(self.irreps_out, y)
         return y
