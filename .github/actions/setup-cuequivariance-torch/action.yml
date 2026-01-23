@@ -1,0 +1,23 @@
+name: 'Setup cuequivariance-torch'
+description: 'Install cuequivariance-torch with all PyTorch dependencies'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install PyTorch dependencies
+      shell: bash
+      run: |
+        python -m uv pip install -U pytest torch e3nn
+    
+    - name: Clean and install packages
+      shell: bash
+      run: |
+        python -m uv pip uninstall cuequivariance cuequivariance_jax cuequivariance_torch 2>/dev/null || true
+        python -m uv pip install -e ./cuequivariance
+        python -m uv pip install -e ./cuequivariance_torch
+    
+    - name: Verify installation
+      shell: bash
+      run: |
+        python -c "import cuequivariance; print('cue', cuequivariance.__version__)"
+        python -c "import cuequivariance_torch; print('cuet', cuequivariance_torch.__version__)"

@@ -10,7 +10,6 @@ on:
 jobs:
 
   cuequivariance:
-
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -19,25 +18,23 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
+    
+    - uses: ./.github/actions/setup-python-uv
       with:
         python-version: ${{ matrix.python-version }}
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y graphviz
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        python -m pip install --upgrade uv
-        python -m uv pip install -e ./cuequivariance[dev] 
+    
+    - uses: ./.github/actions/setup-cuequivariance
+      with:
+        install-graphviz: 'true'
+    
     - name: Test with pytest
       run: |
         pytest --doctest-modules -x -m "not slow" cuequivariance
+    
     - name: Downgrade numpy
       run: |
         python -m uv pip install -U "numpy==1.26.*"
+    
     - name: Test with pytest (numpy 1.26)
       run: |
         pytest --doctest-modules -x -m "not slow" cuequivariance
@@ -52,23 +49,13 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
+    
+    - uses: ./.github/actions/setup-python-uv
       with:
         python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        python -m pip install --upgrade uv
-        python -m uv pip install -U pytest "jax[cuda12]"
-        python -m uv pip install nvidia-cusolver-cu12==11.7.3.90
-        python -m uv pip install jax-triton triton==3.3.1
-        python -m uv pip install flax
-        python -m uv pip uninstall cuequivariance cuequivariance_jax cuequivariance_torch
-        python -m uv pip install -e ./cuequivariance 
-        python -m uv pip install -e ./cuequivariance_jax 
-        python -c "import cuequivariance; print('cue', cuequivariance.__version__)"
-        python -c "import cuequivariance_jax; print('cuex', cuequivariance_jax.__version__)"
+    
+    - uses: ./.github/actions/setup-cuequivariance-jax
+    
     - name: Test with pytest
       run: |
         XLA_PYTHON_CLIENT_PREALLOCATE=false pytest --doctest-modules -x -m "not slow" cuequivariance_jax
@@ -83,20 +70,13 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
+    
+    - uses: ./.github/actions/setup-python-uv
       with:
         python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        python -m pip install --upgrade uv
-        python -m uv pip install -U pytest torch e3nn
-        python -m uv pip uninstall cuequivariance cuequivariance_jax cuequivariance_torch
-        python -m uv pip install -e ./cuequivariance 
-        python -m uv pip install -e ./cuequivariance_torch 
-        python -c "import cuequivariance; print('cue', cuequivariance.__version__)"
-        python -c "import cuequivariance_torch; print('cuet', cuequivariance_torch.__version__)"
+    
+    - uses: ./.github/actions/setup-cuequivariance-torch
+    
     - name: Test with pytest
       run: |
         pytest --doctest-modules -x -m "not slow" cuequivariance_torch
