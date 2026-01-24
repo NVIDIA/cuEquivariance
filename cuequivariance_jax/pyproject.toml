@@ -30,7 +30,6 @@ dependencies = [
     "jax",
     "packaging",
     "einops",
-    "flax",
 ]
 classifiers = [
     "Intended Audience :: Developers",
