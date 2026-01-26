@@ -26,8 +26,8 @@ from jax import Array
 import cuequivariance as cue
 from cuequivariance import Irrep
 
+from . import ir_dict
 from .activation import normalize_function
-from .ir_dict import assert_mul_ir_dict, dict_to_irreps, irreps_to_dict
 from .rep_array.rep_array_ import RepArray
 from .segmented_polynomials.segmented_polynomial import segmented_polynomial
 from .segmented_polynomials.utils import Repeats
@@ -114,7 +114,7 @@ class IrrepsLinear(nnx.Module):
         self.w = nnx.Dict(w)
 
     def __call__(self, x: dict[Irrep, Array]) -> dict[Irrep, Array]:
-        assert_mul_ir_dict(self.irreps_in, x)
+        ir_dict.assert_mul_ir_dict(self.irreps_in, x)
 
         x0 = jax.tree.leaves(x)[0]
         shape = x0.shape[:-2]
@@ -129,7 +129,7 @@ class IrrepsLinear(nnx.Module):
                 / jnp.sqrt(w[...].shape[0])
             )
 
-        assert_mul_ir_dict(self.irreps_out, y)
+        ir_dict.assert_mul_ir_dict(self.irreps_out, y)
         return y
 
 
@@ -245,11 +245,11 @@ class IrrepsIndexedLinear(nnx.Module):
     def __call__(
         self, x: dict[Irrep, Array], num_index_counts: Array
     ) -> dict[Irrep, Array]:
-        assert_mul_ir_dict(self.irreps_in, x)
+        ir_dict.assert_mul_ir_dict(self.irreps_in, x)
 
         # Convert dict (batch, mul, ir.dim) -> ir_mul flat order
         x_ir_mul = jax.tree.map(lambda v: rearrange(v, "... m i -> ... i m"), x)
-        x_flat = dict_to_irreps(self.irreps_in, x_ir_mul)
+        x_flat = ir_dict.dict_to_flat(self.irreps_in, x_ir_mul)
         num_elements = x_flat.shape[0]
 
         p = self.e.polynomial
@@ -263,6 +263,6 @@ class IrrepsIndexedLinear(nnx.Module):
         )
 
         # Convert ir_mul flat -> dict (batch, mul, ir.dim)
-        y = irreps_to_dict(self.irreps_out, y_flat, layout="ir_mul")
-        assert_mul_ir_dict(self.irreps_out, y)
+        y = ir_dict.flat_to_dict(self.irreps_out, y_flat, layout="ir_mul")
+        ir_dict.assert_mul_ir_dict(self.irreps_out, y)
         return y

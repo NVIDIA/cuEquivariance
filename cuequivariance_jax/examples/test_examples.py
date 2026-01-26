@@ -226,6 +226,123 @@ def _convert_linen_to_nnx(linen_params, nnx_model, config):
                 layer.readout.w[ir][...] = w
 
 
+def test_mace_linen_nnx_training_equivalence():
+    """Test Linen and NNX models produce identical params after training."""
+    import optax
+
+    num_features, num_species = 16, 3
+    num_steps = 5
+    learning_rate = 1e-2
+
+    config = dict(
+        num_layers=1,
+        num_features=num_features,
+        num_species=num_species,
+        max_ell=2,
+        correlation=2,
+        num_radial_basis=4,
+        interaction_irreps=cue.Irreps(cue.O3, "0e+1o+2e"),
+        hidden_irreps=cue.Irreps(cue.O3, "0e+1o"),
+        offsets=np.zeros(num_species),
+        cutoff=3.0,
+        epsilon=0.1,
+        skip_connection_first_layer=True,
+    )
+    batch = _make_batch(
+        num_atoms=5, num_edges=10, num_species=num_species, num_graphs=1
+    )
+
+    key = jax.random.key(123)
+    target_E = jax.random.normal(key, (1,))
+    target_F = jax.random.normal(jax.random.split(key)[0], (5, 3))
+
+    # Initialize Linen model
+    linen_model = MACEModel(**config)
+    linen_params = linen_model.init(jax.random.key(0), batch)
+
+    # Initialize NNX model with converted weights
+    nnx_model = MACEModelNNX(**config, dtype=jnp.float32, rngs=nnx.Rngs(0))
+    _convert_linen_to_nnx(linen_params, nnx_model, config)
+
+    # Verify initial outputs match (use 1e-3 tolerance like existing test)
+    E_linen_init, F_linen_init = linen_model.apply(linen_params, batch)
+    E_nnx_init, F_nnx_init = nnx_model(batch)
+    np.testing.assert_allclose(E_linen_init, E_nnx_init, atol=1e-3, rtol=1e-3)
+    np.testing.assert_allclose(F_linen_init, F_nnx_init, atol=1e-3, rtol=1e-3)
+    print("\nInitial outputs match (within 1e-3):")
+    print(f"  E_linen: {E_linen_init}, E_nnx: {E_nnx_init}")
+
+    # Train Linen model
+    def loss_fn_linen(w):
+        E, F = linen_model.apply(w, batch)
+        return jnp.mean((E - target_E) ** 2) + jnp.mean((F - target_F) ** 2)
+
+    tx = optax.adam(learning_rate)
+    opt_state_linen = tx.init(linen_params)
+    for _ in range(num_steps):
+        grad = jax.grad(loss_fn_linen)(linen_params)
+        updates, opt_state_linen = tx.update(grad, opt_state_linen, linen_params)
+        linen_params = optax.apply_updates(linen_params, updates)
+
+    # Train NNX model
+    def loss_fn_nnx(model):
+        E, F = model(batch)
+        return jnp.mean((E - target_E) ** 2) + jnp.mean((F - target_F) ** 2)
+
+    optimizer_nnx = nnx.Optimizer(nnx_model, optax.adam(learning_rate), wrt=nnx.Param)
+    for _ in range(num_steps):
+        grads = nnx.grad(loss_fn_nnx)(nnx_model)
+        optimizer_nnx.update(nnx_model, grads)
+
+    # Compare outputs after training
+    E_linen, F_linen = linen_model.apply(linen_params, batch)
+    E_nnx, F_nnx = nnx_model(batch)
+
+    print(f"\nAfter {num_steps} training steps:")
+    print(f"  Linen loss: {loss_fn_linen(linen_params):.6f}")
+    print(f"  NNX loss:   {loss_fn_nnx(nnx_model):.6f}")
+    print(f"  E_linen: {E_linen}")
+    print(f"  E_nnx:   {E_nnx}")
+    print(f"  max|E diff|: {jnp.max(jnp.abs(E_linen - E_nnx)):.2e}")
+    print(f"  max|F diff|: {jnp.max(jnp.abs(F_linen - F_nnx)):.2e}")
+
+    # Compare multiple parameters
+    print("  Parameter comparisons:")
+
+    # 1. Embedding
+    linen_emb = linen_params["params"]["linear_embedding"]
+    nnx_emb = nnx_model.embedding[...]
+    emb_diff = jnp.max(jnp.abs(linen_emb - nnx_emb))
+    print(f"    embedding: max|diff| = {emb_diff:.2e}")
+
+    # 2. Skip connection weights (linZ_skip_tp -> skip.w)
+    linen_skip = linen_params["params"]["layer_0"]["linZ_skip_tp"]
+    nnx_skip = nnx_model.layers[0].skip.w[...]
+    skip_diff = jnp.max(jnp.abs(linen_skip - nnx_skip))
+    print(f"    layer_0/skip.w: max|diff| = {skip_diff:.2e}")
+
+    # 3. Symmetric contraction weights
+    linen_sc = linen_params["params"]["layer_0"]["symmetric_contraction"]
+    nnx_sc = nnx_model.layers[0].sc.w[...]
+    sc_diff = jnp.max(jnp.abs(linen_sc - nnx_sc))
+    print(f"    layer_0/sc.w: max|diff| = {sc_diff:.2e}")
+
+    # 4. Radial MLP weights (first layer)
+    linen_mlp = linen_params["params"]["layer_0"]["MultiLayerPerceptron_0"]["Dense_0"][
+        "kernel"
+    ]
+    nnx_mlp = nnx_model.layers[0].radial_mlp.linears[0][...]
+    mlp_diff = jnp.max(jnp.abs(linen_mlp - nnx_mlp))
+    print(f"    layer_0/radial_mlp[0]: max|diff| = {mlp_diff:.2e}")
+
+    np.testing.assert_allclose(E_linen, E_nnx, atol=1e-3, rtol=1e-3)
+    np.testing.assert_allclose(F_linen, F_nnx, atol=1e-3, rtol=1e-3)
+    np.testing.assert_allclose(linen_emb, nnx_emb, atol=1e-3, rtol=1e-3)
+    np.testing.assert_allclose(linen_skip, nnx_skip, atol=1e-3, rtol=1e-3)
+    np.testing.assert_allclose(linen_sc, nnx_sc, atol=1e-3, rtol=1e-3)
+    np.testing.assert_allclose(linen_mlp, nnx_mlp, atol=1e-3, rtol=1e-3)
+
+
 def test_nequip_model_basic():
     """Test NEQUIP model."""
     batch = _make_batch()

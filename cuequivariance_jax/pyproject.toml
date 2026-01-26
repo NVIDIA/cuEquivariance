@@ -27,7 +27,7 @@ authors = [{ name = "NVIDIA Corporation" }]
 requires-python = ">=3.10"
 dependencies = [
     "cuequivariance",
-    "jax",
+    "jax>=0.8.1",
     "packaging",
     "einops",
 ]
