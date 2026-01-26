@@ -528,22 +528,16 @@ def benchmark(
         mask=mask,
     )
 
-    optimizer = optax.adam(1e-2)
-    opt_state = optimizer.init(nnx.state(model, nnx.Param))
+    optimizer = nnx.Optimizer(model, optax.adam(1e-2), wrt=nnx.Param)
 
     @nnx.jit
-    def step(model, opt_state, batch_dict, target_E, target_F):
+    def step(model, optimizer, batch_dict, target_E, target_F):
         def loss_fn(model):
             E, F = model(batch_dict)
             return jnp.mean((E - target_E) ** 2) + jnp.mean((F - target_F) ** 2)
 
-        grad = nnx.grad(loss_fn)(model)
-        params = nnx.state(model, nnx.Param)
-        grad_state = nnx.state(grad, nnx.Param)
-        updates, opt_state_new = optimizer.update(grad_state, opt_state, params)
-        new_params = optax.apply_updates(params, updates)
-        nnx.update(model, new_params)
-        return opt_state_new
+        grads = nnx.grad(loss_fn)(model)
+        optimizer.update(model, grads)
 
     @nnx.jit
     def inference(model, batch_dict):
@@ -553,12 +547,12 @@ def benchmark(
     runtime_per_inference = 0
 
     if mode in ["train", "both"]:
-        opt_state = step(model, opt_state, batch_dict, target_E, target_F)
-        jax.block_until_ready(opt_state)
+        step(model, optimizer, batch_dict, target_E, target_F)
+        jax.block_until_ready(nnx.state(model))
         t0 = time.perf_counter()
         for _ in range(10):
-            opt_state = step(model, opt_state, batch_dict, target_E, target_F)
-        jax.block_until_ready(opt_state)
+            step(model, optimizer, batch_dict, target_E, target_F)
+        jax.block_until_ready(nnx.state(model))
         runtime_per_training_step = 1e3 * (time.perf_counter() - t0) / 10
 
     if mode in ["inference", "both"]:
