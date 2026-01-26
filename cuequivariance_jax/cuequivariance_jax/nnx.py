@@ -21,7 +21,6 @@ from typing import Any, Callable
 import jax
 import jax.numpy as jnp
 from einops import rearrange
-from flax import nnx
 from jax import Array
 
 import cuequivariance as cue
@@ -33,6 +32,27 @@ from .rep_array.rep_array_ import RepArray
 from .segmented_polynomials.segmented_polynomial import segmented_polynomial
 from .segmented_polynomials.utils import Repeats
 from .spherical_harmonics import spherical_harmonics
+
+try:
+    from flax import nnx
+except ImportError:
+
+    class nnx:
+        class Module:
+            pass
+
+        class Rngs:
+            pass
+
+        class Param:
+            pass
+
+        class Dict:
+            pass
+
+        class List:
+            pass
+
 
 __all__ = [
     "IrrepsIndexedLinear",

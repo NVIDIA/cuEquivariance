@@ -61,6 +61,29 @@ jobs:
         XLA_PYTHON_CLIENT_PREALLOCATE=false pytest --doctest-modules -x -m "not slow" cuequivariance_jax
 
 
+  cuequivariance-jax-no-flax:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - uses: ./.github/actions/setup-python-uv
+      with:
+        python-version: "3.12"
+    
+    - name: Install without flax
+      run: |
+        python -m uv pip install -U jax
+        python -m uv pip install -e ./cuequivariance
+        python -m uv pip install -e ./cuequivariance_jax
+    
+    - name: Verify import without flax
+      run: |
+        python -c "import cuequivariance_jax; print('cuex', cuequivariance_jax.__version__)"
+        python -c "import cuequivariance_jax.nnx; print('nnx module imported')"
+        python -c "import cuequivariance_jax.flax_linen; print('flax_linen module imported')"
+
+
   cuequivariance-torch:
     runs-on: ubuntu-latest
     strategy:
