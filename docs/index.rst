@@ -63,7 +63,7 @@ Requirements
  - ``cuequivariance-ops-torch-*`` and ``cuequivariance-ops-jax-*`` packages are available for Linux x86_64/aarch64
  - Python 3.10-3.14 is supported
  - PyTorch 2.4.0+ is required for torch packages
- - JAX 0.5.0+ is required for jax packages
+ - JAX 0.8.1+ is required for jax packages
 
 Organization
 ------------
