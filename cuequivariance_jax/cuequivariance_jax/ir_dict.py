@@ -51,8 +51,8 @@ __all__ = [
     "segmented_polynomial_uniform_1d",
     "assert_mul_ir_dict",
     "mul_ir_dict",
-    "irreps_to_dict",
-    "dict_to_irreps",
+    "flat_to_dict",
+    "dict_to_flat",
     "irreps_add",
     "irreps_zeros_like",
 ]
@@ -243,7 +243,7 @@ def mul_ir_dict(irreps: cue.Irreps, data: Any) -> dict[Irrep, Any]:
     return jax.tree.broadcast(data, {ir: None for _, ir in irreps}, lambda v: v is None)
 
 
-def irreps_to_dict(
+def flat_to_dict(
     irreps: cue.Irreps, data: Array, *, layout: str = "mul_ir"
 ) -> dict[Irrep, Array]:
     """Convert a flat array to dict[Irrep, Array] with shape (..., mul, ir.dim).
@@ -266,7 +266,7 @@ def irreps_to_dict(
         >>> irreps = cue.Irreps(cue.O3, "128x0e + 64x1o")
         >>> batch = 32
         >>> flat = jnp.ones((batch, irreps.dim))
-        >>> d = irreps_to_dict(irreps, flat)
+        >>> d = flat_to_dict(irreps, flat)
         >>> d[cue.O3(0, 1)].shape
         (32, 128, 1)
         >>> d[cue.O3(1, -1)].shape
@@ -287,7 +287,7 @@ def irreps_to_dict(
     return result
 
 
-def dict_to_irreps(irreps: cue.Irreps, x: dict[Irrep, Array]) -> Array:
+def dict_to_flat(irreps: cue.Irreps, x: dict[Irrep, Array]) -> Array:
     """Convert dict[Irrep, Array] back to a flat contiguous array.
 
     Flattens the (multiplicity, irrep_dim) dimensions and concatenates all irreps.
@@ -305,7 +305,7 @@ def dict_to_irreps(irreps: cue.Irreps, x: dict[Irrep, Array]) -> Array:
         >>> batch = 32
         >>> d = {cue.O3(0, 1): jnp.ones((batch, 128, 1)),
         ...      cue.O3(1, -1): jnp.ones((batch, 64, 3))}
-        >>> flat = dict_to_irreps(irreps, d)
+        >>> flat = dict_to_flat(irreps, d)
         >>> flat.shape
         (32, 320)
     """
