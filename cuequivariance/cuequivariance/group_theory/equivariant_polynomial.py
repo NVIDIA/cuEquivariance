@@ -354,14 +354,17 @@ class EquivariantPolynomial:
             self.inputs, self.outputs, self.polynomial.canonicalize_subscripts()
         )
 
-    def squeeze_modes(self) -> EquivariantPolynomial:
+    def squeeze_modes(self, modes: str | None = None) -> EquivariantPolynomial:
         """Squeeze modes that are always 1 in all operations.
+
+        Args:
+            modes (str, optional): The modes to squeeze. If None, squeeze all modes that are always 1.
 
         Returns:
             :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: Polynomial with squeezed modes.
         """
         return EquivariantPolynomial(
-            self.inputs, self.outputs, self.polynomial.squeeze_modes()
+            self.inputs, self.outputs, self.polynomial.squeeze_modes(modes)
         )
 
     def split_mode(self, mode: str, size: int) -> EquivariantPolynomial:
