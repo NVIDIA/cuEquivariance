@@ -480,7 +480,7 @@ class EquivariantPolynomial:
         Use this method when you want to compute only a subset of the polynomial outputs
         and have control over which inputs to keep. For keeping all inputs (even if
         not used), use filter_keep_outputs. For automatically removing unused operands,
-        use filter_drop_unsued_operands.
+        use filter_drop_unused_operands.
 
         Args:
             keep (list of bool): List indicating which operands to keep.
@@ -515,7 +515,7 @@ class EquivariantPolynomial:
         assert len(keep) == self.num_outputs
         return self.filter_keep_operands([True] * self.num_inputs + keep)
 
-    def filter_drop_unsued_operands(self) -> EquivariantPolynomial:
+    def filter_drop_unused_operands(self) -> EquivariantPolynomial:
         """Remove all unused operands from the polynomial.
 
         Returns:
@@ -534,7 +534,7 @@ class EquivariantPolynomial:
             if used_flag
         ]
 
-        filtered_polynomial = self.polynomial.filter_drop_unsued_operands()
+        filtered_polynomial = self.polynomial.filter_drop_unused_operands()
 
         return EquivariantPolynomial(
             filtered_inputs, filtered_outputs, filtered_polynomial
