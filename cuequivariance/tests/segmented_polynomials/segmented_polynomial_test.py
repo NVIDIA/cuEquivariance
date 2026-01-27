@@ -109,7 +109,7 @@ def test_remove_unused_buffers():
 
     assert poly.used_operands() == [True, False, True, True]
 
-    cleaned = poly.filter_drop_unsued_operands()
+    cleaned = poly.filter_drop_unused_operands()
     assert cleaned.num_inputs == 2 and cleaned.num_outputs == 1
     assert cleaned.used_operands() == [True, True, True]
 
