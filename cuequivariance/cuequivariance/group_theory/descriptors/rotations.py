@@ -116,8 +116,8 @@ def yx_rotation(
 
     Rotation around the x-axis followed by rotation around the y-axis
     """
-    cio = x_rotation(irreps, lmax).d
-    bio = y_rotation(irreps, lmax).d
+    cio = x_rotation(irreps, lmax).polynomial.operations[0][1]
+    bio = y_rotation(irreps, lmax).polynomial.operations[0][1]
     cibo = cue.segmented_polynomials.dot(cio, bio, (2, 1))
     cbio = cibo.move_operand(1, 2)
     return cue.EquivariantPolynomial(
