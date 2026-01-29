@@ -73,7 +73,7 @@ def test_spherical_harmonics(ell: int):
 
 
 @pytest.mark.parametrize("ell", [0, 1, 2, 3, 4])
-def test_y_rotation(ell: int):
+def test_yxy_rotation(ell: int):
     alpha = 0.3
     beta = 0.4
     gamma = -0.5
@@ -94,6 +94,31 @@ def test_y_rotation(ell: int):
     B = irrep.rotation(np.array([1.0, 0.0, 0.0]), beta)
     C = irrep.rotation(np.array([0.0, 1.0, 0.0]), gamma)
     y2 = A @ B @ C @ x
+
+    np.testing.assert_allclose(y1, y2)
+
+
+@pytest.mark.parametrize("ell", [0, 1, 2, 3, 4])
+def test_yx_rotation(ell: int):
+    phi = 0.3
+    theta = 0.4
+
+    irrep = cue.SO3(ell)
+    poly = cue.descriptors.yx_rotation(cue.Irreps("SO3", [irrep]))
+
+    def enc(th: float):
+        m = np.arange(1, ell + 1)
+        c = np.cos(m * th)
+        s = np.sin(m * th)
+        return np.concatenate([c[::-1], [1.0], s])
+
+    x = np.random.randn(irrep.dim)
+    [y1] = poly(enc(phi), enc(theta), x)
+
+    # Rotation around x-axis followed by rotation around y-axis
+    Rx = irrep.rotation(np.array([1.0, 0.0, 0.0]), phi)
+    Ry = irrep.rotation(np.array([0.0, 1.0, 0.0]), theta)
+    y2 = Ry @ Rx @ x
 
     np.testing.assert_allclose(y1, y2)
 
