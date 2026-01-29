@@ -683,15 +683,27 @@ class SegmentedPolynomial:
             [(ope, stp.canonicalize_subscripts()) for ope, stp in self.operations],
         )
 
-    def squeeze_modes(self) -> SegmentedPolynomial:
+    def squeeze_modes(self, modes: str | None = None) -> SegmentedPolynomial:
         """Squeeze modes that are always 1 in all operations.
+
+        Args:
+            modes (str, optional): The modes to squeeze. If None, squeeze all modes that are always 1.
 
         Returns:
             :class:`cue.SegmentedPolynomial <cuequivariance.SegmentedPolynomial>`: Polynomial with squeezed modes.
+
+        Note:
+            When ``modes`` is None, all operands with 1-dimensions are squeezed, including unused
+            operands. When ``modes`` is specified, unused operands (not linked to any operation) are
+            not squeezed because they don't have mode information to determine which dimensions
+            correspond to which modes.
         """
-        ops = [(ope, stp.squeeze_modes()) for ope, stp in self.operations]
-        inputs = tuple(op.squeeze() for op in self.inputs)
-        outputs = tuple(op.squeeze() for op in self.outputs)
+        ops = [(ope, stp.squeeze_modes(modes)) for ope, stp in self.operations]
+        if modes is not None:
+            inputs, outputs = self.inputs, self.outputs
+        else:
+            inputs = tuple(op.squeeze() for op in self.inputs)
+            outputs = tuple(op.squeeze() for op in self.outputs)
         return SegmentedPolynomial._from_default_operands(inputs, outputs, ops)
 
     def split_mode(self, mode: str, size: int) -> SegmentedPolynomial:
