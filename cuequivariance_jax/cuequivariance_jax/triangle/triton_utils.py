@@ -107,7 +107,9 @@ def _get_max_ptx_version():
                 major, minor = int(match.group(1)), int(match.group(2))
                 # Map CUDA version to PTX version
                 if major == 12:
-                    if minor >= 8:
+                    if minor >= 9:
+                        version = 88
+                    elif minor >= 8:
                         version = 87
                     elif minor >= 5:
                         version = 85
@@ -246,7 +248,16 @@ def triton_call_lowering(
     enable_fp_fusion: bool = False,
 ):
     """Helper for MLIR lowering that calls a Triton kernel."""
-    compute_capability = gpu_triton.get_compute_capability(0)
+    # compute_capability = gpu_triton.get_compute_capability(0)
+    import os
+
+    # Allow overriding compute capability for compatibility with older ptxas
+    override_arch = os.environ.get("TRITON_OVERRIDE_ARCH", "")
+    if override_arch.startswith("sm"):
+        # Extract digits only (handles both sm90 and sm_90 formats)
+        compute_capability = int(override_arch.replace("sm", "").replace("_", ""))
+    else:
+        compute_capability = gpu_triton.get_compute_capability(0)
 
     all_avals = list(ctx.avals_in) + list(ctx.avals_out)
     constexprs = constexprs or {}
