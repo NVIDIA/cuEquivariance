@@ -695,7 +695,7 @@ def _get_autotuned_kernel(is_forward: bool):
             "num_stages": ns,
             "num_warps": nw,
         }
-        for tm in (32, 64, 128)
+        for tm in (64, 128)
         for tn in (32, 64, 128)
         for tk in (16, 32, 64)
         for ns in (3, 4)
