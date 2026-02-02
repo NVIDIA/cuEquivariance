@@ -676,9 +676,9 @@ def _get_autotuned_kernel(is_forward: bool):
             "two_inputs": ti,
             "precision": p,
         }
-        for n in (64, 128)  # Reduced from (128, 256) - covers test cases
+        for n in (128, 256)
         for ti in (True, False)
-        for m in (32, 64)  # Reduced to only sizes used in tests (32, 64)
+        for m in range(32, 2048 * 2048 + 1, 32)
         for dt, p in [
             (jnp.bfloat16, Precision.DEFAULT),
             (jnp.float32, Precision.TF32),
@@ -695,9 +695,9 @@ def _get_autotuned_kernel(is_forward: bool):
             "num_stages": ns,
             "num_warps": nw,
         }
-        for tm in (32, 64)  # Removed 128 to reduce shared memory usage
-        for tn in (32, 64)  # Removed 128 to reduce shared memory usage
-        for tk in (16, 32)  # Removed 64 to reduce shared memory usage
+        for tm in (32, 64, 128)
+        for tn in (32, 64, 128)
+        for tk in (16, 32, 64)
         for ns in (3, 4)
         for nw in (4, 8)
     ]
