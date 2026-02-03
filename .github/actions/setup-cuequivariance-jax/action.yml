@@ -30,6 +30,33 @@ runs:
         python -m uv pip install triton
         python -m uv pip install "flax>=0.12.0"
     
+    - name: Install cuequivariance_ops
+      shell: bash
+      run: |
+        # Try to install cuequivariance_ops from various possible locations
+        # This handles cases where kernelcatcher is checked out as a sibling repo or submodule
+        INSTALLED=false
+        for path in "../cuequivariance_ops" "../../cuequivariance_ops" "../kernelcatcher/cuequivariance_ops" "./kernelcatcher/cuequivariance_ops"; do
+          if [ -d "$path" ] && [ -f "$path/pyproject.toml" ]; then
+            echo "Found cuequivariance_ops at $path, attempting installation..."
+            # Install in editable mode - Python modules should work even if CUDA build fails
+            # We allow the build to fail (CUDA not available) but Python modules should still be importable
+            python -m uv pip install -e "$path" 2>&1 | tee /tmp/cue_ops_install.log || {
+              echo "Installation had errors, but checking if Python modules are available..."
+              # Even if build fails, Python modules might be available
+              python -c "import cuequivariance_ops.triton" 2>/dev/null && INSTALLED=true || echo "Python modules not available"
+            }
+            if python -c "import cuequivariance_ops.triton" 2>/dev/null; then
+              INSTALLED=true
+              echo "Successfully installed cuequivariance_ops (Python modules available)"
+              break
+            fi
+          fi
+        done
+        if [ "$INSTALLED" = "false" ]; then
+          echo "Warning: cuequivariance_ops not found or installation failed. Some tests may be skipped."
+        fi
+    
     - name: Clean and install packages
       shell: bash
       run: |
