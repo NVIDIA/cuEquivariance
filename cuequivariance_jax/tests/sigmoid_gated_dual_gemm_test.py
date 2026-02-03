@@ -46,6 +46,17 @@ def _patch_autotuning_configs():
     This patch depends on internal module structure - if tests fail with
     AttributeError, the module may have been refactored.
     """
+    # Skip patching in CI - cuequivariance_ops is not installed in CI environment
+    # Check for CI environment (case-insensitive to handle different CI systems)
+    is_ci = os.environ.get("CI", "").lower() in ("true", "1", "yes") or os.environ.get(
+        "GITHUB_ACTIONS", ""
+    ).lower() in ("true", "1", "yes")
+    if is_ci:
+        # In CI, cuequivariance_ops is not installed, so skip all autotuning setup
+        # The code will use fallback implementations automatically
+        return
+
+    # Only import and patch autotuning when not in CI mode
     import cuequivariance_jax.triangle._sigmoid_gated_dual_gemm as sgdg_module
     from cuequivariance_ops.triton import autotune_aot
 
