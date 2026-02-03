@@ -50,15 +50,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Checkout kernelcatcher repository
-      uses: actions/checkout@v4
-      with:
-        repository: NVIDIA/kernelcatcher
-        path: kernelcatcher
-        # Use a token with read access if the repo is private
-        # token: ${{ secrets.KERNELCATCHER_TOKEN }}
-      continue-on-error: true
-    
     - uses: ./.github/actions/setup-python-uv
       with:
         python-version: ${{ matrix.python-version }}
