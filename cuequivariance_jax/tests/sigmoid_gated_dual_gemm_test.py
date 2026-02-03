@@ -34,6 +34,130 @@ os.environ["CUEQ_TRITON_IGNORE_EXISTING_CACHE"] = (
 )
 
 
+# Patch the autotuning configs at module load time to restrict the search space
+def _patch_autotuning_configs():
+    """Restrict autotuning configs to a minimal set to prevent test timeouts.
+
+    This patch reduces the autotuning search space from ~72 tunable configs
+    across millions of input sizes to just 2 tunable configs across 4 input sizes.
+    This prevents test timeouts while maintaining adequate test coverage.
+
+    Note: Production code is unaffected - only test autotuning is restricted.
+    This patch depends on internal module structure - if tests fail with
+    AttributeError, the module may have been refactored.
+    """
+    # Skip patching if cuequivariance_ops is not installed
+    # Try to import cuequivariance_ops - if it fails, skip autotuning setup
+    try:
+        import cuequivariance_ops  # noqa: F401
+    except ImportError:
+        # cuequivariance_ops is not installed, so skip all autotuning setup
+        # The code will use fallback implementations automatically
+        return
+
+    # Only import and patch autotuning when not in CI mode
+    import cuequivariance_jax.triangle._sigmoid_gated_dual_gemm as sgdg_module
+    from cuequivariance_ops.triton import autotune_aot
+
+    # Verify module structure before patching
+    assert hasattr(sgdg_module, "_get_autotuned_kernel"), (
+        "Module structure changed - _get_autotuned_kernel not found. Patch needs updating."
+    )
+    assert hasattr(sgdg_module, "_autotuned_forward"), (
+        "Module structure changed - _autotuned_forward not found. Patch needs updating."
+    )
+    assert hasattr(sgdg_module, "_autotuned_backward"), (
+        "Module structure changed - _autotuned_backward not found. Patch needs updating."
+    )
+
+    def patched_get_autotuned_kernel(is_forward: bool):
+        """Patched version with minimal tunable configs."""
+
+        # Restricted input_configs: covers small (M=32) and medium (M=160) sizes
+        # Only tests float32 with DEFAULT precision as these are most common in tests
+        # Other dtypes/precisions are tested via fallback mode in other tests
+        input_configs = [
+            {
+                "M": m,
+                "N": n,
+                "K": 128,
+                "dtype_input": dt,
+                "two_inputs": ti,
+                "precision": p,
+            }
+            for n in (128,)  # Reduced from (128, 256) - single N value sufficient
+            for ti in (True, False)  # Test both single and dual input modes
+            for m in range(32, 256, 128)  # Covers small (32) and medium (160) sizes
+            for dt, p in [
+                (jnp.float32, Precision.DEFAULT),  # Most common config in tests
+            ]
+        ]
+
+        # Minimal tunable configs - just 2 configurations (vs 72 in production)
+        # Vary only TILE_N to test different output tiling strategies
+        tunable_configs = [
+            {
+                "TILE_M": 64,
+                "TILE_N": 32,  # Smaller output tile
+                "TILE_K": 32,
+                "num_stages": 3,
+                "num_warps": 4,
+            },
+            {
+                "TILE_M": 64,
+                "TILE_N": 64,  # Larger output tile
+                "TILE_K": 32,
+                "num_stages": 3,
+                "num_warps": 4,
+            },
+        ]
+
+        if is_forward and sgdg_module._autotuned_forward is None:
+            sgdg_module._autotuned_forward = autotune_aot(
+                input_generator=lambda **k: sgdg_module._generate_inputs(
+                    **k, include_grad=False
+                ),
+                input_to_key=sgdg_module._input_to_key,
+                config_to_key=sgdg_module._config_to_key,
+                input_configs=input_configs,
+                tunable_configs=tunable_configs,
+                prune_configs_fn=None,
+                run_decoy=sgdg_module.run_decoy,
+                run_bench=sgdg_module.run_bench,
+            )(sgdg_module.fused_sigmoid_gated_dual_gemm_forward_kernel_wrapper)
+
+        if not is_forward and sgdg_module._autotuned_backward is None:
+            sgdg_module._autotuned_backward = autotune_aot(
+                input_generator=lambda **k: sgdg_module._generate_inputs(
+                    **k, include_grad=True
+                ),
+                input_to_key=lambda grad_out, **k: sgdg_module._input_to_key(
+                    **k, grad_out=grad_out
+                ),
+                config_to_key=lambda grad_out, **k: sgdg_module._config_to_key(
+                    **k, grad_out=grad_out
+                ),
+                input_configs=input_configs,
+                tunable_configs=tunable_configs,
+                prune_configs_fn=None,
+                run_decoy=sgdg_module.run_decoy,
+                run_bench=sgdg_module.run_bench,
+            )(sgdg_module.fused_sigmoid_gated_dual_gemm_backward_pregemm_kernel_wrapper)
+
+        return (
+            sgdg_module._autotuned_forward
+            if is_forward
+            else sgdg_module._autotuned_backward
+        )
+
+    # Apply the patch at module load time
+    sgdg_module._get_autotuned_kernel = patched_get_autotuned_kernel
+
+
+# Apply the patch immediately when the test module is loaded
+_patch_autotuning_configs()
+
+
 def create_test_data(
     M=32, N=64, K=128, include_mask=False, include_bias=False, batch_size=None
 ):
