@@ -399,6 +399,12 @@ def benchmark(
     jit_train_time = 0
     jit_inference_time = 0
 
+    num_params = sum(x.size for x in jax.tree.leaves(w))
+    print(
+        f"MACE {model_size}: {num_atoms} atoms, {num_edges} edges, {dtype}, {num_params:,} params",
+        flush=True,
+    )
+
     if mode in ["train", "both"]:
         t0 = time.perf_counter()
         jax.block_until_ready(
@@ -421,23 +427,20 @@ def benchmark(
         jax.block_until_ready(out)
         runtime_per_inference = 1e3 * (time.perf_counter() - t0) / 10
 
-    # Profile and print results
-    num_params = sum(x.size for x in jax.tree.leaves(w))
-    print(
-        f"MACE {model_size}: {num_atoms} atoms, {num_edges} edges, {dtype}, {num_params:,} params"
-    )
-
     if mode == "both":
         print(
-            f"train: {runtime_per_training_step:.1f}ms, inference: {runtime_per_inference:.1f}ms, compile: {jit_train_time:.1f}s + {jit_inference_time:.1f}s"
+            f"train: {runtime_per_training_step:.1f}ms, inference: {runtime_per_inference:.1f}ms, compile: {jit_train_time:.1f}s + {jit_inference_time:.1f}s",
+            flush=True,
         )
     elif mode == "train":
         print(
-            f"train: {runtime_per_training_step:.1f}ms, compile: {jit_train_time:.1f}s"
+            f"train: {runtime_per_training_step:.1f}ms, compile: {jit_train_time:.1f}s",
+            flush=True,
         )
     else:
         print(
-            f"inference: {runtime_per_inference:.1f}ms, compile: {jit_inference_time:.1f}s"
+            f"inference: {runtime_per_inference:.1f}ms, compile: {jit_inference_time:.1f}s",
+            flush=True,
         )
 
     try:
