@@ -396,11 +396,15 @@ def benchmark(
 
     runtime_per_training_step = 0
     runtime_per_inference = 0
+    jit_train_time = 0
+    jit_inference_time = 0
 
     if mode in ["train", "both"]:
+        t0 = time.perf_counter()
         jax.block_until_ready(
             step(w, opt_state, batch_dict, target_E, target_F)
         )  # compile
+        jit_train_time = time.perf_counter() - t0
         t0 = time.perf_counter()
         for _ in range(10):
             w, opt_state = step(w, opt_state, batch_dict, target_E, target_F)
@@ -408,7 +412,9 @@ def benchmark(
         runtime_per_training_step = 1e3 * (time.perf_counter() - t0) / 10
 
     if mode in ["inference", "both"]:
+        t0 = time.perf_counter()
         jax.block_until_ready(inference(w, batch_dict))  # compile
+        jit_inference_time = time.perf_counter() - t0
         t0 = time.perf_counter()
         for _ in range(10):
             out = inference(w, batch_dict)
@@ -423,12 +429,16 @@ def benchmark(
 
     if mode == "both":
         print(
-            f"train: {runtime_per_training_step:.1f}ms, inference: {runtime_per_inference:.1f}ms"
+            f"train: {runtime_per_training_step:.1f}ms, inference: {runtime_per_inference:.1f}ms, compile: {jit_train_time:.1f}s + {jit_inference_time:.1f}s"
         )
     elif mode == "train":
-        print(f"train: {runtime_per_training_step:.1f}ms")
+        print(
+            f"train: {runtime_per_training_step:.1f}ms, compile: {jit_train_time:.1f}s"
+        )
     else:
-        print(f"inference: {runtime_per_inference:.1f}ms")
+        print(
+            f"inference: {runtime_per_inference:.1f}ms, compile: {jit_inference_time:.1f}s"
+        )
 
     try:
         cuda = ctypes.CDLL("libcudart.so")
@@ -462,15 +472,22 @@ def main():
     )
     parser.add_argument("--nodes", type=int)
     parser.add_argument("--edges", type=int)
+    parser.add_argument(
+        "--larger",
+        action="store_true",
+        help="Use larger benchmark sizes (4x atoms and edges)",
+    )
     args = parser.parse_args()
 
     defaults = {"MP": (3_000, 160_000), "OFF": (4_000, 70_000)}
+    defaults_larger = {"MP": (12_000, 640_000), "OFF": (16_000, 280_000)}
 
     for dtype in args.dtype:
         for model_size in args.model:
             prefix = model_size.split("-")[0]
-            num_atoms = args.nodes or defaults[prefix][0]
-            num_edges = args.edges or defaults[prefix][1]
+            size_defaults = defaults_larger if args.larger else defaults
+            num_atoms = args.nodes or size_defaults[prefix][0]
+            num_edges = args.edges or size_defaults[prefix][1]
             benchmark(model_size, num_atoms, num_edges, getattr(jnp, dtype), args.mode)
 
 
