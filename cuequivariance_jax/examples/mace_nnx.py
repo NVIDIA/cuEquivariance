@@ -82,9 +82,12 @@ class MessagePassing(nnx.Module):
         irreps_sh: cue.Irreps,
         irreps_out: cue.Irreps,
         epsilon: float,
+        *,
+        name: str = "tensor_product",
         dtype: Any,
         rngs: nnx.Rngs,
     ):
+        self.name = name
         e = (
             cue.descriptors.channelwise_tensor_product(
                 irreps_in, irreps_sh, irreps_out, True
@@ -126,6 +129,7 @@ class MessagePassing(nnx.Module):
             out_template,
             input_indices=[None, senders, None],
             output_indices=receivers,
+            name=self.name,
         )
         return {
             ir: rearrange(v, "n (i s) m -> n (s m) i", i=ir.dim) for ir, v in y.items()
@@ -142,11 +146,14 @@ class SymmetricContraction(nnx.Module):
         correlation: int,
         num_species: int,
         num_features: int,
+        *,
+        name: str = "symmetric_contraction",
         dtype: Any,
         rngs: nnx.Rngs,
     ):
         self.num_species = num_species
         self.irreps_out = irreps_out
+        self.name = name
 
         e, projection = mace_symmetric_contraction(
             irreps_in, irreps_out, range(1, correlation + 1)
@@ -174,7 +181,11 @@ class SymmetricContraction(nnx.Module):
         x = jax.tree.map(lambda v: rearrange(v, "n m i -> n i m"), x)
         out_template = cuex.ir_dict.mul_ir_dict(self.irreps_out, None)
         y = cuex.ir_dict.segmented_polynomial_uniform_1d(
-            self.poly, [w, x], out_template, input_indices=[species_idx, None]
+            self.poly,
+            [w, x],
+            out_template,
+            input_indices=[species_idx, None],
+            name=self.name,
         )
         return jax.tree.map(lambda v: rearrange(v, "n i m -> n m i"), y)
 
@@ -197,10 +208,12 @@ class MACELayer(nnx.Module):
         has_skip: bool,
         has_linZ_first: bool,
         is_last: bool,
+        name: str,
         dtype: Any,
         rngs: nnx.Rngs,
     ):
         self.is_last = is_last
+        self.name = name
 
         hidden_out = (
             hidden_irreps.filter(keep=output_irreps) if is_last else hidden_irreps
@@ -218,8 +231,9 @@ class MACELayer(nnx.Module):
             sph_irreps,
             num_features * interaction_irreps,
             epsilon,
-            dtype,
-            rngs,
+            name=f"{name}_tensor_product",
+            dtype=dtype,
+            rngs=rngs,
         )
         self.radial_mlp = MLP(
             [radial_dim, 64, 64, 64, self.message.weight_numel],
@@ -240,6 +254,7 @@ class MACELayer(nnx.Module):
                 input_irreps,
                 num_features * hidden_out,
                 num_species,
+                name=f"{name}_skip",
                 dtype=dtype,
                 rngs=rngs,
             )
@@ -251,6 +266,7 @@ class MACELayer(nnx.Module):
                 num_features * interaction_irreps,
                 num_features * interaction_irreps,
                 num_species,
+                name=f"{name}_skip_first",
                 dtype=dtype,
                 rngs=rngs,
             )
@@ -263,8 +279,9 @@ class MACELayer(nnx.Module):
             correlation,
             num_species,
             num_features,
-            dtype,
-            rngs,
+            name=f"{name}_symmetric_contraction",
+            dtype=dtype,
+            rngs=rngs,
         )
         self.linear_sc = IrrepsLinear(
             num_features * hidden_out, num_features * hidden_out, dtype=dtype, rngs=rngs
@@ -372,6 +389,7 @@ class MACEModel(nnx.Module):
                     has_skip=has_skip,
                     has_linZ_first=has_linZ_first,
                     is_last=is_last,
+                    name=f"layer_{i}",
                     dtype=dtype,
                     rngs=rngs,
                 )
