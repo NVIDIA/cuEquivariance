@@ -172,7 +172,10 @@ class NEQUIPLayer(flax.linen.Module):
 
             node_feats = cuex.scalar_activation(
                 node_feats,
-                {"0e": self.even_activation, "0o": self.odd_activation},
+                {
+                    cue.O3(0, 1): self.even_activation,
+                    cue.O3(0, -1): self.odd_activation,
+                },
                 normalize_act=True,
             )
         return node_feats
