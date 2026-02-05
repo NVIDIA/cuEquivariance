@@ -22,11 +22,12 @@ import cuequivariance as cue
 
 from .mace_linen import MACEModel
 from .mace_nnx import MACEModel as MACEModelNNX
-from .nequip import NEQUIPModel
+from .nequip_linen import NEQUIPModel
+from .nequip_nnx import NEQUIPModel as NEQUIPModelNNX
 
 
-def _make_batch(num_atoms=10, num_edges=20, num_species=5, num_graphs=2):
-    """Create random batch for testing."""
+def _create_test_graph_batch(num_atoms=10, num_edges=20, num_species=5, num_graphs=2):
+    """Create random graph batch for testing."""
     key = jax.random.key(42)
     keys = jax.random.split(key, 4)
     graph_index = jnp.sort(jax.random.randint(keys[3], (num_atoms,), 0, num_graphs))
@@ -41,9 +42,9 @@ def _make_batch(num_atoms=10, num_edges=20, num_species=5, num_graphs=2):
     )
 
 
-def test_mace_model_basic():
-    """Test Linen MACE model."""
-    batch = _make_batch()
+def test_mace_linen_forward_pass_output_shapes():
+    """Test Linen MACE model forward pass produces correct output shapes."""
+    batch = _create_test_graph_batch()
     model = MACEModel(
         num_layers=1,
         num_features=32,
@@ -63,9 +64,9 @@ def test_mace_model_basic():
     assert E.shape == (2,) and F.shape == (10, 3)
 
 
-def test_mace_nnx_model_basic():
-    """Test NNX MACE model."""
-    batch = _make_batch()
+def test_mace_nnx_forward_pass_output_shapes():
+    """Test NNX MACE model forward pass produces correct output shapes."""
+    batch = _create_test_graph_batch()
     model = MACEModelNNX(
         num_layers=1,
         num_features=32,
@@ -97,10 +98,10 @@ def test_mace_nnx_model_basic():
     ],
     ids=["OFF-S", "OFF-M", "MP-S", "MP-M"],
 )
-def test_mace_linen_to_nnx_equivalence(
+def test_mace_linen_nnx_weight_transfer_produces_identical_outputs(
     hidden_irreps_str, interaction_irreps_str, skip_first
 ):
-    """Test Linen and NNX models produce identical outputs with converted weights."""
+    """Test Linen and NNX MACE models produce identical outputs after weight transfer."""
     num_features, num_species = 16, 3
     interaction_irreps = cue.Irreps(cue.O3, interaction_irreps_str)
     hidden_irreps = cue.Irreps(cue.O3, hidden_irreps_str)
@@ -119,7 +120,7 @@ def test_mace_linen_to_nnx_equivalence(
         epsilon=0.1,
         skip_connection_first_layer=skip_first,
     )
-    batch = _make_batch(
+    batch = _create_test_graph_batch(
         num_atoms=5, num_edges=10, num_species=num_species, num_graphs=1
     )
 
@@ -127,7 +128,7 @@ def test_mace_linen_to_nnx_equivalence(
     linen_params = linen_model.init(jax.random.key(0), batch)
 
     nnx_model = MACEModelNNX(**config, dtype=jnp.float32, rngs=nnx.Rngs(0))
-    _convert_linen_to_nnx(linen_params, nnx_model, config)
+    _transfer_mace_linen_params_to_nnx(linen_params, nnx_model, config)
 
     E_linen, F_linen = linen_model.apply(linen_params, batch)
     E_nnx, F_nnx = nnx_model(batch)
@@ -136,8 +137,8 @@ def test_mace_linen_to_nnx_equivalence(
     np.testing.assert_allclose(F_linen, F_nnx, atol=1e-3, rtol=1e-3)
 
 
-def _convert_linen_to_nnx(linen_params, nnx_model, config):
-    """Convert Linen MACE weights to NNX model."""
+def _transfer_mace_linen_params_to_nnx(linen_params, nnx_model, config):
+    """Transfer Linen MACE parameters to NNX model."""
     num_features = config["num_features"]
     interaction_irreps = config["interaction_irreps"]
     hidden_irreps = config["hidden_irreps"]
@@ -226,8 +227,8 @@ def _convert_linen_to_nnx(linen_params, nnx_model, config):
                 layer.readout.w[ir][...] = w
 
 
-def test_mace_linen_nnx_training_equivalence():
-    """Test Linen and NNX models produce identical params after training."""
+def test_mace_linen_nnx_training_produces_identical_params():
+    """Test Linen and NNX MACE models produce identical parameters after training."""
     import optax
 
     num_features, num_species = 16, 3
@@ -248,7 +249,7 @@ def test_mace_linen_nnx_training_equivalence():
         epsilon=0.1,
         skip_connection_first_layer=True,
     )
-    batch = _make_batch(
+    batch = _create_test_graph_batch(
         num_atoms=5, num_edges=10, num_species=num_species, num_graphs=1
     )
 
@@ -262,7 +263,7 @@ def test_mace_linen_nnx_training_equivalence():
 
     # Initialize NNX model with converted weights
     nnx_model = MACEModelNNX(**config, dtype=jnp.float32, rngs=nnx.Rngs(0))
-    _convert_linen_to_nnx(linen_params, nnx_model, config)
+    _transfer_mace_linen_params_to_nnx(linen_params, nnx_model, config)
 
     # Verify initial outputs match (use 1e-3 tolerance like existing test)
     E_linen_init, F_linen_init = linen_model.apply(linen_params, batch)
@@ -343,9 +344,9 @@ def test_mace_linen_nnx_training_equivalence():
     np.testing.assert_allclose(linen_mlp, nnx_mlp, atol=1e-3, rtol=1e-3)
 
 
-def test_nequip_model_basic():
-    """Test NEQUIP model."""
-    batch = _make_batch()
+def test_nequip_linen_forward_pass_output_shapes():
+    """Test Linen NequIP model forward pass produces correct output shapes."""
+    batch = _create_test_graph_batch()
     model = NEQUIPModel(
         num_layers=2,
         num_features=32,
@@ -357,3 +358,237 @@ def test_nequip_model_basic():
     params = model.init(jax.random.key(0), batch)
     E, F = model.apply(params, batch)
     assert E.shape == (2,) and F.shape == (10, 3)
+
+
+def test_nequip_nnx_forward_pass_output_shapes():
+    """Test NNX NequIP model forward pass produces correct output shapes."""
+    batch = _create_test_graph_batch()
+    model = NEQUIPModelNNX(
+        num_layers=2,
+        num_features=32,
+        num_species=5,
+        max_ell=2,
+        cutoff=3.0,
+        normalization_factor=0.1,
+        dtype=jnp.float32,
+        rngs=nnx.Rngs(0),
+    )
+    E, F = model(batch)
+    assert E.shape == (2,) and F.shape == (10, 3)
+    assert jnp.all(jnp.isfinite(E)) and jnp.all(jnp.isfinite(F))
+
+
+def _transfer_nequip_linen_params_to_nnx(linen_params, nnx_model, config):
+    """Transfer Linen NequIP parameters to NNX model."""
+    num_features = config["num_features"]
+    max_ell = config["max_ell"]
+    output_irreps = num_features * cue.Irreps(
+        cue.O3, [(1, cue.O3(L, (-1) ** L)) for L in range(max_ell + 1)]
+    )
+
+    params = linen_params["params"]
+
+    # Transfer embedding
+    nnx_model.embedding[...] = params["linear_embedding"]
+
+    # Transfer layers
+    for layer_idx, layer in enumerate(nnx_model.layers):
+        lp = params[f"layer_{layer_idx}"]
+        is_first = layer_idx == 0
+
+        # Input irreps for this layer
+        input_irreps = output_irreps.filter(keep="0e") if is_first else output_irreps
+
+        # linear_up (IrrepsLinear): Linen flat -> NNX per-irrep dict
+        # Weight layout: [0e->0e, 1o->1o, 2e->2e, ...] in order of irreps
+        linear_up_w = lp["linear_up"]
+        offset = 0
+        for mul, ir in input_irreps:
+            ir_key = str(ir)
+            size = mul * mul  # square matrix per irrep
+            layer.linear_up.w[ir_key][...] = linear_up_w[
+                offset : offset + size
+            ].reshape(mul, mul)
+            offset += size
+
+        # Radial MLP
+        mlp_params = lp["MultiLayerPerceptron_0"]
+        for i in range(len(layer.radial_mlp.linears)):
+            layer.radial_mlp.linears[i][...] = mlp_params[f"Dense_{i}"]["kernel"]
+
+        # linear_skip (GatedIndexedLinear): Linen (num_species, weight_dim)
+        # Linen weight layout: [0e->scalars, 0e->gates, 1o->1o, 2e->2e, 3o->3o, ...]
+        linear_skip = lp["linear_skip"]
+        in_0e_mul = sum(m for m, ir in input_irreps if ir == cue.O3(0, 1))
+        num_scalars = layer.num_scalars
+        num_gates = layer.num_nonscalar
+
+        skip_offset = 0
+        # 0e -> scalars
+        size = in_0e_mul * num_scalars
+        layer.linear_skip.w_0e_scalar[...] = linear_skip[
+            :, skip_offset : skip_offset + size
+        ]
+        skip_offset += size
+        # 0e -> gates
+        size = in_0e_mul * num_gates
+        layer.linear_skip.w_0e_gates[...] = linear_skip[
+            :, skip_offset : skip_offset + size
+        ]
+        skip_offset += size
+        # Non-scalar irreps
+        skip_w_keys = set(layer.linear_skip.w_nonscalar.keys())
+        for mul_out, ir in layer.linear_skip.irreps_nonscalar:
+            ir_key = str(ir)
+            in_mul_ir = sum(m for m, i in input_irreps if i == ir)
+            if ir_key in skip_w_keys and in_mul_ir > 0:
+                size = in_mul_ir * mul_out
+                layer.linear_skip.w_nonscalar[ir_key][...] = linear_skip[
+                    :, skip_offset : skip_offset + size
+                ]
+                skip_offset += size
+
+        # linear_down (GatedLinear): Linen flat -> NNX split structure
+        # Weight layout: [0e->scalars, 0e->gates, 1o->1o, 2e->2e, 3o->3o, ...]
+        linear_down = lp["linear_down"]
+        msg_irreps = layer.message.irreps_out
+        msg_0e_mul = sum(m for m, ir in msg_irreps if ir == cue.O3(0, 1))
+
+        offset = 0
+        # 0e -> scalars
+        size = msg_0e_mul * num_scalars
+        layer.linear_down.w_0e_scalar[...] = linear_down[
+            offset : offset + size
+        ].reshape(msg_0e_mul, num_scalars)
+        offset += size
+        # 0e -> gates
+        size = msg_0e_mul * num_gates
+        layer.linear_down.w_0e_gates[...] = linear_down[offset : offset + size].reshape(
+            msg_0e_mul, num_gates
+        )
+        offset += size
+        # Non-scalar irreps
+        for mul, ir in layer.linear_down.irreps_nonscalar:
+            ir_key = str(ir)
+            if ir_key in set(layer.linear_down.w_nonscalar.keys()):
+                in_mul_ir = sum(m for m, i in msg_irreps if i == ir)
+                if in_mul_ir > 0:
+                    size = in_mul_ir * mul
+                    layer.linear_down.w_nonscalar[ir_key][...] = linear_down[
+                        offset : offset + size
+                    ].reshape(in_mul_ir, mul)
+                    offset += size
+
+    # Transfer energy readout
+    nnx_model.readout.w["0e"][...] = params["energy_readout"].reshape(num_features, 1)
+
+
+def test_nequip_linen_nnx_weight_transfer_produces_identical_outputs():
+    """Test Linen and NNX NequIP models produce identical outputs after weight transfer."""
+    num_features, num_species = 32, 3
+
+    config = dict(
+        num_layers=2,
+        num_features=num_features,
+        num_species=num_species,
+        max_ell=3,
+        cutoff=5.0,
+        normalization_factor=0.1,
+    )
+    batch = _create_test_graph_batch(
+        num_atoms=5, num_edges=10, num_species=num_species, num_graphs=1
+    )
+
+    linen_model = NEQUIPModel(**config)
+    linen_params = linen_model.init(jax.random.key(0), batch)
+
+    nnx_model = NEQUIPModelNNX(**config, dtype=jnp.float32, rngs=nnx.Rngs(0))
+    _transfer_nequip_linen_params_to_nnx(linen_params, nnx_model, config)
+
+    E_linen, F_linen = linen_model.apply(linen_params, batch)
+    E_nnx, F_nnx = nnx_model(batch)
+
+    np.testing.assert_allclose(E_linen, E_nnx, atol=1e-3, rtol=1e-3)
+    np.testing.assert_allclose(F_linen, F_nnx, atol=1e-3, rtol=1e-3)
+
+
+def test_nequip_linen_nnx_training_produces_identical_params():
+    """Test Linen and NNX NequIP models produce identical parameters after training."""
+    import optax
+
+    num_features, num_species = 32, 3
+    num_steps = 5
+    learning_rate = 1e-2
+
+    config = dict(
+        num_layers=2,
+        num_features=num_features,
+        num_species=num_species,
+        max_ell=3,
+        cutoff=5.0,
+        normalization_factor=0.1,
+    )
+    batch = _create_test_graph_batch(
+        num_atoms=5, num_edges=10, num_species=num_species, num_graphs=1
+    )
+
+    key = jax.random.key(123)
+    target_E = jax.random.normal(key, (1,))
+    target_F = jax.random.normal(jax.random.split(key)[0], (5, 3))
+
+    # Initialize Linen model
+    linen_model = NEQUIPModel(**config)
+    linen_params = linen_model.init(jax.random.key(0), batch)
+
+    # Initialize NNX model with converted weights
+    nnx_model = NEQUIPModelNNX(**config, dtype=jnp.float32, rngs=nnx.Rngs(0))
+    _transfer_nequip_linen_params_to_nnx(linen_params, nnx_model, config)
+
+    # Verify initial outputs match
+    E_linen_init, F_linen_init = linen_model.apply(linen_params, batch)
+    E_nnx_init, F_nnx_init = nnx_model(batch)
+    np.testing.assert_allclose(E_linen_init, E_nnx_init, atol=1e-3, rtol=1e-3)
+    np.testing.assert_allclose(F_linen_init, F_nnx_init, atol=1e-3, rtol=1e-3)
+
+    # Train Linen model
+    def loss_fn_linen(w):
+        E, F = linen_model.apply(w, batch)
+        return jnp.mean((E - target_E) ** 2) + jnp.mean((F - target_F) ** 2)
+
+    tx = optax.adam(learning_rate)
+    opt_state_linen = tx.init(linen_params)
+    for _ in range(num_steps):
+        grad = jax.grad(loss_fn_linen)(linen_params)
+        updates, opt_state_linen = tx.update(grad, opt_state_linen, linen_params)
+        linen_params = optax.apply_updates(linen_params, updates)
+
+    # Train NNX model
+    def loss_fn_nnx(model):
+        E, F = model(batch)
+        return jnp.mean((E - target_E) ** 2) + jnp.mean((F - target_F) ** 2)
+
+    optimizer_nnx = nnx.Optimizer(nnx_model, optax.adam(learning_rate), wrt=nnx.Param)
+    for _ in range(num_steps):
+        grads = nnx.grad(loss_fn_nnx)(nnx_model)
+        optimizer_nnx.update(nnx_model, grads)
+
+    # Compare outputs after training
+    E_linen, F_linen = linen_model.apply(linen_params, batch)
+    E_nnx, F_nnx = nnx_model(batch)
+
+    # Compare key parameters
+    linen_emb = linen_params["params"]["linear_embedding"]
+    nnx_emb = nnx_model.embedding[...]
+
+    # Reconstruct NNX linear_skip weights to compare with Linen's flat format
+    skip_layer = nnx_model.layers[0].linear_skip
+    nnx_skip_parts = [skip_layer.w_0e_scalar[...], skip_layer.w_0e_gates[...]]
+    for ir_key in skip_layer.w_nonscalar.keys():
+        nnx_skip_parts.append(skip_layer.w_nonscalar[ir_key][...])
+    nnx_skip = jnp.concatenate(nnx_skip_parts, axis=-1)
+    linen_skip = linen_params["params"]["layer_0"]["linear_skip"]
+
+    np.testing.assert_allclose(E_linen, E_nnx, atol=1e-3, rtol=1e-3)
+    np.testing.assert_allclose(F_linen, F_nnx, atol=1e-3, rtol=1e-3)
+    np.testing.assert_allclose(linen_emb, nnx_emb, atol=1e-3, rtol=1e-3)
+    np.testing.assert_allclose(linen_skip, nnx_skip, atol=1e-3, rtol=1e-3)
