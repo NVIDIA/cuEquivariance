@@ -20,6 +20,7 @@ Networks for Fast and Accurate Force Fields).
 Reference: Batatia et al. (2022) https://arxiv.org/abs/2206.07697
 """
 
+import ctypes
 from typing import Any, Callable
 
 import jax
@@ -609,6 +610,19 @@ def benchmark(
             f"inference: {runtime_per_inference:.1f}ms, compile: {jit_inference_time:.1f}s",
             flush=True,
         )
+
+    try:
+        cuda = ctypes.CDLL("libcudart.so")
+        cuda.cudaProfilerStart()
+        if mode in ["train", "both"]:
+            jax.block_until_ready(
+                step(model, optimizer, batch_dict, target_E, target_F)
+            )
+        if mode in ["inference", "both"]:
+            jax.block_until_ready(inference(model, batch_dict))
+        cuda.cudaProfilerStop()
+    except Exception:
+        pass
 
 
 def main():
