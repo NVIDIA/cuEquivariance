@@ -20,6 +20,7 @@ Networks for Fast and Accurate Force Fields).
 Reference: Batatia et al. (2022) https://arxiv.org/abs/2206.07697
 """
 
+import ctypes
 from typing import Any, Callable
 
 import jax
@@ -82,9 +83,12 @@ class MessagePassing(nnx.Module):
         irreps_sh: cue.Irreps,
         irreps_out: cue.Irreps,
         epsilon: float,
+        *,
+        name: str = "tensor_product",
         dtype: Any,
         rngs: nnx.Rngs,
     ):
+        self.name = name
         e = (
             cue.descriptors.channelwise_tensor_product(
                 irreps_in, irreps_sh, irreps_out, True
@@ -126,6 +130,7 @@ class MessagePassing(nnx.Module):
             out_template,
             input_indices=[None, senders, None],
             output_indices=receivers,
+            name=self.name,
         )
         return {
             ir: rearrange(v, "n (i s) m -> n (s m) i", i=ir.dim) for ir, v in y.items()
@@ -142,11 +147,14 @@ class SymmetricContraction(nnx.Module):
         correlation: int,
         num_species: int,
         num_features: int,
+        *,
+        name: str = "symmetric_contraction",
         dtype: Any,
         rngs: nnx.Rngs,
     ):
         self.num_species = num_species
         self.irreps_out = irreps_out
+        self.name = name
 
         e, projection = mace_symmetric_contraction(
             irreps_in, irreps_out, range(1, correlation + 1)
@@ -174,7 +182,11 @@ class SymmetricContraction(nnx.Module):
         x = jax.tree.map(lambda v: rearrange(v, "n m i -> n i m"), x)
         out_template = cuex.ir_dict.mul_ir_dict(self.irreps_out, None)
         y = cuex.ir_dict.segmented_polynomial_uniform_1d(
-            self.poly, [w, x], out_template, input_indices=[species_idx, None]
+            self.poly,
+            [w, x],
+            out_template,
+            input_indices=[species_idx, None],
+            name=self.name,
         )
         return jax.tree.map(lambda v: rearrange(v, "n i m -> n m i"), y)
 
@@ -197,10 +209,12 @@ class MACELayer(nnx.Module):
         has_skip: bool,
         has_linZ_first: bool,
         is_last: bool,
+        name: str,
         dtype: Any,
         rngs: nnx.Rngs,
     ):
         self.is_last = is_last
+        self.name = name
 
         hidden_out = (
             hidden_irreps.filter(keep=output_irreps) if is_last else hidden_irreps
@@ -218,8 +232,9 @@ class MACELayer(nnx.Module):
             sph_irreps,
             num_features * interaction_irreps,
             epsilon,
-            dtype,
-            rngs,
+            name=f"{name}_tensor_product",
+            dtype=dtype,
+            rngs=rngs,
         )
         self.radial_mlp = MLP(
             [radial_dim, 64, 64, 64, self.message.weight_numel],
@@ -240,6 +255,7 @@ class MACELayer(nnx.Module):
                 input_irreps,
                 num_features * hidden_out,
                 num_species,
+                name=f"{name}_skip",
                 dtype=dtype,
                 rngs=rngs,
             )
@@ -251,6 +267,7 @@ class MACELayer(nnx.Module):
                 num_features * interaction_irreps,
                 num_features * interaction_irreps,
                 num_species,
+                name=f"{name}_skip_first",
                 dtype=dtype,
                 rngs=rngs,
             )
@@ -263,8 +280,9 @@ class MACELayer(nnx.Module):
             correlation,
             num_species,
             num_features,
-            dtype,
-            rngs,
+            name=f"{name}_symmetric_contraction",
+            dtype=dtype,
+            rngs=rngs,
         )
         self.linear_sc = IrrepsLinear(
             num_features * hidden_out, num_features * hidden_out, dtype=dtype, rngs=rngs
@@ -372,6 +390,7 @@ class MACEModel(nnx.Module):
                     has_skip=has_skip,
                     has_linZ_first=has_linZ_first,
                     is_last=is_last,
+                    name=f"layer_{i}",
                     dtype=dtype,
                     rngs=rngs,
                 )
@@ -545,10 +564,20 @@ def benchmark(
 
     runtime_per_training_step = 0
     runtime_per_inference = 0
+    jit_train_time = 0
+    jit_inference_time = 0
+
+    num_params = sum(x.size for x in jax.tree.leaves(nnx.state(model, nnx.Param)))
+    print(
+        f"MACE-NNX {model_size}: {num_atoms} atoms, {num_edges} edges, {dtype}, {num_params:,} params",
+        flush=True,
+    )
 
     if mode in ["train", "both"]:
+        t0 = time.perf_counter()
         step(model, optimizer, batch_dict, target_E, target_F)
         jax.block_until_ready(nnx.state(model))
+        jit_train_time = time.perf_counter() - t0
         t0 = time.perf_counter()
         for _ in range(10):
             step(model, optimizer, batch_dict, target_E, target_F)
@@ -556,27 +585,44 @@ def benchmark(
         runtime_per_training_step = 1e3 * (time.perf_counter() - t0) / 10
 
     if mode in ["inference", "both"]:
+        t0 = time.perf_counter()
         out = inference(model, batch_dict)
         jax.block_until_ready(out)
+        jit_inference_time = time.perf_counter() - t0
         t0 = time.perf_counter()
         for _ in range(10):
             out = inference(model, batch_dict)
         jax.block_until_ready(out)
         runtime_per_inference = 1e3 * (time.perf_counter() - t0) / 10
 
-    num_params = sum(x.size for x in jax.tree.leaves(nnx.state(model, nnx.Param)))
-    print(
-        f"MACE-NNX {model_size}: {num_atoms} atoms, {num_edges} edges, {dtype}, {num_params:,} params"
-    )
-
     if mode == "both":
         print(
-            f"train: {runtime_per_training_step:.1f}ms, inference: {runtime_per_inference:.1f}ms"
+            f"train: {runtime_per_training_step:.1f}ms, inference: {runtime_per_inference:.1f}ms, compile: {jit_train_time:.1f}s + {jit_inference_time:.1f}s",
+            flush=True,
         )
     elif mode == "train":
-        print(f"train: {runtime_per_training_step:.1f}ms")
+        print(
+            f"train: {runtime_per_training_step:.1f}ms, compile: {jit_train_time:.1f}s",
+            flush=True,
+        )
     else:
-        print(f"inference: {runtime_per_inference:.1f}ms")
+        print(
+            f"inference: {runtime_per_inference:.1f}ms, compile: {jit_inference_time:.1f}s",
+            flush=True,
+        )
+
+    try:
+        cuda = ctypes.CDLL("libcudart.so")
+        cuda.cudaProfilerStart()
+        if mode in ["train", "both"]:
+            jax.block_until_ready(
+                step(model, optimizer, batch_dict, target_E, target_F)
+            )
+        if mode in ["inference", "both"]:
+            jax.block_until_ready(inference(model, batch_dict))
+        cuda.cudaProfilerStop()
+    except Exception:
+        pass
 
 
 def main():
@@ -601,15 +647,22 @@ def main():
     )
     parser.add_argument("--nodes", type=int)
     parser.add_argument("--edges", type=int)
+    parser.add_argument(
+        "--larger",
+        action="store_true",
+        help="Use larger benchmark sizes (4x atoms and edges)",
+    )
     args = parser.parse_args()
 
     defaults = {"MP": (3_000, 160_000), "OFF": (4_000, 70_000)}
+    defaults_larger = {"MP": (12_000, 640_000), "OFF": (16_000, 280_000)}
 
     for dtype_str in args.dtype:
         for model_size in args.model:
             prefix = model_size.split("-")[0]
-            num_atoms = args.nodes or defaults[prefix][0]
-            num_edges = args.edges or defaults[prefix][1]
+            size_defaults = defaults_larger if args.larger else defaults
+            num_atoms = args.nodes or size_defaults[prefix][0]
+            num_edges = args.edges or size_defaults[prefix][1]
             benchmark(
                 model_size, num_atoms, num_edges, getattr(jnp, dtype_str), args.mode
             )

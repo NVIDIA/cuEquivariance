@@ -1,8 +1,12 @@
 ## Latest Changes
 
 ### Breaking Changes
+- [Torch/JAX] The environment variable `CUEQUIVARIANCE_OPS_USE_JIT` no longer exists. JIT compilation is now the default behavior for uniform_1d kernels (already since few releases).
 - [Torch] Removed deprecated primitive classes: `TensorProduct`, `EquivariantTensorProduct`, `SymmetricTensorProduct`, and `IWeightedSymmetricTensorProduct`. Use `cuet.SegmentedPolynomial` with `method='uniform_1d'` instead, or the high-level APIs (`cuet.ChannelWiseTensorProduct`, `cuet.FullyConnectedTensorProduct`, `cuet.SymmetricContraction`). Attempting to import these classes will raise an `ImportError` with migration instructions.
 - [Torch] Removed deprecated low-level wrapper classes: `TensorProductUniform1d`, `TensorProductUniform4x1d`, `TensorProductUniform3x1dIndexed`, `TensorProductUniform4x1dIndexed`, and `SymmetricTensorContraction` from `cuequivariance_ops_torch`. Use `torch.ops.cuequivariance.uniform_1d` or `cuet.SegmentedPolynomial` instead.
+
+### Added
+- [Torch/JAX] New environment variable `CUEQUIVARIANCE_OPS_NVRTC_CACHE_DIR` allows setting a directory for caching compiled kernels, improving JIT compilation time for uniform_1d kernels.
 
 ## 0.8.1 (2026-01-09)
 

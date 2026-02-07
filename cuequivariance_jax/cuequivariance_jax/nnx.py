@@ -226,6 +226,7 @@ class IrrepsIndexedLinear(nnx.Module):
         num_indices: int,
         scale: float = 1.0,
         *,
+        name: str = "indexed_linear",
         dtype: Any = jnp.float32,
         rngs: nnx.Rngs,
     ):
@@ -236,6 +237,7 @@ class IrrepsIndexedLinear(nnx.Module):
         self.irreps_out = irreps_out
         self.num_indices = num_indices
         self.scale = scale / jnp.sqrt(num_indices)
+        self.name = name
 
         self.e = cue.descriptors.linear(irreps_in, irreps_out) * self.scale
         self.w = nnx.Param(
@@ -259,7 +261,7 @@ class IrrepsIndexedLinear(nnx.Module):
             [jax.ShapeDtypeStruct((num_elements, p.outputs[0].size), x_flat.dtype)],
             [Repeats(num_index_counts), None, None],
             method="indexed_linear",
-            name="indexed_linear",
+            name=self.name,
         )
 
         # Convert ir_mul flat -> dict (batch, mul, ir.dim)
