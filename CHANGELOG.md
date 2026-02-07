@@ -1,5 +1,13 @@
 ## Latest Changes
 
+## 0.9.0 (unreleased)
+
+### Added
+- GB10 (DGX Spark) support
+
+### Bug fix
+- [JAX] Fixed Triton tuning issue for triangular multiplicative update
+
 ### Breaking Changes
 - [Torch/JAX] The environment variable `CUEQUIVARIANCE_OPS_USE_JIT` no longer exists. JIT compilation is now the default behavior for uniform_1d kernels (already since few releases).
 - [Torch] Removed deprecated primitive classes: `TensorProduct`, `EquivariantTensorProduct`, `SymmetricTensorProduct`, and `IWeightedSymmetricTensorProduct`. Use `cuet.SegmentedPolynomial` with `method='uniform_1d'` instead, or the high-level APIs (`cuet.ChannelWiseTensorProduct`, `cuet.FullyConnectedTensorProduct`, `cuet.SymmetricContraction`). Attempting to import these classes will raise an `ImportError` with migration instructions.
