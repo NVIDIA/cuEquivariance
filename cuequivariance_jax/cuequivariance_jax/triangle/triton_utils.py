@@ -108,7 +108,7 @@ def _get_max_ptx_version():
                 # Map CUDA version to PTX version
                 if major == 12:
                     if minor >= 9:
-                        version = 88
+                        version = 87 # 88 breaks some triton tests
                     elif minor >= 8:
                         version = 87
                     elif minor >= 5:
