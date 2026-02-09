@@ -13,6 +13,9 @@
 - [Torch] Removed deprecated primitive classes: `TensorProduct`, `EquivariantTensorProduct`, `SymmetricTensorProduct`, and `IWeightedSymmetricTensorProduct`. Use `cuet.SegmentedPolynomial` with `method='uniform_1d'` instead, or the high-level APIs (`cuet.ChannelWiseTensorProduct`, `cuet.FullyConnectedTensorProduct`, `cuet.SymmetricContraction`). Attempting to import these classes will raise an `ImportError` with migration instructions.
 - [Torch] Removed deprecated low-level wrapper classes: `TensorProductUniform1d`, `TensorProductUniform4x1d`, `TensorProductUniform3x1dIndexed`, `TensorProductUniform4x1dIndexed`, and `SymmetricTensorContraction` from `cuequivariance_ops_torch`. Use `torch.ops.cuequivariance.uniform_1d` or `cuet.SegmentedPolynomial` instead.
 
+### Notes
+- [JAX] DGX Spark/GB10 (sm_121) with CUDA 12.9: This release uses PTX 87, which works correctly for most architectures but is not compatible with DGX Spark/GB10 on CUDA 12.9. To enable DGX Spark/GB10 support with CUDA 12.9, refer to [#250](https://github.com/NVIDIA/cuEquivariance/pull/250) for a simple frontend integration tweak that restricts PTX 88 to sm_121 only. This fix will be merged after the 0.9.0 release.
+
 ### Added
 - [Torch/JAX] New environment variable `CUEQUIVARIANCE_OPS_NVRTC_CACHE_DIR` allows setting a directory for caching compiled kernels, improving JIT compilation time for uniform_1d kernels.
 
