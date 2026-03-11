@@ -81,6 +81,7 @@ class IrrepsLinear(nnx.Module):
         irreps_out: cue.Irreps,
         scale: float = 1.0,
         *,
+        precision: jax.lax.Precision | None = None,
         dtype: Any = jnp.float32,
         rngs: nnx.Rngs,
     ):
@@ -90,6 +91,7 @@ class IrrepsLinear(nnx.Module):
         self.irreps_in = irreps_in
         self.irreps_out = irreps_out
         self.scale = scale
+        self.precision = precision
 
         irrep_cls = None
         for _, ir in irreps_in:
@@ -124,7 +126,12 @@ class IrrepsLinear(nnx.Module):
         for key, w in self.w.items():
             ir = self._irrep_cls.from_string(key)
             y[ir] = (
-                jnp.einsum("uv,...ui->...vi", w[...], x[ir])
+                jnp.einsum(
+                    "uv,...ui->...vi",
+                    w[...],
+                    x[ir],
+                    precision=self.precision,
+                )
                 * self.scale
                 / jnp.sqrt(w[...].shape[0])
             )
@@ -195,6 +202,7 @@ class MLP(nnx.Module):
         activation: Callable,
         output_activation: bool = False,
         *,
+        precision: jax.lax.Precision | None = None,
         dtype: Any = jnp.float32,
         rngs: nnx.Rngs,
     ):
@@ -202,6 +210,7 @@ class MLP(nnx.Module):
         self.output_activation = output_activation
         self.num_layers = len(layer_sizes) - 1
         self.layer_sizes = layer_sizes
+        self.precision = precision
 
         linears = []
         for in_dim, out_dim in zip(layer_sizes[:-1], layer_sizes[1:]):
@@ -212,7 +221,7 @@ class MLP(nnx.Module):
     def __call__(self, x: Array) -> Array:
         for i, w in enumerate(self.linears):
             in_dim = self.layer_sizes[i]
-            x = jnp.sqrt(1.0 / in_dim) * (x @ w[...])
+            x = jnp.sqrt(1.0 / in_dim) * jnp.matmul(x, w[...], precision=self.precision)
             if i < self.num_layers - 1 or self.output_activation:
                 x = self.activation(x)
         return x
