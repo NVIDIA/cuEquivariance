@@ -225,7 +225,11 @@ class MACELayer(nnx.Module):
 
         self.sph = SphericalHarmonics(max_ell)
         self.linear_up = IrrepsLinear(
-            input_irreps, input_irreps, dtype=dtype, rngs=rngs
+            input_irreps,
+            input_irreps,
+            precision=jax.lax.Precision.HIGHEST,
+            dtype=dtype,
+            rngs=rngs,
         )
         self.message = MessagePassing(
             input_irreps,
@@ -246,6 +250,7 @@ class MACELayer(nnx.Module):
         self.linear_down = IrrepsLinear(
             self.message.irreps_out,
             num_features * interaction_irreps,
+            precision=jax.lax.Precision.HIGHEST,
             dtype=dtype,
             rngs=rngs,
         )
@@ -285,20 +290,36 @@ class MACELayer(nnx.Module):
             rngs=rngs,
         )
         self.linear_sc = IrrepsLinear(
-            num_features * hidden_out, num_features * hidden_out, dtype=dtype, rngs=rngs
+            num_features * hidden_out,
+            num_features * hidden_out,
+            precision=jax.lax.Precision.HIGHEST,
+            dtype=dtype,
+            rngs=rngs,
         )
 
         if is_last:
             readout_irreps = cue.Irreps(cue.O3, "16x0e")
             self.readout_mlp = IrrepsLinear(
-                num_features * hidden_out, readout_irreps, dtype=dtype, rngs=rngs
+                num_features * hidden_out,
+                readout_irreps,
+                precision=jax.lax.Precision.HIGHEST,
+                dtype=dtype,
+                rngs=rngs,
             )
             self.readout = IrrepsLinear(
-                readout_irreps, output_irreps, dtype=dtype, rngs=rngs
+                readout_irreps,
+                output_irreps,
+                precision=jax.lax.Precision.HIGHEST,
+                dtype=dtype,
+                rngs=rngs,
             )
         else:
             self.readout = IrrepsLinear(
-                num_features * hidden_out, output_irreps, dtype=dtype, rngs=rngs
+                num_features * hidden_out,
+                output_irreps,
+                precision=jax.lax.Precision.HIGHEST,
+                dtype=dtype,
+                rngs=rngs,
             )
 
     def __call__(
