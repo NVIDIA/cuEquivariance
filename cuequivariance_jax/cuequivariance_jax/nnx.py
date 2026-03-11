@@ -81,6 +81,7 @@ class IrrepsLinear(nnx.Module):
         irreps_out: cue.Irreps,
         scale: float = 1.0,
         *,
+        precision: jax.lax.Precision = jax.lax.Precision.HIGHEST,
         dtype: Any = jnp.float32,
         rngs: nnx.Rngs,
     ):
@@ -90,6 +91,7 @@ class IrrepsLinear(nnx.Module):
         self.irreps_in = irreps_in
         self.irreps_out = irreps_out
         self.scale = scale
+        self.precision = precision
 
         irrep_cls = None
         for _, ir in irreps_in:
@@ -124,7 +126,12 @@ class IrrepsLinear(nnx.Module):
         for key, w in self.w.items():
             ir = self._irrep_cls.from_string(key)
             y[ir] = (
-                jnp.einsum("uv,...ui->...vi", w[...], x[ir])
+                jnp.einsum(
+                    "uv,...ui->...vi",
+                    w[...],
+                    x[ir],
+                    precision=self.precision,
+                )
                 * self.scale
                 / jnp.sqrt(w[...].shape[0])
             )
