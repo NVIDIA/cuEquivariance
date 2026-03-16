@@ -1,6 +1,12 @@
 ## Latest Changes
 ## (unreleased)
 
+## 0.9.1 (2026-03-16)
+
+### Bug fix
+- [Torch/JAX] Fixed a rare overflow in the uniform 1d kernel when indices are large, by casting index arithmetic from 32-bit to 64-bit
+- [Torch/JAX] Disabled parallel compilation of uniform 1d kernels by default (`CUEQUIVARIANCE_OPS_PARALLEL_COMPILE` now defaults to `0`). Parallel compilation caused issues in multi-GPU setups. It will be re-enabled by default in a future release once the underlying bugs are resolved.
+
 ## 0.9.0 (2026-02-17)
 
 ### Added
