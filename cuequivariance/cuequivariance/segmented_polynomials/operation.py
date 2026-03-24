@@ -98,14 +98,16 @@ class Operation:
         return s
 
     def __lt__(self, value):
-        assert isinstance(value, Operation)
+        if not isinstance(value, Operation):
+            return NotImplemented
         return (len(self.buffers), self.buffers) < (len(value.buffers), value.buffers)
 
     def __hash__(self) -> int:
         return hash(self.buffers)
 
     def __eq__(self, value):
-        assert isinstance(value, Operation)
+        if not isinstance(value, Operation):
+            return NotImplemented
         return self.buffers == value.buffers
 
     def permute_operands(self, permutation: tuple[int, ...]) -> Operation:

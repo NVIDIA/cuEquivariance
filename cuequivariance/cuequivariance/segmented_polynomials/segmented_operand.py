@@ -135,11 +135,13 @@ class SegmentedOperand:
         return hash((self.ndim, self.segments))
 
     def __eq__(self, other: SegmentedOperand) -> bool:
-        assert isinstance(other, SegmentedOperand)
+        if not isinstance(other, SegmentedOperand):
+            return NotImplemented
         return self.ndim == other.ndim and self.segments == other.segments
 
     def __lt__(self, other: SegmentedOperand) -> bool:
-        assert isinstance(other, SegmentedOperand)
+        if not isinstance(other, SegmentedOperand):
+            return NotImplemented
         return (self.ndim, self.segments) < (other.ndim, other.segments)
 
     def __repr__(self) -> str:
