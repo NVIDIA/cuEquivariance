@@ -47,7 +47,8 @@ def triangle_attention(
         q: Query tensor of shape [B, N, H, S_qo, D].
         k: Key tensor of shape [B, N, H, S_kv, D].
         v: Value tensor of shape [B, N, H, S_kv, D].
-        bias: Bias tensor of shape [B, 1, H, S_qo, S_kv].
+        bias: Bias tensor of shape [B, 1, H, S_qo, S_kv]. Cast to float32 for standard
+            kernels; on Blackwell GPUs (sm100f), cast to match q/k/v dtype (bf16/fp16).
         mask: Mask tensor of shape [B, N, 1, 1, S_kv] (boolean, True means valid).
         scale: Scaling factor for the dot product.
         precision: Precision for the computation (default is None).
@@ -68,6 +69,12 @@ def triangle_attention(
         Without explicit sharding, performance will be significantly degraded. See
         `JAX shard_map documentation <https://docs.jax.dev/en/latest/notebooks/shard_map.html>`_
         for details on manual parallelism.
+
+    .. note::
+        On Blackwell GPUs (cc 10.0 or 10.3, cu13 builds), the sm100f kernel supports
+        hidden_dim<=256 for forward and hidden_dim<=128 for backward passes (bf16/fp16
+        only; hidden_dim must be divisible by 8). The sm100f forward kernel requires
+        S_kv to be a multiple of 8.
     """
     return triangle_attention_custom_vjp(
         q, k, v, bias, mask, scale=scale, precision=precision
