@@ -413,7 +413,8 @@ class SegmentedPolynomial:
         return hash((self.inputs, self.outputs, self.operations))
 
     def __eq__(self, value) -> bool:
-        assert isinstance(value, SegmentedPolynomial)
+        if not isinstance(value, SegmentedPolynomial):
+            return NotImplemented
         return (
             self.inputs == value.inputs
             and self.outputs == value.outputs
@@ -421,7 +422,8 @@ class SegmentedPolynomial:
         )
 
     def __lt__(self, value) -> bool:
-        assert isinstance(value, SegmentedPolynomial)
+        if not isinstance(value, SegmentedPolynomial):
+            return NotImplemented
         return (
             self.inputs,
             self.outputs,

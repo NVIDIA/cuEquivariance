@@ -229,7 +229,8 @@ class SegmentedTensorProduct:
         )
 
     def __eq__(self, value: SegmentedTensorProduct) -> bool:
-        assert isinstance(value, SegmentedTensorProduct)
+        if not isinstance(value, SegmentedTensorProduct):
+            return NotImplemented
         return (
             self.operands_and_subscripts == value.operands_and_subscripts
             and self.paths == value.paths
@@ -237,7 +238,8 @@ class SegmentedTensorProduct:
         )
 
     def __lt__(self, value: SegmentedTensorProduct) -> bool:
-        assert isinstance(value, SegmentedTensorProduct)
+        if not isinstance(value, SegmentedTensorProduct):
+            return NotImplemented
         return (
             self.num_operands,
             self.num_paths,
