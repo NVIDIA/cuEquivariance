@@ -39,13 +39,14 @@ def triangle_attention(
     mask: Optional[torch.Tensor] = None,
     scale: Optional[float] = None,
     return_aux: bool = False,
+    dim_order: Optional[Tuple[int, int, int, int, int]] = None,
 ) -> torch.Tensor | Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     r"""
     Triangle Attention
 
     .. math::
 
-        \text{Attention}_q(Q, K, V, B, M) = \sum_k\left[\text{softmax}_k\left(\begin{cases} 
+        \text{Attention}_q(Q, K, V, B, M) = \sum_k\left[\text{softmax}_k\left(\begin{cases}
         s\, Q_q \cdot K_k + B_{qk} & \text{if } M_k = 1 \\
         -10^9 & \text{otherwise}
         \end{cases}\right) V_k \right]
@@ -62,6 +63,12 @@ def triangle_attention(
         scale (float, optional): Float scale for q (s in the equation). If None, value 1/sqrt(d) is used.
         return_aux (bool): If True, two auxiliary tensors are returned along with the result.
             Defaults to False.
+        dim_order (tuple of 5 ints, optional): Permutation of (0,1,2,3,4) specifying how to
+            reorder the axes of q/k/v/bias from the user's layout to the kernel's [B,N,H,Q,D]
+            layout. This is an O(1) metadata-only permute (no data copy) and incurs zero
+            overhead when the resulting tensor already satisfies sm100f TMA alignment
+            constraints. Example: ``dim_order=(0,1,3,2,4)`` for tensors stored as
+            [B,N,Q,H,D] (H/Q swapped). Defaults to None (no reordering).
 
     Note:
         - B: batch size
@@ -130,7 +137,7 @@ def triangle_attention(
             "Error importing triangle_attention from cuequivariance_ops_torch."
         )
     else:
-        return f(q, k, v, bias, mask, scale, return_aux)
+        return f(q, k, v, bias, mask, scale, return_aux, dim_order)
 
 
 def triangle_multiplicative_update(
