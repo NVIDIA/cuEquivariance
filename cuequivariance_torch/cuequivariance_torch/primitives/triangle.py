@@ -57,7 +57,9 @@ def triangle_attention(
         k (torch.Tensor): Key tensor of shape (B, N, H, K, D). For B=1, can also be (N, H, K, D).
         v (torch.Tensor): Value tensor of shape (B, N, H, K, D). For B=1, can also be (N, H, K, D).
         bias (torch.Tensor): Bias tensor of shape (B, 1, H, Q, K), For B=1, can also be (1, H, Q, K).
-            Will be cast to float32 internally.
+            Will be cast to float32 for standard kernels. On Blackwell GPUs (sm100f, compute
+            capability 10.0 or 10.3), will be cast to match q/k/v dtype (bf16/fp16) for best
+            performance.
         mask (torch.Tensor, optional): Mask tensor of shape (B, N, 1, 1, K). For B=1, can also be (N, 1, 1, K).
             Will be cast to bool internally.
         scale (float, optional): Float scale for q (s in the equation). If None, value 1/sqrt(d) is used.
@@ -86,7 +88,7 @@ def triangle_attention(
     Notes:
         (1) Context is saved for backward pass. You don't need to save it manually.
         (2) Kernel precision (fp32, bf16, fp16) is based on input dtypes. For tf32, set it from torch global scope
-        (3) Triangle attention kernel supports: all hidden_dim<=32 and divisible by 4 for tf32/fp32, and for all hidden_dim<=128 and divisible by 8 for bf16/fp16. In the rare instance that the kernel does not support an input config, fallback to torch is enabled instead of erroring out.
+        (3) Triangle attention kernel supports: all hidden_dim<=32 and divisible by 4 for tf32/fp32, and for all hidden_dim<=128 and divisible by 8 for bf16/fp16 (standard kernels). On Blackwell GPUs (compute capability 10.0 or 10.3), the sm100f kernel supports hidden_dim<=256 for forward passes and hidden_dim<=128 for backward passes. In the rare instance that the kernel does not support an input config, fallback to torch is enabled instead of erroring out.
         (4) Blackwell-optimized kernels (for compute capabilities 10.0 and 10.3) provide superior performance especially for long sequences and higher head dimensions. These kernels require the sequence length N to be a multiple of 8 for the forward pass; pad the sequence if necessary. Currently, this feature is supported only for cu13 builds.
 
     Example:
