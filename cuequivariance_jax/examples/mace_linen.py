@@ -32,7 +32,6 @@ import flax.linen
 import jax
 import jax.numpy as jnp
 import numpy as np
-import nvtx
 import optax
 from cuequivariance.group_theory.experimental.mace import symmetric_contraction
 from cuequivariance_jax.experimental.utils import MultiLayerPerceptron, bessel
@@ -445,6 +444,8 @@ def benchmark(
         )
 
     try:
+        import nvtx
+
         cuda = ctypes.CDLL("libcudart.so")
         cuda.cudaProfilerStart()
 

@@ -26,7 +26,6 @@ from typing import Any, Callable
 import jax
 import jax.numpy as jnp
 import numpy as np
-import nvtx
 from cuequivariance.group_theory.experimental.mace import (
     symmetric_contraction as mace_symmetric_contraction,
 )
@@ -645,6 +644,8 @@ def benchmark(
         )
 
     try:
+        import nvtx
+
         cuda = ctypes.CDLL("libcudart.so")
         cuda.cudaProfilerStart()
         if mode in ["train", "both"]:
