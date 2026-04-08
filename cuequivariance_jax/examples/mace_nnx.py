@@ -644,15 +644,21 @@ def benchmark(
         )
 
     try:
+        import nvtx
+
         cuda = ctypes.CDLL("libcudart.so")
         cuda.cudaProfilerStart()
         if mode in ["train", "both"]:
-            train_state = step(
-                train_graphdef, train_state, batch_dict, target_E, target_F
-            )
-            jax.block_until_ready(train_state)
+            with nvtx.annotate("Train", color="green"):
+                train_state = step(
+                    train_graphdef, train_state, batch_dict, target_E, target_F
+                )
+                jax.block_until_ready(train_state)
         if mode in ["inference", "both"]:
-            jax.block_until_ready(inference(model_graphdef, model_state, batch_dict))
+            with nvtx.annotate("Inference", color="blue"):
+                jax.block_until_ready(
+                    inference(model_graphdef, model_state, batch_dict)
+                )
         cuda.cudaProfilerStop()
     except Exception:
         pass
