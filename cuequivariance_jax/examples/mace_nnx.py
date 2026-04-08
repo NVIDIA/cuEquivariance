@@ -569,18 +569,25 @@ def benchmark(
     )
 
     optimizer = nnx.Optimizer(model, optax.adam(1e-2), wrt=nnx.Param)
+    train_graphdef, train_state = nnx.split((model, optimizer))
 
-    @nnx.jit
-    def step(model, optimizer, batch_dict, target_E, target_F):
+    @jax.jit
+    def step(graphdef, state, batch_dict, target_E, target_F):
+        model, optimizer = nnx.merge(graphdef, state)
+
         def loss_fn(model):
             E, F = model(batch_dict)
             return jnp.mean((E - target_E) ** 2) + jnp.mean((F - target_F) ** 2)
 
         grads = nnx.grad(loss_fn)(model)
         optimizer.update(model, grads)
+        return nnx.state((model, optimizer))
 
-    @nnx.jit
-    def inference(model, batch_dict):
+    model_graphdef, model_state = nnx.split(model)
+
+    @jax.jit
+    def inference(graphdef, state, batch_dict):
+        model = nnx.merge(graphdef, state)
         return model(batch_dict)
 
     runtime_per_training_step = 0
@@ -596,23 +603,27 @@ def benchmark(
 
     if mode in ["train", "both"]:
         t0 = time.perf_counter()
-        step(model, optimizer, batch_dict, target_E, target_F)
-        jax.block_until_ready(nnx.state(model))
+        train_state = step(train_graphdef, train_state, batch_dict, target_E, target_F)
+        jax.block_until_ready(train_state)
         jit_train_time = time.perf_counter() - t0
         t0 = time.perf_counter()
         for _ in range(10):
-            step(model, optimizer, batch_dict, target_E, target_F)
-        jax.block_until_ready(nnx.state(model))
+            train_state = step(
+                train_graphdef, train_state, batch_dict, target_E, target_F
+            )
+        jax.block_until_ready(train_state)
         runtime_per_training_step = 1e3 * (time.perf_counter() - t0) / 10
+        nnx.update((model, optimizer), train_state)
+        model_graphdef, model_state = nnx.split(model)
 
     if mode in ["inference", "both"]:
         t0 = time.perf_counter()
-        out = inference(model, batch_dict)
+        out = inference(model_graphdef, model_state, batch_dict)
         jax.block_until_ready(out)
         jit_inference_time = time.perf_counter() - t0
         t0 = time.perf_counter()
         for _ in range(10):
-            out = inference(model, batch_dict)
+            out = inference(model_graphdef, model_state, batch_dict)
         jax.block_until_ready(out)
         runtime_per_inference = 1e3 * (time.perf_counter() - t0) / 10
 
@@ -636,11 +647,12 @@ def benchmark(
         cuda = ctypes.CDLL("libcudart.so")
         cuda.cudaProfilerStart()
         if mode in ["train", "both"]:
-            jax.block_until_ready(
-                step(model, optimizer, batch_dict, target_E, target_F)
+            train_state = step(
+                train_graphdef, train_state, batch_dict, target_E, target_F
             )
+            jax.block_until_ready(train_state)
         if mode in ["inference", "both"]:
-            jax.block_until_ready(inference(model, batch_dict))
+            jax.block_until_ready(inference(model_graphdef, model_state, batch_dict))
         cuda.cudaProfilerStop()
     except Exception:
         pass
