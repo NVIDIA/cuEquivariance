@@ -25,7 +25,6 @@ arXiv preprint arXiv:2206.07697. https://arxiv.org/abs/2206.07697
 import argparse
 import ctypes
 import time
-import nvtx
 from typing import Callable
 
 import flax
@@ -33,6 +32,7 @@ import flax.linen
 import jax
 import jax.numpy as jnp
 import numpy as np
+import nvtx
 import optax
 from cuequivariance.group_theory.experimental.mace import symmetric_contraction
 from cuequivariance_jax.experimental.utils import MultiLayerPerceptron, bessel
@@ -447,10 +447,12 @@ def benchmark(
     try:
         cuda = ctypes.CDLL("libcudart.so")
         cuda.cudaProfilerStart()
-        
+
         if mode in ["train", "both"]:
             with nvtx.annotate("Train", color="green"):
-                jax.block_until_ready(step(w, opt_state, batch_dict, target_E, target_F))
+                jax.block_until_ready(
+                    step(w, opt_state, batch_dict, target_E, target_F)
+                )
         if mode in ["inference", "both"]:
             with nvtx.annotate("Inference", color="blue"):
                 jax.block_until_ready(inference(w, batch_dict))

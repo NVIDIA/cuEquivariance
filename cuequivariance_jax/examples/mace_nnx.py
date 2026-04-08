@@ -655,7 +655,9 @@ def benchmark(
                 jax.block_until_ready(train_state)
         if mode in ["inference", "both"]:
             with nvtx.annotate("Inference", color="blue"):
-                jax.block_until_ready(inference(model_graphdef, model_state, batch_dict))
+                jax.block_until_ready(
+                    inference(model_graphdef, model_state, batch_dict)
+                )
         cuda.cudaProfilerStop()
     except Exception:
         pass
