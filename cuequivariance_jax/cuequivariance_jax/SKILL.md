@@ -173,7 +173,7 @@ poly = (
      .split_operand_by_irrep(-1)     # split output
      .polynomial
 )
-# After split: all operands have uniform segment shapes (required for uniform_1d)
+# After split: each operand has a single irrep type, mapping naturally to dict[Irrep, Array]
 ```
 
 ### Executing with segmented_polynomial_uniform_1d
@@ -352,12 +352,14 @@ poly = (
      .split_operand_by_irrep(-1)  # split output
      .polynomial
 )
-# Now each operand has uniform segments -> use ir_dict.segmented_polynomial_uniform_1d
+# Each operand has a single irrep type -> maps naturally to dict[Irrep, Array]
 ```
 
-### Why split_operand_by_irrep works
+### Why split_operand_by_irrep matters
 
-Before splitting, a polynomial has dense operands like `32x0+32x1` with segments `((1,32), (3,32))` -- non-uniform shapes. After `split_operand_by_irrep`, each piece has a single irrep type, so all segments within that operand are the same shape. The pytree structure of `dict[Irrep, Array]` maps naturally to the split operands.
+Without splitting, a dense operand like `32x0+32x1` requires all irreps packed into a single contiguous buffer. After `split_operand_by_irrep`, each irrep gets its own separate buffer passed to the CUDA kernel via FFI. The buffers no longer need to be contiguous with each other.
+
+This is especially useful when the polynomial is preceded or followed by per-irrep linear layers (like `IrrepsLinear`). With split operands, no transpose or copy is needed between the linear layers and the polynomial — the `dict[Irrep, Array]` flows directly through the pipeline.
 
 ## RepArray
 
