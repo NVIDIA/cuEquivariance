@@ -47,6 +47,38 @@ Tensor Products
    equivariant_polynomial
    segmented_polynomial
 
+ir_dict
+-------
+
+Utilities for working with ``dict[Irrep, Array]`` representation, an alternative to ``RepArray``.
+
+.. autosummary::
+   :toctree: generated/
+   :template: function_template.rst
+
+   ir_dict.segmented_polynomial_uniform_1d
+   ir_dict.assert_mul_ir_dict
+   ir_dict.mul_ir_dict
+   ir_dict.flat_to_dict
+   ir_dict.dict_to_flat
+   ir_dict.irreps_add
+   ir_dict.irreps_zeros_like
+
+NNX Layers
+----------
+
+Flax NNX modules using ``dict[Irrep, Array]`` representation.
+
+.. autosummary::
+   :toctree: generated/
+   :template: class_template.rst
+
+   nnx.IrrepsLinear
+   nnx.SphericalHarmonics
+   nnx.IrrepsNormalize
+   nnx.MLP
+   nnx.IrrepsIndexedLinear
+
 Extra Modules
 -------------
 
@@ -61,6 +93,15 @@ Extra Modules
    :template: function_template.rst
 
    spherical_harmonics
+
+Utilities
+---------
+
+.. autosummary::
+   :toctree: generated/
+   :template: class_template.rst
+
+   Repeats
 
 Triangle
 --------
