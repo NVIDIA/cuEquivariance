@@ -148,6 +148,9 @@ class SegmentedPolynomial(nn.Module):
     ):
         super().__init__()
 
+        self._polynomial_orig = polynomial
+        self._math_dtype_orig = math_dtype
+        self._output_dtype_map_orig = output_dtype_map
         self.num_inputs = polynomial.num_inputs
         self.num_outputs = polynomial.num_outputs
         self.method = method
@@ -181,29 +184,67 @@ class SegmentedPolynomial(nn.Module):
             )
 
         if method == "uniform_1d":
-            self.m = SegmentedPolynomialFromUniform1dJit(
-                polynomial, math_dtype, output_dtype_map, name, self.options
-            )
-            self.fallback = self.m
+            try:
+                self.m = SegmentedPolynomialFromUniform1dJit(
+                    polynomial, math_dtype, output_dtype_map, name, self.options
+                )
+            except ImportError:
+                method = "naive"
+                warnings.warn(
+                    "uniform_1d backend is not available. "
+                    "Falling back to naive implementation."
+                )
+                self.m = SegmentedPolynomialNaive(
+                    polynomial, math_dtype, output_dtype_map, name
+                )
         elif method == "naive":
             self.m = SegmentedPolynomialNaive(
                 polynomial, math_dtype, output_dtype_map, name
             )
-            self.fallback = self.m
         elif method == "fused_tp":
-            self.m = SegmentedPolynomialFusedTP(
-                polynomial, math_dtype, output_dtype_map, name
-            )
-            self.fallback = SegmentedPolynomialNaive(
-                polynomial, math_dtype, output_dtype_map, name
-            )
+            try:
+                self.m = SegmentedPolynomialFusedTP(
+                    polynomial, math_dtype, output_dtype_map, name
+                )
+            except ImportError:
+                method = "naive"
+                warnings.warn(
+                    "fused_tp backend is not available. "
+                    "Falling back to naive implementation."
+                )
+                self.m = SegmentedPolynomialNaive(
+                    polynomial, math_dtype, output_dtype_map, name
+                )
         elif method == "indexed_linear":
-            self.m = SegmentedPolynomialIndexedLinear(
-                polynomial, math_dtype, output_dtype_map, name
-            )
-            self.fallback = self.m
+            try:
+                self.m = SegmentedPolynomialIndexedLinear(
+                    polynomial, math_dtype, output_dtype_map, name
+                )
+            except ImportError:
+                method = "naive"
+                warnings.warn(
+                    "indexed_linear backend is not available. "
+                    "Falling back to naive implementation."
+                )
+                self.m = SegmentedPolynomialNaive(
+                    polynomial, math_dtype, output_dtype_map, name
+                )
         else:
             raise ValueError(f"Invalid method: {method}")
+        self.method = method
+
+    def __reduce__(self):
+        return (
+            SegmentedPolynomial,
+            (
+                self._polynomial_orig,
+                self.method,
+                self._math_dtype_orig,
+                self._output_dtype_map_orig,
+                "segmented_polynomial",
+                self.options,
+            ),
+        )
 
     def __repr__(self):
         return self.repr + f"\n{super().__repr__()}"
@@ -304,7 +345,17 @@ class SegmentedPolynomial(nn.Module):
                     warnings.warn(
                         "Fused TP is not supported on CPU. Falling back to naive implementation."
                     )
-                    return self.fallback(
+                    if not hasattr(self, "_cpu_fallback"):
+                        object.__setattr__(
+                            self,
+                            "_cpu_fallback",
+                            SegmentedPolynomialNaive(
+                                self._polynomial_orig,
+                                self._math_dtype_orig,
+                                self._output_dtype_map_orig,
+                            ),
+                        )
+                    return self._cpu_fallback(
                         inputs, input_indices, output_shapes, output_indices
                     )
 

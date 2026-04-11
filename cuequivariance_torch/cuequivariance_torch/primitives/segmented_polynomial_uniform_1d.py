@@ -90,6 +90,10 @@ class SegmentedPolynomialFromUniform1dJit(nn.Module):
     ):
         super().__init__()
 
+        self._polynomial_orig = polynomial
+        self._output_dtype_map_orig = output_dtype_map
+        self._options_orig = options
+
         if uniform_1d is None:
             raise ImportError(
                 "Failed to construct SegmentedPolynomialFromUniform1dJit: "
@@ -217,6 +221,23 @@ class SegmentedPolynomialFromUniform1dJit(nn.Module):
         self.BATCH_DIM_SHARED = BATCH_DIM_SHARED
         self.BATCH_DIM_BATCHED = BATCH_DIM_BATCHED
         self.BATCH_DIM_INDEXED = BATCH_DIM_INDEXED
+
+    def __reduce__(self):
+        from cuequivariance_torch.primitives.segmented_polynomial import (
+            SegmentedPolynomial,
+        )
+
+        return (
+            SegmentedPolynomial,
+            (
+                self._polynomial_orig,
+                "uniform_1d",
+                self.math_dtype,
+                self._output_dtype_map_orig,
+                self.name,
+                self._options_orig,
+            ),
+        )
 
     def forward(
         self,

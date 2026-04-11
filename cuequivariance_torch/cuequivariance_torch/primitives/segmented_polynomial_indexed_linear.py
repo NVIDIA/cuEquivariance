@@ -165,6 +165,9 @@ class SegmentedPolynomialIndexedLinear(nn.Module):
         name: str = "segmented_polynomial",
     ):
         super().__init__()
+        self._polynomial_orig = polynomial
+        self._output_dtype_map_orig = output_dtype_map
+        self._math_dtype_orig = math_dtype
         self.num_inputs = polynomial.num_inputs
         self.num_outputs = polynomial.num_outputs
         self.input_sizes = [o.size for o in polynomial.inputs]
@@ -224,6 +227,22 @@ class SegmentedPolynomialIndexedLinear(nn.Module):
                     f"Buffer {Z_index} has multiple indexed values."
                 )
             self.tps.append(IndexedLinear(d, signature[0], signature[1:], math_dtype))
+
+    def __reduce__(self):
+        from cuequivariance_torch.primitives.segmented_polynomial import (
+            SegmentedPolynomial,
+        )
+
+        return (
+            SegmentedPolynomial,
+            (
+                self._polynomial_orig,
+                "indexed_linear",
+                self._math_dtype_orig,
+                self._output_dtype_map_orig,
+                self.name,
+            ),
+        )
 
     def forward(
         self,
