@@ -306,7 +306,7 @@ class SegmentedPolynomial(nn.Module):
             if (
                 not torch.jit.is_tracing()
                 and not torch.compiler.is_compiling()
-                and not torch.fx._symbolic_trace.is_fx_tracing()
+                and not torch.fx._symbolic_trace.is_fx_symbolic_tracing()
             ):
                 torch._assert(
                     len(inputs) == self.num_inputs,
