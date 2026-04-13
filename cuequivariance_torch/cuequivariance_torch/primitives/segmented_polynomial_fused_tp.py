@@ -81,6 +81,8 @@ class SegmentedPolynomialFusedTP(nn.Module):
         name: str = "segmented_polynomial",
     ):
         super().__init__()
+        self._polynomial_orig = polynomial
+        self._output_dtype_map_orig = output_dtype_map
         self.num_inputs = polynomial.num_inputs
         self.num_outputs = polynomial.num_outputs
         self.input_sizes = [o.size for o in polynomial.inputs]
@@ -163,6 +165,22 @@ class SegmentedPolynomialFusedTP(nn.Module):
                 [perm[i] for i in operation.input_buffers(self.num_inputs)]
             )
             self.b_outs.append(b_out - self.num_inputs)
+
+    def __reduce__(self):
+        from cuequivariance_torch.primitives.segmented_polynomial import (
+            SegmentedPolynomial,
+        )
+
+        return (
+            SegmentedPolynomial,
+            (
+                self._polynomial_orig,
+                "fused_tp",
+                self.math_dtype,
+                self._output_dtype_map_orig,
+                self.name,
+            ),
+        )
 
     def forward(
         self,

@@ -188,6 +188,18 @@ def _tensor_product_fx(
             def __init__(self, descriptor: cue.SegmentedTensorProduct):
                 super().__init__()
 
+                self._output_size = descriptor.operands[-1].size
+                self._math_dtype = math_dtype
+                self._num_paths = descriptor.num_paths
+                self._path_output_indices = [
+                    path.indices[-1] for path in descriptor.paths
+                ]
+                self._einsum_eq = (
+                    str(descriptor.coefficient_subscripts)
+                    + "->"
+                    + str(descriptor.subscripts.operands[-1])
+                )
+
                 for pid, path in enumerate(descriptor.paths):
                     if math_dtype is not None:
                         self.register_buffer(
@@ -205,23 +217,21 @@ def _tensor_product_fx(
                         )
 
             def forward(self):
-                if math_dtype is not None:
+                if self._math_dtype is not None:
                     output = torch.zeros(
-                        (descriptor.operands[-1].size,),
+                        (self._output_size,),
                         device=self.c0.device,
-                        dtype=math_dtype,
+                        dtype=self._math_dtype,
                     )
                 else:
                     output = torch.zeros(
-                        (descriptor.operands[-1].size,),
+                        (self._output_size,),
                         device=self.c0.device,
                         dtype=self.c0.dtype,
                     )
-                for pid in range(descriptor.num_paths):
-                    output[descriptor.paths[pid].indices[-1]] += torch.einsum(
-                        descriptor.coefficient_subscripts
-                        + "->"
-                        + descriptor.subscripts.operands[-1],
+                for pid in range(self._num_paths):
+                    output[self._path_output_indices[pid]] += torch.einsum(
+                        self._einsum_eq,
                         getattr(self, f"c{pid}"),
                     )
                 return output
