@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.12", "3.14"]
+        python-version: ["3.10", "3.12", "3.13"]
 
     steps:
     - uses: actions/checkout@v4
@@ -32,12 +32,10 @@ jobs:
         pytest --doctest-modules -x -m "not slow" cuequivariance
 
     - name: Downgrade numpy
-      if: matrix.python-version != '3.14'
       run: |
         python -m uv pip install -U "numpy==1.26.*"
 
     - name: Test with pytest (numpy 1.26)
-      if: matrix.python-version != '3.14'
       run: |
         pytest --doctest-modules -x -m "not slow" cuequivariance
 
@@ -51,13 +49,13 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    
+
     - uses: ./.github/actions/setup-python-uv
       with:
         python-version: ${{ matrix.python-version }}
-    
+
     - uses: ./.github/actions/setup-cuequivariance-jax
-    
+
     - name: Test with pytest
       run: |
         XLA_PYTHON_CLIENT_PREALLOCATE=false pytest --doctest-modules -x -m "not slow" cuequivariance_jax
@@ -68,17 +66,17 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    
+
     - uses: ./.github/actions/setup-python-uv
       with:
         python-version: "3.12"
-    
+
     - name: Install without flax
       run: |
         python -m uv pip install -U jax
         python -m uv pip install -e ./cuequivariance
         python -m uv pip install -e ./cuequivariance_jax
-    
+
     - name: Verify import without flax
       run: |
         python -c "import cuequivariance_jax; print('cuex', cuequivariance_jax.__version__)"
@@ -95,13 +93,13 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    
+
     - uses: ./.github/actions/setup-python-uv
       with:
         python-version: ${{ matrix.python-version }}
-    
+
     - uses: ./.github/actions/setup-cuequivariance-torch
-    
+
     - name: Test with pytest
       run: |
         pytest --doctest-modules -x -m "not slow" cuequivariance_torch
