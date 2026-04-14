@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.12", "3.13"]
+        python-version: ["3.10", "3.14"]
 
     steps:
     - uses: actions/checkout@v4
@@ -32,10 +32,12 @@ jobs:
         pytest --doctest-modules -x -m "not slow" cuequivariance
 
     - name: Downgrade numpy
+      if: matrix.python-version == '3.10'
       run: |
-        python -m uv pip install -U "numpy==1.26.*"
+        uv pip install -U "numpy==1.26.*"
 
     - name: Test with pytest (numpy 1.26)
+      if: matrix.python-version == '3.10'
       run: |
         pytest --doctest-modules -x -m "not slow" cuequivariance
 
@@ -45,7 +47,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.13"]
+        python-version: ["3.11", "3.14"]
 
     steps:
     - uses: actions/checkout@v4
@@ -73,9 +75,9 @@ jobs:
 
     - name: Install without flax
       run: |
-        python -m uv pip install -U jax
-        python -m uv pip install -e ./cuequivariance
-        python -m uv pip install -e ./cuequivariance_jax
+        uv pip install -U jax
+        uv pip install -e ./cuequivariance
+        uv pip install -e ./cuequivariance_jax
 
     - name: Verify import without flax
       run: |

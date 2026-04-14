@@ -817,7 +817,15 @@ class SegmentedTensorProduct:
         """Add a segment to the descriptor."""
         if isinstance(segment, dict):
             segment = tuple(segment[m] for m in self.subscripts.operands[operand])
-        return self.operands[operand].add_segment(segment)
+        result = self.operands[operand].add_segment(segment)
+        # Rebuild tuple to invalidate CPython's cached tuple hashes,
+        # which become stale after the operand is mutated in-place.
+        object.__setattr__(
+            self,
+            "operands_and_subscripts",
+            tuple((ope, ss) for ope, ss in self.operands_and_subscripts),
+        )
+        return result
 
     def add_segments(
         self, operand: int, segments: list[Union[tuple[int, ...], dict[str, int]]]
