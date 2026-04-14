@@ -56,7 +56,7 @@ jobs:
     
     - name: Downgrade numpy
       run: |
-        uv pip install -U "numpy==1.26.*"
+        uv pip install --system -U "numpy==1.26.*"
     
     - name: Test with pytest (numpy 1.26, including slow tests)
       run: |

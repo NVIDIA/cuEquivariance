@@ -34,7 +34,7 @@ jobs:
     - name: Downgrade numpy
       if: matrix.python-version == '3.10'
       run: |
-        uv pip install -U "numpy==1.26.*"
+        uv pip install --system -U "numpy==1.26.*"
 
     - name: Test with pytest (numpy 1.26)
       if: matrix.python-version == '3.10'
@@ -75,9 +75,9 @@ jobs:
 
     - name: Install without flax
       run: |
-        uv pip install -U jax
-        uv pip install -e ./cuequivariance
-        uv pip install -e ./cuequivariance_jax
+        uv pip install --system -U jax
+        uv pip install --system -e ./cuequivariance
+        uv pip install --system -e ./cuequivariance_jax
 
     - name: Verify import without flax
       run: |

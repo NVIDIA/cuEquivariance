@@ -20,4 +20,4 @@ runs:
     - name: Install cuequivariance
       shell: bash
       run: |
-        uv pip install -e ./cuequivariance[dev]
+        uv pip install --system -e ./cuequivariance[dev]

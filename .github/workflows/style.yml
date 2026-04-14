@@ -22,7 +22,7 @@ jobs:
         enable-cache: true
     - name: Setup Pre-commit
       run: |
-        uv pip install pre-commit
+        uv pip install --system pre-commit
         pre-commit install
     - name: Run Pre-commit
       run: |

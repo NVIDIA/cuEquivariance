@@ -7,14 +7,14 @@ runs:
     - name: Install PyTorch dependencies
       shell: bash
       run: |
-        uv pip install -U pytest torch e3nn
+        uv pip install --system -U pytest torch e3nn
     
     - name: Clean and install packages
       shell: bash
       run: |
-        uv pip uninstall cuequivariance cuequivariance_jax cuequivariance_torch 2>/dev/null || true
-        uv pip install -e ./cuequivariance
-        uv pip install -e ./cuequivariance_torch
+        uv pip uninstall --system cuequivariance cuequivariance_jax cuequivariance_torch 2>/dev/null || true
+        uv pip install --system -e ./cuequivariance
+        uv pip install --system -e ./cuequivariance_torch
     
     - name: Verify installation
       shell: bash
