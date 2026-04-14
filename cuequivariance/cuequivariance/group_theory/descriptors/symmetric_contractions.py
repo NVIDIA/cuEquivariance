@@ -114,7 +114,7 @@ def symmetric_contraction(
         ...    16 * cue.Irreps("SO3", "0 + 1"),
         ...    (1, 2, 3)
         ... )
-        ╭ a=32x0+80x0+176x0 b=16x0+16x1+16x2 -> C=16x0+16x1
+        ╭ a=288x0 b=16x0+16x1+16x2 -> C=16x0+16x1
         │  []·a[u]·b[u]➜C[u] ─────────── num_paths=4 u=16
         │  []·a[u]·b[u]·b[u]➜C[u] ────── num_paths=37 u=16
         ╰─ []·a[u]·b[u]·b[u]·b[u]➜C[u] ─ num_paths=437 u=16
