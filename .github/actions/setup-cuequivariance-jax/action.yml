@@ -14,28 +14,28 @@ runs:
       if: inputs.use-gpu != 'true'
       shell: bash
       run: |
-        uv pip install --system -U pytest jax
+        uv pip install -U pytest jax
     
     - name: Install JAX (GPU)
       if: inputs.use-gpu == 'true'
       shell: bash
       run: |
-        uv pip install --system -U pytest "jax[cuda12]"
-        uv pip install --system nvidia-cusolver-cu12==11.7.3.90
-        uv pip install --system nvidia-cublas-cu12
+        uv pip install -U pytest "jax[cuda12]"
+        uv pip install nvidia-cusolver-cu12==11.7.3.90
+        uv pip install nvidia-cublas-cu12
     
     - name: Install common dependencies
       shell: bash
       run: |
-        uv pip install --system triton
-        uv pip install --system "flax>=0.12.0"
+        uv pip install triton
+        uv pip install "flax>=0.12.0"
     
     - name: Clean and install packages
       shell: bash
       run: |
-        uv pip uninstall --system cuequivariance cuequivariance_jax cuequivariance_torch 2>/dev/null || true
-        uv pip install --system -e ./cuequivariance
-        uv pip install --system -e ./cuequivariance_jax
+        uv pip uninstall cuequivariance cuequivariance_jax cuequivariance_torch 2>/dev/null || true
+        uv pip install -e ./cuequivariance
+        uv pip install -e ./cuequivariance_jax
     
     - name: Verify installation
       shell: bash

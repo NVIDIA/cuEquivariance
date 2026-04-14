@@ -13,16 +13,16 @@ runs:
     - name: Install JAX and PyTorch dependencies
       shell: bash
       run: |
-        uv pip install --system -U pytest jax torch e3nn
-        uv pip install --system "flax>=0.12.0"
+        uv pip install -U pytest jax torch e3nn
+        uv pip install "flax>=0.12.0"
     
     - name: Install packages
       shell: bash
       run: |
-        uv pip install --system -e ./cuequivariance
-        uv pip install --system -e ./cuequivariance_jax
-        uv pip install --system -e ./cuequivariance_torch
-        uv pip install --system -r docs/requirements.txt
+        uv pip install -e ./cuequivariance
+        uv pip install -e ./cuequivariance_jax
+        uv pip install -e ./cuequivariance_torch
+        uv pip install -r docs/requirements.txt
     
     - name: Verify installation
       shell: bash
