@@ -259,6 +259,7 @@ class IrrepsIndexedLinear(nnx.Module):
         # Convert dict (batch, mul, ir.dim) -> ir_mul flat order
         x_ir_mul = jax.tree.map(lambda v: rearrange(v, "... m i -> ... i m"), x)
         x_flat = ir_dict.dict_to_flat(self.irreps_in, x_ir_mul)
+        x_flat = x_flat.astype(self.w[...].dtype)
         num_elements = x_flat.shape[0]
 
         [y_flat] = segmented_polynomial(
