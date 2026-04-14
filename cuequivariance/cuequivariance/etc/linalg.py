@@ -107,6 +107,10 @@ def limit_denominator(n, d, max_denominator: int):
     n1, d1 = p0 + k * p1, q0 + k * q1
     n2, d2 = p1, q1
     with np.errstate(over="ignore"):
+        # The intermediate products (n2*d0, n0*d2) overflow int64 (~2^102), but the
+        # overflow is benign: their difference is bounded by d0 < 2^62 (fits in int64),
+        # and two's complement subtraction recovers it exactly. The final product
+        # d1*(difference) is also bounded by d0 < 2^63.
         mask = np.abs(d1 * (n2 * d0 - n0 * d2)) <= np.abs(d2 * (n1 * d0 - n0 * d1))
     return np.where(
         d0 <= max_denominator,
