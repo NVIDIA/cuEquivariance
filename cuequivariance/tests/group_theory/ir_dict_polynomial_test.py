@@ -17,7 +17,6 @@ import pytest
 
 import cuequivariance as cue
 
-
 # --------------------------------------------------------------------------
 # split_polynomial_by_irreps
 # --------------------------------------------------------------------------
@@ -30,7 +29,9 @@ def test_split_polynomial_by_irreps_matches_split_operand_by_irrep():
     irreps_sh = cue.Irreps(cue.O3, "0e + 1o")
     irreps_out = cue.Irreps(cue.O3, "0e + 1o + 2e")
 
-    e = cue.descriptors.channelwise_tensor_product(irreps_in, irreps_sh, irreps_out, True)
+    e = cue.descriptors.channelwise_tensor_product(
+        irreps_in, irreps_sh, irreps_out, True
+    )
     old = (
         e.split_operand_by_irrep(2)
         .split_operand_by_irrep(1)
@@ -176,9 +177,7 @@ def test_fully_connected_tensor_product_ir_dict(irreps1, irreps2, irreps3):
 )
 def test_linear_ir_dict(irreps_in, irreps_out):
     e = cue.descriptors.linear(irreps_in, irreps_out)
-    old_poly = (
-        e.split_operand_by_irrep(1).split_operand_by_irrep(-1).polynomial
-    )
+    old_poly = e.split_operand_by_irrep(1).split_operand_by_irrep(-1).polynomial
 
     result = cue.descriptors.linear_ir_dict(irreps_in, irreps_out)
 
@@ -228,9 +227,7 @@ def test_symmetric_contraction_ir_dict():
     irreps_out = 16 * cue.Irreps("SO3", "0 + 1")
 
     e = cue.descriptors.symmetric_contraction(irreps_in, irreps_out, (1, 2, 3))
-    old_poly = (
-        e.split_operand_by_irrep(1).split_operand_by_irrep(-1).polynomial
-    )
+    old_poly = e.split_operand_by_irrep(1).split_operand_by_irrep(-1).polynomial
 
     result = cue.descriptors.symmetric_contraction_ir_dict(
         irreps_in, irreps_out, (1, 2, 3)
@@ -244,6 +241,8 @@ def test_symmetric_contraction_ir_dict():
 def test_mace_symmetric_contraction_ir_dict():
     from cuequivariance.group_theory.experimental.mace.symmetric_contractions import (
         symmetric_contraction as mace_sc,
+    )
+    from cuequivariance.group_theory.experimental.mace.symmetric_contractions import (
         symmetric_contraction_ir_dict as mace_sc_ir_dict,
     )
 
@@ -251,9 +250,7 @@ def test_mace_symmetric_contraction_ir_dict():
     irreps_out = 4 * cue.Irreps("SO3", "0 + 1")
 
     e, projection_old = mace_sc(irreps_in, irreps_out, [1, 2, 3])
-    old_poly = (
-        e.split_operand_by_irrep(1).split_operand_by_irrep(-1).polynomial
-    )
+    old_poly = e.split_operand_by_irrep(1).split_operand_by_irrep(-1).polynomial
 
     result, projection_new = mace_sc_ir_dict(irreps_in, irreps_out, [1, 2, 3])
 
@@ -296,16 +293,10 @@ def test_channelwise_numpy_evaluation():
     irreps1 = cue.Irreps(cue.O3, "4x0e + 2x1o")
     irreps_sh = cue.Irreps(cue.O3, "0e + 1o")
 
-    e = cue.descriptors.channelwise_tensor_product(irreps1, irreps_sh, simplify_irreps3=True)
+    e = cue.descriptors.channelwise_tensor_product(
+        irreps1, irreps_sh, simplify_irreps3=True
+    )
     result = cue.descriptors.channelwise_tensor_product_ir_dict(irreps1, irreps_sh)
-
-    # Generate random inputs matching the unsplit polynomial
-    np.random.seed(42)
-    inputs_orig = [np.random.randn(op.size) for op in e.polynomial.inputs]
-    [out_orig] = e.polynomial(*inputs_orig)
-
-    # The split polynomial has more operands — reconstruct matching inputs
-    inputs_split = [np.random.randn(op.size) for op in result.polynomial.inputs]
 
     # Use the same flat data for both
     # Unsplit: [weights, input1_flat, input2_flat]

@@ -422,7 +422,12 @@ def _elementwise_tensor_product_core(
 
     irreps3 = cue.Irreps(G, irreps3)
     d = d.normalize_paths_for_operand(-1)
-    return cue.SegmentedPolynomial.eval_last_operand(d), irreps1_cut, irreps2_cut, irreps3
+    return (
+        cue.SegmentedPolynomial.eval_last_operand(d),
+        irreps1_cut,
+        irreps2_cut,
+        irreps3,
+    )
 
 
 def elementwise_tensor_product(

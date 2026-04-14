@@ -25,12 +25,8 @@ def _spherical_harmonics_core(
 ) -> tuple[cue.SegmentedPolynomial, cue.Irreps]:
     if len(ls) != 1:
         results = [_spherical_harmonics_core(ir_vec, [ell]) for ell in ls]
-        poly = cue.SegmentedPolynomial.stack(
-            [r[0] for r in results], [False, True]
-        )
-        irreps_out = cue.Irreps(
-            type(ir_vec), sum([list(r[1]) for r in results], [])
-        )
+        poly = cue.SegmentedPolynomial.stack([r[0] for r in results], [False, True])
+        irreps_out = cue.Irreps(type(ir_vec), sum([list(r[1]) for r in results], []))
         return poly, irreps_out
 
     [ell] = ls

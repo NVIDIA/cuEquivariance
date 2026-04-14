@@ -246,7 +246,9 @@ class IrrepsIndexedLinear(nnx.Module):
         scale = scale / jnp.sqrt(num_indices)
         self.poly = cue.descriptors.linear(irreps_in, irreps_out).polynomial * scale
         self.w = nnx.Param(
-            jax.random.normal(rngs.params(), (num_indices, self.poly.inputs[0].size), dtype)
+            jax.random.normal(
+                rngs.params(), (num_indices, self.poly.inputs[0].size), dtype
+            )
         )
 
     def __call__(
@@ -262,7 +264,11 @@ class IrrepsIndexedLinear(nnx.Module):
         [y_flat] = segmented_polynomial(
             self.poly,
             [self.w[...], x_flat],
-            [jax.ShapeDtypeStruct((num_elements, self.poly.outputs[0].size), x_flat.dtype)],
+            [
+                jax.ShapeDtypeStruct(
+                    (num_elements, self.poly.outputs[0].size), x_flat.dtype
+                )
+            ],
             [Repeats(num_index_counts), None, None],
             method="indexed_linear",
             name=self.name,
