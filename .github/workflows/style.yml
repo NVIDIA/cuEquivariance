@@ -16,10 +16,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - uses: astral-sh/setup-uv@v7
+    - uses: ./.github/actions/setup-python-uv
       with:
         python-version: "3.12"
-        enable-cache: true
     - name: Setup Pre-commit
       run: |
         uv pip install pre-commit
