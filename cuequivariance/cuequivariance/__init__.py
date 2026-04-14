@@ -51,6 +51,8 @@ from .group_theory import (
     reduced_antisymmetric_tensor_product_basis,
     EquivariantPolynomial,
     EquivariantTensorProduct,  # deprecated
+    IrDictPolynomial,
+    split_polynomial_by_irreps,
 )
 
 from cuequivariance import segmented_polynomials as segmented_polynomials
@@ -89,6 +91,8 @@ __all__ = [
     "reduced_antisymmetric_tensor_product_basis",
     "EquivariantPolynomial",
     "EquivariantTensorProduct",
+    "IrDictPolynomial",
+    "split_polynomial_by_irreps",
     "segmented_polynomials",
     "group_theory",
     "descriptors",

@@ -17,57 +17,20 @@ from functools import cache
 import cuequivariance as cue
 
 
-def symmetric_contraction(
-    irreps_in: cue.Irreps,
-    irreps_out: cue.Irreps,
-    degrees: tuple[int, ...],
-) -> cue.EquivariantPolynomial:
-    """Construct the descriptor for a symmetric contraction.
-
-    The symmetric contraction is a weighted sum of the input contracted with itself degree times.
-
-    Subscripts: ``weights[u],input[u],output[u]``
-
-    Args:
-        irreps_in (Irreps): The input irreps, the multiplicity are treated in parallel.
-        irreps_out (Irreps): The output irreps.
-        degrees (tuple[int, ...]): List of degrees for the symmetric contractions.
-
-    Returns:
-        EquivariantPolynomial: The descriptor of the symmetric contraction.
-            The operands are the weights, the input degree times and the output.
-
-    Example:
-        >>> cue.descriptors.symmetric_contraction(
-        ...    16 * cue.Irreps("SO3", "0 + 1 + 2"),
-        ...    16 * cue.Irreps("SO3", "0 + 1"),
-        ...    (1, 2, 3)
-        ... )
-        ╭ a=32x0+80x0+176x0 b=16x0+16x1+16x2 -> C=16x0+16x1
-        │  []·a[u]·b[u]➜C[u] ─────────── num_paths=4 u=16
-        │  []·a[u]·b[u]·b[u]➜C[u] ────── num_paths=37 u=16
-        ╰─ []·a[u]·b[u]·b[u]·b[u]➜C[u] ─ num_paths=437 u=16
-
-        Where ``32x0+80x0+176x0`` are the weights needed for each degree (32 for degree 1, 80 for degree 2, 176 for degree 3).
-    """
-    return symmetric_contraction_cached(irreps_in, irreps_out, tuple(degrees))
-
-
 @cache
-def symmetric_contraction_cached(
+def _symmetric_contraction_core(
     irreps_in: cue.Irreps,
     irreps_out: cue.Irreps,
     degrees: tuple[int, ...],
-) -> cue.EquivariantPolynomial:
+) -> cue.SegmentedPolynomial:
     degrees = list(degrees)
     if len(degrees) != 1:
-        return cue.EquivariantPolynomial.stack(
-            [
-                symmetric_contraction(irreps_in, irreps_out, (degree,))
-                for degree in degrees
-            ],
-            [True, False, False],
-        )
+        polys = [
+            _symmetric_contraction_core(irreps_in, irreps_out, (degree,))
+            for degree in degrees
+        ]
+        return cue.SegmentedPolynomial.stack(polys, [True, False, False])
+
     [degree] = degrees
     del degrees
 
@@ -118,15 +81,84 @@ def symmetric_contraction_cached(
     for i in input_operands:
         assert d.operands[i] == input_operand
 
+    return cue.SegmentedPolynomial(
+        [d.operands[0], input_operand],
+        [d.operands[-1]],
+        [(cue.Operation([0] + [1] * degree + [2]), d)],
+    )
+
+
+def symmetric_contraction(
+    irreps_in: cue.Irreps,
+    irreps_out: cue.Irreps,
+    degrees: tuple[int, ...],
+) -> cue.EquivariantPolynomial:
+    """Construct the descriptor for a symmetric contraction.
+
+    The symmetric contraction is a weighted sum of the input contracted with itself degree times.
+
+    Subscripts: ``weights[u],input[u],output[u]``
+
+    Args:
+        irreps_in (Irreps): The input irreps, the multiplicity are treated in parallel.
+        irreps_out (Irreps): The output irreps.
+        degrees (tuple[int, ...]): List of degrees for the symmetric contractions.
+
+    Returns:
+        EquivariantPolynomial: The descriptor of the symmetric contraction.
+            The operands are the weights, the input degree times and the output.
+
+    Example:
+        >>> cue.descriptors.symmetric_contraction(
+        ...    16 * cue.Irreps("SO3", "0 + 1 + 2"),
+        ...    16 * cue.Irreps("SO3", "0 + 1"),
+        ...    (1, 2, 3)
+        ... )
+        ╭ a=32x0+80x0+176x0 b=16x0+16x1+16x2 -> C=16x0+16x1
+        │  []·a[u]·b[u]➜C[u] ─────────── num_paths=4 u=16
+        │  []·a[u]·b[u]·b[u]➜C[u] ────── num_paths=37 u=16
+        ╰─ []·a[u]·b[u]·b[u]·b[u]➜C[u] ─ num_paths=437 u=16
+
+        Where ``32x0+80x0+176x0`` are the weights needed for each degree (32 for degree 1, 80 for degree 2, 176 for degree 3).
+    """
+    poly = _symmetric_contraction_core(irreps_in, irreps_out, tuple(degrees))
     return cue.EquivariantPolynomial(
         [
-            cue.IrrepsAndLayout(irreps_in.new_scalars(d.operands[0].size), cue.ir_mul),
-            cue.IrrepsAndLayout(mul * irreps_in, cue.ir_mul),
+            cue.IrrepsAndLayout(irreps_in.new_scalars(poly.inputs[0].size), cue.ir_mul),
+            cue.IrrepsAndLayout(irreps_in, cue.ir_mul),
         ],
-        [cue.IrrepsAndLayout(mul * irreps_out, cue.ir_mul)],
-        cue.SegmentedPolynomial(
-            [d.operands[0], input_operand],
-            [d.operands[-1]],
-            [(cue.Operation([0] + [1] * degree + [2]), d)],
-        ),
+        [cue.IrrepsAndLayout(irreps_out, cue.ir_mul)],
+        poly,
+    )
+
+
+def symmetric_contraction_ir_dict(
+    irreps_in: cue.Irreps,
+    irreps_out: cue.Irreps,
+    degrees: tuple[int, ...],
+) -> cue.IrDictPolynomial:
+    """Construct a symmetric contraction as an :class:`~cuequivariance.IrDictPolynomial`.
+
+    This is the ``ir_dict`` variant of :func:`symmetric_contraction`.
+
+    .. currentmodule:: cuequivariance
+
+    Args:
+        irreps_in (Irreps): The input irreps, the multiplicity are treated in parallel.
+        irreps_out (Irreps): The output irreps.
+        degrees (tuple[int, ...]): List of degrees for the symmetric contractions.
+
+    Returns:
+        :class:`cue.IrDictPolynomial <cuequivariance.IrDictPolynomial>`: The symmetric contraction
+        with ``input_irreps = (weight_irreps, mul * irreps_in)`` and
+        ``output_irreps = (mul * irreps_out,)``.
+    """
+    poly = _symmetric_contraction_core(irreps_in, irreps_out, tuple(degrees))
+    weight_irreps = irreps_in.new_scalars(poly.inputs[0].size)
+    poly = cue.split_polynomial_by_irreps(poly, 1, irreps_in)
+    poly = cue.split_polynomial_by_irreps(poly, -1, irreps_out)
+    return cue.IrDictPolynomial(
+        polynomial=poly,
+        input_irreps=(weight_irreps, irreps_in),
+        output_irreps=(irreps_out,),
     )

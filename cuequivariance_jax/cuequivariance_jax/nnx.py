@@ -28,10 +28,8 @@ from cuequivariance import Irrep
 
 from . import ir_dict
 from .activation import normalize_function
-from .rep_array.rep_array_ import RepArray
 from .segmented_polynomials.segmented_polynomial import segmented_polynomial
 from .segmented_polynomials.utils import Repeats
-from .spherical_harmonics import spherical_harmonics
 
 try:
     from flax import nnx
@@ -143,33 +141,31 @@ class IrrepsLinear(nnx.Module):
 class SphericalHarmonics(nnx.Module):
     def __init__(self, max_degree: int, eps: float = 0.0):
         self.eps = eps
-        self.max_degree = max_degree
-        self.irreps_in = cue.Irreps(cue.O3, "1o")
-        self.irreps_out = cue.Irreps(
-            cue.O3, [(1, cue.O3(L, (-1) ** L)) for L in range(max_degree + 1)]
+        desc = cue.descriptors.spherical_harmonics_ir_dict(
+            cue.O3(1, -1), list(range(max_degree + 1))
         )
+        self.poly = desc.polynomial
+        (self.irreps_out,) = desc.output_irreps
 
     def __call__(self, x: Array) -> dict[Irrep, Array]:
         assert x.shape[-1] == 3
         shape = x.shape[:-1]
 
-        x = RepArray(self.irreps_in, x, cue.ir_mul)
-        x = jax.tree.map(
-            lambda v: v / _safe_norm(v, self.eps, axis=-1, keepdim=True), x
+        x = x / _safe_norm(x, self.eps, axis=-1, keepdim=True)
+        outputs = segmented_polynomial(
+            self.poly,
+            [x],
+            [
+                jax.ShapeDtypeStruct(shape + (out.size,), x.dtype)
+                for out in self.poly.outputs
+            ],
+            method="naive",
+            name="spherical_harmonics",
         )
-        y = spherical_harmonics(range(self.max_degree + 1), x, normalize=False)
-
-        y = {
-            ir: rearrange(v, "... i m -> ... m i")
-            for (_, ir), v in zip(y.irreps, y.segments)
+        return {
+            ir: y.reshape(shape + (1, ir.dim))
+            for (_, ir), y in zip(self.irreps_out, outputs)
         }
-        actual = jax.tree.map(lambda x: x.shape, y)
-        expected = {
-            cue.O3(L, (-1) ** L): shape + (1, 2 * L + 1)
-            for L in range(self.max_degree + 1)
-        }
-        assert actual == expected, f"y: {actual}, expected: {expected}"
-        return y
 
 
 class IrrepsNormalize(nnx.Module):
@@ -245,12 +241,12 @@ class IrrepsIndexedLinear(nnx.Module):
         self.irreps_in = irreps_in
         self.irreps_out = irreps_out
         self.num_indices = num_indices
-        self.scale = scale / jnp.sqrt(num_indices)
         self.name = name
 
-        self.e = cue.descriptors.linear(irreps_in, irreps_out) * self.scale
+        scale = scale / jnp.sqrt(num_indices)
+        self.poly = cue.descriptors.linear(irreps_in, irreps_out).polynomial * scale
         self.w = nnx.Param(
-            jax.random.normal(rngs.params(), (num_indices, self.e.inputs[0].dim), dtype)
+            jax.random.normal(rngs.params(), (num_indices, self.poly.inputs[0].size), dtype)
         )
 
     def __call__(
@@ -263,11 +259,10 @@ class IrrepsIndexedLinear(nnx.Module):
         x_flat = ir_dict.dict_to_flat(self.irreps_in, x_ir_mul)
         num_elements = x_flat.shape[0]
 
-        p = self.e.polynomial
         [y_flat] = segmented_polynomial(
-            p,
+            self.poly,
             [self.w[...], x_flat],
-            [jax.ShapeDtypeStruct((num_elements, p.outputs[0].size), x_flat.dtype)],
+            [jax.ShapeDtypeStruct((num_elements, self.poly.outputs[0].size), x_flat.dtype)],
             [Repeats(num_index_counts), None, None],
             method="indexed_linear",
             name=self.name,
