@@ -1,6 +1,6 @@
 ---
 name: cuequivariance-jax
-description: Execute equivariant polynomials in JAX using segmented_polynomial (naive/uniform_1d), equivariant_polynomial with RepArray, ir_dict with dict[Irrep, Array], and Flax NNX layers (IrrepsLinear, SphericalHarmonics). Use when writing JAX code with cuequivariance.
+description: Execute equivariant polynomials in JAX using segmented_polynomial (naive/uniform_1d), the ir_dict workflow with IrDictPolynomial and dict[Irrep, Array], and Flax NNX layers (IrrepsLinear, SphericalHarmonics, IrrepsIndexedLinear). Use when writing JAX code with cuequivariance.
 ---
 
 # cuequivariance_jax: Executing Equivariant Polynomials in JAX
@@ -9,11 +9,11 @@ description: Execute equivariant polynomials in JAX using segmented_polynomial (
 
 `cuequivariance_jax` (imported as `cuex`) executes `cuequivariance` polynomials on GPU via JAX. It provides:
 
-1. **Core primitive**: `cuex.segmented_polynomial()` -- JAX primitive with full AD/vmap/JIT support
+1. **Core primitive**: `cuex.segmented_polynomial()` — JAX primitive with full AD/vmap/JIT support
 2. **Two data representations** (both built on `segmented_polynomial`):
-   - `cuex.equivariant_polynomial()` + `RepArray` -- the original interface, a single contiguous array with representation metadata
-   - `cuex.ir_dict` module -- `dict[Irrep, Array]` interface, conceptually simpler, works naturally with `jax.tree` operations
-3. **NNX layers**: `cuex.nnx` module -- Flax NNX `Module` wrappers using `dict[Irrep, Array]`
+   - `cuex.equivariant_polynomial()` + `RepArray` — the original interface, a single contiguous array with representation metadata
+   - `cuex.ir_dict` module — `dict[Irrep, Array]` interface, uses `IrDictPolynomial` descriptors, works naturally with `jax.tree`
+3. **NNX layers**: `cuex.nnx` module — Flax NNX `Module` wrappers using `dict[Irrep, Array]`
 
 ## Execution methods
 
@@ -65,20 +65,8 @@ y = jax.random.normal(key, (batch, poly.inputs[2].size))  # batched input 2
 Inputs can have any number of batch axes (everything before the last axis). Standard NumPy broadcasting applies: each batch axis is either size-1 or a common size. Inputs with fewer batch dimensions are implicitly prepended with size-1 axes:
 
 ```python
-# 2 batch axes with size-1 broadcasting
-w = jnp.ones((1, 10, poly.inputs[0].size))        # shared across axis 0
-x = jnp.ones((5, 10, poly.inputs[1].size))         # 5 along axis 0
-y = jnp.ones((5, 1, poly.inputs[2].size))          # shared across axis 1
-
-[out] = cuex.segmented_polynomial(
-    poly, [w, x, y],
-    [jax.ShapeDtypeStruct((5, 10, poly.outputs[0].size), jnp.float32)],
-    method="uniform_1d",
-)
-# out.shape == (5, 10, ...)
-
 # Fewer batch dims: weights with no batch axis broadcast across all
-w = jnp.ones((poly.inputs[0].size,))              # 0 batch axes -> prepended as (1, 1, ...)
+w = jnp.ones((poly.inputs[0].size,))              # 0 batch axes -> broadcasts
 x = jnp.ones((5, 10, poly.inputs[1].size))
 y = jnp.ones((5, 10, poly.inputs[2].size))
 
@@ -91,13 +79,9 @@ y = jnp.ones((5, 10, poly.inputs[2].size))
 
 ### Indexing (gather/scatter)
 
-Index arrays provide gather (for inputs) and scatter (for outputs). One index per operand (inputs + outputs), `None` means no indexing. Index arrays decouple input/output batch shapes -- the output shape is determined by the index ranges, not by the input shapes:
+Index arrays provide gather (for inputs) and scatter (for outputs). One index per operand (inputs + outputs), `None` means no indexing:
 
 ```python
-a = jnp.ones((1, 50, poly.inputs[0].size))
-b = jnp.ones((10, 50, poly.inputs[1].size))
-c = jnp.ones((100, 1, poly.inputs[2].size))
-
 i = jax.random.randint(key, (100, 50), 0, 10)     # gather b along axis 0
 j1 = jax.random.randint(key, (100, 50), 0, 11)    # scatter output axis 0
 j2 = jax.random.randint(key, (100, 1), 0, 12)     # scatter output axis 1
@@ -108,12 +92,11 @@ j2 = jax.random.randint(key, (100, 1), 0, 12)     # scatter output axis 1
     indices=[None, np.s_[i, :], None, np.s_[j1, j2]],
     method="uniform_1d",
 )
-# out.shape == (11, 12, ...) -- determined by index ranges, not input shapes
 ```
 
 ### Gradients
 
-Fully differentiable -- supports `jax.grad`, `jax.jacobian`, `jax.jvp`, `jax.vmap`:
+Fully differentiable — supports `jax.grad`, `jax.jacobian`, `jax.jvp`, `jax.vmap`:
 
 ```python
 def loss(w, x, y):
@@ -127,54 +110,27 @@ def loss(w, x, y):
 grad_w = jax.grad(loss, 0)(w, x, y)
 ```
 
-## RepArray interface: equivariant_polynomial
-
-The original interface. Wraps `segmented_polynomial` with `RepArray` -- a single contiguous array with representation metadata:
-
-```python
-e = cue.descriptors.fully_connected_tensor_product(
-    4 * cue.Irreps("SO3", "0 + 1"),
-    cue.Irreps("SO3", "0 + 1"),
-    4 * cue.Irreps("SO3", "0 + 1"),
-)
-
-inputs = [
-    cuex.randn(jax.random.key(i), rep, (batch,), jnp.float32)
-    for i, rep in enumerate(e.inputs)
-]
-
-# Returns a RepArray with representation metadata
-out = cuex.equivariant_polynomial(e, inputs, method="naive")
-out.array   # the raw jax.Array
-out.reps    # dict mapping axes to Rep objects
-```
-
 ## ir_dict interface
 
-An alternative to `RepArray`. Uses `dict[Irrep, Array]` where each value has shape `(..., multiplicity, irrep_dim)`. Conceptually simpler: works naturally with `jax.tree` operations and is the standard representation for NNX layers.
+Uses `dict[Irrep, Array]` where each value has shape `(..., multiplicity, irrep_dim)`. This is the standard representation for NNX layers and works naturally with `jax.tree` operations.
 
-### Preparing a polynomial for ir_dict
+### Getting an ir_dict-ready polynomial
 
-Descriptors produce `EquivariantPolynomial` with dense operands. To use `ir_dict`, split operands by irrep:
+Use `_ir_dict` descriptor variants, which return `IrDictPolynomial` with the polynomial already split by irrep:
 
 ```python
-e = cue.descriptors.channelwise_tensor_product(
+desc = cue.descriptors.channelwise_tensor_product_ir_dict(
     32 * cue.Irreps("SO3", "0 + 1"),
     cue.Irreps("SO3", "0 + 1"),
     cue.Irreps("SO3", "0 + 1"),
-    simplify_irreps3=True,
 )
 
-# Split irreps-typed operands into per-irrep pieces
-# Order matters: split inner operands first to preserve operand indices
-poly = (
-    e.split_operand_by_irrep(2)      # split input 2
-     .split_operand_by_irrep(1)      # split input 1
-     .split_operand_by_irrep(-1)     # split output
-     .polynomial
-)
-# After split: each operand has a single irrep type, mapping naturally to dict[Irrep, Array]
+poly = desc.polynomial              # SegmentedPolynomial, already split by irrep
+weight_irreps, irreps1, irreps2 = desc.input_irreps
+(irreps_out,) = desc.output_irreps  # tuple unpacking to get the single output group
 ```
+
+Each polynomial operand corresponds to exactly one `(mul, ir)` block. The `input_irreps` and `output_irreps` tuples describe how operands group into logical operand groups (weights, node features, spherical harmonics, output).
 
 ### Executing with segmented_polynomial_uniform_1d
 
@@ -194,7 +150,7 @@ node_feats = {
 }
 x1 = jax.tree.map(lambda v: rearrange(v, "n m i -> n i m"), node_feats)
 
-# Spherical harmonics: (edges, ir.dim) -- no multiplicity dimension
+# Spherical harmonics: (edges, ir.dim) — no multiplicity dimension
 sph = {
     cue.SO3(0): jnp.ones((num_edges, 1)),
     cue.SO3(1): jnp.ones((num_edges, 3)),
@@ -203,7 +159,6 @@ sph = {
 # Build output template
 senders = jax.random.randint(key, (num_edges,), 0, num_nodes)
 receivers = jax.random.randint(key, (num_edges,), 0, num_nodes)
-irreps_out = e.outputs[0].irreps
 out_template = {
     ir: jax.ShapeDtypeStruct(
         (num_nodes, desc.num_segments) + desc.segment_shape, w.dtype
@@ -242,6 +197,28 @@ z = cuex.ir_dict.irreps_zeros_like(x)
 template = cuex.ir_dict.mul_ir_dict(irreps, jax.ShapeDtypeStruct(shape, dtype))
 ```
 
+## RepArray interface: equivariant_polynomial
+
+The original interface. Wraps `segmented_polynomial` with `RepArray` — a single contiguous array with representation metadata:
+
+```python
+e = cue.descriptors.fully_connected_tensor_product(
+    4 * cue.Irreps("SO3", "0 + 1"),
+    cue.Irreps("SO3", "0 + 1"),
+    4 * cue.Irreps("SO3", "0 + 1"),
+)
+
+inputs = [
+    cuex.randn(jax.random.key(i), rep, (batch,), jnp.float32)
+    for i, rep in enumerate(e.inputs)
+]
+
+# Returns a RepArray with representation metadata
+out = cuex.equivariant_polynomial(e, inputs, method="naive")
+out.array   # the raw jax.Array
+out.reps    # dict mapping axes to Rep objects
+```
+
 ## NNX layers
 
 ### IrrepsLinear
@@ -272,6 +249,8 @@ y = linear(x)
 Implementation uses `jnp.einsum("uv,...ui->...vi", w, x[ir])` per irrep with `1/sqrt(mul_in)` normalization.
 
 ### SphericalHarmonics
+
+Uses `spherical_harmonics_ir_dict` internally for the `dict[Irrep, Array]` output:
 
 ```python
 sh = cuex.nnx.SphericalHarmonics(max_degree=3, eps=0.0)
@@ -338,42 +317,24 @@ For `equivariant_polynomial()` (RepArray interface):
 ```python
 e = cue.descriptors.channelwise_tensor_product(...)
 e = e.squeeze_modes().flatten_coefficient_modes()
-# If still >1 mode: e = e.flatten_modes(["u", "w"])
 out = cuex.equivariant_polynomial(e, inputs, method="uniform_1d")
 ```
 
-For `ir_dict` (dict[Irrep, Array] interface):
+For `ir_dict` (dict[Irrep, Array] interface), use `_ir_dict` descriptors directly:
 
 ```python
-e = cue.descriptors.channelwise_tensor_product(..., simplify_irreps3=True)
-poly = (
-    e.split_operand_by_irrep(2)   # split input 2
-     .split_operand_by_irrep(1)   # split input 1
-     .split_operand_by_irrep(-1)  # split output
-     .polynomial
+desc = cue.descriptors.channelwise_tensor_product_ir_dict(
+    irreps_in, irreps_sh, irreps_out
 )
+poly = desc.polynomial
 # Each operand has a single irrep type -> maps naturally to dict[Irrep, Array]
 ```
 
-### Why split_operand_by_irrep matters
+### Why splitting by irrep matters
 
-Without splitting, a dense operand like `32x0+32x1` requires all irreps packed into a single contiguous buffer. After `split_operand_by_irrep`, each irrep gets its own separate buffer passed to the CUDA kernel via FFI. The buffers no longer need to be contiguous with each other.
+Without splitting, a dense operand like `32x0+32x1` requires all irreps packed into a single contiguous buffer. After splitting, each irrep gets its own separate buffer passed to the CUDA kernel via FFI. The buffers no longer need to be contiguous with each other.
 
 This is especially useful when the polynomial is preceded or followed by per-irrep linear layers (like `IrrepsLinear`). With split operands, no transpose or copy is needed between the linear layers and the polynomial — the `dict[Irrep, Array]` flows directly through the pipeline.
-
-## RepArray
-
-Representation-aware JAX array:
-
-```python
-rep = cue.IrrepsAndLayout(cue.Irreps("SO3", "4x0 + 2x1"), cue.ir_mul)
-x = cuex.RepArray(rep, jnp.ones((batch, rep.dim)))
-x = cuex.randn(jax.random.key(0), rep, (batch,), jnp.float32)
-
-x.array   # raw jax.Array
-x.reps    # {axis: Rep}
-x.irreps  # Irreps (if last axis is IrrepsAndLayout)
-```
 
 ## Complete GNN message-passing example
 
@@ -382,20 +343,13 @@ This pattern is used in NequIP, MACE, and similar equivariant GNN models:
 ```python
 class MessagePassing(nnx.Module):
     def __init__(self, irreps_in, irreps_sh, irreps_out, epsilon, *, name, dtype, rngs):
-        e = (
-            cue.descriptors.channelwise_tensor_product(
-                irreps_in, irreps_sh, irreps_out, True
-            )
-            * epsilon
+        self.name = name
+        desc = cue.descriptors.channelwise_tensor_product_ir_dict(
+            irreps_in, irreps_sh, irreps_out
         )
-        self.weight_numel = e.inputs[0].dim
-        self.irreps_out = e.outputs[0].irreps
-        self.poly = (
-            e.split_operand_by_irrep(2)
-             .split_operand_by_irrep(1)
-             .split_operand_by_irrep(-1)
-             .polynomial
-        )
+        (self.irreps_out,) = desc.output_irreps
+        self.poly = desc.polynomial * epsilon
+        self.weight_numel = self.poly.inputs[0].size
 
     def __call__(self, weights, node_feats, sph, senders, receivers, num_nodes):
         # weights: (num_edges, weight_numel)
@@ -425,6 +379,20 @@ class MessagePassing(nnx.Module):
         }
 ```
 
+## RepArray
+
+Representation-aware JAX array:
+
+```python
+rep = cue.IrrepsAndLayout(cue.Irreps("SO3", "4x0 + 2x1"), cue.ir_mul)
+x = cuex.RepArray(rep, jnp.ones((batch, rep.dim)))
+x = cuex.randn(jax.random.key(0), rep, (batch,), jnp.float32)
+
+x.array   # raw jax.Array
+x.reps    # {axis: Rep}
+x.irreps  # Irreps (if last axis is IrrepsAndLayout)
+```
+
 ## Key file locations
 
 | Component | Path |
@@ -437,6 +405,5 @@ class MessagePassing(nnx.Module):
 | `ir_dict` module | `cuequivariance_jax/ir_dict.py` |
 | `nnx` module | `cuequivariance_jax/nnx.py` |
 | `RepArray` | `cuequivariance_jax/rep_array/rep_array_.py` |
-| `Repeats` / utilities | `cuequivariance_jax/segmented_polynomials/utils.py` |
 | NequIP example | `cuequivariance_jax/examples/nequip_nnx.py` |
 | MACE example | `cuequivariance_jax/examples/mace_nnx.py` |

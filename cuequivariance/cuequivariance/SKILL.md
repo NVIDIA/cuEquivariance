@@ -1,6 +1,6 @@
 ---
 name: cuequivariance
-description: Define custom groups (Irrep subclasses), build segmented tensor products with CG coefficients, create equivariant polynomials, and use built-in descriptors (linear, tensor products, spherical harmonics). Use when working with cuequivariance group theory, irreps, or segmented polynomials.
+description: Define custom groups (Irrep subclasses), build segmented tensor products with CG coefficients, create equivariant polynomials and IrDictPolynomials, and use built-in descriptors (linear, tensor products, spherical harmonics). Use when working with cuequivariance group theory, irreps, or segmented polynomials.
 ---
 
 # cuequivariance: Groups, Irreps, and Segmented Polynomials
@@ -10,7 +10,9 @@ description: Define custom groups (Irrep subclasses), build segmented tensor pro
 `cuequivariance` (imported as `cue`) provides two core abstractions:
 
 1. **Group theory**: `Irrep` subclasses define irreducible representations of Lie groups (SO3, O3, SU2, or custom). `Irreps` manages collections with multiplicities.
-2. **Segmented polynomials**: `SegmentedTensorProduct` describes tensor contractions over segments of varying shape, linked by `Path` objects carrying Clebsch-Gordan coefficients. `SegmentedPolynomial` wraps multiple STPs into a polynomial with named inputs/outputs. `EquivariantPolynomial` attaches group representations to each operand.
+2. **Segmented polynomials**: `SegmentedTensorProduct` describes tensor contractions over segments of varying shape, linked by `Path` objects carrying Clebsch-Gordan coefficients. `SegmentedPolynomial` wraps multiple STPs into a polynomial with named inputs/outputs. Two higher-level wrappers attach group representations:
+   - `EquivariantPolynomial` — dense operands with `IrrepsAndLayout` metadata
+   - `IrDictPolynomial` — operands already split by irrep, with per-group `Irreps` metadata for the `dict[Irrep, Array]` workflow
 
 ## Defining a custom group
 
@@ -122,8 +124,8 @@ for mul, ir in irreps:
 
 `IrrepsLayout` controls memory order within each `(mul, ir)` block:
 
-- `cue.ir_mul`: data ordered as `(ir.dim, mul)` -- **used by all descriptors**
-- `cue.mul_ir`: data ordered as `(mul, ir.dim)` -- **used by nnx dict[Irrep, Array]**
+- `cue.ir_mul`: data ordered as `(ir.dim, mul)` — **used by all descriptors and ir_dict internally**
+- `cue.mul_ir`: data ordered as `(mul, ir.dim)` — **used by nnx `dict[Irrep, Array]` and PyTorch**
 
 `IrrepsAndLayout` combines irreps with a layout into a `Rep`:
 
@@ -181,9 +183,14 @@ for cg in cue.clebsch_gordan(ir1, ir2, ir3):
     d.add_path((mul1, mul2, mul3), seg_in1, seg_in2, seg_out, c=cg)
 ```
 
-## Using descriptors (high-level API)
+## Descriptors
 
-All descriptors return `cue.EquivariantPolynomial`:
+All descriptors come in two variants:
+
+- **Original** — returns `EquivariantPolynomial` with dense operands
+- **`_ir_dict`** — returns `IrDictPolynomial` with operands already split by irrep
+
+### EquivariantPolynomial descriptors
 
 ```python
 # Fully connected tensor product (all input-output irrep combinations)
@@ -199,12 +206,17 @@ e = cue.descriptors.channelwise_tensor_product(
     cue.Irreps("SO3", "0 + 1"), simplify_irreps3=True,
 )
 
+# Full (weightless) tensor product
+e = cue.descriptors.full_tensor_product(
+    cue.Irreps("SO3", "2x0 + 1x1"), cue.Irreps("SO3", "0 + 1"),
+)
+
 # Elementwise tensor product (paired channels)
 e = cue.descriptors.elementwise_tensor_product(
     cue.Irreps("SO3", "4x0 + 4x1"), cue.Irreps("SO3", "4x0 + 4x1"),
 )
 
-# Linear equivariant map (no second input, just weight x input)
+# Linear equivariant map (weight x input)
 e = cue.descriptors.linear(
     cue.Irreps("SO3", "4x0 + 2x1"),
     cue.Irreps("SO3", "3x0 + 5x1"),
@@ -217,8 +229,78 @@ e = cue.descriptors.spherical_harmonics(cue.SO3(1), [0, 1, 2, 3])
 e = cue.descriptors.symmetric_contraction(
     64 * cue.Irreps("SO3", "0 + 1 + 2"),
     64 * cue.Irreps("SO3", "0 + 1"),
-    [0, 1, 2, 3],
+    (1, 2, 3),
 )
+```
+
+### IrDictPolynomial descriptors
+
+Each `_ir_dict` variant returns an `IrDictPolynomial` whose polynomial is already split by irrep. The `input_irreps` and `output_irreps` tuples describe the operand groups.
+
+```python
+# Channelwise tensor product
+desc = cue.descriptors.channelwise_tensor_product_ir_dict(
+    64 * cue.Irreps("SO3", "0 + 1"),
+    cue.Irreps("SO3", "0 + 1"),
+    cue.Irreps("SO3", "0 + 1"),
+)
+# desc.polynomial       — SegmentedPolynomial, already split by irrep
+# desc.input_irreps     — (weight_irreps, irreps1, irreps2)
+# desc.output_irreps    — (irreps_out,)
+
+# Fully connected tensor product
+desc = cue.descriptors.fully_connected_tensor_product_ir_dict(irreps1, irreps2, irreps3)
+
+# Full (weightless) tensor product
+desc = cue.descriptors.full_tensor_product_ir_dict(irreps1, irreps2)
+
+# Elementwise tensor product
+desc = cue.descriptors.elementwise_tensor_product_ir_dict(irreps1, irreps2)
+
+# Linear
+desc = cue.descriptors.linear_ir_dict(irreps_in, irreps_out)
+
+# Spherical harmonics
+desc = cue.descriptors.spherical_harmonics_ir_dict(cue.O3(1, -1), [0, 1, 2, 3])
+
+# Symmetric contraction
+desc = cue.descriptors.symmetric_contraction_ir_dict(irreps_in, irreps_out, (1, 2, 3))
+```
+
+### IrDictPolynomial
+
+`IrDictPolynomial` pairs a `SegmentedPolynomial` (already split by irrep) with the `Irreps` that describe each operand group.
+
+```python
+desc = cue.descriptors.channelwise_tensor_product_ir_dict(
+    32 * cue.Irreps("SO3", "0 + 1"),
+    cue.Irreps("SO3", "0 + 1"),
+    cue.Irreps("SO3", "0 + 1"),
+)
+
+desc.polynomial       # SegmentedPolynomial — each operand is one (mul, ir) block
+desc.input_irreps     # (weight_irreps, irreps1, irreps2)
+desc.output_irreps    # (irreps_out,)
+
+# Scale coefficients
+scaled_poly = desc.polynomial * 0.5
+
+# Access individual operand info
+for i, op in enumerate(desc.polynomial.inputs):
+    print(f"Input {i}: size={op.size}, num_segments={op.num_segments}")
+```
+
+Contract: for each `(mul, ir)` block in `input_irreps` / `output_irreps`, the corresponding polynomial operand has size `mul * ir.dim`.
+
+### split_polynomial_by_irreps
+
+The low-level function underlying `_ir_dict` descriptors. Splits one polynomial operand at irrep boundaries:
+
+```python
+poly = e.polynomial  # from an EquivariantPolynomial
+poly = cue.split_polynomial_by_irreps(poly, 2, irreps_sh)   # split input 2
+poly = cue.split_polynomial_by_irreps(poly, 1, irreps_in)   # split input 1
+poly = cue.split_polynomial_by_irreps(poly, -1, irreps_out) # split output
 ```
 
 ### EquivariantPolynomial key methods
@@ -318,7 +400,6 @@ y = np.random.randn(ep.inputs[2].dim)
 | Component | Path |
 |-----------|------|
 | `Irrep` base class | `cuequivariance/group_theory/representations/irrep.py` |
-| `Rep` base class | `cuequivariance/group_theory/representations/rep.py` |
 | `SO3` | `cuequivariance/group_theory/representations/irrep_so3.py` |
 | `O3` | `cuequivariance/group_theory/representations/irrep_o3.py` |
 | `SU2` | `cuequivariance/group_theory/representations/irrep_su2.py` |
@@ -328,7 +409,8 @@ y = np.random.randn(ep.inputs[2].dim)
 | `SegmentedTensorProduct` | `cuequivariance/segmented_polynomials/segmented_tensor_product.py` |
 | `SegmentedPolynomial` | `cuequivariance/segmented_polynomials/segmented_polynomial.py` |
 | `EquivariantPolynomial` | `cuequivariance/group_theory/equivariant_polynomial.py` |
+| `IrDictPolynomial` | `cuequivariance/group_theory/ir_dict_polynomial.py` |
 | Descriptors | `cuequivariance/group_theory/descriptors/` |
-| `fully_connected_tensor_product` etc. | `cuequivariance/group_theory/descriptors/irreps_tp.py` |
+| Tensor product descriptors | `cuequivariance/group_theory/descriptors/irreps_tp.py` |
 | `spherical_harmonics` | `cuequivariance/group_theory/descriptors/spherical_harmonics_.py` |
 | `symmetric_contraction` | `cuequivariance/group_theory/descriptors/symmetric_contractions.py` |
