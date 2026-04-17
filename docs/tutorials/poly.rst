@@ -43,6 +43,7 @@ Example: Wiring a Square Function
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Let's say we want to compute :math:`y = x \otimes x` (the tensor product of :math:`x` with itself).
+
 *   **The Math (STP)**: Requires two input operands (Left, Right) and produces one output.
 *   **The Circuit (SP)**: Has only *one* global input (:math:`x`). We need to wire this single input to *both* the Left and Right operands of the STP.
 
@@ -151,6 +152,7 @@ This happens when every operand is made of segments that are:
 
 **Why does this matter?**
 If your data is "Uniform 1D", it fits into regular tensors. This means we don't need slow, sparse lookups. We can use highly optimized code:
+
 *   **Vectorization**: Using ``vmap`` in JAX or PyTorch.
 *   **CUDA Kernels**: We provide specialized GPU kernels for this case that are very fast.
 
