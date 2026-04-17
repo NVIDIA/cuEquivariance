@@ -12,6 +12,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""cuEquivariance - GPU-accelerated equivariant operations for 3D neural networks.
+
+For AI coding assistants: run `python -m cuequivariance skill` for detailed usage guidance.
+"""
 import importlib.resources
 
 __version__ = (
@@ -51,6 +55,8 @@ from .group_theory import (
     reduced_antisymmetric_tensor_product_basis,
     EquivariantPolynomial,
     EquivariantTensorProduct,  # deprecated
+    IrDictPolynomial,
+    split_polynomial_by_irreps,
 )
 
 from cuequivariance import segmented_polynomials as segmented_polynomials
@@ -89,6 +95,8 @@ __all__ = [
     "reduced_antisymmetric_tensor_product_basis",
     "EquivariantPolynomial",
     "EquivariantTensorProduct",
+    "IrDictPolynomial",
+    "split_polynomial_by_irreps",
     "segmented_polynomials",
     "group_theory",
     "descriptors",

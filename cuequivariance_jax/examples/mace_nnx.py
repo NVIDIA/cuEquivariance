@@ -26,8 +26,8 @@ from typing import Any, Callable
 import jax
 import jax.numpy as jnp
 import numpy as np
-from cuequivariance.group_theory.experimental.mace import (
-    symmetric_contraction as mace_symmetric_contraction,
+from cuequivariance.group_theory.experimental.mace.symmetric_contractions import (
+    symmetric_contraction_ir_dict as mace_symmetric_contraction_ir_dict,
 )
 from cuequivariance_jax.nnx import (
     MLP,
@@ -89,21 +89,12 @@ class MessagePassing(nnx.Module):
         rngs: nnx.Rngs,
     ):
         self.name = name
-        e = (
-            cue.descriptors.channelwise_tensor_product(
-                irreps_in, irreps_sh, irreps_out, True
-            )
-            * epsilon
+        desc = cue.descriptors.channelwise_tensor_product_ir_dict(
+            irreps_in, irreps_sh, irreps_out
         )
-        self.weight_numel = e.inputs[0].dim
-        self.irreps_out = e.outputs[0].irreps
-
-        self.poly = (
-            e.split_operand_by_irrep(2)
-            .split_operand_by_irrep(1)
-            .split_operand_by_irrep(-1)
-            .polynomial
-        )
+        (self.irreps_out,) = desc.output_irreps
+        self.poly = desc.polynomial * epsilon
+        self.weight_numel = self.poly.inputs[0].size
 
     def __call__(
         self,
@@ -156,12 +147,12 @@ class SymmetricContraction(nnx.Module):
         self.irreps_out = irreps_out
         self.name = name
 
-        e, projection = mace_symmetric_contraction(
+        desc, projection = mace_symmetric_contraction_ir_dict(
             irreps_in, irreps_out, range(1, correlation + 1)
         )
         self.projection = jnp.array(projection, dtype=dtype)
 
-        self.poly = e.split_operand_by_irrep(1).split_operand_by_irrep(-1).polynomial
+        self.poly = desc.polynomial
         self.w = nnx.Param(
             jax.random.normal(
                 rngs.params(),
