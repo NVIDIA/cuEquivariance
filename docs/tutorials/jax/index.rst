@@ -20,4 +20,5 @@ JAX Examples
    :maxdepth: 1
 
    poly
+   ir_dict
 

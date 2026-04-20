@@ -44,7 +44,8 @@ Basic Usage
 
     # 2. Define output shapes/dtypes
     # We need to tell JAX what the output will look like
-    output_structs = [jax.ShapeDtypeStruct((3, 3), jnp.float32)]
+    # Use -1 for the last dimension to infer from the polynomial descriptor
+    output_structs = [jax.ShapeDtypeStruct((-1,), jnp.float32)]
 
     # 3. Execute
     input_arr = jnp.ones((3,))

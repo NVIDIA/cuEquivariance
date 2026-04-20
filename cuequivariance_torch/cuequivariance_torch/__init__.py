@@ -12,6 +12,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""cuEquivariance PyTorch - PyTorch backend for cuEquivariance equivariant operations.
+
+For AI coding assistants: run `python -m cuequivariance_torch skill` for detailed usage guidance.
+"""
 import importlib.resources
 
 __version__ = (
