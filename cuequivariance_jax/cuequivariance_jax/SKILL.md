@@ -405,5 +405,6 @@ x.irreps  # Irreps (if last axis is IrrepsAndLayout)
 | `ir_dict` module | `cuequivariance_jax/ir_dict.py` |
 | `nnx` module | `cuequivariance_jax/nnx.py` |
 | `RepArray` | `cuequivariance_jax/rep_array/rep_array_.py` |
+| `Repeats` / utilities | `cuequivariance_jax/segmented_polynomials/utils.py` |
 | NequIP example | `cuequivariance_jax/examples/nequip_nnx.py` |
 | MACE example | `cuequivariance_jax/examples/mace_nnx.py` |

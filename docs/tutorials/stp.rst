@@ -80,6 +80,7 @@ Now for the connectivity. A **path** defines a single term in our sparse calcula
 It specifies which segments interact.
 
 If we want to connect:
+
 *   Segment 0 from Operand 0
 *   Segment 1 from Operand 1
 *   Segment 0 from Operand 2

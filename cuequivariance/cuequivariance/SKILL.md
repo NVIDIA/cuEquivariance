@@ -400,6 +400,7 @@ y = np.random.randn(ep.inputs[2].dim)
 | Component | Path |
 |-----------|------|
 | `Irrep` base class | `cuequivariance/group_theory/representations/irrep.py` |
+| `Rep` base class | `cuequivariance/group_theory/representations/rep.py` |
 | `SO3` | `cuequivariance/group_theory/representations/irrep_so3.py` |
 | `O3` | `cuequivariance/group_theory/representations/irrep_o3.py` |
 | `SU2` | `cuequivariance/group_theory/representations/irrep_su2.py` |
