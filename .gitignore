@@ -3,3 +3,4 @@ docs/api/generated/
 docs/public/
 docs/jupyter_execute/
 docs/_build/
+.venv/
