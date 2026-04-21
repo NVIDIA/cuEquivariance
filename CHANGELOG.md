@@ -15,6 +15,9 @@
 - [JAX] Restrict PTX 88 to sm_121 for CUDA 12.9+, avoiding breakage on other architectures (addresses the known issue noted in the 0.9.0 release) ([#250](https://github.com/NVIDIA/cuEquivariance/pull/250))
 - [Torch/JAX] `cuet.attention_pair_bias`/`cuex.attention_pair_bias`: fixed incorrect results when the hidden dimension is not a multiple of 32; the previous torch fallback for these cases is removed as the kernel now handles them correctly
 
+### Notes
+- [Torch] The `CUEQ_TORCH_COMPILE` environment variable (experimental) enables `torch.compile` for `cuet.triangle_attention`; useful for non-contiguous tensor inputs on Ampere/Hopper architectures
+
 ### Documentation
 - Fixed tutorial format issues ([#274](https://github.com/NVIDIA/cuEquivariance/pull/274))
 
