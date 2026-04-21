@@ -1,6 +1,22 @@
 ## Latest Changes
 ## (unreleased)
 
+## 0.10.0 (2026-04-21)
+
+### Added
+- Python 3.14 support finalized, including a fix for stale tuple hashes in `SegmentedTensorProduct` after in-place operand mutation, and updated CI matrix ([#272](https://github.com/NVIDIA/cuEquivariance/pull/272))
+- [Torch/JAX] `cuet.triangle_attention`/`cuex.triangle_attention`: sm100f (CC 10.0/10.3) fwd hidden_dim ≤ 256, bwd hidden_dim ≤ 128; `bias` is cast to q/k/v dtype (instead of always float32) under sm100f; updated docstrings. Only available on cu13 builds ([#260](https://github.com/NVIDIA/cuEquivariance/pull/260))
+- [JAX] MACE `flax.nnx` example restructured to use `nnx.split` + `@jax.jit` on `(graphdef, state)` instead of `@nnx.jit` on the module, removing the Python-side nnx graph traversal overhead from each training/inference step ([#261](https://github.com/NVIDIA/cuEquivariance/pull/261))
+- [JAX] NVTX markers added to the MACE examples to make step boundaries visible in `nsys` profiles ([#266](https://github.com/NVIDIA/cuEquivariance/pull/266))
+
+### Bug fix
+- [Torch] `SegmentedPolynomial` checkpoint portability: GPU-saved models now load correctly on CPU. Implemented via `__reduce__` on `SegmentedPolynomialFromUniform1dJit`, `SegmentedPolynomialFusedTP`, `SegmentedPolynomialIndexedLinear`, and `SegmentedPolynomial`, plus graceful fallback when specific `cuequivariance_ops_torch` extensions (e.g. `uniform_1d`) are unavailable ([#270](https://github.com/NVIDIA/cuEquivariance/pull/270))
+- [Torch] Replaced deprecated `is_fx_tracing` with `is_fx_symbolic_tracing` ([#270](https://github.com/NVIDIA/cuEquivariance/pull/270))
+- [JAX] Restrict PTX 88 to sm_121 for CUDA 12.9+, avoiding breakage on other architectures (addresses the known issue noted in the 0.9.0 release) ([#250](https://github.com/NVIDIA/cuEquivariance/pull/250))
+
+### Documentation
+- Fixed tutorial format issues ([#274](https://github.com/NVIDIA/cuEquivariance/pull/274))
+
 ## 0.9.1 (2026-03-16)
 
 ### Bug fix
