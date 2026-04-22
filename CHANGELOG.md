@@ -16,7 +16,7 @@
 - [Torch/JAX] `cuet.attention_pair_bias`/`cuex.attention_pair_bias`: fixed incorrect results when the hidden dimension is not a multiple of 32; the previous torch fallback for these cases is removed as the kernel now handles them correctly
 
 ### Notes
-- [Torch] `CUEQ_TORCH_COMPILE` (experimental): set to a non-zero integer to enable `torch.compile` for `cuet.triangle_attention`; useful for non-contiguous tensor inputs on Ampere/Hopper architectures. Supported modes: `1` → `"default"`, `2` → `"reduce-overhead"`, `3` → `"max-autotune"`, `4` → `"max-autotune-no-cudagraphs"`
+- [Torch] `CUEQ_TORCH_COMPILE` (experimental): set to a non-zero integer to enable `torch.compile` for the forward pass of `cuet.triangle_attention`; useful for non-contiguous tensor inputs on Ampere/Hopper architectures. Supported modes: `1` → `"default"`, `2` → `"reduce-overhead"`, `3` → `"max-autotune"`, `4` → `"max-autotune-no-cudagraphs"`
 
 ### Documentation
 - Fixed tutorial format issues ([#274](https://github.com/NVIDIA/cuEquivariance/pull/274))
