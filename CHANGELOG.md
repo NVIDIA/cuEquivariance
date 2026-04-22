@@ -5,7 +5,7 @@
 
 ### Added
 - Python 3.14 support finalized, including a fix for stale tuple hashes in `SegmentedTensorProduct` after in-place operand mutation, and updated CI matrix ([#272](https://github.com/NVIDIA/cuEquivariance/pull/272))
-- [Torch/JAX] `cuet.triangle_attention`/`cuex.triangle_attention`: new faster sm100f (CC 10.0/10.3) forward kernel for hidden_dim ≤ 256, bwd hidden_dim ≤ 128; `bias` is cast to q/k/v dtype (instead of always float32) under sm100f; non-contiguous input tensors are handled internally — no manual contiguity assertion is required as long as shape requirements are met; updated docstrings. Only available on cu13 builds ([#260](https://github.com/NVIDIA/cuEquivariance/pull/260))
+- [Torch/JAX] `cuet.triangle_attention`/`cuex.triangle_attention`: new faster sm100f (CC 10.0/10.3) forward kernel supporting hidden_dim ≤ 256 (backward acceleration limit remains hidden_dim ≤ 128, unchanged); `bias` is cast to q/k/v dtype (instead of always float32) under sm100f; non-contiguous input tensors are handled internally — no manual contiguity assertion is required as long as shape requirements are met; updated docstrings. Only available on cu13 builds ([#260](https://github.com/NVIDIA/cuEquivariance/pull/260))
 - [JAX] MACE `flax.nnx` example restructured to use `nnx.split` + `@jax.jit` on `(graphdef, state)` instead of `@nnx.jit` on the module, removing the Python-side nnx graph traversal overhead from each training/inference step ([#261](https://github.com/NVIDIA/cuEquivariance/pull/261))
 - [JAX] NVTX markers added to the MACE examples to make step boundaries visible in `nsys` profiles ([#266](https://github.com/NVIDIA/cuEquivariance/pull/266))
 
@@ -16,7 +16,7 @@
 - [Torch/JAX] `cuet.attention_pair_bias`/`cuex.attention_pair_bias`: fixed incorrect results when the hidden dimension is not a multiple of 32; the previous torch fallback for these cases is removed as the kernel now handles them correctly
 
 ### Notes
-- [Torch] The `CUEQ_TORCH_COMPILE` environment variable (experimental) enables `torch.compile` for `cuet.triangle_attention`; useful for non-contiguous tensor inputs on Ampere/Hopper architectures
+- [Torch] `CUEQ_TORCH_COMPILE` (experimental): set to a non-zero integer to enable `torch.compile` for `cuet.triangle_attention`; useful for non-contiguous tensor inputs on Ampere/Hopper architectures. Supported modes: `1` → `"default"`, `2` → `"reduce-overhead"`, `3` → `"max-autotune"`, `4` → `"max-autotune-no-cudagraphs"`
 
 ### Documentation
 - Fixed tutorial format issues ([#274](https://github.com/NVIDIA/cuEquivariance/pull/274))
