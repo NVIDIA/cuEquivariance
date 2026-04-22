@@ -74,7 +74,9 @@ def triangle_attention(
         On Blackwell GPUs (cc 10.0 or 10.3, cu13 builds), the sm100f kernel supports
         hidden_dim<=256 for forward and hidden_dim<=128 for backward passes (bf16/fp16
         only; hidden_dim must be divisible by 8). The sm100f forward kernel requires
-        S_kv to be a multiple of 8.
+        S_kv to be a multiple of 8, please pad if necessary.
+        The kernel provides optimal performance for a "padding mask" consisting in
+        (all True, followed by all False) in the last dimension.
     """
     return triangle_attention_custom_vjp(
         q, k, v, bias, mask, scale=scale, precision=precision
