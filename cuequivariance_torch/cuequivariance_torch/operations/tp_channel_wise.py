@@ -190,7 +190,7 @@ class ChannelWiseTensorProduct(torch.nn.Module):
         weight: Optional[torch.Tensor] = None,
         indices_1: Optional[torch.Tensor] = None,
         indices_2: Optional[torch.Tensor] = None,
-        indices_out: Optional[torch.Tensor] = None,
+        indices_0: Optional[torch.Tensor] = None,
         size_out: Optional[int] = None,
     ) -> torch.Tensor:
         """
@@ -204,8 +204,8 @@ class ChannelWiseTensorProduct(torch.nn.Module):
                 If None, the internal weights are used.
             indices_1 (torch.Tensor, optional): Indices to gather elements for the first operand.
             indices_2 (torch.Tensor, optional): Indices to gather elements for the second operand.
-            indices_out (torch.Tensor, optional): Indices to scatter elements for the output.
-            size_out (int, optional): Batch dimension of the output. Needed if indices_out are provided.
+            indices_0 (torch.Tensor, optional): Indices to scatter elements for the output.
+            size_out (int, optional): Batch dimension of the output. Needed if indices_0 are provided.
 
         Returns:
             torch.Tensor:
@@ -226,12 +226,12 @@ class ChannelWiseTensorProduct(torch.nn.Module):
             indices_in[1] = indices_1
         if indices_2 is not None:
             indices_in[2] = indices_2
-        indices_out_dict: Dict[int, torch.Tensor] = {}
-        if indices_out is not None:
-            indices_out_dict = {0: indices_out}
+        indices_out: Dict[int, torch.Tensor] = {}
+        if indices_0 is not None:
+            indices_out = {0: indices_0}
             if size_out is None:
                 raise ValueError(
-                    "size_out should be provided if indices_out is provided"
+                    "size_out should be provided if indices_0 is provided"
                 )
             else:
                 sizes_out = {0: torch.empty(size_out, 1).to(x1.device)}
@@ -253,6 +253,6 @@ class ChannelWiseTensorProduct(torch.nn.Module):
             [weight, x1, x2],
             input_indices=indices_in,
             output_shapes=sizes_out,
-            output_indices=indices_out_dict,
+            output_indices=indices_out,
         )
         return self.transpose_out(output[0])
