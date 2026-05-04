@@ -20,6 +20,38 @@ import cuequivariance as cue
 from cuequivariance.etc.sympy_utils import sqrtQarray_to_sympy
 
 
+def _spherical_harmonics_core(
+    ir_vec: cue.Irrep, ls: list[int]
+) -> tuple[cue.SegmentedPolynomial, cue.Irreps]:
+    if len(ls) != 1:
+        results = [_spherical_harmonics_core(ir_vec, [ell]) for ell in ls]
+        poly = cue.SegmentedPolynomial.stack([r[0] for r in results], [False, True])
+        irreps_out = cue.Irreps(type(ir_vec), sum([list(r[1]) for r in results], []))
+        return poly, irreps_out
+
+    [ell] = ls
+    ir, formula = sympy_spherical_harmonics(ir_vec, ell)
+
+    assert ir_vec.dim == 3
+    d = cue.SegmentedTensorProduct.empty_segments([3] * ell + [ir.dim])
+    for i in range(ir.dim):
+        for degrees, coeff in (
+            sympy.Poly(formula[i], sympy.symbols("x:3")).as_dict().items()
+        ):
+            indices = poly_degrees_to_path_indices(degrees)
+            d.add_path(*indices, i, c=coeff)
+
+    d = d.symmetrize_operands(range(ell), force=True)
+
+    poly = cue.SegmentedPolynomial(
+        [cue.SegmentedOperand([()] * 3)],
+        [cue.SegmentedOperand([()] * ir.dim)],
+        [(cue.Operation([0] * ell + [1]), d)],
+    )
+    irreps_out = cue.Irreps(type(ir_vec), [(1, ir)])
+    return poly, irreps_out
+
+
 def spherical_harmonics(
     ir_vec: cue.Irrep, ls: list[int], layout: cue.IrrepsLayout = cue.ir_mul
 ) -> cue.EquivariantPolynomial:
@@ -42,33 +74,36 @@ def spherical_harmonics(
         │  []·a[]➜B[] ───── num_paths=3
         ╰─ []·a[]·a[]➜B[] ─ num_paths=11
     """
-    if len(ls) != 1:
-        return cue.EquivariantPolynomial.stack(
-            [spherical_harmonics(ir_vec, [ell], layout) for ell in ls], [False, True]
-        )
-
-    [ell] = ls
-    ir, formula = sympy_spherical_harmonics(ir_vec, ell)
-
-    assert ir_vec.dim == 3
-    d = cue.SegmentedTensorProduct.empty_segments([3] * ell + [ir.dim])
-    for i in range(ir.dim):
-        for degrees, coeff in (
-            sympy.Poly(formula[i], sympy.symbols("x:3")).as_dict().items()
-        ):
-            indices = poly_degrees_to_path_indices(degrees)
-            d.add_path(*indices, i, c=coeff)
-
-    d = d.symmetrize_operands(range(ell), force=True)
-
+    poly, irreps_out = _spherical_harmonics_core(ir_vec, ls)
     return cue.EquivariantPolynomial(
         [cue.IrrepsAndLayout(cue.Irreps(ir_vec), cue.ir_mul)],
-        [cue.IrrepsAndLayout(cue.Irreps(ir), cue.ir_mul)],
-        cue.SegmentedPolynomial(
-            [cue.SegmentedOperand([()] * 3)],
-            [cue.SegmentedOperand([()] * ir.dim)],
-            [(cue.Operation([0] * ell + [1]), d)],
-        ),
+        [cue.IrrepsAndLayout(irreps_out, cue.ir_mul)],
+        poly,
+    )
+
+
+def spherical_harmonics_ir_dict(
+    ir_vec: cue.Irrep, ls: list[int]
+) -> cue.IrDictPolynomial:
+    """Polynomial descriptor for the spherical harmonics as an :class:`~cuequivariance.IrDictPolynomial`.
+
+    This is the ``ir_dict`` variant of :func:`spherical_harmonics`.
+
+    Args:
+        ir_vec (Irrep): irrep of the input vector, for example ``cue.SO3(1)``.
+        ls (list of int): list of spherical harmonic degrees, for example ``[0, 1, 2]``.
+
+    Returns:
+        :class:`cue.IrDictPolynomial <cuequivariance.IrDictPolynomial>`: The spherical harmonics
+        with ``input_irreps = (Irreps(ir_vec),)`` and ``output_irreps = (irreps_out,)``.
+    """
+    poly, irreps_out = _spherical_harmonics_core(ir_vec, ls)
+    irreps_in = cue.Irreps(ir_vec)
+    poly = cue.split_polynomial_by_irreps(poly, -1, irreps_out)
+    return cue.IrDictPolynomial(
+        polynomial=poly,
+        input_irreps=(irreps_in,),
+        output_irreps=(irreps_out,),
     )
 
 

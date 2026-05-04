@@ -222,20 +222,12 @@ class MessagePassing(nnx.Module):
         rngs: nnx.Rngs,
     ):
         self.name = name
-        e = (
-            cue.descriptors.channelwise_tensor_product(
-                irreps_in, irreps_sh, irreps_out, True
-            )
-            * epsilon
+        desc = cue.descriptors.channelwise_tensor_product_ir_dict(
+            irreps_in, irreps_sh, irreps_out
         )
-        self.weight_numel = e.inputs[0].dim
-        self.irreps_out = e.outputs[0].irreps
-        self.poly = (
-            e.split_operand_by_irrep(2)
-            .split_operand_by_irrep(1)
-            .split_operand_by_irrep(-1)
-            .polynomial
-        )
+        (self.irreps_out,) = desc.output_irreps
+        self.poly = desc.polynomial * epsilon
+        self.weight_numel = self.poly.inputs[0].size
 
     def __call__(
         self,

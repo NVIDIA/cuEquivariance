@@ -9,7 +9,7 @@ description: Execute equivariant tensor products in PyTorch using SegmentedPolyn
 
 `cuequivariance_torch` (imported as `cuet`) executes `cuequivariance` polynomials on GPU via PyTorch. It provides:
 
-1. **Core primitive**: `cuet.SegmentedPolynomial` -- `torch.nn.Module` with multiple CUDA backends
+1. **Core primitive**: `cuet.SegmentedPolynomial` — `torch.nn.Module` with multiple CUDA backends
 2. **High-level operations** (`torch.nn.Module`): `ChannelWiseTensorProduct`, `FullyConnectedTensorProduct`, `Linear`, `SymmetricContraction`, `SphericalHarmonics`, `Rotation`, `Inversion`
 3. **Layers**: `cuet.layers.BatchNorm`, `cuet.layers.FullyConnectedTensorProductConv` (message passing)
 4. **Utilities**: `triangle_attention`, `triangle_multiplicative_update`, `attention_pair_bias` (AlphaFold2-style)
@@ -96,8 +96,8 @@ All operations are `torch.nn.Module` subclasses. They wrap `SegmentedPolynomial`
 
 `IrrepsLayout` controls memory order within each `(mul, ir)` block:
 
-- `cue.mul_ir`: data ordered as `(mul, ir.dim)` -- **default, compatible with e3nn**
-- `cue.ir_mul`: data ordered as `(ir.dim, mul)` -- **used internally by descriptors**
+- `cue.mul_ir`: data ordered as `(mul, ir.dim)` — **default, compatible with e3nn**
+- `cue.ir_mul`: data ordered as `(ir.dim, mul)` — **used internally by descriptors**
 
 Operations accept `layout` (applies to all), or per-operand `layout_in1`, `layout_in2`, `layout_out`.
 
@@ -150,7 +150,7 @@ tp = cuet.FullyConnectedTensorProduct(
     cue.Irreps("O3", "0e + 1o"),         # irreps_in2
     cue.Irreps("O3", "4x0e + 4x1o"),    # irreps_out
     layout=cue.mul_ir,
-    internal_weights=True,                # store weights as parameters
+    internal_weights=True,
     device="cuda",
 )
 
@@ -195,7 +195,7 @@ MACE-style symmetric contraction with element-indexed weights.
 sc = cuet.SymmetricContraction(
     cue.Irreps("O3", "32x0e + 32x1o"),  # irreps_in (uniform mul required)
     cue.Irreps("O3", "32x0e"),           # irreps_out (uniform mul required)
-    contraction_degree=3,                 # polynomial degree
+    contraction_degree=3,
     num_elements=95,                      # number of chemical elements
     layout=cue.ir_mul,
     dtype=torch.float32,
@@ -213,8 +213,8 @@ Default method: `"uniform_1d"` if segments are uniform, else `"naive"`.
 
 ```python
 sh = cuet.SphericalHarmonics(
-    ls=[0, 1, 2, 3],    # degrees
-    normalize=True,       # normalize input vectors
+    ls=[0, 1, 2, 3],
+    normalize=True,
     device="cuda",
 )
 
@@ -283,7 +283,7 @@ conv = cuet.layers.FullyConnectedTensorProductConv(
     in_irreps=cue.Irreps("O3", "4x0e + 4x1o"),
     sh_irreps=cue.Irreps("O3", "0e + 1o"),
     out_irreps=cue.Irreps("O3", "4x0e + 4x1o"),
-    mlp_channels=[16, 32, 32],     # MLP for path weights
+    mlp_channels=[16, 32, 32],
     mlp_activation=torch.nn.ReLU(),
     batch_norm=True,
     layout=cue.ir_mul,

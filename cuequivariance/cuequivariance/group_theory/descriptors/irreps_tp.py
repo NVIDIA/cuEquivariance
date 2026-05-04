@@ -19,6 +19,34 @@ import cuequivariance as cue
 from cuequivariance.group_theory.irreps_array.irrep_utils import into_list_of_irrep
 
 
+def _fully_connected_tensor_product_core(
+    irreps1: cue.Irreps, irreps2: cue.Irreps, irreps3: cue.Irreps
+) -> cue.SegmentedPolynomial:
+    G = irreps1.irrep_class
+
+    d = cue.SegmentedTensorProduct.from_subscripts("uvw,iu,jv,kw+ijk")
+
+    for mul, ir in irreps1:
+        d.add_segment(1, (ir.dim, mul))
+    for mul, ir in irreps2:
+        d.add_segment(2, (ir.dim, mul))
+    for mul, ir in irreps3:
+        d.add_segment(3, (ir.dim, mul))
+
+    for (i1, (mul1, ir1)), (i2, (mul2, ir2)), (i3, (mul3, ir3)) in itertools.product(
+        enumerate(irreps1), enumerate(irreps2), enumerate(irreps3)
+    ):
+        if ir3 not in ir1 * ir2:
+            continue
+
+        # for loop over the different solutions of the Clebsch-Gordan decomposition
+        for cg in G.clebsch_gordan(ir1, ir2, ir3):
+            d.add_path((mul1, mul2, mul3), i1, i2, i3, c=cg)
+
+    d = d.normalize_paths_for_operand(-1)
+    return cue.SegmentedPolynomial.eval_last_operand(d)
+
+
 def fully_connected_tensor_product(
     irreps1: cue.Irreps, irreps2: cue.Irreps, irreps3: cue.Irreps
 ) -> cue.EquivariantPolynomial:
@@ -51,59 +79,56 @@ def fully_connected_tensor_product(
 
         Where ``61440x0`` are the 61440 weights needed to mix all the inputs with all the outputs.
     """
-    G = irreps1.irrep_class
-
-    d = cue.SegmentedTensorProduct.from_subscripts("uvw,iu,jv,kw+ijk")
-
-    for mul, ir in irreps1:
-        d.add_segment(1, (ir.dim, mul))
-    for mul, ir in irreps2:
-        d.add_segment(2, (ir.dim, mul))
-    for mul, ir in irreps3:
-        d.add_segment(3, (ir.dim, mul))
-
-    for (i1, (mul1, ir1)), (i2, (mul2, ir2)), (i3, (mul3, ir3)) in itertools.product(
-        enumerate(irreps1), enumerate(irreps2), enumerate(irreps3)
-    ):
-        if ir3 not in ir1 * ir2:
-            continue
-
-        # for loop over the different solutions of the Clebsch-Gordan decomposition
-        for cg in G.clebsch_gordan(ir1, ir2, ir3):
-            d.add_path((mul1, mul2, mul3), i1, i2, i3, c=cg)
-
-    d = d.normalize_paths_for_operand(-1)
+    poly = _fully_connected_tensor_product_core(irreps1, irreps2, irreps3)
     return cue.EquivariantPolynomial(
         [
-            cue.IrrepsAndLayout(irreps1.new_scalars(d.operands[0].size), cue.ir_mul),
+            cue.IrrepsAndLayout(irreps1.new_scalars(poly.inputs[0].size), cue.ir_mul),
             cue.IrrepsAndLayout(irreps1, cue.ir_mul),
             cue.IrrepsAndLayout(irreps2, cue.ir_mul),
         ],
         [cue.IrrepsAndLayout(irreps3, cue.ir_mul)],
-        cue.SegmentedPolynomial.eval_last_operand(d),
+        poly,
     )
 
 
-def full_tensor_product(
-    irreps1: cue.Irreps,
-    irreps2: cue.Irreps,
-    irreps3_filter: Optional[Sequence[cue.Irrep]] = None,
-) -> cue.EquivariantPolynomial:
+def fully_connected_tensor_product_ir_dict(
+    irreps1: cue.Irreps, irreps2: cue.Irreps, irreps3: cue.Irreps
+) -> cue.IrDictPolynomial:
     """
-    subscripts: ``lhs[iu],rhs[jv],output[kuv]``
+    subscripts: ``weights[uvw],lhs[iu],rhs[jv],output[kw]``
 
-    Construct a weightless channelwise tensor product descriptor.
+    Construct a fully connected tensor product as an :class:`~cuequivariance.IrDictPolynomial`.
+
+    This is the ``ir_dict`` variant of :func:`fully_connected_tensor_product`.
 
     .. currentmodule:: cuequivariance
 
     Args:
         irreps1 (Irreps): Irreps of the first operand.
         irreps2 (Irreps): Irreps of the second operand.
-        irreps3_filter (sequence of Irrep, optional): Irreps of the output to consider.
+        irreps3 (Irreps): Irreps of the output.
 
     Returns:
-        :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: Descriptor of the full tensor product.
+        :class:`cue.IrDictPolynomial <cuequivariance.IrDictPolynomial>`: The fully connected tensor product
+        with ``input_irreps = (weight_irreps, irreps1, irreps2)`` and ``output_irreps = (irreps3,)``.
     """
+    poly = _fully_connected_tensor_product_core(irreps1, irreps2, irreps3)
+    weight_irreps = irreps1.new_scalars(poly.inputs[0].size)
+    poly = cue.split_polynomial_by_irreps(poly, 2, irreps2)
+    poly = cue.split_polynomial_by_irreps(poly, 1, irreps1)
+    poly = cue.split_polynomial_by_irreps(poly, -1, irreps3)
+    return cue.IrDictPolynomial(
+        polynomial=poly,
+        input_irreps=(weight_irreps, irreps1, irreps2),
+        output_irreps=(irreps3,),
+    )
+
+
+def _full_tensor_product_core(
+    irreps1: cue.Irreps,
+    irreps2: cue.Irreps,
+    irreps3_filter: Optional[Sequence[cue.Irrep]],
+) -> tuple[cue.SegmentedPolynomial, cue.Irreps]:
     G = irreps1.irrep_class
 
     if irreps3_filter is not None:
@@ -136,28 +161,18 @@ def full_tensor_product(
     d = d.permute_segments(2, inv)
 
     d = d.normalize_paths_for_operand(-1)
-    return cue.EquivariantPolynomial(
-        [
-            cue.IrrepsAndLayout(irreps1, cue.ir_mul),
-            cue.IrrepsAndLayout(irreps2, cue.ir_mul),
-        ],
-        [cue.IrrepsAndLayout(irreps3, cue.ir_mul)],
-        cue.SegmentedPolynomial.eval_last_operand(d),
-    )
+    return cue.SegmentedPolynomial.eval_last_operand(d), irreps3
 
 
-def channelwise_tensor_product(
+def full_tensor_product(
     irreps1: cue.Irreps,
     irreps2: cue.Irreps,
-    irreps3_filter=None,
-    simplify_irreps3: bool = False,
+    irreps3_filter: Optional[Sequence[cue.Irrep]] = None,
 ) -> cue.EquivariantPolynomial:
     """
-    subscripts: ``weights[uv],lhs[iu],rhs[jv],output[kuv]``
+    subscripts: ``lhs[iu],rhs[jv],output[kuv]``
 
-    Construct a channelwise tensor product descriptor.
-
-    This operation is computationally sparser than the fully connected tensor product.
+    Construct a weightless channelwise tensor product descriptor.
 
     .. currentmodule:: cuequivariance
 
@@ -165,11 +180,61 @@ def channelwise_tensor_product(
         irreps1 (Irreps): Irreps of the first operand.
         irreps2 (Irreps): Irreps of the second operand.
         irreps3_filter (sequence of Irrep, optional): Irreps of the output to consider.
-        simplify_irreps3 (bool, optional): If True, the irreps of the output are simplified.
 
     Returns:
-        :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: Descriptor of the channelwise tensor product.
+        :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: Descriptor of the full tensor product.
     """
+    poly, irreps3 = _full_tensor_product_core(irreps1, irreps2, irreps3_filter)
+    return cue.EquivariantPolynomial(
+        [
+            cue.IrrepsAndLayout(irreps1, cue.ir_mul),
+            cue.IrrepsAndLayout(irreps2, cue.ir_mul),
+        ],
+        [cue.IrrepsAndLayout(irreps3, cue.ir_mul)],
+        poly,
+    )
+
+
+def full_tensor_product_ir_dict(
+    irreps1: cue.Irreps,
+    irreps2: cue.Irreps,
+    irreps3_filter: Optional[Sequence[cue.Irrep]] = None,
+) -> cue.IrDictPolynomial:
+    """
+    subscripts: ``lhs[iu],rhs[jv],output[kuv]``
+
+    Construct a weightless channelwise tensor product as an :class:`~cuequivariance.IrDictPolynomial`.
+
+    This is the ``ir_dict`` variant of :func:`full_tensor_product`.
+
+    .. currentmodule:: cuequivariance
+
+    Args:
+        irreps1 (Irreps): Irreps of the first operand.
+        irreps2 (Irreps): Irreps of the second operand.
+        irreps3_filter (sequence of Irrep, optional): Irreps of the output to consider.
+
+    Returns:
+        :class:`cue.IrDictPolynomial <cuequivariance.IrDictPolynomial>`: The full tensor product
+        with ``input_irreps = (irreps1, irreps2)`` and ``output_irreps = (irreps3,)``.
+    """
+    poly, irreps3 = _full_tensor_product_core(irreps1, irreps2, irreps3_filter)
+    poly = cue.split_polynomial_by_irreps(poly, 1, irreps2)
+    poly = cue.split_polynomial_by_irreps(poly, 0, irreps1)
+    poly = cue.split_polynomial_by_irreps(poly, -1, irreps3)
+    return cue.IrDictPolynomial(
+        polynomial=poly,
+        input_irreps=(irreps1, irreps2),
+        output_irreps=(irreps3,),
+    )
+
+
+def _channelwise_tensor_product_core(
+    irreps1: cue.Irreps,
+    irreps2: cue.Irreps,
+    irreps3_filter,
+    simplify_irreps3: bool,
+) -> tuple[cue.SegmentedPolynomial, cue.Irreps]:
     G = irreps1.irrep_class
 
     if irreps3_filter is not None:
@@ -215,14 +280,84 @@ def channelwise_tensor_product(
         d = d.permute_segments(3, [sid for _, _, sid in segments])
         irreps3 = irreps3.simplify()
 
+    return cue.SegmentedPolynomial.eval_last_operand(d), irreps3
+
+
+def channelwise_tensor_product(
+    irreps1: cue.Irreps,
+    irreps2: cue.Irreps,
+    irreps3_filter=None,
+    simplify_irreps3: bool = False,
+) -> cue.EquivariantPolynomial:
+    """
+    subscripts: ``weights[uv],lhs[iu],rhs[jv],output[kuv]``
+
+    Construct a channelwise tensor product descriptor.
+
+    This operation is computationally sparser than the fully connected tensor product.
+
+    .. currentmodule:: cuequivariance
+
+    Args:
+        irreps1 (Irreps): Irreps of the first operand.
+        irreps2 (Irreps): Irreps of the second operand.
+        irreps3_filter (sequence of Irrep, optional): Irreps of the output to consider.
+        simplify_irreps3 (bool, optional): If True, the irreps of the output are simplified.
+
+    Returns:
+        :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: Descriptor of the channelwise tensor product.
+    """
+    poly, irreps3 = _channelwise_tensor_product_core(
+        irreps1, irreps2, irreps3_filter, simplify_irreps3
+    )
     return cue.EquivariantPolynomial(
         [
-            cue.IrrepsAndLayout(irreps1.new_scalars(d.operands[0].size), cue.ir_mul),
+            cue.IrrepsAndLayout(irreps1.new_scalars(poly.inputs[0].size), cue.ir_mul),
             cue.IrrepsAndLayout(irreps1, cue.ir_mul),
             cue.IrrepsAndLayout(irreps2, cue.ir_mul),
         ],
         [cue.IrrepsAndLayout(irreps3, cue.ir_mul)],
-        cue.SegmentedPolynomial.eval_last_operand(d),
+        poly,
+    )
+
+
+def channelwise_tensor_product_ir_dict(
+    irreps1: cue.Irreps,
+    irreps2: cue.Irreps,
+    irreps3_filter=None,
+) -> cue.IrDictPolynomial:
+    """
+    subscripts: ``weights[uv],lhs[iu],rhs[jv],output[kuv]``
+
+    Construct a channelwise tensor product as an :class:`~cuequivariance.IrDictPolynomial`.
+
+    This is the ``ir_dict`` variant of :func:`channelwise_tensor_product`.
+    The returned polynomial is already split by irrep and ready for use with
+    :func:`cuequivariance_jax.ir_dict.segmented_polynomial_uniform_1d`.
+    The output irreps are always simplified (each irrep appears at most once).
+
+    .. currentmodule:: cuequivariance
+
+    Args:
+        irreps1 (Irreps): Irreps of the first operand.
+        irreps2 (Irreps): Irreps of the second operand.
+        irreps3_filter (sequence of Irrep, optional): Irreps of the output to consider.
+
+    Returns:
+        :class:`cue.IrDictPolynomial <cuequivariance.IrDictPolynomial>`: The channelwise tensor product
+        with ``input_irreps = (weight_irreps, irreps1, irreps2)`` and ``output_irreps = (irreps3,)``.
+    """
+    poly, irreps3 = _channelwise_tensor_product_core(
+        irreps1, irreps2, irreps3_filter, simplify_irreps3=True
+    )
+    weight_irreps = irreps1.new_scalars(poly.inputs[0].size)
+    poly = cue.split_polynomial_by_irreps(poly, 2, irreps2)
+    poly = cue.split_polynomial_by_irreps(poly, 1, irreps1)
+    poly = cue.split_polynomial_by_irreps(poly, -1, irreps3)
+    return cue.IrDictPolynomial(
+        polynomial=poly,
+        input_irreps=(weight_irreps, irreps1, irreps2),
+        output_irreps=(irreps3,),
     )
 
 
@@ -255,24 +390,11 @@ def _align_two_irreps(
     return cue.Irreps(irreps1.irrep_class, l1), cue.Irreps(irreps2.irrep_class, l2)
 
 
-def elementwise_tensor_product(
+def _elementwise_tensor_product_core(
     irreps1: cue.Irreps,
     irreps2: cue.Irreps,
-    irreps3_filter: Optional[Sequence[cue.Irrep]] = None,
-) -> cue.EquivariantPolynomial:
-    """
-    subscripts: ``lhs[iu],rhs[ju],output[ku]``
-
-    Construct an elementwise tensor product descriptor.
-
-    Args:
-        irreps1 (Irreps): Irreps of the first operand.
-        irreps2 (Irreps): Irreps of the second operand.
-        irreps3_filter (sequence of Irrep, optional): Irreps of the output to consider.
-
-    Returns:
-        :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: Descriptor of the elementwise tensor product.
-    """
+    irreps3_filter: Optional[Sequence[cue.Irrep]],
+) -> tuple[cue.SegmentedPolynomial, cue.Irreps, cue.Irreps, cue.Irreps]:
     G = irreps1.irrep_class
 
     if irreps1.num_irreps != irreps2.num_irreps:
@@ -300,14 +422,103 @@ def elementwise_tensor_product(
 
     irreps3 = cue.Irreps(G, irreps3)
     d = d.normalize_paths_for_operand(-1)
+    return (
+        cue.SegmentedPolynomial.eval_last_operand(d),
+        irreps1_cut,
+        irreps2_cut,
+        irreps3,
+    )
+
+
+def elementwise_tensor_product(
+    irreps1: cue.Irreps,
+    irreps2: cue.Irreps,
+    irreps3_filter: Optional[Sequence[cue.Irrep]] = None,
+) -> cue.EquivariantPolynomial:
+    """
+    subscripts: ``lhs[iu],rhs[ju],output[ku]``
+
+    Construct an elementwise tensor product descriptor.
+
+    Args:
+        irreps1 (Irreps): Irreps of the first operand.
+        irreps2 (Irreps): Irreps of the second operand.
+        irreps3_filter (sequence of Irrep, optional): Irreps of the output to consider.
+
+    Returns:
+        :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: Descriptor of the elementwise tensor product.
+    """
+    poly, _, _, irreps3 = _elementwise_tensor_product_core(
+        irreps1, irreps2, irreps3_filter
+    )
     return cue.EquivariantPolynomial(
         [
             cue.IrrepsAndLayout(irreps1, cue.ir_mul),
             cue.IrrepsAndLayout(irreps2, cue.ir_mul),
         ],
         [cue.IrrepsAndLayout(irreps3, cue.ir_mul)],
-        cue.SegmentedPolynomial.eval_last_operand(d),
+        poly,
     )
+
+
+def elementwise_tensor_product_ir_dict(
+    irreps1: cue.Irreps,
+    irreps2: cue.Irreps,
+    irreps3_filter: Optional[Sequence[cue.Irrep]] = None,
+) -> cue.IrDictPolynomial:
+    """
+    subscripts: ``lhs[iu],rhs[ju],output[ku]``
+
+    Construct an elementwise tensor product as an :class:`~cuequivariance.IrDictPolynomial`.
+
+    This is the ``ir_dict`` variant of :func:`elementwise_tensor_product`.
+
+    Note:
+        The input irreps may be refined (split into smaller blocks) to align
+        multiplicities. The actual irreps used are available in the returned
+        ``input_irreps``.
+
+    .. currentmodule:: cuequivariance
+
+    Args:
+        irreps1 (Irreps): Irreps of the first operand.
+        irreps2 (Irreps): Irreps of the second operand.
+        irreps3_filter (sequence of Irrep, optional): Irreps of the output to consider.
+
+    Returns:
+        :class:`cue.IrDictPolynomial <cuequivariance.IrDictPolynomial>`: The elementwise tensor product
+        with ``input_irreps = (irreps1_aligned, irreps2_aligned)`` and ``output_irreps = (irreps3,)``.
+    """
+    poly, irreps1_cut, irreps2_cut, irreps3 = _elementwise_tensor_product_core(
+        irreps1, irreps2, irreps3_filter
+    )
+    poly = cue.split_polynomial_by_irreps(poly, 1, irreps2_cut)
+    poly = cue.split_polynomial_by_irreps(poly, 0, irreps1_cut)
+    poly = cue.split_polynomial_by_irreps(poly, -1, irreps3)
+    return cue.IrDictPolynomial(
+        polynomial=poly,
+        input_irreps=(irreps1_cut, irreps2_cut),
+        output_irreps=(irreps3,),
+    )
+
+
+def _linear_core(
+    irreps_in: cue.Irreps, irreps_out: cue.Irreps
+) -> cue.SegmentedPolynomial:
+    d = cue.SegmentedTensorProduct.from_subscripts("uv_iu_iv")
+    for mul, ir in irreps_in:
+        d.add_segment(1, (ir.dim, mul))
+    for mul, ir in irreps_out:
+        d.add_segment(2, (ir.dim, mul))
+
+    for (i1, (mul1, ir1)), (i2, (mul2, ir2)) in itertools.product(
+        enumerate(irreps_in), enumerate(irreps_out)
+    ):
+        if ir1 == ir2:
+            d.add_path((mul1, mul2), i1, i2, c=1.0)
+
+    d = d.normalize_paths_for_operand(-1)
+    return cue.SegmentedPolynomial.eval_last_operand(d)
 
 
 def linear(irreps_in: cue.Irreps, irreps_out: cue.Irreps) -> cue.EquivariantPolynomial:
@@ -323,25 +534,43 @@ def linear(irreps_in: cue.Irreps, irreps_out: cue.Irreps) -> cue.EquivariantPoly
     Returns:
         :class:`cue.EquivariantPolynomial <cuequivariance.EquivariantPolynomial>`: Descriptor of the linear transformation.
     """
-    d = cue.SegmentedTensorProduct.from_subscripts("uv_iu_iv")
-    for mul, ir in irreps_in:
-        d.add_segment(1, (ir.dim, mul))
-    for mul, ir in irreps_out:
-        d.add_segment(2, (ir.dim, mul))
-
-    for (i1, (mul1, ir1)), (i2, (mul2, ir2)) in itertools.product(
-        enumerate(irreps_in), enumerate(irreps_out)
-    ):
-        if ir1 == ir2:
-            d.add_path((mul1, mul2), i1, i2, c=1.0)
-
-    d = d.normalize_paths_for_operand(-1)
-
+    poly = _linear_core(irreps_in, irreps_out)
     return cue.EquivariantPolynomial(
         [
-            cue.IrrepsAndLayout(irreps_in.new_scalars(d.operands[0].size), cue.ir_mul),
+            cue.IrrepsAndLayout(irreps_in.new_scalars(poly.inputs[0].size), cue.ir_mul),
             cue.IrrepsAndLayout(irreps_in, cue.ir_mul),
         ],
         [cue.IrrepsAndLayout(irreps_out, cue.ir_mul)],
-        cue.SegmentedPolynomial.eval_last_operand(d),
+        poly,
+    )
+
+
+def linear_ir_dict(
+    irreps_in: cue.Irreps, irreps_out: cue.Irreps
+) -> cue.IrDictPolynomial:
+    """
+    subscripts: ``weights[uv],input[iu],output[iv]``
+
+    Construct a linear equivariant transformation as an :class:`~cuequivariance.IrDictPolynomial`.
+
+    This is the ``ir_dict`` variant of :func:`linear`.
+
+    .. currentmodule:: cuequivariance
+
+    Args:
+        irreps_in (Irreps): Irreps of the input.
+        irreps_out (Irreps): Irreps of the output.
+
+    Returns:
+        :class:`cue.IrDictPolynomial <cuequivariance.IrDictPolynomial>`: The linear transformation
+        with ``input_irreps = (weight_irreps, irreps_in)`` and ``output_irreps = (irreps_out,)``.
+    """
+    poly = _linear_core(irreps_in, irreps_out)
+    weight_irreps = irreps_in.new_scalars(poly.inputs[0].size)
+    poly = cue.split_polynomial_by_irreps(poly, 1, irreps_in)
+    poly = cue.split_polynomial_by_irreps(poly, -1, irreps_out)
+    return cue.IrDictPolynomial(
+        polynomial=poly,
+        input_irreps=(weight_irreps, irreps_in),
+        output_irreps=(irreps_out,),
     )
