@@ -22,3 +22,5 @@ Per [Signing Your Work](https://github.com/NVIDIA/cuEquivariance/blob/main/CONTR
 
 - [ ] All commits in this PR are signed off (`git commit -s`).
 - [ ] By signing off, I certify that I have the right to submit this contribution under the project's open source license, in accordance with the [Developer Certificate of Origin v1.1](https://github.com/NVIDIA/cuEquivariance/blob/main/CONTRIBUTING.md#full-text-of-the-dco).
+
+<!-- demo PR — preview of template rendering -->
