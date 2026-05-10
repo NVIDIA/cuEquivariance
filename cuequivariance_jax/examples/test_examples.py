@@ -12,6 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -20,6 +21,7 @@ from flax import nnx
 
 import cuequivariance as cue
 
+from .mace_eqx import MACEModel as MACEModelEQX
 from .mace_linen import MACEModel
 from .mace_nnx import MACEModel as MACEModelNNX
 from .nequip_linen import NEQUIPModel
@@ -592,3 +594,205 @@ def test_nequip_linen_nnx_training_produces_identical_params():
     np.testing.assert_allclose(F_linen, F_nnx, atol=1e-3, rtol=1e-3)
     np.testing.assert_allclose(linen_emb, nnx_emb, atol=1e-3, rtol=1e-3)
     np.testing.assert_allclose(linen_skip, nnx_skip, atol=1e-3, rtol=1e-3)
+
+
+def test_mace_eqx_forward_pass_output_shapes():
+    """Test Equinox MACE model forward pass produces correct output shapes."""
+    batch = _create_test_graph_batch()
+    model = MACEModelEQX(
+        num_layers=1,
+        num_features=32,
+        num_species=5,
+        max_ell=2,
+        correlation=2,
+        num_radial_basis=4,
+        interaction_irreps=cue.Irreps(cue.O3, "0e+1o"),
+        hidden_irreps=cue.Irreps(cue.O3, "0e"),
+        offsets=np.zeros(5),
+        cutoff=3.0,
+        epsilon=0.1,
+        skip_connection_first_layer=True,
+        dtype=jnp.float32,
+        key=jax.random.key(0),
+    )
+    E, F = model(batch)
+    assert E.shape == (2,) and F.shape == (10, 3)
+    assert jnp.all(jnp.isfinite(E)) and jnp.all(jnp.isfinite(F))
+
+
+def _copy_mace_nnx_params_to_eqx(nnx_model, eqx_model):
+    params = {}
+    for path, value in nnx.state(nnx_model).flat_state():
+        try:
+            array = value[...]
+        except Exception:
+            array = value
+        if hasattr(array, "shape"):
+            params[path] = array
+
+    def get(path):
+        return params[path]
+
+    eqx_model = eqx.tree_at(lambda m: m.embedding, eqx_model, get(("embedding",)))
+    for i, layer in enumerate(eqx_model.layers):
+        layer_path = ("layers", i)
+        eqx_model = eqx.tree_at(
+            lambda m, i=i: m.layers[i].linear_up.w,
+            eqx_model,
+            {
+                key[-1]: value
+                for key, value in params.items()
+                if key[:3] == layer_path + ("linear_up",) and key[3] == "w"
+            },
+        )
+        eqx_model = eqx.tree_at(
+            lambda m, i=i: m.layers[i].radial_mlp.linears,
+            eqx_model,
+            [
+                get(layer_path + ("radial_mlp", "linears", j))
+                for j in range(len(layer.radial_mlp.linears))
+            ],
+        )
+        eqx_model = eqx.tree_at(
+            lambda m, i=i: m.layers[i].linear_down.w,
+            eqx_model,
+            {
+                key[-1]: value
+                for key, value in params.items()
+                if key[:3] == layer_path + ("linear_down",) and key[3] == "w"
+            },
+        )
+        if layer.skip is not None:
+            eqx_model = eqx.tree_at(
+                lambda m, i=i: m.layers[i].skip.w,
+                eqx_model,
+                get(layer_path + ("skip", "w")),
+            )
+        if layer.linZ_first is not None:
+            eqx_model = eqx.tree_at(
+                lambda m, i=i: m.layers[i].linZ_first.w,
+                eqx_model,
+                get(layer_path + ("linZ_first", "w")),
+            )
+        eqx_model = eqx.tree_at(
+            lambda m, i=i: m.layers[i].sc.w,
+            eqx_model,
+            get(layer_path + ("sc", "w")),
+        )
+        eqx_model = eqx.tree_at(
+            lambda m, i=i: m.layers[i].linear_sc.w,
+            eqx_model,
+            {
+                key[-1]: value
+                for key, value in params.items()
+                if key[:3] == layer_path + ("linear_sc",) and key[3] == "w"
+            },
+        )
+        if layer.readout_mlp is not None:
+            eqx_model = eqx.tree_at(
+                lambda m, i=i: m.layers[i].readout_mlp.w,
+                eqx_model,
+                {
+                    key[-1]: value
+                    for key, value in params.items()
+                    if key[:3] == layer_path + ("readout_mlp",) and key[3] == "w"
+                },
+            )
+        eqx_model = eqx.tree_at(
+            lambda m, i=i: m.layers[i].readout.w,
+            eqx_model,
+            {
+                key[-1]: value
+                for key, value in params.items()
+                if key[:3] == layer_path + ("readout",) and key[3] == "w"
+            },
+        )
+    return eqx_model
+
+
+def _assert_mace_nnx_eqx_params_match(nnx_model, eqx_model):
+    params = {}
+    for path, value in nnx.state(nnx_model).flat_state():
+        try:
+            array = value[...]
+        except Exception:
+            array = value
+        if hasattr(array, "shape"):
+            params[path] = array
+
+    def assert_array(path, value):
+        np.testing.assert_array_equal(value, params[path])
+
+    assert_array(("embedding",), eqx_model.embedding)
+    for i, layer in enumerate(eqx_model.layers):
+        layer_path = ("layers", i)
+        for attr in ("linear_up", "linear_down", "linear_sc", "readout"):
+            for ir, value in getattr(layer, attr).w.items():
+                assert_array(layer_path + (attr, "w", ir), value)
+        for j, value in enumerate(layer.radial_mlp.linears):
+            assert_array(layer_path + ("radial_mlp", "linears", j), value)
+        if layer.skip is not None:
+            assert_array(layer_path + ("skip", "w"), layer.skip.w)
+        if layer.linZ_first is not None:
+            assert_array(layer_path + ("linZ_first", "w"), layer.linZ_first.w)
+        assert_array(layer_path + ("sc", "w"), layer.sc.w)
+        if layer.readout_mlp is not None:
+            for ir, value in layer.readout_mlp.w.items():
+                assert_array(layer_path + ("readout_mlp", "w", ir), value)
+
+
+@pytest.mark.parametrize(
+    "num_layers,hidden_irreps_str,interaction_irreps_str,skip_first",
+    [
+        (1, "0e", "0e+1o", True),
+        (1, "0e", "0e+1o", False),
+        (2, "0e+1o", "0e+1o+2e", True),
+        (2, "0e+1o", "0e+1o+2e", False),
+    ],
+    ids=["MP-scalar-1L", "OFF-scalar-1L", "MP-nonscalar-2L", "OFF-nonscalar-2L"],
+)
+def test_mace_eqx_nnx_copied_weight_outputs_match(
+    num_layers, hidden_irreps_str, interaction_irreps_str, skip_first
+):
+    """Test Equinox and NNX MACE outputs match after explicit weight copy."""
+    config = dict(
+        num_layers=num_layers,
+        num_features=4,
+        num_species=3,
+        max_ell=2,
+        correlation=2,
+        num_radial_basis=3,
+        interaction_irreps=cue.Irreps(cue.O3, interaction_irreps_str),
+        hidden_irreps=cue.Irreps(cue.O3, hidden_irreps_str),
+        offsets=np.array([0.2, -0.1, 0.05], dtype=np.float32),
+        cutoff=3.0,
+        epsilon=0.1,
+        skip_connection_first_layer=skip_first,
+    )
+    batch = dict(
+        nn_vecs=jnp.array(
+            [
+                [0.7, 0.2, -0.1],
+                [-0.4, 0.8, 0.3],
+                [0.3, -0.6, 0.5],
+                [0.9, 0.1, 0.4],
+                [-0.2, 0.5, -0.7],
+            ],
+            dtype=jnp.float32,
+        ),
+        species=jnp.array([2, 0, 1, 0], dtype=jnp.int32),
+        inda=jnp.array([0, 1, 2, 3, 1], dtype=jnp.int32),
+        indb=jnp.array([1, 2, 3, 0, 3], dtype=jnp.int32),
+        inde=jnp.zeros(4, dtype=jnp.int32),
+        nats=jnp.array([4], dtype=jnp.int32),
+        mask=jnp.array([1, 0, 1, 1, 1], dtype=jnp.int32),
+    )
+    nnx_model = MACEModelNNX(**config, dtype=jnp.float32, rngs=nnx.Rngs(0))
+    eqx_model = MACEModelEQX(**config, dtype=jnp.float32, key=jax.random.key(123))
+    eqx_model = _copy_mace_nnx_params_to_eqx(nnx_model, eqx_model)
+    _assert_mace_nnx_eqx_params_match(nnx_model, eqx_model)
+
+    E_nnx, F_nnx = nnx_model(batch)
+    E_eqx, F_eqx = eqx_model(batch)
+    np.testing.assert_allclose(E_eqx, E_nnx, atol=2e-5, rtol=2e-5)
+    np.testing.assert_allclose(F_eqx, F_nnx, atol=2e-5, rtol=2e-5)

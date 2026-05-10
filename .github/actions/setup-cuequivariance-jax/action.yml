@@ -28,7 +28,7 @@ runs:
       shell: bash
       run: |
         uv pip install triton
-        uv pip install "flax>=0.12.0"
+        uv pip install "flax>=0.12.0" "equinox>=0.11.11"
     
     - name: Clean and install packages
       shell: bash
