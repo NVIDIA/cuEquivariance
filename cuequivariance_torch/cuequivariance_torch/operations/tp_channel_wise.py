@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import warnings
-from typing import Optional, Sequence
+from typing import Dict, Optional, Sequence
 
 import torch
 from cuequivariance.group_theory.irreps_array.misc_ui import (
@@ -221,13 +221,14 @@ class ChannelWiseTensorProduct(torch.nn.Module):
         x1 = self.transpose_in1(x1)
         x2 = self.transpose_in2(x2)
 
-        indices_in = {}
+        indices_in: Dict[int, torch.Tensor] = {}
         if indices_1 is not None:
             indices_in[1] = indices_1
         if indices_2 is not None:
             indices_in[2] = indices_2
+        dict_indices_out: Dict[int, torch.Tensor] = {}
         if indices_out is not None:
-            indices_out = {0: indices_out}
+            dict_indices_out = {0: indices_out}
             if size_out is None:
                 raise ValueError(
                     "size_out should be provided if indices_out is provided"
@@ -235,7 +236,7 @@ class ChannelWiseTensorProduct(torch.nn.Module):
             else:
                 sizes_out = {0: torch.empty(size_out, 1).to(x1.device)}
         else:
-            sizes_out = {}
+            sizes_out: Dict[int, torch.Tensor] = {}
 
         if self.weight is not None:
             if weight is not None:
@@ -252,6 +253,6 @@ class ChannelWiseTensorProduct(torch.nn.Module):
             [weight, x1, x2],
             input_indices=indices_in,
             output_shapes=sizes_out,
-            output_indices=indices_out,
+            output_indices=dict_indices_out,
         )
         return self.transpose_out(output[0])

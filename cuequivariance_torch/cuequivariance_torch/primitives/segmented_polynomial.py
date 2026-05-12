@@ -17,6 +17,7 @@ import warnings
 from typing import Any, Dict, List, Optional
 
 import torch
+import torch.fx
 import torch.nn as nn
 from cuequivariance_torch.primitives.segmented_polynomial_fused_tp import (
     SegmentedPolynomialFusedTP,
@@ -303,10 +304,19 @@ class SegmentedPolynomial(nn.Module):
 
         inputs = list(inputs)
         if not torch.jit.is_scripting():
+            is_fx_tracing = False
+            fx = getattr(torch, "fx", None)
+            if fx is not None:
+                symbolic_trace = getattr(fx, "_symbolic_trace", None)
+                if symbolic_trace is not None:
+                    is_fx_tracing = getattr(
+                        symbolic_trace, "is_fx_symbolic_tracing", bool
+                    )()
+
             if (
                 not torch.jit.is_tracing()
                 and not torch.compiler.is_compiling()
-                and not torch.fx._symbolic_trace.is_fx_symbolic_tracing()
+                and not is_fx_tracing
             ):
                 torch._assert(
                     len(inputs) == self.num_inputs,
