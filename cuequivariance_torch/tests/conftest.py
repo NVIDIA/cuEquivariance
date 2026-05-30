@@ -14,6 +14,14 @@
 # limitations under the License.
 import pytest
 import torch
+import torch._dynamo
+
+# torch 2.11+ no longer honors allow_in_graph for torch.autograd.grad; it gates
+# tracing through it under torch.compile/export behind this config flag. Several
+# tests (e.g. segmented_polynomial in compile/export modes) call torch.autograd.grad
+# inside a compiled module, so enable it session-wide. Guarded for older torch.
+if hasattr(torch._dynamo.config, "trace_autograd_ops"):
+    torch._dynamo.config.trace_autograd_ops = True
 
 
 @pytest.fixture(autouse=True)
