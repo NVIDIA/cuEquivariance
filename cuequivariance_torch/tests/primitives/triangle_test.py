@@ -181,3 +181,41 @@ def test_attention_pair_bias():
             b_ln_z=b_ln_z,
         )
         assert output.shape == torch.Size([batch_size, seq_len, hidden_dim])
+
+
+def test_trimul_precision_mxfp8_enum_member():
+    # BIO-714: MXFP8 must be discoverable on the public TriMulPrecision enum, whether it
+    # is imported from the cuequivariance_ops_torch backend or resolved from the in-module
+    # fallback enum (no-ops-installed case). Both must carry the same sentinel values.
+    assert hasattr(cuet.TriMulPrecision, "MXFP8")
+    assert hasattr(cuet.TriMulPrecision, "BFLOAT16")
+    assert int(cuet.TriMulPrecision.MXFP8.value) == -1000
+    assert int(cuet.TriMulPrecision.BFLOAT16.value) == -1001
+
+
+def test_triangle_multiplicative_update_mxfp8_inference():
+    # BIO-714: exercise the opt-in, inference-only MXFP8 path via the enum member.
+    # seq_len is > the eager bf16-fallback threshold (150) and divisible by 32 so the
+    # optimized path engages; on a Blackwell GPU (cc >= 10.0) this hits the MXFP8 CUTLASS
+    # kernel, and on other GPUs it transparently falls back to bf16 (same output shape).
+    if not torch.cuda.is_available():
+        return
+    try:
+        import cuequivariance_ops_torch  # noqa: F401
+    except ImportError:
+        return  # backend ops not installed; the MXFP8 path is unavailable
+    device = torch.device("cuda")
+    batch_size, seq_len, hidden_dim = 1, 160, 32
+    expected = torch.Size([batch_size, seq_len, seq_len, hidden_dim])
+    with torch.no_grad():
+        x = torch.randn(batch_size, seq_len, seq_len, hidden_dim, device=device)
+        mask = torch.ones(batch_size, seq_len, seq_len, device=device)
+        # Both the enum member and the legacy string spelling select the same path.
+        for precision in (cuet.TriMulPrecision.MXFP8, "mxfp8"):
+            output = cuet.triangle_multiplicative_update(
+                x=x,
+                direction="outgoing",
+                mask=mask,
+                precision=precision,
+            )
+            assert output.shape == expected
