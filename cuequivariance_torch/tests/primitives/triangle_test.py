@@ -189,8 +189,8 @@ def test_trimul_precision_mxfp8_enum_member():
     # fallback enum (no-ops-installed case). Both must carry the same sentinel values.
     assert hasattr(cuet.TriMulPrecision, "MXFP8")
     assert hasattr(cuet.TriMulPrecision, "BFLOAT16")
-    assert int(cuet.TriMulPrecision.MXFP8.value) == -1000
-    assert int(cuet.TriMulPrecision.BFLOAT16.value) == -1001
+    assert int(cuet.TriMulPrecision.MXFP8.value) == 4
+    assert int(cuet.TriMulPrecision.BFLOAT16.value) == 5
 
 
 def test_triangle_multiplicative_update_mxfp8_inference():

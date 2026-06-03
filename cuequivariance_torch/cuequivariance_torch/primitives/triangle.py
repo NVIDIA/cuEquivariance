@@ -35,8 +35,8 @@ except ImportError:
         TF32x3 = 2
         IEEE = 3
         # Tri-mul carrier-precision modes (opt-in; default is None = off).
-        MXFP8 = -1000
-        BFLOAT16 = -1001
+        MXFP8 = 4
+        BFLOAT16 = 5
 
 
 def triangle_attention(
