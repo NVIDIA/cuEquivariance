@@ -39,6 +39,44 @@ except ImportError:
         BFLOAT16 = 5
 
 
+def mask_to_kv_lengths(mask: torch.Tensor) -> torch.Tensor:
+    r"""
+    Convert a right-padded triangle-attention mask to per-row key/value lengths.
+
+    Args:
+        mask (torch.Tensor): Boolean-like mask of shape (B, N, 1, 1, K). For B=1,
+            can also be (N, 1, 1, K). The last dimension must be prefix-shaped:
+            all True entries first, followed by all False entries.
+
+    Returns:
+        torch.Tensor: int32 tensor of shape (B, N, 1, 1, 1) containing each row's
+        effective key/value length. Zero-length rows are allowed.
+
+    Raises:
+        ValueError: If the mask shape is not supported or the mask is not prefix-shaped.
+
+    Note:
+        This helper validates the prefix contract. For torch.compile-heavy code, compute
+        lengths before the compiled region and pass them to :func:`triangle_attention`
+        with ``kv_lengths=...``.
+    """
+    mask_bool = mask.to(dtype=torch.bool)
+    while len(mask_bool.shape) < 5:
+        mask_bool = mask_bool.unsqueeze(0)
+    if mask_bool.ndim != 5 or mask_bool.shape[2:4] != (1, 1):
+        raise ValueError(
+            "mask_to_kv_lengths: mask must have shape (B, N, 1, 1, K) "
+            f"after adding leading singleton dimensions, got {tuple(mask_bool.shape)}"
+        )
+    lengths = mask_bool.to(dtype=torch.int32).sum(dim=-1, keepdim=True).to(torch.int32)
+    prefix = torch.arange(mask_bool.shape[-1], device=mask_bool.device).view(
+        1, 1, 1, 1, mask_bool.shape[-1]
+    ) < lengths
+    if not bool(torch.all(mask_bool == prefix).item()):
+        raise ValueError("mask_to_kv_lengths: mask must be right-padded/prefix-shaped")
+    return lengths.detach().contiguous()
+
+
 def triangle_attention(
     q: torch.Tensor,
     k: torch.Tensor,
@@ -47,6 +85,8 @@ def triangle_attention(
     mask: Optional[torch.Tensor] = None,
     scale: Optional[float] = None,
     return_aux: bool = False,
+    *,
+    kv_lengths: Optional[torch.Tensor] = None,
 ) -> torch.Tensor | Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     r"""
     Triangle Attention
@@ -68,10 +108,17 @@ def triangle_attention(
             capability 10.0 or 10.3), will be cast to match q/k/v dtype (bf16/fp16) for best
             performance.
         mask (torch.Tensor, optional): Mask tensor of shape (B, N, 1, 1, K). For B=1, can also be (N, 1, 1, K).
-            Will be cast to bool internally.
+            Will be cast to bool internally. Dense masks accept any pattern and route to the
+            correct fallback path. For right-padded masks, pass ``kv_lengths`` instead to use
+            the Blackwell sm100f length fast path.
         scale (float, optional): Float scale for q (s in the equation). If None, value 1/sqrt(d) is used.
         return_aux (bool): If True, two auxiliary tensors are returned along with the result.
             Defaults to False.
+        kv_lengths (torch.Tensor, optional): int32 tensor of shape (B, N, 1, 1, 1)
+            containing each row's effective K length. This represents a right-padded /
+            prefix mask: positions ``j < kv_lengths[b, n]`` are valid and later positions
+            are masked. Pass either ``mask`` or ``kv_lengths``, not both. On supported
+            Blackwell cu13 builds, ``kv_lengths`` selects the sm100f length fast path.
 
     Note:
         - B: batch size
@@ -90,12 +137,12 @@ def triangle_attention(
         (1) Context is saved for backward pass. You don't need to save it manually.
         (2) Kernel precision (fp32, bf16, fp16) is based on input dtypes. For tf32, set it from torch global scope
         (3) Triangle attention kernel supports: all hidden_dim<=32 and divisible by 4 for tf32/fp32, and for all hidden_dim<=128 and divisible by 8 for bf16/fp16 (standard kernels). On Blackwell GPUs (compute capability 10.0 or 10.3), the sm100f kernel supports hidden_dim<=256 for forward passes and hidden_dim<=128 for backward passes. In the rare instance that the kernel does not support an input config, fallback to torch is enabled instead of erroring out.
-        (4) Blackwell-optimized kernels (for compute capabilities 10.0 and 10.3) provide superior performance especially for long sequences and higher head dimensions. These kernels require the sequence length N to be a multiple of 8 for the forward pass; pad the sequence if necessary. The kernel provides optimal performance for a "padding mask" consisting in (all True, followed by all False) in the last dimension. Currently, this feature is supported only for cu13 builds.
+        (4) Blackwell-optimized kernels (for compute capabilities 10.0 and 10.3) provide superior performance especially for long sequences and higher head dimensions. These kernels require the key/value sequence length K to be a multiple of 8 for the forward pass; pad the sequence if necessary. Use ``kv_lengths`` for right-padded sequence masks to select the sm100f length fast path. A dense ``mask`` without ``kv_lengths`` remains correct for arbitrary or holey patterns, but it routes to the fallback path.
 
     Example:
         >>> import torch
         >>> import math
-        >>> from cuequivariance_torch import triangle_attention
+        >>> from cuequivariance_torch import mask_to_kv_lengths, triangle_attention
         >>> if torch.cuda.is_available():  # doctest: +SKIP
         ...     device = torch.device("cuda")
         ...     # Set up dimensions
@@ -109,14 +156,25 @@ def triangle_attention(
         ...                     device=device, dtype=torch.float16, requires_grad=True)
         ...     bias = torch.randn(batch_size, 1, num_heads, seq_len, seq_len,
         ...                        device=device, dtype=torch.float32, requires_grad=True)
-        ...     # Create optional mask
-        ...     mask = torch.rand(batch_size, seq_len, 1, 1, seq_len,
-        ...                       device=device) < 0.5
+        ...     # Right-padded sequence mask: valid tokens first, padding last.
+        ...     seq_lengths = torch.tensor([96], device=device, dtype=torch.int32)
+        ...     positions = torch.arange(seq_len, device=device)
+        ...     row_valid = positions.view(1, seq_len) < seq_lengths.view(batch_size, 1)
+        ...     col_valid = positions.view(1, seq_len) < seq_lengths.view(batch_size, 1)
+        ...     mask = row_valid.view(batch_size, seq_len, 1, 1, 1) & col_valid.view(
+        ...         batch_size, 1, 1, 1, seq_len)
+        ...     kv_lengths = mask_to_kv_lengths(mask)
         ...     # Calculate scale
         ...     scale = 1 / math.sqrt(hidden_dim)
-        ...     # Forward pass
+        ...     # Forward pass using the Blackwell sm100f length fast path when available.
         ...     output, lse, max_val = triangle_attention(
-        ...         q=q, k=k, v=v, bias=bias, mask=mask, scale=scale, return_aux=True)
+        ...         q=q, k=k, v=v, bias=bias, scale=scale, return_aux=True,
+        ...         kv_lengths=kv_lengths)
+        ...     # Arbitrary dense masks are still correct; they use the fallback path.
+        ...     arbitrary_mask = torch.rand(batch_size, seq_len, 1, 1, seq_len,
+        ...                                 device=device) < 0.5
+        ...     fallback_output = triangle_attention(
+        ...         q=q, k=k, v=v, bias=bias, mask=arbitrary_mask, scale=scale)
         ...     print(output.shape)  # torch.Size([1, 128, 2, 128, 32])
         ...     # Create gradient tensor and perform backward pass
         ...     grad_out = torch.randn_like(output)
@@ -140,7 +198,7 @@ def triangle_attention(
             "Error importing triangle_attention from cuequivariance_ops_torch."
         )
     else:
-        return f(q, k, v, bias, mask, scale, return_aux)
+        return f(q, k, v, bias, mask, scale, return_aux, kv_lengths=kv_lengths)
 
 
 def triangle_multiplicative_update(

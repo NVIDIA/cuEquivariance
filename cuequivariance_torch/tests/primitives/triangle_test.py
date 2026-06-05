@@ -94,6 +94,56 @@ def test_triangle_attention():
         )
 
 
+def test_triangle_attention_kv_lengths():
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+        batch_size, seq_len, num_heads, hidden_dim = 1, 16, 2, 32
+        q = torch.randn(
+            batch_size,
+            seq_len,
+            num_heads,
+            seq_len,
+            hidden_dim,
+            device=device,
+            dtype=torch.float16,
+        )
+        k = torch.randn_like(q)
+        v = torch.randn_like(q)
+        bias = torch.randn(
+            batch_size,
+            1,
+            num_heads,
+            seq_len,
+            seq_len,
+            device=device,
+            dtype=torch.float32,
+        )
+        seq_lengths = torch.tensor([12], device=device, dtype=torch.int32)
+        positions = torch.arange(seq_len, device=device)
+        row_valid = positions.view(1, seq_len) < seq_lengths.view(batch_size, 1)
+        col_valid = positions.view(1, seq_len) < seq_lengths.view(batch_size, 1)
+        mask = row_valid.view(batch_size, seq_len, 1, 1, 1) & col_valid.view(
+            batch_size, 1, 1, 1, seq_len
+        )
+        kv_lengths = cuet.mask_to_kv_lengths(mask)
+
+        assert kv_lengths.shape == torch.Size([batch_size, seq_len, 1, 1, 1])
+        assert kv_lengths.dtype == torch.int32
+        output = cuet.triangle_attention(
+            q=q,
+            k=k,
+            v=v,
+            bias=bias,
+            scale=1 / math.sqrt(hidden_dim),
+            kv_lengths=kv_lengths,
+        )
+        assert output.shape == torch.Size(
+            [batch_size, seq_len, num_heads, seq_len, hidden_dim]
+        )
+        zero_rows = kv_lengths.view(batch_size, seq_len) == 0
+        torch.testing.assert_close(output[zero_rows], torch.zeros_like(output[zero_rows]))
+
+
 def test_triangle_multiplicative_update():
     if torch.cuda.is_available():
         device = torch.device("cuda")
