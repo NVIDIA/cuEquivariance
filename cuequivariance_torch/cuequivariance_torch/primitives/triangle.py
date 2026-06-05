@@ -191,6 +191,13 @@ def triangle_attention(
         torch.Size([1, 1, 2, 128, 128])
     """
 
+    if mask is not None and kv_lengths is not None:
+        raise ValueError(
+            "triangle_attention: pass either `mask` or `kv_lengths`, not both. "
+            "`kv_lengths` selects the SM100f length fast path; a dense `mask` uses "
+            "the fallback path."
+        )
+
     try:
         from cuequivariance_ops_torch import triangle_attention as f
     except Exception:
