@@ -22,21 +22,13 @@ except ImportError:
     import enum
 
     class TriMulPrecision(enum.IntEnum):  # type: ignore
-        """Fallback precision enum when cuequivariance_ops_torch is not available.
-
-        Values must match ``cuequivariance_ops_torch.TriMulPrecision`` so that
-        ``precision=TriMulPrecision.MXFP8`` resolves identically whether or not
-        the backend ops package is installed.
-        """
+        """Fallback precision enum when cuequivariance_ops_torch is not available."""
 
         NONE = -1
         DEFAULT = 0
         TF32 = 1
         TF32x3 = 2
         IEEE = 3
-        # Tri-mul carrier-precision modes (opt-in; default is None = off).
-        MXFP8 = 4
-        BFLOAT16 = 5
 
 
 def triangle_attention(
@@ -205,9 +197,6 @@ def triangle_multiplicative_update(
             Available options:
             - None: Defaults to triton language dot's default for non-32b input and for 32b input, tf32/tf32x3 based on 1/0 value set in torch.backends.cuda.matmul.allow_tf32
             - IEEE: Use IEEE 754 precision
-            - MXFP8: Opt-in MXFP8 (E4M3 + UE8M0 block scales) acceleration for the
-              triangular projection. **Inference-only and off by default** — see note (7).
-              Equivalent to passing the string ``"mxfp8"``.
 
     Returns:
         Output tensor of shape (batch_size, seq_len, seq_len, hidden_dim)
@@ -219,18 +208,6 @@ def triangle_multiplicative_update(
         (4) We have moved away from the default round-towards-zero (RZ) implementation to round-nearest (RN) for better tf32 accuracy in cuex.triangle_multiplicative_update. In rare circumstances, this may cause minor differences in results observed.
         (5) When using torch compile, use `cueuivariance_ops_torch.init_triton_cache()` to initialize triton cache before calling torch compiled triangular multiplicative update.
         (6) Although the example demonstrates the most common case of one batch dimension, the API supports variable number of leading batch dimensions.
-        (7) **MXFP8 precision** (``precision=TriMulPrecision.MXFP8`` or ``"mxfp8"``) is an
-            opt-in, **inference-only** acceleration of the triangular projection. It is
-            **off by default** (``precision=None``). It engages only when *all* of the
-            following hold, and otherwise transparently falls back to bf16 (no error):
-            - **Inference only**: any input has ``requires_grad=True`` (training) falls back
-              to bf16 with a warning. The MXFP8 backward path is not yet implemented.
-            - **Sequence length** must be divisible by 32 (``seq_len % 32 == 0``); other
-              lengths warn and fall back to bf16.
-            - **Hardware**: a Blackwell GPU (CUDA compute capability >= 10.0, e.g.
-              sm_100 / sm_103) with the CUTLASS MXFP8 binding available; on other GPUs it
-              falls back to bf16.
-            Numerics are MXFP8-quantized, so expect small deviations from the bf16/None path.
 
     Example:
         >>> import torch
