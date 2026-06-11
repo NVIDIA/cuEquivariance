@@ -69,9 +69,12 @@ def mask_to_kv_lengths(mask: torch.Tensor) -> torch.Tensor:
             f"after adding leading singleton dimensions, got {tuple(mask_bool.shape)}"
         )
     lengths = mask_bool.to(dtype=torch.int32).sum(dim=-1, keepdim=True).to(torch.int32)
-    prefix = torch.arange(mask_bool.shape[-1], device=mask_bool.device).view(
-        1, 1, 1, 1, mask_bool.shape[-1]
-    ) < lengths
+    prefix = (
+        torch.arange(mask_bool.shape[-1], device=mask_bool.device).view(
+            1, 1, 1, 1, mask_bool.shape[-1]
+        )
+        < lengths
+    )
     if not bool(torch.all(mask_bool == prefix).item()):
         raise ValueError("mask_to_kv_lengths: mask must be right-padded/prefix-shaped")
     return lengths.detach().contiguous()
