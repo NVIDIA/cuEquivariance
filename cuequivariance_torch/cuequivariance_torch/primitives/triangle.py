@@ -119,6 +119,8 @@ def triangle_attention(
             prefix mask: positions ``j < kv_lengths[b, n]`` are valid and later positions
             are masked. Pass either ``mask`` or ``kv_lengths``, not both. On supported
             Blackwell cu13 builds, ``kv_lengths`` selects the sm100f length fast path.
+            Each length must be in ``[0, K]``; values greater than ``K`` are clamped
+            to ``K`` (the row then attends the full key sequence).
 
     Note:
         - B: batch size
