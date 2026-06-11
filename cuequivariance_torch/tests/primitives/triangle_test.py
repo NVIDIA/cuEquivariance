@@ -142,7 +142,9 @@ def test_triangle_attention_kv_lengths():
             [batch_size, seq_len, num_heads, seq_len, hidden_dim]
         )
         zero_rows = kv_lengths.view(batch_size, seq_len) == 0
-        torch.testing.assert_close(output[zero_rows], torch.zeros_like(output[zero_rows]))
+        torch.testing.assert_close(
+            output[zero_rows], torch.zeros_like(output[zero_rows])
+        )
 
 
 def test_triangle_attention_mask_and_kv_lengths_mutually_exclusive():

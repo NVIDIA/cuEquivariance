@@ -16,6 +16,7 @@
 
 For AI coding assistants: run `python -m cuequivariance_torch skill` for detailed usage guidance.
 """
+
 import importlib.resources
 
 __version__ = (
