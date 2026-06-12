@@ -68,6 +68,7 @@ Triangle
    :toctree: generated/
    :template: function_template.rst
 
+   mask_to_kv_lengths
    triangle_attention
    triangle_multiplicative_update
    attention_pair_bias

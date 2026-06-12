@@ -1,6 +1,9 @@
 ## Latest Changes
 ## (unreleased)
 
+### Added
+- [Torch] `cuet.triangle_attention` accepts `kv_lengths`, an int32 per-row key/value length tensor for right-padded sequence masks. Passing `kv_lengths` selects the Blackwell sm100f length fast path when available; dense `mask` remains the correct fallback path for arbitrary masks. Added `cuet.mask_to_kv_lengths` to convert and validate prefix masks.
+
 ## 0.10.0 (2026-04-21)
 
 ### Added

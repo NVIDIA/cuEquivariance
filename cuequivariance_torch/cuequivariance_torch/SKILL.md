@@ -306,7 +306,10 @@ Require `cuequivariance_ops_torch`.
 
 ```python
 # Triangle attention with pair bias
-out = cuet.triangle_attention(q, k, v, bias, mask=mask, scale=scale)
+kv_lengths = cuet.mask_to_kv_lengths(prefix_mask)
+out = cuet.triangle_attention(q, k, v, bias, scale=scale, kv_lengths=kv_lengths)
+# Arbitrary dense masks are supported through the fallback path:
+out = cuet.triangle_attention(q, k, v, bias, mask=holey_mask, scale=scale)
 # q, k, v: (B, N, H, Q/K, D), bias: (B, 1, H, Q, K)
 
 # Triangle multiplicative update

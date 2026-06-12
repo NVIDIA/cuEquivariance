@@ -14,6 +14,7 @@
 # limitations under the License.
 import math
 
+import pytest
 import torch
 
 import cuequivariance_torch as cuet
@@ -92,6 +93,73 @@ def test_triangle_attention():
         assert bias.grad.shape == torch.Size(
             [batch_size, 1, num_heads, seq_len, seq_len]
         )
+
+
+def test_triangle_attention_kv_lengths():
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+        batch_size, seq_len, num_heads, hidden_dim = 1, 16, 2, 32
+        q = torch.randn(
+            batch_size,
+            seq_len,
+            num_heads,
+            seq_len,
+            hidden_dim,
+            device=device,
+            dtype=torch.float16,
+        )
+        k = torch.randn_like(q)
+        v = torch.randn_like(q)
+        bias = torch.randn(
+            batch_size,
+            1,
+            num_heads,
+            seq_len,
+            seq_len,
+            device=device,
+            dtype=torch.float32,
+        )
+        seq_lengths = torch.tensor([12], device=device, dtype=torch.int32)
+        positions = torch.arange(seq_len, device=device)
+        row_valid = positions.view(1, seq_len) < seq_lengths.view(batch_size, 1)
+        col_valid = positions.view(1, seq_len) < seq_lengths.view(batch_size, 1)
+        mask = row_valid.view(batch_size, seq_len, 1, 1, 1) & col_valid.view(
+            batch_size, 1, 1, 1, seq_len
+        )
+        kv_lengths = cuet.mask_to_kv_lengths(mask)
+
+        assert kv_lengths.shape == torch.Size([batch_size, seq_len, 1, 1, 1])
+        assert kv_lengths.dtype == torch.int32
+        output = cuet.triangle_attention(
+            q=q,
+            k=k,
+            v=v,
+            bias=bias,
+            scale=1 / math.sqrt(hidden_dim),
+            kv_lengths=kv_lengths,
+        )
+        assert output.shape == torch.Size(
+            [batch_size, seq_len, num_heads, seq_len, hidden_dim]
+        )
+        zero_rows = kv_lengths.view(batch_size, seq_len) == 0
+        torch.testing.assert_close(
+            output[zero_rows], torch.zeros_like(output[zero_rows])
+        )
+
+
+def test_triangle_attention_mask_and_kv_lengths_mutually_exclusive():
+    # kv_lengths selects the SM100f length fast path; a dense mask uses the
+    # fallback. Passing both is contradictory and must raise. The guard lives in
+    # the public wrapper, before any backend dispatch, so this needs no GPU.
+    n = 8
+    q = torch.zeros(1, n, 1, n, 8)
+    k = torch.zeros(1, n, 1, n, 8)
+    v = torch.zeros(1, n, 1, n, 8)
+    bias = torch.zeros(1, 1, 1, n, n)
+    mask = torch.ones(1, n, 1, 1, n, dtype=torch.bool)
+    kv_lengths = torch.full((1, n, 1, 1, 1), n, dtype=torch.int32)
+    with pytest.raises(ValueError, match="not both"):
+        cuet.triangle_attention(q, k, v, bias, mask=mask, kv_lengths=kv_lengths)
 
 
 def test_triangle_multiplicative_update():
