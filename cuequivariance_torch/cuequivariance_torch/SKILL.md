@@ -12,7 +12,7 @@ description: Execute equivariant tensor products in PyTorch using SegmentedPolyn
 1. **Core primitive**: `cuet.SegmentedPolynomial` — `torch.nn.Module` with multiple CUDA backends
 2. **High-level operations** (`torch.nn.Module`): `ChannelWiseTensorProduct`, `FullyConnectedTensorProduct`, `Linear`, `SymmetricContraction`, `SphericalHarmonics`, `Rotation`, `Inversion`
 3. **Layers**: `cuet.layers.BatchNorm`, `cuet.layers.FullyConnectedTensorProductConv` (message passing)
-4. **Utilities**: `triangle_attention`, `triangle_multiplicative_update`, `attention_pair_bias` (AlphaFold2-style)
+4. **Utilities**: `triangle_attention`, `triangle_multiplicative_update`, `attention_pair_bias` (AlphaFold3-style)
 5. **Export support**: `onnx_custom_translation_table()`, `register_tensorrt_plugins()`
 
 ## Execution methods
@@ -319,8 +319,14 @@ out = cuet.triangle_multiplicative_update(
     precision=cuet.TriMulPrecision.DEFAULT,
 )
 
-# Attention with pair bias (diffusion models)
-out = cuet.attention_pair_bias(q, k, v, bias, mask=mask)
+# Attention with pair bias
+out, _ = cuet.attention_pair_bias(
+    single_repr, pair_repr, mask, num_heads,
+    w_ln_a, b_ln_a,
+    w_proj_q, b_proj_q, w_proj_k, w_proj_v,
+    w_proj_g, w_proj_o, w_proj_z,
+    w_ln_z=w_ln_z, b_ln_z=b_ln_z,
+)
 ```
 
 ## ONNX and TensorRT export
