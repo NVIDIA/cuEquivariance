@@ -190,61 +190,43 @@ def test_attention_pair_bias():
     if torch.cuda.is_available():
         device = torch.device("cuda")
         batch_size, seq_len, num_heads, heads_dim, hidden_dim = 1, 32, 2, 32, 64
-        query_len, key_len, z_dim = 32, 32, 16
-        # Create input tensors on GPU
-        s = torch.randn(
-            batch_size, seq_len, hidden_dim, device=device, dtype=torch.float32
-        )
-        q = torch.randn(
-            batch_size,
-            num_heads,
-            query_len,
-            heads_dim,
-            device=device,
-            dtype=torch.float32,
-        )
-        k = torch.randn(
-            batch_size,
-            num_heads,
-            key_len,
-            heads_dim,
-            device=device,
-            dtype=torch.float32,
-        )
-        v = torch.randn(
-            batch_size,
-            num_heads,
-            key_len,
-            heads_dim,
-            device=device,
-            dtype=torch.float32,
-        )
-        z = torch.randn(
-            batch_size, query_len, key_len, z_dim, device=device, dtype=torch.float32
-        )
-        mask = torch.rand(batch_size, key_len, device=device) < 0.5
-        w_proj_z = torch.randn(num_heads, z_dim, device=device, dtype=torch.float32)
-        w_proj_g = torch.randn(
-            hidden_dim, hidden_dim, device=device, dtype=torch.float32
-        )
-        w_proj_o = torch.randn(
-            hidden_dim, hidden_dim, device=device, dtype=torch.float32
-        )
-        w_ln_z = torch.randn(z_dim, device=device, dtype=torch.float32)
-        b_ln_z = torch.randn(z_dim, device=device, dtype=torch.float32)
-        # Perform operation
+        z_dim = 16
+        inner = num_heads * heads_dim
+        dt = torch.float32
 
-        output, proj_z = cuet.attention_pair_bias(
-            s=s,
-            q=q,
-            k=k,
-            v=v,
-            z=z,
+        single_repr = torch.randn(
+            batch_size, seq_len, hidden_dim, device=device, dtype=dt
+        )
+        pair_repr = torch.randn(
+            batch_size, seq_len, seq_len, z_dim, device=device, dtype=dt
+        )
+        mask = torch.rand(batch_size, seq_len, device=device) < 0.5
+        w_ln_a = torch.randn(hidden_dim, device=device, dtype=dt)
+        b_ln_a = torch.randn(hidden_dim, device=device, dtype=dt)
+        w_proj_q = torch.randn(inner, hidden_dim, device=device, dtype=dt)
+        b_proj_q = torch.randn(inner, device=device, dtype=dt)
+        w_proj_k = torch.randn(inner, hidden_dim, device=device, dtype=dt)
+        w_proj_v = torch.randn(inner, hidden_dim, device=device, dtype=dt)
+        w_proj_g = torch.randn(inner, hidden_dim, device=device, dtype=dt)
+        w_proj_o = torch.randn(hidden_dim, inner, device=device, dtype=dt)
+        w_proj_z = torch.randn(num_heads, z_dim, device=device, dtype=dt)
+        w_ln_z = torch.randn(z_dim, device=device, dtype=dt)
+        b_ln_z = torch.randn(z_dim, device=device, dtype=dt)
+        # Perform operation
+        output, z_proj = cuet.attention_pair_bias(
+            single_repr=single_repr,
+            pair_repr=pair_repr,
             mask=mask,
             num_heads=num_heads,
-            w_proj_z=w_proj_z,
+            w_ln_a=w_ln_a,
+            b_ln_a=b_ln_a,
+            w_proj_q=w_proj_q,
+            b_proj_q=b_proj_q,
+            w_proj_k=w_proj_k,
+            w_proj_v=w_proj_v,
             w_proj_g=w_proj_g,
             w_proj_o=w_proj_o,
+            w_proj_z=w_proj_z,
             w_ln_z=w_ln_z,
             b_ln_z=b_ln_z,
         )

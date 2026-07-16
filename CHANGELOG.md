@@ -4,6 +4,9 @@
 ### Added
 - [Torch] `cuet.triangle_attention` accepts `kv_lengths`, an int32 per-row key/value length tensor for right-padded sequence masks. Passing `kv_lengths` selects the Blackwell sm100f length fast path when available; dense `mask` remains the correct fallback path for arbitrary masks. Added `cuet.mask_to_kv_lengths` to convert and validate prefix masks.
 
+### Breaking Changes
+- [Torch] `cuet.attention_pair_bias` now takes the single representation `single_repr` plus the node-LayerNorm (`w_ln_a`/`b_ln_a`) and Q/K/V/gate projection weights instead of pre-projected `q`/`k`/`v` and a separate `s`, matching OpenFold3 `AttentionPairBias` (non-adaLN self-attention). The pre-projected `s`/`q`/`k`/`v` inputs and the gating bias `b_proj_g` are removed, and the op is now self-attention only (square `N x N`); rectangular (`U != V`) cross-attention is no longer supported. ([#290](https://github.com/NVIDIA/cuEquivariance/pull/290))
+
 ## 0.10.0 (2026-04-21)
 
 ### Added
@@ -16,7 +19,7 @@
 - [Torch] `SegmentedPolynomial` checkpoint portability: GPU-saved models now load correctly on CPU. Implemented via `__reduce__` on `SegmentedPolynomialFromUniform1dJit`, `SegmentedPolynomialFusedTP`, `SegmentedPolynomialIndexedLinear`, and `SegmentedPolynomial`, plus graceful fallback when specific `cuequivariance_ops_torch` extensions (e.g. `uniform_1d`) are unavailable ([#270](https://github.com/NVIDIA/cuEquivariance/pull/270))
 - [Torch] Replaced deprecated `is_fx_tracing` with `is_fx_symbolic_tracing` ([#270](https://github.com/NVIDIA/cuEquivariance/pull/270))
 - [JAX] Restrict PTX 88 to sm_121 for CUDA 12.9+, avoiding breakage on other architectures (addresses the known issue noted in the 0.9.0 release) ([#250](https://github.com/NVIDIA/cuEquivariance/pull/250))
-- [Torch/JAX] `cuet.attention_pair_bias`/`cuex.attention_pair_bias`: fixed incorrect results when the hidden dimension is not a multiple of 32; the previous torch fallback for these cases is removed as the kernel now handles them correctly
+- [Torch] `cuet.attention_pair_bias`: fixed incorrect results when the hidden dimension is not a multiple of 32; the previous torch fallback for these cases is removed as the kernel now handles them correctly
 
 ### Notes
 - [Torch] The `CUEQ_TORCH_COMPILE` environment variable (experimental) enables `torch.compile` for `cuet.triangle_attention`; useful for non-contiguous tensor inputs on Ampere/Hopper architectures
