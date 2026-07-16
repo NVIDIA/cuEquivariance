@@ -3,6 +3,7 @@
 
 ### Added
 - [Torch] `cuet.triangle_attention` accepts `kv_lengths`, an int32 per-row key/value length tensor for right-padded sequence masks. Passing `kv_lengths` selects the Blackwell sm100f length fast path when available; dense `mask` remains the correct fallback path for arbitrary masks. Added `cuet.mask_to_kv_lengths` to convert and validate prefix masks.
+- [Torch] `cuet.attention_pair_bias` exposes the optional generalized (Proteina/Complexa) projection parameters `b_proj_k`, `b_proj_v`, `w_ln_q`/`b_ln_q`, `w_ln_k`/`b_ln_k`, and `b_proj_g` as keyword-only arguments forwarded to the backend. They default to `None`, so the strict OpenFold3/Boltz contract applied to `single_repr` is unchanged; supplying them adds the K/V/gate projection biases and the post-projection Q/K LayerNorm (over the full `H * DH` dimension, before the head split). ([#291](https://github.com/NVIDIA/cuEquivariance/pull/291))
 
 ### Breaking Changes
 - [Torch] `cuet.attention_pair_bias` now takes the single representation `single_repr` plus the node-LayerNorm (`w_ln_a`/`b_ln_a`) and Q/K/V/gate projection weights instead of pre-projected `q`/`k`/`v` and a separate `s`, matching OpenFold3 `AttentionPairBias` (non-adaLN self-attention). The pre-projected `s`/`q`/`k`/`v` inputs and the gating bias `b_proj_g` are removed, and the op is now self-attention only (square `N x N`); rectangular (`U != V`) cross-attention is no longer supported. ([#290](https://github.com/NVIDIA/cuEquivariance/pull/290))

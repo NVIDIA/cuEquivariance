@@ -319,7 +319,7 @@ out = cuet.triangle_multiplicative_update(
     precision=cuet.TriMulPrecision.DEFAULT,
 )
 
-# Attention with pair bias
+# Attention with pair bias (strict OpenFold3/Boltz contract)
 out, _ = cuet.attention_pair_bias(
     single_repr, pair_repr, mask, num_heads,
     w_ln_a, b_ln_a,
@@ -327,6 +327,8 @@ out, _ = cuet.attention_pair_bias(
     w_proj_g, w_proj_o, w_proj_z,
     w_ln_z=w_ln_z, b_ln_z=b_ln_z,
 )
+# Optional generalized (Proteina/Complexa) params, all keyword-only and None by
+# default: b_proj_k, b_proj_v, w_ln_q, b_ln_q, w_ln_k, b_ln_k, b_proj_g.
 ```
 
 ## ONNX and TensorRT export

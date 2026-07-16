@@ -231,3 +231,56 @@ def test_attention_pair_bias():
             b_ln_z=b_ln_z,
         )
         assert output.shape == torch.Size([batch_size, seq_len, hidden_dim])
+
+
+def test_attention_pair_bias_generalized_projection():
+    # The optional generalized (Proteina/Complexa) projection params must be
+    # forwarded to the backend and actually change the output relative to the
+    # strict OpenFold3/Boltz call that omits them.
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+        batch_size, seq_len, num_heads, heads_dim, hidden_dim = 1, 32, 2, 32, 64
+        z_dim = 16
+        inner = num_heads * heads_dim
+        dt = torch.float32
+
+        single_repr = torch.randn(
+            batch_size, seq_len, hidden_dim, device=device, dtype=dt
+        )
+        pair_repr = torch.randn(
+            batch_size, seq_len, seq_len, z_dim, device=device, dtype=dt
+        )
+        mask = torch.rand(batch_size, seq_len, device=device) < 0.5
+        common = dict(
+            single_repr=single_repr,
+            pair_repr=pair_repr,
+            mask=mask,
+            num_heads=num_heads,
+            w_ln_a=torch.randn(hidden_dim, device=device, dtype=dt),
+            b_ln_a=torch.randn(hidden_dim, device=device, dtype=dt),
+            w_proj_q=torch.randn(inner, hidden_dim, device=device, dtype=dt),
+            b_proj_q=torch.randn(inner, device=device, dtype=dt),
+            w_proj_k=torch.randn(inner, hidden_dim, device=device, dtype=dt),
+            w_proj_v=torch.randn(inner, hidden_dim, device=device, dtype=dt),
+            w_proj_g=torch.randn(inner, hidden_dim, device=device, dtype=dt),
+            w_proj_o=torch.randn(hidden_dim, inner, device=device, dtype=dt),
+            w_proj_z=torch.randn(num_heads, z_dim, device=device, dtype=dt),
+            w_ln_z=torch.randn(z_dim, device=device, dtype=dt),
+            b_ln_z=torch.randn(z_dim, device=device, dtype=dt),
+        )
+
+        strict, _ = cuet.attention_pair_bias(**common)
+        generalized, _ = cuet.attention_pair_bias(
+            **common,
+            b_proj_k=torch.randn(inner, device=device, dtype=dt),
+            b_proj_v=torch.randn(inner, device=device, dtype=dt),
+            w_ln_q=torch.randn(inner, device=device, dtype=dt),
+            b_ln_q=torch.randn(inner, device=device, dtype=dt),
+            w_ln_k=torch.randn(inner, device=device, dtype=dt),
+            b_ln_k=torch.randn(inner, device=device, dtype=dt),
+            b_proj_g=torch.randn(inner, device=device, dtype=dt),
+        )
+        assert generalized.shape == torch.Size([batch_size, seq_len, hidden_dim])
+        assert not torch.allclose(strict, generalized), (
+            "generalized projection params were not forwarded to the backend"
+        )

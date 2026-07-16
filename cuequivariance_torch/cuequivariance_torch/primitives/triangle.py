@@ -355,6 +355,14 @@ def attention_pair_bias(
     attn_scale: Optional[float] = None,
     return_z_proj: bool = False,
     is_cached_z_proj: bool = False,
+    *,
+    b_proj_k: Optional[torch.Tensor] = None,
+    b_proj_v: Optional[torch.Tensor] = None,
+    w_ln_q: Optional[torch.Tensor] = None,
+    b_ln_q: Optional[torch.Tensor] = None,
+    w_ln_k: Optional[torch.Tensor] = None,
+    b_ln_k: Optional[torch.Tensor] = None,
+    b_proj_g: Optional[torch.Tensor] = None,
 ):
     """Compute attention with a pairwise bias.
 
@@ -384,9 +392,9 @@ def attention_pair_bias(
         b_ln_a: Bias for the LayerNorm(single_repr) of shape (D,). May be None.
         w_proj_q: Weight for the query projection of shape (H * DH, D).
         b_proj_q: Bias for the query projection of shape (H * DH,). May be None.
-        w_proj_k: Weight for the key projection of shape (H * DH, D) (no bias).
-        w_proj_v: Weight for the value projection of shape (H * DH, D) (no bias).
-        w_proj_g: Weight for the gating projection of shape (H * DH, D) (no bias).
+        w_proj_k: Weight for the key projection of shape (H * DH, D).
+        w_proj_v: Weight for the value projection of shape (H * DH, D).
+        w_proj_g: Weight for the gating projection of shape (H * DH, D).
         w_proj_o: Weight for the output projection of shape (D, H * DH).
         w_proj_z: Weight for the pair (pair_repr) projection of shape (H, z_dim).
         b_proj_o: Bias for output projection of shape (D,). Defaults to None.
@@ -403,6 +411,25 @@ def attention_pair_bias(
             output. Defaults to False.
         is_cached_z_proj: Whether the pair_repr tensor is already projected and cached.
             If True, pair_repr should be of shape (B, H, N, N). Defaults to False.
+        b_proj_k: Optional bias for the key projection of shape (H * DH,). Defaults to None.
+        b_proj_v: Optional bias for the value projection of shape (H * DH,). Defaults to None.
+        w_ln_q: Optional weight for a post-projection LayerNorm of the query, of shape
+            (H * DH,). Normalizes over the full H * DH dimension before the head split.
+            Defaults to None.
+        b_ln_q: Optional bias for the post-projection query LayerNorm of shape (H * DH,).
+            Weight and bias are independently optional. Defaults to None.
+        w_ln_k: Optional weight for a post-projection LayerNorm of the key, of shape
+            (H * DH,). Normalizes over the full H * DH dimension before the head split.
+            Defaults to None.
+        b_ln_k: Optional bias for the post-projection key LayerNorm of shape (H * DH,).
+            Weight and bias are independently optional. Defaults to None.
+        b_proj_g: Optional bias for the gating projection of shape (H * DH,). Defaults to None.
+
+    Note:
+        The strict OpenFold3/Boltz contract leaves the optional K/V/gate biases
+        (``b_proj_k``, ``b_proj_v``, ``b_proj_g``) and the projected Q/K LayerNorm
+        (``w_ln_q``/``b_ln_q``, ``w_ln_k``/``b_ln_k``) unset. Supplying them provides
+        the generalized Proteina/Complexa contract; strict callers are unaffected.
 
     Returns:
         - **output** (:class:`torch.Tensor`): Attention output of shape (B * M, N, D)
@@ -531,4 +558,11 @@ def attention_pair_bias(
             attn_scale=attn_scale,
             return_z_proj=return_z_proj,
             is_cached_z_proj=is_cached_z_proj,
+            b_proj_k=b_proj_k,
+            b_proj_v=b_proj_v,
+            w_ln_q=w_ln_q,
+            b_ln_q=b_ln_q,
+            w_ln_k=w_ln_k,
+            b_ln_k=b_ln_k,
+            b_proj_g=b_proj_g,
         )
