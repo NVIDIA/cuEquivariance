@@ -439,7 +439,7 @@ def attention_pair_bias(
     """
 
     try:
-        from cuequivariance_ops_torch.attention_pair_bias_torch import (
+        from cuequivariance_ops_torch.attention_pair_bias import (
             attention_pair_bias as f,
         )
     except Exception:
