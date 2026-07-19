@@ -345,7 +345,7 @@ def attention_pair_bias(
     w_proj_v: torch.Tensor,
     w_proj_g: torch.Tensor,
     w_proj_o: torch.Tensor,
-    w_proj_z: torch.Tensor,
+    w_proj_z: Optional[torch.Tensor] = None,
     b_proj_o: Optional[torch.Tensor] = None,
     b_proj_z: Optional[torch.Tensor] = None,
     w_ln_z: Optional[torch.Tensor] = None,
@@ -371,9 +371,10 @@ def attention_pair_bias(
     ``Linear(LayerNorm(pair_repr))``, biased and masked softmax attention,
     the output gate ``sigmoid(Linear(LayerNorm(single_repr)))``, and the output
     projection.
-    For long sequences it uses an optimized kernel path and for short sequences a
-    PyTorch fallback (see Notes). Q, K, V and the gate are all projected from the
-    same normalized ``single_repr`` (there is no separate ``s`` input).
+    The backend selects a supported, profitable optimized route for the current
+    inputs and otherwise uses the native PyTorch implementation (see Notes). Q, K,
+    V and the gate are all projected from the same normalized ``single_repr``
+    (there is no separate ``s`` input).
 
     Dimensions: ``B`` batch, ``M`` multiplicity (single-rep replicas), ``N`` sequence
     length, ``D`` single-rep feature dim, ``H`` heads, ``DH`` head dim (so the
@@ -397,7 +398,9 @@ def attention_pair_bias(
         w_proj_v: Weight for the value projection of shape (H * DH, D).
         w_proj_g: Weight for the gating projection of shape (H * DH, D).
         w_proj_o: Weight for the output projection of shape (D, H * DH).
-        w_proj_z: Weight for the pair projection of shape (H, z_dim).
+        w_proj_z: Weight for the pair projection of shape (H, z_dim). May be None
+            when ``is_cached_z_proj`` is True because ``pair_repr`` is already
+            projected. Defaults to None.
         b_proj_o: Bias for the output projection of shape (D,). Defaults to None.
         b_proj_z: Bias for the pair projection of shape (H,). Defaults to None.
         w_ln_z: Weight for the LayerNorm of ``pair_repr`` of shape (z_dim,). May be None.
@@ -430,10 +433,10 @@ def attention_pair_bias(
           False.
 
     Notes:
-        - For short sequences (<= CUEQ_ATTENTION_PAIR_BIAS_FALLBACK_THRESHOLD) the
-          PyTorch fallback is used; for long sequences, the pair bias is computed
-          by a Triton kernel and the attention uses scaled_dot_product_attention
-          (cuDNN/Flash/Efficient backend selection).
+        - The backend chooses among its supported optimized routes according to the
+          device, dtype, shape, gradient mode, and projection options. It uses the
+          native PyTorch implementation whenever no optimized route is supported
+          and profitable. The exact routing policy is an implementation detail.
         - Multiplicity (M) is inferred from the shapes so multiple single-rep
           replicas can share one pair representation in a single forward pass.
     """

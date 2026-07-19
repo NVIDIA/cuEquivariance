@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import math
+import sys
+import types
 
 import pytest
 import torch
@@ -284,3 +286,92 @@ def test_attention_pair_bias_generalized_projection():
         assert not torch.allclose(strict, generalized), (
             "generalized projection params were not forwarded to the backend"
         )
+
+
+def test_attention_pair_bias_forwards_generalized_projection_and_defaults(monkeypatch):
+    """The frontend forwards generalized options and supports a cached pair bias."""
+    backend_module = types.ModuleType("cuequivariance_ops_torch.attention_pair_bias")
+    calls = []
+    output = torch.tensor([123.0])
+    cached_output = torch.tensor([456.0])
+
+    def backend_spy(
+        single_repr,
+        pair_repr,
+        mask,
+        num_heads,
+        w_ln_a,
+        b_ln_a,
+        w_proj_q,
+        b_proj_q,
+        w_proj_k,
+        w_proj_v,
+        w_proj_g,
+        w_proj_o,
+        w_proj_z,
+        **kwargs,
+    ):
+        calls.append(
+            {
+                "single_repr": single_repr,
+                "pair_repr": pair_repr,
+                "mask": mask,
+                "num_heads": num_heads,
+                "w_proj_z": w_proj_z,
+                "kwargs": kwargs,
+            }
+        )
+        return (cached_output if kwargs["is_cached_z_proj"] else output), None
+
+    backend_module.attention_pair_bias = backend_spy
+    monkeypatch.setitem(
+        sys.modules,
+        "cuequivariance_ops_torch.attention_pair_bias",
+        backend_module,
+    )
+
+    tensor = torch.tensor([1.0])
+    common = dict(
+        single_repr=tensor,
+        mask=None,
+        num_heads=2,
+        w_ln_a=tensor,
+        b_ln_a=None,
+        w_proj_q=tensor,
+        b_proj_q=None,
+        w_proj_k=tensor,
+        w_proj_v=tensor,
+        w_proj_g=tensor,
+        w_proj_o=tensor,
+    )
+    generalized = {
+        "b_proj_k": torch.tensor([3.0]),
+        "b_proj_v": torch.tensor([4.0]),
+        "w_ln_q": torch.tensor([5.0]),
+        "b_ln_q": torch.tensor([6.0]),
+        "w_ln_k": torch.tensor([7.0]),
+        "b_ln_k": torch.tensor([8.0]),
+        "b_proj_g": torch.tensor([9.0]),
+    }
+
+    actual, _ = cuet.attention_pair_bias(
+        **common,
+        pair_repr=torch.tensor([2.0]),
+        w_proj_z=torch.tensor([10.0]),
+        **generalized,
+    )
+    assert actual is output
+    assert calls[-1]["w_proj_z"].item() == 10.0
+    for name, value in generalized.items():
+        assert calls[-1]["kwargs"][name] is value
+
+    actual, _ = cuet.attention_pair_bias(
+        **common,
+        pair_repr=torch.tensor([11.0]),
+        is_cached_z_proj=True,
+    )
+    assert actual is cached_output
+    assert calls[-1]["w_proj_z"] is None
+    assert calls[-1]["kwargs"]["is_cached_z_proj"] is True
+    for name in generalized:
+        assert calls[-1]["kwargs"][name] is None
