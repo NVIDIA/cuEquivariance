@@ -345,7 +345,7 @@ def attention_pair_bias(
     w_proj_v: torch.Tensor,
     w_proj_g: torch.Tensor,
     w_proj_o: torch.Tensor,
-    w_proj_z: torch.Tensor,
+    w_proj_z: Optional[torch.Tensor] = None,
     b_proj_o: Optional[torch.Tensor] = None,
     b_proj_z: Optional[torch.Tensor] = None,
     w_ln_z: Optional[torch.Tensor] = None,
@@ -355,154 +355,94 @@ def attention_pair_bias(
     attn_scale: Optional[float] = None,
     return_z_proj: bool = False,
     is_cached_z_proj: bool = False,
+    *,
+    b_proj_k: Optional[torch.Tensor] = None,
+    b_proj_v: Optional[torch.Tensor] = None,
+    w_ln_q: Optional[torch.Tensor] = None,
+    b_ln_q: Optional[torch.Tensor] = None,
+    w_ln_k: Optional[torch.Tensor] = None,
+    b_ln_k: Optional[torch.Tensor] = None,
+    b_proj_g: Optional[torch.Tensor] = None,
 ):
     """Compute attention with a pairwise bias.
 
-    This function takes the single representation ``single_repr`` and computes the
-    LayerNorm(single_repr), the Q/K/V and gating projections, the pair-bias term
-    ``Linear(LayerNorm(pair_repr))``, biased+masked softmax attention, the output
-    gate ``sigmoid(Linear(single_repr))``, and the output projection. For long
-    sequences it uses an optimized kernel path and for short sequences a PyTorch
-    fallback (see Notes).
+    Takes the single representation ``single_repr`` and computes LayerNorm, the
+    Q/K/V and gating projections, the pair-bias term
+    ``Linear(LayerNorm(pair_repr))``, biased and masked softmax attention,
+    the output gate ``sigmoid(Linear(LayerNorm(single_repr)))``, and the output
+    projection.
+    The backend selects a supported, profitable optimized route for the current
+    inputs and otherwise uses the native PyTorch implementation (see Notes). Q, K,
+    V and the gate are all projected from the same normalized ``single_repr``
+    (there is no separate ``s`` input).
 
     Dimensions: ``B`` batch, ``M`` multiplicity (single-rep replicas), ``N`` sequence
     length, ``D`` single-rep feature dim, ``H`` heads, ``DH`` head dim (so the
     attention inner dim is ``H * DH``), ``z_dim`` pair feature dim.
 
     Args:
-        single_repr: Single/token representation of shape (B * M, N, D). The
-            LayerNorm(single_repr) and the Q/K/V/gate projections are applied to
-            this tensor inside the op (there is no separate ``s`` input; the gate
-            is computed from the normalized ``single_repr``).
-        pair_repr: Pairwise tensor of shape (B, N, N, z_dim) containing pairwise
-            interactions. When ``is_cached_z_proj`` is True, ``pair_repr`` is
-            instead the already-projected bias of shape (B, H, N, N).
+        single_repr: Single/token representation of shape (B * M, N, D). LayerNorm
+            and the Q/K/V/gate projections are applied to this tensor inside the op
+            (the gate is computed from the normalized representation).
+        pair_repr: Pairwise tensor of shape (B, N, N, z_dim). When
+            ``is_cached_z_proj`` is True, ``pair_repr`` is instead the
+            already-projected bias of shape (B, H, N, N).
         mask: Attention mask of shape (B, N) or (B * M, N) (0 = masked, 1 = valid).
             If None, all positions are treated as valid.
         num_heads: Number of attention heads.
-        w_ln_a: Weight for the LayerNorm(single_repr) of shape (D,).
-        b_ln_a: Bias for the LayerNorm(single_repr) of shape (D,). May be None.
+        w_ln_a: Weight for the LayerNorm of ``single_repr`` of shape (D,).
+        b_ln_a: Bias for the LayerNorm of ``single_repr`` of shape (D,). May be None.
         w_proj_q: Weight for the query projection of shape (H * DH, D).
         b_proj_q: Bias for the query projection of shape (H * DH,). May be None.
-        w_proj_k: Weight for the key projection of shape (H * DH, D) (no bias).
-        w_proj_v: Weight for the value projection of shape (H * DH, D) (no bias).
-        w_proj_g: Weight for the gating projection of shape (H * DH, D) (no bias).
+        w_proj_k: Weight for the key projection of shape (H * DH, D).
+        w_proj_v: Weight for the value projection of shape (H * DH, D).
+        w_proj_g: Weight for the gating projection of shape (H * DH, D).
         w_proj_o: Weight for the output projection of shape (D, H * DH).
-        w_proj_z: Weight for the pair (pair_repr) projection of shape (H, z_dim).
-        b_proj_o: Bias for output projection of shape (D,). Defaults to None.
-        b_proj_z: Bias for pair_repr projection of shape (H,). Defaults to None.
-        w_ln_z: Weight for layer normalization of pair_repr tensor of shape (z_dim,).
-            May be None.
-        b_ln_z: Bias for layer normalization of pair_repr tensor of shape (z_dim,).
-            May be None.
+        w_proj_z: Weight for the pair projection of shape (H, z_dim). May be None
+            when ``is_cached_z_proj`` is True because ``pair_repr`` is already
+            projected. Defaults to None.
+        b_proj_o: Bias for the output projection of shape (D,). Defaults to None.
+        b_proj_z: Bias for the pair projection of shape (H,). Defaults to None.
+        w_ln_z: Weight for the LayerNorm of ``pair_repr`` of shape (z_dim,). May be None.
+        b_ln_z: Bias for the LayerNorm of ``pair_repr`` of shape (z_dim,). May be None.
         inf: Large value used for masking invalid attention positions. Defaults to 1e6.
         eps: Epsilon value for layer normalization. Defaults to 1e-5.
-        attn_scale: Scaling factor for attention scores. If None, uses 1/sqrt(head_dim).
-            Defaults to None.
-        return_z_proj: Whether to return the projected pair_repr tensor as the second
+        attn_scale: Scaling factor for attention scores. If None, uses
+            1/sqrt(head_dim). Defaults to None.
+        return_z_proj: Whether to return the projected pair tensor as the second
             output. Defaults to False.
-        is_cached_z_proj: Whether the pair_repr tensor is already projected and cached.
-            If True, pair_repr should be of shape (B, H, N, N). Defaults to False.
+        is_cached_z_proj: Whether ``pair_repr`` is already projected and cached. If
+            True, ``pair_repr`` should be of shape (B, H, N, N). Defaults to False.
+        b_proj_k: Optional key-projection bias of shape (H * DH,). Defaults to None.
+        b_proj_v: Optional value-projection bias of shape (H * DH,). Defaults to None.
+        w_ln_q: Optional weight for projected-query LayerNorm of shape (H * DH,).
+            The norm is applied over H * DH before splitting heads. Defaults to None.
+        b_ln_q: Optional bias for projected-query LayerNorm of shape (H * DH,).
+            Weight and bias are independently optional. Defaults to None.
+        w_ln_k: Optional weight for projected-key LayerNorm of shape (H * DH,).
+            The norm is applied over H * DH before splitting heads. Defaults to None.
+        b_ln_k: Optional bias for projected-key LayerNorm of shape (H * DH,).
+            Weight and bias are independently optional. Defaults to None.
+        b_proj_g: Optional gating-projection bias of shape (H * DH,). Defaults to None.
 
     Returns:
-        - **output** (:class:`torch.Tensor`): Attention output of shape (B * M, N, D)
-          with pairwise bias applied.
-        - **z_proj** (:class:`torch.Tensor` | None): Projected pair_repr tensor of
-          shape (B, H, N, N) reusable via ``is_cached_z_proj``, or ``None`` when
-          ``return_z_proj=False``.
+        - output (torch.Tensor): Attention output of shape (B * M, N, D) with the
+          pairwise bias applied.
+        - z_proj (torch.Tensor | None): Projected pair tensor of shape (B, H, N, N)
+          reusable via ``is_cached_z_proj``, or ``None`` when ``return_z_proj`` is
+          False.
 
     Notes:
-        - For short sequences (≤ CUEQ_ATTENTION_PAIR_BIAS_FALLBACK_THRESHOLD),
-          uses PyTorch fallback implementation.
-        - For long sequences, the pair bias is computed by a Triton kernel and the
-          attention uses scaled_dot_product_attention (cuDNN/Flash/Efficient
-          backend selection).
+        - The backend chooses among its supported optimized routes according to the
+          device, dtype, shape, gradient mode, and projection options. It uses the
+          native PyTorch implementation whenever no optimized route is supported
+          and profitable. The exact routing policy is an implementation detail.
         - Multiplicity (M) is inferred from the shapes so multiple single-rep
           replicas can share one pair representation in a single forward pass.
-        - Tested for bf16, fp16, fp32 and tf32. torch.set_float32_matmul_precision maybe used to toggle between fp32/tf32.
-        - Currently, the kernel provides superior performance only when DH (head dimension) is a multiple of 32.
-          For non-multiples of 32, we also recommend using graph compilation techniques like torch.compile, in addition.
-
-    Examples:
-        Basic usage without caching:
-
-        >>> import torch
-        >>> from cuequivariance_torch import attention_pair_bias
-        >>> if torch.cuda.is_available():  # doctest: +SKIP
-        ...     device = torch.device("cuda")
-        ...     batch_size, seq_len, num_heads, heads_dim = 1, 32, 2, 32
-        ...     hidden_dim, z_dim = num_heads * heads_dim, 16
-        ...     inner = num_heads * heads_dim
-        ...     dt = torch.bfloat16
-        ...     single_repr = torch.randn(batch_size, seq_len, hidden_dim, device=device, dtype=dt)
-        ...     pair_repr = torch.randn(batch_size, seq_len, seq_len, z_dim, device=device, dtype=dt)
-        ...     mask = torch.rand(batch_size, seq_len, device=device) < 0.5
-        ...     w_ln_a = torch.randn(hidden_dim, device=device, dtype=dt)
-        ...     b_ln_a = torch.randn(hidden_dim, device=device, dtype=dt)
-        ...     w_proj_q = torch.randn(inner, hidden_dim, device=device, dtype=dt)
-        ...     b_proj_q = torch.randn(inner, device=device, dtype=dt)
-        ...     w_proj_k = torch.randn(inner, hidden_dim, device=device, dtype=dt)
-        ...     w_proj_v = torch.randn(inner, hidden_dim, device=device, dtype=dt)
-        ...     w_proj_g = torch.randn(inner, hidden_dim, device=device, dtype=dt)
-        ...     w_proj_o = torch.randn(hidden_dim, inner, device=device, dtype=dt)
-        ...     w_proj_z = torch.randn(num_heads, z_dim, device=device, dtype=dt)
-        ...     w_ln_z = torch.randn(z_dim, device=device, dtype=dt)
-        ...     b_ln_z = torch.randn(z_dim, device=device, dtype=dt)
-        ...     # Perform operation
-        ...     output, _ = attention_pair_bias(
-        ...         single_repr=single_repr,
-        ...         pair_repr=pair_repr,
-        ...         mask=mask,
-        ...         num_heads=num_heads,
-        ...         w_ln_a=w_ln_a,
-        ...         b_ln_a=b_ln_a,
-        ...         w_proj_q=w_proj_q,
-        ...         b_proj_q=b_proj_q,
-        ...         w_proj_k=w_proj_k,
-        ...         w_proj_v=w_proj_v,
-        ...         w_proj_g=w_proj_g,
-        ...         w_proj_o=w_proj_o,
-        ...         w_proj_z=w_proj_z,
-        ...         w_ln_z=w_ln_z,
-        ...         b_ln_z=b_ln_z,
-        ...         return_z_proj=False,
-        ...     )
-        ...     print(output.shape)  # torch.Size([1, 32, 64])
-        torch.Size([1, 32, 64])
-
-        Example with caching (recommended for inference when pair_repr doesn't change):
-
-        >>> # Check cache and determine if pair_repr is already projected
-        >>> if model_cache is not None and "z_proj" in model_cache:  # doctest: +SKIP
-        ...     pair_repr = model_cache["z_proj"]
-        ...     is_cached_z_proj = True
-        ... else:
-        ...     is_cached_z_proj = False
-        >>>
-        >>> # Call attention_pair_bias
-        >>> o, z_proj = attention_pair_bias(  # doctest: +SKIP
-        ...     single_repr=single_repr, pair_repr=pair_repr, mask=mask,
-        ...     num_heads=num_heads,
-        ...     w_ln_a=w_ln_a, b_ln_a=b_ln_a,
-        ...     w_proj_q=w_proj_q, b_proj_q=b_proj_q,
-        ...     w_proj_k=w_proj_k, w_proj_v=w_proj_v,
-        ...     w_proj_g=w_proj_g, w_proj_o=w_proj_o,
-        ...     w_proj_z=w_proj_z if not is_cached_z_proj else None,
-        ...     w_ln_z=w_ln_z if not is_cached_z_proj else None,
-        ...     b_ln_z=b_ln_z if not is_cached_z_proj else None,
-        ...     return_z_proj=True,
-        ...     is_cached_z_proj=is_cached_z_proj,
-        ... )
-        >>>
-        >>> # Cache z_proj for next call
-        >>> if model_cache is not None and "z_proj" not in model_cache:  # doctest: +SKIP
-        ...     model_cache["z_proj"] = z_proj
     """
 
     try:
-        from cuequivariance_ops_torch.attention_pair_bias_torch import (
-            attention_pair_bias as f,
-        )
+        from cuequivariance_ops_torch import attention_pair_bias as f
     except Exception:
         raise ImportError(
             "Error importing attention_pair_bias from cuequivariance_ops_torch."
@@ -531,4 +471,11 @@ def attention_pair_bias(
             attn_scale=attn_scale,
             return_z_proj=return_z_proj,
             is_cached_z_proj=is_cached_z_proj,
+            b_proj_k=b_proj_k,
+            b_proj_v=b_proj_v,
+            w_ln_q=w_ln_q,
+            b_ln_q=b_ln_q,
+            w_ln_k=w_ln_k,
+            b_ln_k=b_ln_k,
+            b_proj_g=b_proj_g,
         )
