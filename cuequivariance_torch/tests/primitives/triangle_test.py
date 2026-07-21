@@ -289,8 +289,8 @@ def test_attention_pair_bias_generalized_projection():
 
 
 def test_attention_pair_bias_forwards_generalized_projection_and_defaults(monkeypatch):
-    """The frontend forwards generalized options and supports a cached pair bias."""
-    backend_module = types.ModuleType("cuequivariance_ops_torch.attention_pair_bias")
+    """The public backend export receives generalized and cached-pair options."""
+    backend_module = types.ModuleType("cuequivariance_ops_torch")
     calls = []
     output = torch.tensor([123.0])
     cached_output = torch.tensor([456.0])
@@ -326,8 +326,13 @@ def test_attention_pair_bias_forwards_generalized_projection_and_defaults(monkey
     backend_module.attention_pair_bias = backend_spy
     monkeypatch.setitem(
         sys.modules,
-        "cuequivariance_ops_torch.attention_pair_bias",
+        "cuequivariance_ops_torch",
         backend_module,
+    )
+    monkeypatch.delitem(
+        sys.modules,
+        "cuequivariance_ops_torch.attention_pair_bias",
+        raising=False,
     )
 
     tensor = torch.tensor([1.0])

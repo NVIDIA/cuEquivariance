@@ -442,9 +442,7 @@ def attention_pair_bias(
     """
 
     try:
-        from cuequivariance_ops_torch.attention_pair_bias import (
-            attention_pair_bias as f,
-        )
+        from cuequivariance_ops_torch import attention_pair_bias as f
     except Exception:
         raise ImportError(
             "Error importing attention_pair_bias from cuequivariance_ops_torch."
