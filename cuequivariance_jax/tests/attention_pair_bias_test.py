@@ -30,9 +30,7 @@ def _inputs(dtype=jnp.float32):
     return {
         "single_repr": normal(0, (B * M, N, D)),
         "pair_repr": normal(1, (B, N, N, DZ)),
-        "mask": jnp.asarray(
-            [[1.0, 1.0, 0.25], [1.0, 0.5, 1.0]], dtype=dtype
-        ),
+        "mask": jnp.asarray([[1.0, 1.0, 0.25], [1.0, 0.5, 1.0]], dtype=dtype),
         "num_heads": H,
         "w_ln_a": normal(2, (D,)),
         "b_ln_a": normal(3, (D,)),

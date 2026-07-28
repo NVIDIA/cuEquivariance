@@ -41,9 +41,7 @@ def _layer_norm(
 ) -> jax.Array:
     output_dtype = x.dtype
     stats_dtype = (
-        jnp.float32
-        if output_dtype in (jnp.float16, jnp.bfloat16)
-        else output_dtype
+        jnp.float32 if output_dtype in (jnp.float16, jnp.bfloat16) else output_dtype
     )
     x_stats = x.astype(stats_dtype)
     centered = x_stats - jnp.mean(x_stats, axis=-1, keepdims=True)
@@ -126,13 +124,11 @@ def _validate_inputs(
     ):
         if value.shape != (projected_channels, D):
             raise ValueError(
-                f"{name} must have shape {(projected_channels, D)}, "
-                f"got {value.shape}"
+                f"{name} must have shape {(projected_channels, D)}, got {value.shape}"
             )
     if w_proj_o.shape != (D, projected_channels):
         raise ValueError(
-            f"w_proj_o must have shape {(D, projected_channels)}, "
-            f"got {w_proj_o.shape}"
+            f"w_proj_o must have shape {(D, projected_channels)}, got {w_proj_o.shape}"
         )
     if w_ln_a.shape != (D,):
         raise ValueError(f"w_ln_a must have shape {(D,)}, got {w_ln_a.shape}")
@@ -247,21 +243,17 @@ def _attention_pair_bias_reference(
     ).astype(input_dtype)
 
     scale = head_dim**-0.5 if attn_scale is None else attn_scale
-    scores = jnp.einsum(
-        "bhid,bhjd->bhij", q, k, precision=precision
-    ).astype(jnp.float32)
+    scores = jnp.einsum("bhid,bhjd->bhij", q, k, precision=precision).astype(
+        jnp.float32
+    )
     scores = scores * scale + pair_bias.astype(jnp.float32)
     attention = jax.nn.softmax(scores, axis=-1).astype(input_dtype)
-    out = jnp.einsum(
-        "bhij,bhjd->bihd", attention, v, precision=precision
-    ).reshape(BM, N, num_heads * head_dim)
+    out = jnp.einsum("bhij,bhjd->bihd", attention, v, precision=precision).reshape(
+        BM, N, num_heads * head_dim
+    )
 
-    gate = jax.nn.sigmoid(
-        _linear(normalized, w_proj_g, b_proj_g, precision)
-    )
-    output = _linear(gate * out, w_proj_o, b_proj_o, precision).astype(
-        input_dtype
-    )
+    gate = jax.nn.sigmoid(_linear(normalized, w_proj_g, b_proj_g, precision))
+    output = _linear(gate * out, w_proj_o, b_proj_o, precision).astype(input_dtype)
     return output, z_proj if return_z_proj else None
 
 
