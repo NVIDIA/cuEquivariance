@@ -2,6 +2,7 @@
 ## (unreleased)
 
 ### Added
+- [JAX] Added `cuex.attention_pair_bias` with raw and cached pair-projection API parity, a portable pure-JAX implementation, and optional `cuequivariance_ops_jax` triangle-attention FFI acceleration for eligible FP16/BF16 CUDA inputs.
 - [Torch] `cuet.triangle_attention` accepts `kv_lengths`, an int32 per-row key/value length tensor for right-padded sequence masks. Passing `kv_lengths` selects the Blackwell sm100f length fast path when available; dense `mask` remains the correct fallback path for arbitrary masks. Added `cuet.mask_to_kv_lengths` to convert and validate prefix masks.
 - [Torch] `cuet.attention_pair_bias` exposes the optional generalized (Proteina/Complexa) projection parameters `b_proj_k`, `b_proj_v`, `w_ln_q`/`b_ln_q`, `w_ln_k`/`b_ln_k`, and `b_proj_g` as keyword-only arguments forwarded to the backend. They default to `None`, so the strict OpenFold3/Boltz contract applied to `single_repr` is unchanged; supplying them adds the K/V/gate projection biases and the post-projection Q/K LayerNorm (over the full `H * DH` dimension, before the head split). The pair-projection weight `w_proj_z` may be omitted when `is_cached_z_proj=True` because the supplied pair representation is already projected. ([#291](https://github.com/NVIDIA/cuEquivariance/pull/291))
 
