@@ -263,7 +263,11 @@ def triangle_attention_custom_vjp(
 def triangle_attention_custom_vjp_fwd(q, k, v, bias, mask, scale, precision=None):
     a, lse, amax = fwd_p.bind(q, k, v, bias, mask, scale=scale, precision=precision)
     residuals = (a, lse, q, k, v, bias, mask)
-    return (a, lse, amax), residuals
+    # Match the primal output's pytree structure: `triangle_attention_custom_vjp`
+    # returns `fwd_p.bind(...)`, and a multiple_results primitive's bind returns a
+    # list. Returning a tuple here trips custom_vjp's fwd/primal structure check
+    # on JAX versions that enforce exact tuple-vs-list equality (TypeError).
+    return [a, lse, amax], residuals
 
 
 def triangle_attention_custom_vjp_bwd(scale, precision, residuals, cotangents):
