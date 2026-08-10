@@ -327,8 +327,9 @@ out, _ = cuet.attention_pair_bias(
     w_proj_g, w_proj_o, w_proj_z,
     w_ln_z=w_ln_z, b_ln_z=b_ln_z,
 )
-# Optional generalized (Proteina/Complexa) params, all keyword-only and None by
-# default: b_proj_k, b_proj_v, w_ln_q, b_ln_q, w_ln_k, b_ln_k, b_proj_g.
+# Optional generalized (Proteina/Complexa) params are keyword-only:
+# b_proj_k, b_proj_v, w_ln_q, b_ln_q, w_ln_k, b_ln_k, b_proj_g (default None),
+# and norm_kind (default "layer_norm").
 ```
 
 ## ONNX and TensorRT export

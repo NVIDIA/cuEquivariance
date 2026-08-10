@@ -363,14 +363,13 @@ def attention_pair_bias(
     w_ln_k: Optional[torch.Tensor] = None,
     b_ln_k: Optional[torch.Tensor] = None,
     b_proj_g: Optional[torch.Tensor] = None,
+    norm_kind: str = "layer_norm",
 ):
     """Compute attention with a pairwise bias.
 
-    Takes the single representation ``single_repr`` and computes LayerNorm, the
-    Q/K/V and gating projections, the pair-bias term
-    ``Linear(LayerNorm(pair_repr))``, biased and masked softmax attention,
-    the output gate ``sigmoid(Linear(LayerNorm(single_repr)))``, and the output
-    projection.
+    Normalizes the single and pair representations according to ``norm_kind``,
+    then computes the Q/K/V and gating projections, pair-bias term, biased and
+    masked softmax attention, output gate, and output projection.
     The backend selects a supported, profitable optimized route for the current
     inputs and otherwise uses the native PyTorch implementation (see Notes). Q, K,
     V and the gate are all projected from the same normalized ``single_repr``
@@ -406,7 +405,7 @@ def attention_pair_bias(
         w_ln_z: Weight for the LayerNorm of ``pair_repr`` of shape (z_dim,). May be None.
         b_ln_z: Bias for the LayerNorm of ``pair_repr`` of shape (z_dim,). May be None.
         inf: Large value used for masking invalid attention positions. Defaults to 1e6.
-        eps: Epsilon value for layer normalization. Defaults to 1e-5.
+        eps: Epsilon value for normalization. Defaults to 1e-5.
         attn_scale: Scaling factor for attention scores. If None, uses
             1/sqrt(head_dim). Defaults to None.
         return_z_proj: Whether to return the projected pair tensor as the second
@@ -424,6 +423,9 @@ def attention_pair_bias(
         b_ln_k: Optional bias for projected-key LayerNorm of shape (H * DH,).
             Weight and bias are independently optional. Defaults to None.
         b_proj_g: Optional gating-projection bias of shape (H * DH,). Defaults to None.
+        norm_kind: Normalization applied to the single, optional Q/K, and pair
+            representations. ``"layer_norm"`` preserves the existing behavior;
+            ``"rms_norm"`` requires every normalization bias to be ``None``.
 
     Returns:
         - output (torch.Tensor): Attention output of shape (B * M, N, D) with the
@@ -441,13 +443,17 @@ def attention_pair_bias(
           replicas can share one pair representation in a single forward pass.
     """
 
+    if w_proj_z is None and not is_cached_z_proj:
+        raise ValueError("w_proj_z is required unless is_cached_z_proj=True")
+
     try:
         from cuequivariance_ops_torch import attention_pair_bias as f
-    except Exception:
+    except Exception as error:
         raise ImportError(
             "Error importing attention_pair_bias from cuequivariance_ops_torch."
-        )
+        ) from error
     else:
+        norm_kind_kwargs = {} if norm_kind == "layer_norm" else {"norm_kind": norm_kind}
         return f(
             single_repr,
             pair_repr,
@@ -478,4 +484,5 @@ def attention_pair_bias(
             w_ln_k=w_ln_k,
             b_ln_k=b_ln_k,
             b_proj_g=b_proj_g,
+            **norm_kind_kwargs,
         )
