@@ -102,6 +102,31 @@ def test_gradient_correctness_finite_differences(platform, precision):
     )
 
 
+def test_gradient_through_checkpointed_scan():
+    """Reverse mode must work through the Pairformer-style remat/scan composition."""
+    q, k, v, bias, mask, scale = create_test_data(
+        "cpu",
+        batch_size=1,
+        n_nodes=1,
+        n_heads=1,
+        seq_len_qo=4,
+        seq_len_kv=4,
+        d_model=8,
+    )
+
+    def body(carry, _):
+        output, _, _ = cuex.triangle_attention(carry, k, v, bias, mask, scale)
+        return output, None
+
+    def loss(q):
+        output, _ = jax.lax.scan(jax.checkpoint(body), q, None, length=2)
+        return jnp.sum(output)
+
+    dq = jax.grad(loss)(q)
+    assert dq.shape == q.shape
+    assert jnp.all(jnp.isfinite(dq))
+
+
 @pytest.mark.parametrize("platform", ["cpu", "cuda"])
 @pytest.mark.parametrize(
     "batch_size, n_nodes, n_heads, seq_len_qo, seq_len_kv, d_model", SHAPE_CONFIGS
