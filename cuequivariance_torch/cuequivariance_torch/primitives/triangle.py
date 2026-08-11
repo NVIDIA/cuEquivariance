@@ -380,17 +380,17 @@ def attention_pair_bias(
     attention inner dim is ``H * DH``), ``z_dim`` pair feature dim.
 
     Args:
-        single_repr: Single/token representation of shape (B * M, N, D). LayerNorm
-            and the Q/K/V/gate projections are applied to this tensor inside the op
-            (the gate is computed from the normalized representation).
+        single_repr: Single/token representation of shape (B * M, N, D).
+            Normalization and the Q/K/V/gate projections are applied to this tensor
+            inside the op (the gate is computed from the normalized representation).
         pair_repr: Pairwise tensor of shape (B, N, N, z_dim). When
             ``is_cached_z_proj`` is True, ``pair_repr`` is instead the
             already-projected bias of shape (B, H, N, N).
         mask: Attention mask of shape (B, N) or (B * M, N) (0 = masked, 1 = valid).
             If None, all positions are treated as valid.
         num_heads: Number of attention heads.
-        w_ln_a: Weight for the LayerNorm of ``single_repr`` of shape (D,).
-        b_ln_a: Bias for the LayerNorm of ``single_repr`` of shape (D,). May be None.
+        w_ln_a: Normalization weight for ``single_repr`` of shape (D,).
+        b_ln_a: Normalization bias for ``single_repr`` of shape (D,). May be None.
         w_proj_q: Weight for the query projection of shape (H * DH, D).
         b_proj_q: Bias for the query projection of shape (H * DH,). May be None.
         w_proj_k: Weight for the key projection of shape (H * DH, D).
@@ -402,8 +402,8 @@ def attention_pair_bias(
             projected. Defaults to None.
         b_proj_o: Bias for the output projection of shape (D,). Defaults to None.
         b_proj_z: Bias for the pair projection of shape (H,). Defaults to None.
-        w_ln_z: Weight for the LayerNorm of ``pair_repr`` of shape (z_dim,). May be None.
-        b_ln_z: Bias for the LayerNorm of ``pair_repr`` of shape (z_dim,). May be None.
+        w_ln_z: Normalization weight for ``pair_repr`` of shape (z_dim,). May be None.
+        b_ln_z: Normalization bias for ``pair_repr`` of shape (z_dim,). May be None.
         inf: Large value used for masking invalid attention positions. Defaults to 1e6.
         eps: Epsilon value for normalization. Defaults to 1e-5.
         attn_scale: Scaling factor for attention scores. If None, uses

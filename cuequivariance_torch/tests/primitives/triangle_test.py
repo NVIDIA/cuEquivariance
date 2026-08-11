@@ -236,7 +236,7 @@ def test_attention_pair_bias():
 
 
 def test_attention_pair_bias_generalized_projection():
-    # The optional generalized (Proteina/Complexa) projection params must be
+    # The optional generalized projection params must be
     # forwarded to the backend and actually change the output relative to the
     # strict OpenFold3/Boltz call that omits them.
     if torch.cuda.is_available():
