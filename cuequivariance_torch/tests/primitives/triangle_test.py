@@ -236,7 +236,7 @@ def test_attention_pair_bias():
 
 
 def test_attention_pair_bias_generalized_projection():
-    # The optional generalized (Proteina/Complexa) projection params must be
+    # The optional generalized projection params must be
     # forwarded to the backend and actually change the output relative to the
     # strict OpenFold3/Boltz call that omits them.
     if torch.cuda.is_available():
@@ -370,13 +370,35 @@ def test_attention_pair_bias_forwards_generalized_projection_and_defaults(monkey
     for name, value in generalized.items():
         assert calls[-1]["kwargs"][name] is value
 
+    rms_generalized = {
+        **generalized,
+        "b_ln_q": None,
+        "b_ln_k": None,
+    }
     actual, _ = cuet.attention_pair_bias(
         **common,
         pair_repr=torch.tensor([11.0]),
+        w_proj_z=torch.tensor([12.0]),
+        norm_kind="rms_norm",
+        **rms_generalized,
+    )
+    assert actual is output
+    assert calls[-1]["kwargs"]["norm_kind"] == "rms_norm"
+
+    actual, _ = cuet.attention_pair_bias(
+        **common,
+        pair_repr=torch.tensor([13.0]),
         is_cached_z_proj=True,
     )
     assert actual is cached_output
     assert calls[-1]["w_proj_z"] is None
     assert calls[-1]["kwargs"]["is_cached_z_proj"] is True
+    assert "norm_kind" not in calls[-1]["kwargs"]
     for name in generalized:
         assert calls[-1]["kwargs"][name] is None
+
+    with pytest.raises(ValueError, match="w_proj_z is required"):
+        cuet.attention_pair_bias(
+            **common,
+            pair_repr=torch.tensor([14.0]),
+        )
