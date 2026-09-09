@@ -54,7 +54,8 @@ def triangle_attention(
         precision: Precision for the computation (default is None).
 
     Returns:
-        A tuple containing the attention output, log-sum-exp, and maximum value.
+        A three-element list containing the attention output, log-sum-exp, and
+        maximum value.
 
     .. math::
 
