@@ -13,7 +13,9 @@ runs:
     - name: Install JAX and PyTorch dependencies
       shell: bash
       run: |
-        uv pip install -U pytest jax torch e3nn
+        # TODO: drop the <0.11.2 pin once flax 0.12.10 ships (google/flax#5596):
+        # jax 0.11.2 removed jax.experimental.hijax.HiPrimitive, which flax<=0.12.9 imports.
+        uv pip install -U pytest "jax<0.11.2" torch e3nn
         uv pip install "flax>=0.12.0"
     
     - name: Install packages
