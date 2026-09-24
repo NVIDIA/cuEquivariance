@@ -14,13 +14,15 @@ runs:
       if: inputs.use-gpu != 'true'
       shell: bash
       run: |
-        uv pip install -U pytest jax
-    
+        # TODO: drop the <0.11.2 pin once flax 0.12.10 ships (google/flax#5596):
+        # jax 0.11.2 removed jax.experimental.hijax.HiPrimitive, which flax<=0.12.9 imports.
+        uv pip install -U pytest "jax<0.11.2"
+
     - name: Install JAX (GPU)
       if: inputs.use-gpu == 'true'
       shell: bash
       run: |
-        uv pip install -U pytest "jax[cuda12]"
+        uv pip install -U pytest "jax[cuda12]<0.11.2"
         uv pip install nvidia-cusolver-cu12==11.7.3.90
         uv pip install nvidia-cublas-cu12
     
