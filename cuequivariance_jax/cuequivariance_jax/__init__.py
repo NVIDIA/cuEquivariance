@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -49,6 +49,7 @@ from .triangle import (
     triangle_multiplicative_update,
     Precision as TriMulPrecision,
     triangle_attention,
+    attention_pair_bias,
 )
 from . import flax_linen
 from . import experimental
@@ -76,6 +77,7 @@ __all__ = [
     "triangle_multiplicative_update",
     "TriMulPrecision",
     "triangle_attention",
+    "attention_pair_bias",
     "flax_linen",
     "experimental",
     "nnx",
