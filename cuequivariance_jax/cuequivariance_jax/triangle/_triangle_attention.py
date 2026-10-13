@@ -31,13 +31,18 @@ try:
 except ImportError:
     HAS_CUE_OPS_JAX = False
 
+try:
+    from cuequivariance_ops_jax import TRIANGLE_ATTENTION_ACCEPTS_NO_MASK
+except ImportError:  # absent, or a release that predates mask=None support
+    TRIANGLE_ATTENTION_ACCEPTS_NO_MASK = False
+
 
 def triangle_attention(
     q: jax.Array,  # [B, N, H, S_qo, D]
     k: jax.Array,  # [B, N, H, S_kv, D]
     v: jax.Array,  # [B, N, H, S_kv, D]
     bias: jax.Array,  # [B, 1, H, S_qo, S_kv]
-    mask: jax.Array,  # [B, N, 1, 1, S_kv] boolean
+    mask: jax.Array | None,  # [B, N, 1, 1, S_kv] boolean
     scale: float,
     precision: jax.lax.Precision | None = None,
 ):
@@ -49,7 +54,10 @@ def triangle_attention(
         v: Value tensor of shape [B, N, H, S_kv, D].
         bias: Bias tensor of shape [B, 1, H, S_qo, S_kv]. Cast to float32 for standard
             kernels; on Blackwell GPUs (sm100f), cast to match q/k/v dtype (bf16/fp16).
-        mask: Mask tensor of shape [B, N, 1, 1, S_kv] (boolean, True means valid).
+        mask: Mask tensor of shape [B, N, 1, 1, S_kv] (boolean, True means valid), or
+            ``None`` for no masking. ``None`` is equivalent to an all-True mask without
+            creating one, unless the installed cuequivariance_ops_jax predates
+            ``None`` support.
         scale: Scaling factor for the dot product.
         precision: Precision for the computation (default is None).
 
@@ -79,6 +87,8 @@ def triangle_attention(
         The kernel provides optimal performance for a "padding mask" consisting in
         (all True, followed by all False) in the last dimension.
     """
+    if mask is None and HAS_CUE_OPS_JAX and not TRIANGLE_ATTENTION_ACCEPTS_NO_MASK:
+        mask = jnp.ones((*k.shape[:2], 1, 1, k.shape[3]), dtype=jnp.bool_)
     return triangle_attention_custom_vjp(
         q, k, v, bias, mask, scale=scale, precision=precision
     )
@@ -90,7 +100,7 @@ def triangle_attention_jax_fwd(
     k: jax.Array,  # [B, N, H, S_kv, D]
     v: jax.Array,  # [B, N, H, S_kv, D]
     bias: jax.Array,  # [B, 1, H, S_qo, S_kv]
-    mask: jax.Array,  # [B, N, 1, 1, S_kv] boolean
+    mask: jax.Array | None,  # [B, N, 1, 1, S_kv] boolean
     scale: float,
     precision: jax.lax.Precision | None = None,
 ) -> jax.Array:  # [B, N, H, S_qo, D]
@@ -101,7 +111,8 @@ def triangle_attention_jax_fwd(
     q = scale * q
     a = jnp.einsum("...ai,...bi->...ab", q, k, precision=precision)
     a = a + bias
-    a = jnp.where(mask, a, -1e9)
+    if mask is not None:
+        a = jnp.where(mask, a, -1e9)
 
     a = a.astype(jnp.float32)  # [B, N, H, S_qo, S_kv]
     amax = jnp.max(a, axis=-1, keepdims=True)
@@ -128,7 +139,7 @@ def triangle_attention_fwd_abstract_eval(
     k: jax.core.ShapedArray,  # [B, N, H, S_kv, D]
     v: jax.core.ShapedArray,  # [B, N, H, S_kv, D]
     bias: jax.core.ShapedArray,  # [B, 1, H, S_qo, S_kv]
-    mask: jax.core.ShapedArray,  # [B, N, 1, 1, S_kv] boolean
+    *mask: jax.core.ShapedArray,  # [B, N, 1, 1, S_kv] boolean, absent for no mask
     **unused_kwargs,
 ) -> tuple[jax.core.ShapedArray, jax.core.ShapedArray, jax.core.ShapedArray]:
     B, N, H, S_qo, D = q.shape
@@ -146,7 +157,7 @@ def triangle_attention_bwd_abstract_eval(
     k: jax.core.ShapedArray,  # [B, N, H, S_kv, D]
     v: jax.core.ShapedArray,  # [B, N, H, S_kv, D]
     bias: jax.core.ShapedArray,  # [B, 1, H, S_qo, S_kv]
-    mask: jax.core.ShapedArray,  # [B, N, 1, 1, S_kv] boolean
+    *mask: jax.core.ShapedArray,  # [B, N, 1, 1, S_kv] boolean, absent for no mask
     **unused_kwargs,
 ) -> tuple[
     jax.core.ShapedArray,
@@ -167,11 +178,11 @@ def triangle_attention_fwd_impl(
     k: jax.Array,  # [B, N, H, S_kv, D]
     v: jax.Array,  # [B, N, H, S_kv, D]
     bias: jax.Array,  # [B, 1, H, S_qo, S_kv]
-    mask: jax.Array,  # [B, N, 1, 1, S_kv] boolean
-    *,
+    *mask_operands: jax.Array,  # [B, N, 1, 1, S_kv] boolean, absent for no mask
     scale: float,
     precision: jax.lax.Precision | None = None,
 ) -> tuple[jax.Array, jax.Array, jax.Array]:
+    mask = mask_operands[0] if mask_operands else None
     if platform == "cuda":
         assert HAS_CUE_OPS_JAX, (
             "Please install cuequivariance_ops_jax for CUDA support."
@@ -190,11 +201,11 @@ def triangle_attention_bwd_impl(
     k: jax.Array,  # [B, N, H, S_kv, D]
     v: jax.Array,  # [B, N, H, S_kv, D]
     bias: jax.Array,  # [B, 1, H, S_qo, S_kv]
-    mask: jax.Array,  # [B, N, 1, 1, S_kv] boolean
-    *,
+    *mask_operands: jax.Array,  # [B, N, 1, 1, S_kv] boolean, absent for no mask
     scale: float,
     precision: jax.lax.Precision | None = None,
 ) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
+    mask = mask_operands[0] if mask_operands else None
     if platform == "cuda":
         assert HAS_CUE_OPS_JAX, (
             "Please install cuequivariance_ops_jax for CUDA support."
@@ -238,14 +249,28 @@ for platform in ["cuda", None]:
         platform,
     )
 
-batching.primitive_batchers[fwd_p] = partial(
-    naive_batching_rule, fwd_p, (0, 0, 0, 0, 0), (0, 0, 0)
-)
-batching.primitive_batchers[bwd_p] = partial(
-    naive_batching_rule, bwd_p, (0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0)
-)
+
+def _batching_rule(primitive, num_outputs, batched_inputs, vmapped_axes, **kwargs):
+    # Every operand, including the optional mask, is batched along axis 0.
+    return naive_batching_rule(
+        primitive,
+        (0,) * len(batched_inputs),
+        (0,) * num_outputs,
+        batched_inputs,
+        vmapped_axes,
+        **kwargs,
+    )
+
+
+batching.primitive_batchers[fwd_p] = partial(_batching_rule, fwd_p, 3)
+batching.primitive_batchers[bwd_p] = partial(_batching_rule, bwd_p, 4)
 
 # Custom VJP:
+
+
+def _mask_operands(mask: jax.Array | None) -> tuple[jax.Array, ...]:
+    """The primitives take the mask as an optional trailing operand."""
+    return () if mask is None else (mask,)
 
 
 @partial(custom_vjp, nondiff_argnums=(5, 6))
@@ -254,15 +279,19 @@ def triangle_attention_custom_vjp(
     k: jax.Array,  # [B, N, H, S_kv, D]
     v: jax.Array,  # [B, N, H, S_kv, D]
     bias: jax.Array,  # [B, 1, H, S_qo, S_kv]
-    mask: jax.Array,  # [B, N, 1, 1, S_kv] boolean
+    mask: jax.Array | None,  # [B, N, 1, 1, S_kv] boolean
     scale: float,
     precision: jax.lax.Precision | None = None,
 ):
-    return fwd_p.bind(q, k, v, bias, mask, scale=scale, precision=precision)
+    return fwd_p.bind(
+        q, k, v, bias, *_mask_operands(mask), scale=scale, precision=precision
+    )
 
 
 def triangle_attention_custom_vjp_fwd(q, k, v, bias, mask, scale, precision=None):
-    a, lse, amax = fwd_p.bind(q, k, v, bias, mask, scale=scale, precision=precision)
+    a, lse, amax = fwd_p.bind(
+        q, k, v, bias, *_mask_operands(mask), scale=scale, precision=precision
+    )
     residuals = (a, lse, q, k, v, bias, mask)
     # Match the primal output's pytree structure: `triangle_attention_custom_vjp`
     # returns `fwd_p.bind(...)`, and a multiple_results primitive's bind returns a
@@ -276,7 +305,16 @@ def triangle_attention_custom_vjp_bwd(scale, precision, residuals, cotangents):
     da, dlse, damax = cotangents
 
     dq, dk, dv, dbias = bwd_p.bind(
-        da, a, lse, q, k, v, bias, mask, scale=scale, precision=precision
+        da,
+        a,
+        lse,
+        q,
+        k,
+        v,
+        bias,
+        *_mask_operands(mask),
+        scale=scale,
+        precision=precision,
     )
     return (dq, dk, dv, dbias, None)
 

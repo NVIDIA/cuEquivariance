@@ -12,8 +12,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import importlib
+
 import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
 from jax.test_util import check_grads
 
@@ -169,7 +172,58 @@ def test_dtype_support(platform, dtype, precision):
 
 
 @pytest.mark.parametrize("platform", ["cpu", "cuda"])
-def test_vmap(platform):
+def test_mask_none_matches_all_true_mask(platform):
+    """``mask=None`` gives the same outputs and gradients as an all-True mask."""
+    require_platform(platform)
+
+    q, k, v, bias, mask, scale = create_test_data(platform)
+
+    def outputs_and_grads(mask):
+        def loss(q, k, v, bias):
+            outputs = cuex.triangle_attention(
+                q, k, v, bias, mask, scale, precision=jax.lax.Precision.HIGH
+            )
+            return jnp.sum(outputs[0]), outputs
+
+        grad_fn = jax.grad(loss, argnums=(0, 1, 2, 3), has_aux=True)
+        grads, outputs = grad_fn(q, k, v, bias)
+        return (*outputs, *grads)
+
+    for actual, expected in zip(
+        outputs_and_grads(None), outputs_and_grads(jnp.ones_like(mask)), strict=True
+    ):
+        np.testing.assert_allclose(actual, expected, rtol=1e-5, atol=1e-6)
+
+
+def test_mask_none_with_ops_jax_before_mask_none_support(monkeypatch):
+    """An installed cuequivariance_ops_jax without mask=None support gets an all-True mask."""
+    module = importlib.import_module("cuequivariance_jax.triangle._triangle_attention")
+    received = []
+    monkeypatch.setattr(module, "HAS_CUE_OPS_JAX", True)
+    monkeypatch.setattr(
+        module,
+        "triangle_attention_custom_vjp",
+        lambda q, k, v, bias, mask, scale, precision: received.append(mask),
+    )
+    q, k, v, bias, _, scale = create_test_data("cpu")
+
+    for accepts_no_mask in (False, True):
+        monkeypatch.setattr(
+            module, "TRIANGLE_ATTENTION_ACCEPTS_NO_MASK", accepts_no_mask
+        )
+        cuex.triangle_attention(q, k, v, bias, None, scale)
+
+    all_true, passed_through = received
+    assert passed_through is None
+    assert all_true.dtype == jnp.bool_
+    np.testing.assert_array_equal(
+        all_true, np.ones((*k.shape[:2], 1, 1, k.shape[3]), dtype=bool)
+    )
+
+
+@pytest.mark.parametrize("platform", ["cpu", "cuda"])
+@pytest.mark.parametrize("with_mask", [True, False])
+def test_vmap(platform, with_mask):
     require_platform(platform)
 
     batch_size = 2
@@ -201,6 +255,8 @@ def test_vmap(platform):
     mask = jax.random.bernoulli(
         keys[4], 0.8, (vmap_size, batch_size, n_nodes, 1, 1, seq_len_kv)
     )
+    if not with_mask:
+        mask = None
     scale = d_model**-0.5
 
     def grad_fn(q, k, v, bias, mask):
@@ -212,7 +268,10 @@ def test_vmap(platform):
 
         return jax.grad(loss_fn, argnums=(0, 1, 2, 3))(q, k, v, bias)
 
-    dq, dk, dv, dbias = jax.vmap(grad_fn, (0, 0, None, 0, 0))(q, k, v, bias, mask)
+    mask_axis = 0 if with_mask else None
+    dq, dk, dv, dbias = jax.vmap(grad_fn, (0, 0, None, 0, mask_axis))(
+        q, k, v, bias, mask
+    )
     assert dq.shape == q.shape
     assert dk.shape == k.shape
     assert dv.shape == (vmap_size,) + v.shape
