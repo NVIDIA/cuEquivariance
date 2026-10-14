@@ -22,8 +22,9 @@
 ### Notes
 
 - **Supported PyTorch versions:** 2.11, 2.12 and 2.13. PyTorch 2.14 is not yet supported. A known PyTorch 2.14 training failure is fixed in this release (see Bug Fixes), but full 2.14 support comes in a future release.
-- The optimized TriMul kernels run only with the CUDA 13 wheels (`cuequivariance-ops-torch-cu13`). The CUDA 12 wheels do not contain them and use the 0.12 implementation.
+- The optimized TriMul kernels run only with the CUDA 13 wheels (`cuequivariance-ops-torch-cu13`). The CUDA 12 wheels do not contain the optimized TriMul kernels and instead use the 0.12 implementation.
 - The optimized TriMul kernels run only on these GPUs: H100 SXM (80 GB HBM3), H200, GH200 480GB, B200 and RTX PRO 6000 Blackwell (Server and Workstation Edition). All other GPUs use the 0.12 implementation. This includes H100 PCIe, H100 NVL, B300 / GB300, A100, L40(S) and Rubin.
+- [JAX] The optimized TriMul kernels are PyTorch only. `cuex.triangle_multiplicative_update` is unchanged from 0.12.0. The supported PyTorch versions above do not apply to JAX.
 - Recommended usage is unchanged: `torch.compile(model, mode="reduce-overhead")`. Warm up for a few iterations first.
 - The optimized kernels were added only on shapes where they passed the accuracy release gate and were faster than the 0.12 implementation in our CI.
 - [Torch] The optimized TriMul kernels run only on the exact listed shapes. See the GitHub release notes for 0.13.0 for the supported configurations, the precision rules and how to turn the kernels off.
