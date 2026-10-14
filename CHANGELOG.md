@@ -1,13 +1,147 @@
 ## Latest Changes
-## (unreleased)
+
+## 0.13.0 (2026-10-15)
 
 ### Added
-- [Torch] `cuet.triangle_attention` accepts `kv_lengths`, an int32 per-row key/value length tensor for right-padded sequence masks. Passing `kv_lengths` selects the Blackwell sm100f length fast path when available; dense `mask` remains the correct fallback path for arbitrary masks. Added `cuet.mask_to_kv_lengths` to convert and validate prefix masks.
-- [Torch] `cuet.attention_pair_bias` exposes the optional generalized (Proteina/Complexa) projection parameters `b_proj_k`, `b_proj_v`, `w_ln_q`/`b_ln_q`, `w_ln_k`/`b_ln_k`, and `b_proj_g` as keyword-only arguments forwarded to the backend. They default to `None`, so the strict OpenFold3/Boltz contract applied to `single_repr` is unchanged; supplying them adds the K/V/gate projection biases and the post-projection Q/K LayerNorm (over the full `H * DH` dimension, before the head split). The pair-projection weight `w_proj_z` may be omitted when `is_cached_z_proj=True` because the supplied pair representation is already projected. ([#291](https://github.com/NVIDIA/cuEquivariance/pull/291))
-- [JAX] `cuex.triangle_attention` accepts `mask=None` for unmasked attention, matching `cuet.triangle_attention`. It is equivalent to an all-True mask without creating one, and is supported through `jax.grad` and `jax.vmap`. With a `cuequivariance-ops-jax` release that predates `mask=None` support, an all-True mask is created and passed instead.
+
+- [Torch] **Optimized Triangle Multiplicative Update kernels.** `cuet.triangle_multiplicative_update` now runs new prebuilt optimized kernels on the shapes each kernel was validated on. All other calls use the 0.12 implementation, unchanged. CUDA 13 wheels only. See "Optimized TriMul kernels" below.
+  - Inference on H100 SXM, H200, GH200 480GB, B200 and RTX PRO 6000 Blackwell; training on H100 SXM, H200, GH200 480GB and B200.
+  - Pair width C and hidden width D: 128/128, 256/256, 384/256 and 512/512, with and without projection bias. The exact supported shapes are listed in the GitHub release notes for 0.13.0.
+- [JAX] `cuex.triangle_attention` accepts `mask=None` for unmasked attention, as `cuet.triangle_attention` does. The call then runs the unmasked kernels, without an all-True mask. This is supported through `jax.grad` and `jax.vmap`. With an older `cuequivariance-ops-jax`, the frontend makes an all-True mask and passes it. ([#307](https://github.com/NVIDIA/cuEquivariance/pull/307))
+
+### Bug Fixes
+
+- [Torch/JAX] Triangle Attention on RTX PRO 6000 Blackwell, CUDA 13 wheels: fixed a register spill in the masked forward kernels at head dimension 64 (BF16 and FP16) that made the masked forward slower than in older builds. Results are bit-identical.
+- [JAX] Unmasked Triangle Attention calls no longer run the Boolean-mask kernels. Pass `mask=None` to get the unmasked forward and backward kernels.
+- [Torch] Fixed a failure with PyTorch 2.14 in training: the fused gated dual GEMM backward returned too many gradients, and PyTorch 2.14 raises an error for this. Every training call that reached this kernel failed, including the 0.12 TriMul training route.
 
 ### Breaking Changes
-- [Torch] `cuet.attention_pair_bias` now takes the single representation `single_repr` plus the node-LayerNorm (`w_ln_a`/`b_ln_a`) and Q/K/V/gate projection weights instead of pre-projected `q`/`k`/`v` and a separate `s`, matching OpenFold3 `AttentionPairBias` (non-adaLN self-attention). The pre-projected `s`/`q`/`k`/`v` inputs and the gating bias `b_proj_g` are removed, and the op is now self-attention only (square `N x N`); rectangular (`U != V`) cross-attention is no longer supported. ([#290](https://github.com/NVIDIA/cuEquivariance/pull/290))
+
+- None.
+
+### Notes
+
+- **Supported PyTorch versions:** 2.11, 2.12 and 2.13. PyTorch 2.14 is not yet supported. A known PyTorch 2.14 training failure is fixed in this release (see Bug Fixes), but full 2.14 support comes in a future release.
+- The optimized TriMul kernels run only with the CUDA 13 wheels (`cuequivariance-ops-torch-cu13`). The CUDA 12 wheels do not contain them and use the 0.12 implementation.
+- The optimized TriMul kernels run only on these GPUs: H100 SXM (80 GB HBM3), H200, GH200 480GB, B200 and RTX PRO 6000 Blackwell (Server and Workstation Edition). All other GPUs use the 0.12 implementation. This includes H100 PCIe, H100 NVL, B300 / GB300, A100, L40(S) and Rubin.
+- Recommended usage is unchanged: `torch.compile(model, mode="reduce-overhead")`. Warm up for a few iterations first.
+- The optimized kernels were added only on shapes where they passed the accuracy release gate and were faster than the 0.12 implementation in our CI.
+- [Torch] The optimized TriMul kernels run only on the exact listed shapes. See the GitHub release notes for 0.13.0 for the supported configurations, the precision rules and how to turn the kernels off.
+
+### Known issues
+
+- **Small-sequence training on B200.** A few B200 training cells at short sequence lengths (N=128) can run slightly slower than the 0.12 implementation. We are working to resolve this in a future release.
+- **Exported models use the 0.12 implementation.** `torch.export` (strict and non-strict), ONNX export (and so TensorRT), and traces with symbolic sizes outside `torch.compile` (`make_fx`, `FakeTensorMode`) never record an optimized kernel.
+- **Eager-mode routing cost.** In eager mode, calls that do not take an optimized kernel pay a small routing check on each call. The cost is most visible at small shapes, and most of all on RTX PRO 6000. Under `torch.compile`, the check costs nothing.
+- **Second backward and double backward.** In training, a second backward through one forward (`retain_graph=True`):
+  - is exact in eager mode, but needs about 1.9× the memory of the first backward;
+  - gives NaN gradients when it is replayed from a CUDA graph. This is by design: the result is visibly wrong, never silently wrong. The first backward of every replay is exact.
+
+  Double backward (`create_graph=True`) raises an error.
+- **Exclusive GPU.** Some optimized kernels use software grid barriers and expect exclusive use of the GPU. Under MPS sharing without SM partitions, they can hang.
+- **FP32 TriMul on GPUs with about 100 KB shared memory per block** (L40S and other Ada GPUs, RTX PRO 6000 and other sm_120 GPUs): with Triton newer than 3.6 (PyTorch 2.14 ships 3.8), the FP32 0.12 Triton kernel at C=128 fails with `OutOfResources`. This is not an issue of the optimized kernels; 0.12.0 has the same problem. BF16 calls are not affected.
+- **Per-rank compile limit under DDP.** Under DDP or multi-node training, each rank applies the recompile limit separately. Ranks that see shapes in a different order can run the optimized kernels on different shapes. Results are not affected, but a small speed difference between ranks is possible.
+
+## 0.12.0 (2026-09-24)
+
+### Added
+
+- [Performance] Improvements to triangle multiplicative update under `torch.compile` (inference/training, geometric mean improvement across all supported shapes in v0.11.1): 1.2x/1.1x on A100, 1.2x/1.1x on H100/H200, 1.3x/1.15x on B200 / B300, on RTX Pro 6000 Blackwell Server Edition.
+- [Torch] Expanded `cuet.triangle_multiplicative_update` kernel coverage for pair width 384 and hidden width 256: inference and training on H100 / H200, and inference on B200 / B300 and RTX PRO 6000 Blackwell. The H100 / H200 inference path also accepts sequence lengths that are not multiples of 128.
+- [Torch] `cuet.attention_pair_bias` accepts `norm_kind="layer_norm"` (default) or `"rms_norm"`. RMSNorm requires every normalization bias to be `None`. (#299)
+- [Torch] Expanded Attention Pair Bias training kernel coverage on H100 / H200 for RMSNorm with single width 768, pair width 384, 12 heads, and head dimension 64 under BF16 autocast and `torch.compile`.
+- [ops-torch] Added an RMSNorm pair-update / Attention Pair Bias inference handoff on H100 / H200, B200 / B300, and RTX PRO 6000 Blackwell for supported shapes, including pair width 384 with 12 heads and head dimension 64. `pair_update_finalize_masked_attention_bias` returns the updated pair representation and an optional masked attention-bias cache; pass that cache to `attention_pair_bias_masked_cache` with `is_cached_z_proj=True`.
+- [ops-torch] Added module-based Attention Pair Bias entry points, packed Q/K/V projection parameters, and `attention_pair_bias_shape_is_supported`. Module-based entry points preserve normalization for non-affine LayerNorm and RMSNorm modules.
+- [ops-torch] Added split-parameter Triangle Multiplicative Update entry points, preparation helpers, and shape-support and inference-route queries for callers that manage separate projection parameters or select kernels before allocating tensors.
+- [Torch/JAX] Expanded Triangle Attention layout support on RTX PRO 6000 Blackwell (sm120f) to include non-contiguous Q/K/V layouts with a contiguous head dimension and 16-byte-aligned outer strides. Updated the head-dimension-64 forward kernel.
+- [Torch] Triangle Attention with `kv_lengths` on B200 / B300 now handles zero-length rows through CUDA postprocessing in eager inference. Under `torch.compile`, row zeroing remains visible to the compiler.
+- [Torch/JAX] Added Vera Rubin (sm_107) to the `cuequivariance-ops-*-cu13` wheel builds, using the existing package names. cuEquivariance is currently functional on Vera Rubin for the purpose of ecosystem integration, and performance improvements will be released in the near future.
+  - Note: Users must bring their own Rubin compatible container and/or PyTorch version and install the wheel inside of it.
+
+### Bug Fixes
+
+- [Torch/JAX] Fixed a warp-reduction bug in fused tensor products that could silently produce incorrect results in segmented polynomials, tensor products, and indexed linear layers. The fix applies across GPU architectures.
+- [Torch] Fixed the Triangle Multiplicative Update training performance regression at batch sizes greater than 1 for the covered BF16 shapes.
+- [Torch] `cuet.triangle_multiplicative_update` now applies `eps` to both LayerNorms in the reference implementation. Fixed an assertion failure in the generic path when the pair and hidden widths differ.
+- [Torch] Fixed graph breaks caused by dispatch warnings under `torch.compile`.
+- [Torch] Fixed Triangle Attention backward handling of sliced inputs and K/V tensors with different layouts on B200 / B300. Misaligned input views are copied to aligned storage before the SM100f / SM120f kernels run.
+- [JAX] Fixed the `custom_vjp` output-structure mismatch in `cuex.triangle_attention` that caused `jax.grad` and `jax.value_and_grad` to fail. Added coverage for differentiation through checkpointed scans. (#295, #300)
+
+### Breaking Changes
+
+- [Torch] Triangle Attention output on SM100f / SM120f can now preserve the query tensor's non-contiguous layout. Call `.contiguous()` before operations that require contiguous storage. Auxiliary `lse` and `max` outputs remain contiguous.
+- [Torch] `cuet.attention_pair_bias` raises `ValueError` when `w_proj_z` is `None` unless `is_cached_z_proj=True`. (#299)
+- [JAX] cuequivariance-jax now requires JAX >= 0.9.1, matching the XLA FFI API used by the kernel bindings.
+
+### Notes
+
+- CUDA 12 wheel builds now use CUDA 12.9.1 (previously CUDA 12.8). The cu12 builds now include the SM100f and SM120f Triangle Attention kernels.
+- CUDA 13 wheel builds now use CUDA 13.4.1 (previously CUDA 13.0), which now supports Rubin.
+- [Torch] Under `torch.compile`, Triangle Multiplicative Update calls outside the specialized kernels' supported shapes use a compiler-visible reference formula for hidden width 256 and pair widths 256–512, with BF16 inputs or FP32 inputs under BF16 autocast at default precision. Other shapes and precision modes retain their existing dispatch rules.
+- [Torch] Shape support also depends on dtype, layout, gradient mode, and the kernels available in the installed build. H100 / H200 TriMul training kernels still require sequence lengths divisible by 128. The APB RMSNorm inference handoff is exposed through `cuequivariance_ops_torch`; setting `norm_kind="rms_norm"` on `cuet.attention_pair_bias` alone does not select it. If the finalizer returns no cache, use the ordinary attention call.
+
+## 0.11.1 (2026-08-07)
+
+Patch release focused on PyTorch compatibility. No API or behavior changes — the pure-Python frontend is unchanged from 0.11.0. This is a coordinated version bump across the frontend and the compiled `cuequivariance-ops-*` wheels.
+
+### Changed
+- [ops-torch] Widened PyTorch version support. The `cuequivariance-ops-torch-cu12` / `-cu13` wheels now import and run across PyTorch **2.11, 2.12, and 2.13**. Previously the compiled extension was ABI-locked to the exact PyTorch minor it was built against, so any other version failed with an undefined-symbol error at import.
+
+### Bug Fixes
+- [ops-torch] `torch>=2.11` is now a real runtime dependency. It was previously declared only in an optional `test` extra, so `pip` did not enforce it — a user on PyTorch < 2.11 could install the wheel and then hit a cryptic import failure. `pip` now blocks the incompatible install up front.
+
+## 0.11.0 (2026-08-04)
+
+### Added
+
+- [Torch] `cuet.triangle_attention` accepts `kv_lengths`, an int32 per-row key/value length tensor (shape `[B, N, 1, 1, 1]`) for right-padded sequences.
+- Passing `kv_lengths` selects the SM100f (B200 / B300) or sm120f (RTX 6000 Pro Blackwell) length fast path when available; on other GPUs it is converted to the equivalent dense prefix mask. `kv_lengths` and `mask` are mutually exclusive (passing both raises). Added `cuet.mask_to_kv_lengths` to convert and validate prefix masks.
+- [Torch/JAX] Native `sm120f` Triangle Attention kernel for RTX 6000 Pro Blackwell, replacing the generic kernel used on that SKU in 0.10.
+- [Torch] `cuet.attention_pair_bias` exposes the optional generalized projection parameters `b_proj_k`, `b_proj_v`, `w_ln_q`/`b_ln_q`, `w_ln_k`/`b_ln_k`, and `b_proj_g` as keyword-only arguments (default `None`), preserving the strict contract on `single_repr`; `w_proj_z` may be omitted when `is_cached_z_proj=True`. ([#293](https://github.com/NVIDIA/cuEquivariance/pull/293))
+- [JAX] Added a dictionary-based interface for organizing and processing features by representation type. ([#271](https://github.com/NVIDIA/cuEquivariance/pull/271))
+
+### Bug Fixes
+
+- [Torch] Triangle Attention no longer silently mis-handles dense masks on Blackwell. In 0.10, passing any `mask=` on Blackwell (B200 / B300) took the `SM100f` fast path. `SM100f` is a length/prefix kernel — it attends `[0, kv_length)` per row — so it collapsed any mask into a single per-row length. A full or right-padded (prefix) mask was fast and correct, but an arbitrary (non-prefix) mask was fast and silently incorrect: interior gaps were dropped, with no warning and no error. In 0.11, `SM100f` rejects any dense `mask=` (including an all-ones mask) and routes it to the correct fallback kernel. Arbitrary masks are now always correct.
+- [Torch] Fixed TorchScript and Pytorch 2.2 compatibility issues in `cuet.ChannelWiseTensorProduct` and `cuet.SegmentedPolynomial`. ([#277](https://github.com/NVIDIA/cuEquivariance/pull/277))
+
+### Breaking Changes
+
+- [Torch] `cuet.attention_pair_bias` now takes the single representation `single_repr` plus the node-LayerNorm (`w_ln_a`/`b_ln_a`) and Q/K/V/gate projection weights instead of pre-projected `q`/`k`/`v` and a separate `s`, and performs the projections internally. The pre-projected `q`/`k`/`v` and `s` are removed, and the op is now self-attention only (square `N × N`) — rectangular `U × V` (`U != V`) cross-attention is no longer supported. ([#290](https://github.com/NVIDIA/cuEquivariance/pull/290))
+- [Torch] On Blackwell (B200 / B300), a dense `mask=` passed to `cuet.triangle_attention` (including an all-ones mask) no longer takes the SM100f fast path — it routes to the correct fallback, which is slower than the fast path. Build `kv_lengths` once upstream, then pass `kv_lengths=cuet.mask_to_kv_lengths(mask)` for the fast path. A one-time warning points to this whenever a mask would have reached `SM100f`.
+- [Torch] PyTorch 2.11.X is now required.
+
+### Notes
+
+- Which masking choice accelerates what (Torch, B200/B300):
+  - *Fully-valid sequences* → pass no `mask` and no `kv_lengths`. This is the fastest path, and it routes exactly as it did in 0.10 (unaffected by the mask change).
+  - *Right-padded / prefix sequences* → pass `kv_lengths`. The kernel skips the padded keys entirely, while native PyTorch computes them and masks afterwards — so cuEquivariance's advantage over native PyTorch is largest here.
+  - *Arbitrary (non-prefix) masks* → pass `mask=`. Correct in 0.11, but runs the fallback.
+- Build `kv_lengths` once, upstream. `cuet.mask_to_kv_lengths` does a one-time host sync (prefix-shape validation; it raises on a non-prefix mask), so compute it in the collator / data-processing stage. The op itself is host-sync-free with `kv_lengths`: the only range-check `.item()` is opt-in (`CUEQ_TRIATTN_VALIDATE_KV_LENGTHS`) and skipped under `torch.compile`; the clamp is device-side.
+- [JAX] The `mask` → `kv_lengths` changes are Torch-only. The JAX path auto-selects the `SM100f` fast path from its mask and is unaffected.
+- Recommended usage. For best performance, run cuEquivariance ops under `torch.compile(model, mode="reduce-overhead")` (CUDA graphs), which removes per-call launch/dispatch overhead — most impactful at small shapes and low batch, where the kernels are launch-bound. Warm up first: the first few iterations (≈3) go to tracing and CUDA-graph capture and are slower; the speedups appear only once the graph is set up. CUDA graphs assume static shapes and re-capture when shapes change.
+- Hardware support. Triangle Attention: `SM100f` fast path on B200 / B300 (via `kv_lengths`); native `sm120f` on RTX 6000 Pro Blackwell; generic kernel on H100 / H200 / A100 / L40. APB inference: H100 / H200, B200, B300, RTX 6000 Pro Blackwell, A100 (not L40). APB training: H100 / H200, B200, B300 (not A100, RTX 6000 Pro Blackwell, or L40).
+- Data type support. Triangle Attention supports BF16, FP16, and FP32/TF32 — the FP32/TF32 kernel requires `hidden_dim <= 32` and `hidden_dim % 4 == 0`; larger head dimensions must use BF16 or FP16. The specialized `sm100f` and `sm120f` kernels are BF16/FP16 only. APB's optimized paths for inference and training use BF16 and, for select routes, FP16.
+- APB shape support. The optimized `attention_pair_bias` path supports pair width 128 and 256, head dimension 8-64, and num heads 4-16.
+- Triangle Multiplication remains unchanged in 0.11.
+- Known issue. A minor per-call overhead affects the Triangle Attention `kv_lengths` (padded-sequence) inference path, most visible at short sequences. It does not affect correctness, training, or the no-mask path. A fix is in progress.
+
+### Masked and Right-Padded Sequences on B200 / B300
+
+On B200 / B300, supplying `kv_lengths` selects the `SM100f` length fast path, and the advantage over native PyTorch grows when sequences are masked or right-padded. Native PyTorch materializes the dense mask and computes the padded keys before masking them; cuEquivariance passes a compact per-row length and skips them in the kernel entirely.
+
+### Known issues
+
+- A minor per-call overhead affects the Triangle Attention `kv_lengths` (padded-sequence) inference path, most visible at short sequences. It does not affect correctness, training, or the no-mask path. A fix is in progress.
+- CUDA 12.8 wheels do not support Blackwell's SM100F fast path. In the next release we will upgrade our CUDA 12.8 wheels to use CUDA 12.9 which will support TriAttn’s SM100F fast path on Blackwell.
+- TriMul training is slower than native PyTorch (with `torch.compile`) at batch sizes > 1 due to a slowdown in the backwards pass – we will work to resolve this in our next release.
+- There is an issue using torch version 2.11+ which we will fix in a minor update (v0.11.1) coming soon
+
+### Documentation
+
+- *[Torch/JAX]* Expose generalized projection params in attention_pair_bias wrapper ([#293](https://github.com/NVIDIA/cuEquivariance/pull/293))
+- *[Torch]* Triangle Attention kv_lengths documentation ([#287](https://github.com/NVIDIA/cuEquivariance/pull/287))
+- [JAX] Added an example showing how to implement MACE with Equinox. ([#281](https://github.com/NVIDIA/cuEquivariance/pull/281))
 
 ## 0.10.0 (2026-04-21)
 
