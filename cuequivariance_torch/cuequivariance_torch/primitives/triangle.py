@@ -244,32 +244,38 @@ def triangle_multiplicative_update(
     - Note: When using Docker with default or on-demand tuning enabled, commit the container to persist tuning changes
 
     Args:
-        x (torch.Tensor): Input tensor of shape (B, N, N, D) where:
+        x (torch.Tensor): Input pair tensor of shape (B, N, N, C) where:
             B is the batch size
             N is the sequence length
-            D is the hidden dimension
+            C is the pair width (the channel size of the pair representation)
+            The hidden width D (the channel size inside the update) is set by the
+            projection weights: D = p_in_weight.shape[0] // 2. Often C = D.
         direction (str): Direction of the triangular projection. Must be either "outgoing" or "incoming".
         mask (torch.Tensor): Optional Mask tensor of shape (B, N, N) for masking the output.
-        norm_in_weight (torch.Tensor): Optional weight tensor for input normalization of shape (D,).
-        norm_in_bias (torch.Tensor): Optional bias tensor for input normalization of shape (D,).
-        p_in_weight (torch.Tensor): Optional weight tensor for input projection of shape (2D, D).
+        norm_in_weight (torch.Tensor): Optional weight tensor for input normalization of shape (C,).
+        norm_in_bias (torch.Tensor): Optional bias tensor for input normalization of shape (C,).
+        p_in_weight (torch.Tensor): Optional weight tensor for input projection of shape (2D, C).
         p_in_bias (torch.Tensor): Optional bias tensor for input projection of shape (2D,).
-        g_in_weight (torch.Tensor): Optional weight tensor for input gating of shape (2D, D).
+        g_in_weight (torch.Tensor): Optional weight tensor for input gating of shape (2D, C).
         g_in_bias (torch.Tensor): Optional bias tensor for input gating of shape (2D,).
         norm_out_weight (torch.Tensor): Optional weight tensor for output normalization of shape (D,).
         norm_out_bias (torch.Tensor): Optional bias tensor for output normalization of shape (D,).
-        p_out_weight (torch.Tensor): Optional weight tensor for output projection of shape (D, D).
-        p_out_bias (torch.Tensor): Optional bias tensor for output projection of shape (D,).
-        g_out_weight (torch.Tensor): Optional weight tensor for output gating of shape (D, D).
-        g_out_bias (torch.Tensor): Optional bias tensor for output gating of shape (D,).
+        p_out_weight (torch.Tensor): Optional weight tensor for output projection of shape (C, D).
+        p_out_bias (torch.Tensor): Optional bias tensor for output projection of shape (C,).
+        g_out_weight (torch.Tensor): Optional weight tensor for output gating of shape (C, C).
+        g_out_bias (torch.Tensor): Optional bias tensor for output gating of shape (C,).
         eps (float, optional): Small constant for numerical stability in normalization. Defaults to 1e-5.
-        precision (TriMulPrecision, optional): Precision mode for matrix multiplications.
+        precision (TriMulPrecision or str, optional): Precision mode for matrix multiplications.
             Available options:
             - None: Defaults to triton language dot's default for non-32b input and for 32b input, tf32/tf32x3 based on 1/0 value set in torch.backends.cuda.matmul.allow_tf32
             - IEEE: Use IEEE 754 precision
+            - "bfloat16": Round the input pair, the mask and all weights and biases to BF16 before
+              the operation (the LayerNorms then read BF16 values). The rounding is differentiable,
+              so gradients reach FP32 parameters. Under BF16 autocast with precision None, the
+              LayerNorms read the FP32 pair and only the matrix multiplications use BF16.
 
     Returns:
-        Output tensor of shape (batch_size, seq_len, seq_len, hidden_dim)
+        Output tensor of shape (B, N, N, C)
 
     Notes:
         (1) Context is saved for backward pass. You don't need to save it manually.
