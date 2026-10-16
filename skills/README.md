@@ -50,14 +50,15 @@ before changing the assertions. The CUDA backend constraints are checked as
 guidance; these datasets do not benchmark GPU performance or validate CUDA kernels.
 
 The tests under `.github/tests/test_*_skill_evals.py` verify the mathematical and
-API expectations behind the prompts. They are maintenance checks, not live agent
-scores. To run them against a development checkout with the relevant frontend
-dependencies installed:
+API expectations behind the prompts. `test_torch_skill_examples.py` also executes
+the published Torch examples and checks the GNN's determinism, equivariance, and
+gradients. These are maintenance checks, not live agent scores. To run them against
+a development checkout with the relevant frontend dependencies installed:
 
 ```bash
 pytest -q .github/tests/test_core_skill_evals.py
 JAX_PLATFORMS=cpu pytest -q .github/tests/test_jax_skill_evals.py
-pytest -q .github/tests/test_torch_skill_evals.py
+pytest -q .github/tests/test_torch_skill_evals.py .github/tests/test_torch_skill_examples.py
 ```
 
 To verify the pinned evaluation environment in a separate Python 3.12 environment:

@@ -1,418 +1,250 @@
 ---
 name: cuequivariance-torch
-description: Execute equivariant tensor products in PyTorch using SegmentedPolynomial (naive/uniform_1d/fused_tp/indexed_linear), high-level operations (ChannelWiseTensorProduct, FullyConnectedTensorProduct, Linear, SymmetricContraction, SphericalHarmonics, Rotation), and layers (BatchNorm, FullyConnectedTensorProductConv). Use when writing PyTorch code with cuequivariance.
+description: Use when building or debugging cuEquivariance PyTorch tensor products or equivariant GNNs, especially CPU references, layouts, indexing, and gradients.
 license: Apache-2.0
 metadata:
   author: Mario Geiger <mgeiger@nvidia.com>
+  tags: [pytorch, equivariance, tensor-products]
 ---
 
-# cuequivariance_torch: Executing Equivariant Polynomials in PyTorch
+# cuEquivariance in PyTorch
 
-## Overview
+## Purpose
 
-`cuequivariance_torch` (imported as `cuet`) executes `cuequivariance` polynomials on CPU or GPU via PyTorch. It provides:
+Use `cuequivariance_torch` (`cuet`) to execute `cuequivariance` (`cue`) descriptors with PyTorch autograd. This guide covers CPU reference calculations, CUDA backend selection, and equivariant layers. Use the project's existing framework and environment.
 
-1. **Core primitive**: `cuet.SegmentedPolynomial` — `torch.nn.Module` with multiple CUDA backends
-2. **High-level operations** (`torch.nn.Module`): `ChannelWiseTensorProduct`, `FullyConnectedTensorProduct`, `Linear`, `SymmetricContraction`, `SphericalHarmonics`, `Rotation`, `Inversion`
-3. **Layers**: `cuet.layers.BatchNorm`, `cuet.layers.FullyConnectedTensorProductConv` (message passing)
-4. **Utilities**: `triangle_attention`, `triangle_multiplicative_update`, `attention_pair_bias` (AlphaFold3-style)
-5. **Export support**: `onnx_custom_translation_table()`, `register_tensorrt_plugins()`
+## Inputs
+
+Required for the computation: operation, SO3/O3 irreps, layout, device, dtype, and weight ownership. Derive these from the request or existing code and state any defaults. Graph operations also require source/destination counts and node/edge indexing. Optional inputs include a preferred backend or performance/export targets. Preserve the user's project constraints and installed API.
 
 ## Instructions
 
-1. Check installed versions, `torch.cuda.is_available()`, and the target dtype. Install `cuequivariance-torch` and a suitable PyTorch build; CUDA kernels are optional for the CPU examples.
-2. Use `method="naive"` explicitly for a CPU reference, including high-level operations whose defaults select CUDA. Check device, dtype, and segment constraints before selecting a fused method.
-3. Derive sizes from the descriptor or module. Specify the feature layout, shared versus per-example weights, and whether weights are internal parameters or supplied externally.
-4. Compare a deterministic forward pass against NumPy or an explicit PyTorch reference. Verify autograd, nontrivial rotations, and repeated-destination scatter sums where applicable before optimizing.
-5. Use the core `cuequivariance` skill for group definitions and descriptors, or `cuequivariance-jax` for JAX. Do not substitute frameworks or install GPU dependencies for a CPU-only request.
+1. Check the selected interpreter and imports once using the probe below. Reuse a working environment. A missing CUDA backend is usually a method-selection issue, not a reason to reinstall PyTorch.
+2. Set `method="naive"` for CPU calculations. Match module parameters, features, weights, and reference computations in device and dtype. Use float64 for small numerical and gradient checks.
+3. Specify layout and weight ownership explicitly. Derive sizes and output order from the module/descriptor; do not guess multiplicities from a filter.
+4. Build the smallest relevant computation, run it, and report the actual checks and any failure. Compare the requested forward/gradient/equivariance properties before optimizing. Avoid repeatedly inspecting unrelated modules or producing several competing implementations.
+5. If an API differs from this guide, inspect that installed object's signature and source once. Adapt to the installed version or explain the required version; do not silently replace cuEquivariance with another library.
 
-Source paths below are relative to the `cuequivariance_torch/` project inside a source checkout. For a separately installed skill, inspect `cuet.__file__` or https://github.com/NVIDIA/cuEquivariance.
+## Prerequisites and environment reuse
+
+Run this with the project's Python interpreter (including its existing virtual environment, if any):
+
+```python
+import sys
+import torch
+import cuequivariance as cue
+import cuequivariance_torch as cuet
+
+print("python:", sys.executable)
+print("torch:", torch.__version__, "CUDA build:", torch.version.cuda)
+print("CUDA available:", torch.cuda.is_available())
+print("cue:", cue.__file__)
+print("cuet:", cuet.__file__)
+```
+
+If these imports work, continue with this interpreter; CPU execution does not require CUDA kernels. When an import fails, first check whether a different project interpreter already has the dependencies. Use that same interpreter for installation and execution.
+
+Only when dependencies are missing and installation is appropriate, create a **new** environment. An installation or backend error does not justify deleting an existing environment, replacing the user's CPU PyTorch, or bypassing system-package protection. On Linux/macOS, this fallback also works when `venv` cannot bootstrap pip through `ensurepip` (the host needs pip 22.3+):
+
+```bash
+cueq_env=$(mktemp -d "${TMPDIR:-/tmp}/cueq-cpu.XXXXXX")
+python3 -m venv --without-pip "$cueq_env"
+python3 -m pip --python "$cueq_env" install torch --index-url https://download.pytorch.org/whl/cpu
+python3 -m pip --python "$cueq_env" install cuequivariance-torch
+"$cueq_env/bin/python" -c 'import torch, cuequivariance_torch; print(torch.__version__)'
+```
+
+Honor project version/source constraints in these commands and keep using the new environment's Python explicitly. If pip is unavailable, use an existing manager such as `uv` or report the missing prerequisite. See [pip's interpreter selection](https://pip.pypa.io/en/stable/topics/python-option/).
+
+## Limitations and backends
+
+| Method | Use and constraints |
+| --- | --- |
+| `naive` | Pure PyTorch reference implementation; supported CPU path and autograd. |
+| `uniform_1d` | CUDA; uniform segment shapes within each operand and a single mode after descriptor transformations. |
+| `fused_tp` | CUDA contractions with 3 or 4 operands; math dtype float32/float64. Some versions fall back on CPU, but select `naive` explicitly for a CPU reference. |
+| `indexed_linear` | CUDA indexed linear operations; indices must be sorted. |
+
+High-level defaults vary: `SphericalHarmonics` selects `uniform_1d`, `FullyConnectedTensorProduct` selects `fused_tp`, `Linear` selects `naive`, and `ChannelWiseTensorProduct`/`SymmetricContraction` select according to descriptor compatibility. Moving tensors to CPU does not change every constructor's backend choice. CUDA acceleration requires compatible PyTorch, GPU, and `cuequivariance_ops_torch` builds; CPU checks do not establish GPU performance or export compatibility.
+
+## Layouts and weights
+
+- `cue.mul_ir` is the high-level default, compatible with e3nn: each block is `(multiplicity, irrep_dimension)`. Core descriptors commonly use `cue.ir_mul`: `(irrep_dimension, multiplicity)`. Check each descriptor operand's `.layout`.
+- Convert **each irrep block**, not the whole flattened tensor with a reshape. `cuet.TransposeIrrepsLayout(irreps, source=..., target=..., use_fallback=True)` performs the blockwise conversion using PyTorch.
+- For externally supplied weights set `internal_weights=False`. Shared weights have shape `(1, module.weight_numel)`; distinct weights per item have shape `(batch, module.weight_numel)` and require `shared_weights=False`. A gathered graph operation uses the **edge count** for this batch dimension.
+- `filter_irreps_out` selects allowed irrep types, not a requested output representation with prescribed multiplicities. Read `module.irreps_out`; preserve its actual order when constructing the next layer or reference.
+- For training, create learned parameters or an edge-weight network in `__init__`. Do not draw new random weights inside `forward()`.
 
 ## Examples
 
-Examples build on preceding imports and descriptors. Set `method="naive"` and remove `device="cuda"` for CPU execution; CUDA-specific indexing methods still require their documented backend.
-
-## Execution methods
-
-| Method | Backend | Requirements |
-|--------|---------|-------------|
-| `"naive"` | Pure PyTorch (einsum) | Always works, any platform |
-| `"uniform_1d"` | CUDA kernel | GPU, all segments uniform shape within each operand, single mode |
-| `"fused_tp"` | CUDA kernel | GPU, 3- or 4-operand contractions, float32/float64 |
-| `"indexed_linear"` | CUDA kernel | GPU, linear with indexed weights, sorted indices |
-
-## Core primitive: SegmentedPolynomial
+The CPU examples below share these imports. Replace the small representations and tensors with the task's inputs; keep the layout, indexing, and gradient contracts.
 
 ```python
+import numpy as np
 import torch
 import cuequivariance as cue
 import cuequivariance_torch as cuet
 
-# Build a descriptor
-e = cue.descriptors.spherical_harmonics(cue.SO3(1), [0, 1, 2])
-poly = e.polynomial
-
-# Create the module
-sp = cuet.SegmentedPolynomial(poly, method="uniform_1d")
-
-# Forward pass
-batch = 8
-x = torch.randn(batch, 3, device="cuda")
-[output] = sp([x])
-# output.shape == (batch, 9)  -- 1 + 3 + 5
+torch.manual_seed(0)
+dtype = torch.float64
 ```
 
-### Inputs, indexing, and scatter
+### Spherical harmonics and a NumPy reference
+
+`normalize=False` evaluates the raw polynomial; `normalize=True` first normalizes the input vectors. Match that choice in the reference and use nonzero vectors for gradient checks.
 
 ```python
-e = cue.descriptors.channelwise_tensor_product(
-    16 * cue.Irreps("SO3", "0 + 1"),
-    cue.Irreps("SO3", "0 + 1"),
-    cue.Irreps("SO3", "0 + 1"),
+ls = [0, 1, 2]
+sh = cuet.SphericalHarmonics(ls, normalize=False, method="naive")
+vectors = torch.randn(2, 3, dtype=dtype, requires_grad=True)
+values = sh(vectors)
+descriptor = cue.descriptors.spherical_harmonics(cue.SO3(1), ls)
+np.testing.assert_allclose(
+    values.detach().numpy(), descriptor(vectors.detach().numpy())[0], atol=1e-12
 )
-poly = e.polynomial
+assert values.shape == (2, sum(2 * l + 1 for l in ls))
+assert torch.autograd.gradcheck(sh, (vectors,))
+```
 
-sp = cuet.SegmentedPolynomial(poly, method="uniform_1d")
+### Linear: layout conversion and rotations
 
-w = torch.randn(1, poly.inputs[0].size, device="cuda")            # shared weights
-x1 = torch.randn(batch, poly.inputs[1].size, device="cuda")       # batched input 1
-x2 = torch.randn(batch, poly.inputs[2].size, device="cuda")       # batched input 2
+Use identical explicit weights for a layout comparison. For row-vector features, apply the representation matrix as `x @ D.T`.
 
-# Basic forward
-[out] = sp([w, x1, x2])
-
-# With input gathering (e.g., gather x1 by node index)
-senders = torch.randint(0, num_nodes, (num_edges,), device="cuda")
-[out] = sp([w, x1, x2], input_indices={1: senders})
-
-# With output scattering (accumulate into target nodes)
-receivers = torch.randint(0, num_nodes, (num_edges,), device="cuda")
-[out] = sp(
-    [w, x1, x2],
-    input_indices={1: senders},
-    output_indices={0: receivers},
-    output_shapes={0: torch.empty(num_nodes, 1, device="cuda")},
+```python
+irreps_in = cue.Irreps("SO3", "3x0 + 2x1")
+irreps_out = cue.Irreps("SO3", "2x0 + 4x1")
+options = dict(internal_weights=False, method="naive", dtype=dtype)
+linear = cuet.Linear(irreps_in, irreps_out, layout=cue.mul_ir, **options)
+linear_ir = cuet.Linear(irreps_in, irreps_out, layout=cue.ir_mul, **options)
+to_ir = cuet.TransposeIrrepsLayout(
+    irreps_in, source=cue.mul_ir, target=cue.ir_mul, use_fallback=True
 )
+to_mul = cuet.TransposeIrrepsLayout(
+    irreps_out, source=cue.ir_mul, target=cue.mul_ir, use_fallback=True
+)
+x = torch.randn(2, irreps_in.dim, dtype=dtype, requires_grad=True)
+w = torch.randn(1, linear.weight_numel, dtype=dtype, requires_grad=True)
+y = linear(x, w)
+torch.testing.assert_close(y, to_mul(linear_ir(to_ir(x), w)))
+rotation = np.array([0.2, -0.3, 0.1])
+din, dout = [torch.from_numpy(cue.IrrepsAndLayout(r, cue.mul_ir).exp_map(rotation, []))
+             for r in (irreps_in, irreps_out)]
+torch.testing.assert_close(linear(x @ din.T, w), y @ dout.T)
+for g in torch.autograd.grad(y.square().sum(), (x, w)):
+    assert torch.isfinite(g).all() and g.abs().sum() > 0
 ```
 
-### Math dtype control
+### Channelwise product with external per-example weights
+
+The core descriptor takes `(weights, input1, input2)` and returns a list of outputs. The high-level module takes `(input1, input2, weight=...)` and returns a tensor. Matching `ir_mul` layouts avoids an extra transpose in this reference.
 
 ```python
-# Compute in float32 regardless of input dtype
-sp = cuet.SegmentedPolynomial(poly, method="fused_tp", math_dtype=torch.float32)
-
-# For fused_tp, math_dtype must be float32 or float64
-# For naive, any torch.dtype works
-# For uniform_1d, float32 or float64 (auto-selects float32 if input is e.g. float16)
-```
-
-## High-level operations
-
-All operations are `torch.nn.Module` subclasses. They wrap `SegmentedPolynomial` and handle layout transposition automatically.
-
-### Memory layout
-
-`IrrepsLayout` controls memory order within each `(mul, ir)` block:
-
-- `cue.mul_ir`: data ordered as `(mul, ir.dim)` — **default, compatible with e3nn**
-- `cue.ir_mul`: data ordered as `(ir.dim, mul)` — **used internally by descriptors**
-
-Operations accept `layout` (applies to all), or per-operand `layout_in1`, `layout_in2`, `layout_out`.
-
-### ChannelWiseTensorProduct
-
-Channel-wise tensor product: pairs channels of `x1` with channels of `x2`.
-
-```python
-# With internal weights (default: shared_weights=True, internal_weights=True)
+a, b = cue.Irreps("SO3", "3x0 + 3x1"), cue.Irreps("SO3", "0 + 1")
+keep = [cue.SO3(0), cue.SO3(1)]
 tp = cuet.ChannelWiseTensorProduct(
-    cue.Irreps("SO3", "32x0 + 32x1"),   # irreps_in1
-    cue.Irreps("SO3", "0 + 1"),          # irreps_in2
-    layout=cue.mul_ir,
-    device="cuda",
-    dtype=torch.float32,
+    a, b, keep, layout=cue.ir_mul, shared_weights=False,
+    internal_weights=False, method="naive", dtype=dtype,
 )
-# tp.weight_numel -- number of weight parameters
-# tp.irreps_out -- output irreps (auto-computed)
-
-x1 = torch.randn(batch, tp.irreps_in1.dim, device="cuda")
-x2 = torch.randn(batch, tp.irreps_in2.dim, device="cuda")
-
-out = tp(x1, x2)  # uses internal weight parameter
-# out.shape == (batch, tp.irreps_out.dim)
-
-# With external weights (shared_weights=False)
-tp = cuet.ChannelWiseTensorProduct(
-    cue.Irreps("SO3", "32x0 + 32x1"),
-    cue.Irreps("SO3", "0 + 1"),
-    layout=cue.mul_ir,
-    shared_weights=False,
-    device="cuda",
-)
-w = torch.randn(batch, tp.weight_numel, device="cuda")
-out = tp(x1, x2, weight=w)
-
-# With gather/scatter for graph neural networks
-out = tp(x1, x2, weight=w, indices_1=senders, indices_out=receivers, size_out=num_nodes)
+x1, x2, w = [torch.randn(2, n, dtype=dtype, requires_grad=True)
+             for n in (a.dim, b.dim, tp.weight_numel)]
+y = tp(x1, x2, weight=w)
+descriptor = cue.descriptors.channelwise_tensor_product(a, b, keep)
+reference = descriptor(*(t.detach().numpy() for t in (w, x1, x2)))[0]
+np.testing.assert_allclose(y.detach().numpy(), reference, atol=1e-12)
+assert y.shape == (2, tp.irreps_out.dim)
+for g in torch.autograd.grad(y.square().sum(), (x1, x2, w)):
+    assert torch.isfinite(g).all() and g.abs().sum() > 0
 ```
 
-Default method: `"uniform_1d"` if segments are uniform, else `"naive"`.
+For a fully connected product, specify the desired output irreps in `cuet.FullyConnectedTensorProduct(a, b, irreps_out, method="naive", dtype=dtype)`. Its default weights are internal trainable parameters. Use the same external-weight flags when the caller or an edge network owns the weights.
 
-### FullyConnectedTensorProduct
+### SegmentedPolynomial: gather and scatter
 
-All input irrep pairs contribute to all output irreps (dense contraction).
+Input/output index keys refer to **operand positions**, not feature channels. Supply `torch.int32` or `torch.int64` indices on the computation's device. `output_shapes` takes a two-dimensional **tensor**, whose first dimension determines the destination count; it does not take a shape tuple. Repeated receivers sum, and destinations without incoming edges remain zero.
 
 ```python
-tp = cuet.FullyConnectedTensorProduct(
-    cue.Irreps("O3", "4x0e + 4x1o"),    # irreps_in1
-    cue.Irreps("O3", "0e + 1o"),         # irreps_in2
-    cue.Irreps("O3", "4x0e + 4x1o"),    # irreps_out
-    layout=cue.mul_ir,
-    internal_weights=True,
-    device="cuda",
-)
-
-out = tp(x1, x2)  # uses internal weights
-# or: out = tp(x1, x2, weight=w)  # external weights
+descriptor = cue.descriptors.linear(cue.Irreps("SO3", "3x0"), cue.Irreps("SO3", "2x0"))
+sp = cuet.SegmentedPolynomial(descriptor.polynomial, method="naive")
+nodes = torch.randn(5, 3, dtype=dtype, requires_grad=True)
+w = torch.randn(1, descriptor.inputs[0].dim, dtype=dtype, requires_grad=True)
+senders = torch.tensor([0, 2, 1, 0], dtype=torch.int64)
+receivers = torch.tensor([1, 0, 1, 2], dtype=torch.int64)
+[actual] = sp([w, nodes], input_indices={1: senders},
+              output_indices={0: receivers}, output_shapes={0: nodes.new_empty(4, 1)})
+[edges] = sp([w, nodes[senders]])
+reference = nodes.new_zeros(4, descriptor.outputs[0].dim).index_add_(0, receivers, edges)
+torch.testing.assert_close(actual, reference)
+assert torch.count_nonzero(actual[3]) == 0
+grads = torch.autograd.grad(actual.square().sum(), (nodes, w))
+ref_grads = torch.autograd.grad(reference.square().sum(), (nodes, w))
+for g, ref in zip(grads, ref_grads):
+    torch.testing.assert_close(g, ref)
 ```
 
-Default method: `"fused_tp"`.
+Reuse the descriptor to build a numerical reference: its coefficients include normalization factors, so a hand-written matrix product without those factors can be wrong. For high-level channelwise gathering/scattering, use `indices_1`, `indices_2`, `indices_out`, and `size_out` instead of the primitive's dictionaries.
 
-### Linear
+### Trainable message passing
 
-Equivariant linear layer (weight-only, no second input).
-
-```python
-linear = cuet.Linear(
-    cue.Irreps("SO3", "4x0 + 2x1"),     # irreps_in
-    cue.Irreps("SO3", "3x0 + 5x1"),     # irreps_out
-    layout=cue.mul_ir,
-    internal_weights=True,
-    device="cuda",
-)
-
-out = linear(x)
-
-# Species-indexed weights (different weights per atom type)
-linear = cuet.Linear(
-    irreps_in, irreps_out,
-    weight_classes=50,   # 50 different weight sets
-    internal_weights=True,
-    device="cuda",
-)
-out = linear(x, weight_indices=species_indices)  # species_indices: (batch,) int tensor
-```
-
-Default method: `"naive"`. Use `method="fused_tp"` for CUDA acceleration.
-
-### SymmetricContraction
-
-MACE-style symmetric contraction with element-indexed weights.
+This CPU reference uses a radial MLP to produce one weight vector per edge. Its parameters persist across calls, and `irreps_sh` matches the single copy of each spherical harmonic degree.
 
 ```python
-sc = cuet.SymmetricContraction(
-    cue.Irreps("O3", "32x0e + 32x1o"),  # irreps_in (uniform mul required)
-    cue.Irreps("O3", "32x0e"),           # irreps_out (uniform mul required)
-    contraction_degree=3,
-    num_elements=95,                      # number of chemical elements
-    layout=cue.ir_mul,
-    dtype=torch.float32,
-    device="cuda",
-)
-
-# indices: (batch,) int tensor selecting which element weights to use
-out = sc(x, indices)
-# out.shape == (batch, irreps_out.dim)
-```
-
-Default method: `"uniform_1d"` if segments are uniform, else `"naive"`.
-
-### SphericalHarmonics
-
-```python
-sh = cuet.SphericalHarmonics(
-    ls=[0, 1, 2, 3],
-    normalize=True,
-    device="cuda",
-)
-
-vectors = torch.randn(batch, 3, device="cuda")
-out = sh(vectors)
-# out.shape == (batch, 1 + 3 + 5 + 7)  -- sum of 2l+1
-```
-
-Default method: `"uniform_1d"`.
-
-### Rotation and Inversion
-
-```python
-# Rotation (SO3 or O3 irreps)
-rot = cuet.Rotation(
-    cue.Irreps("SO3", "4x0 + 2x1 + 1x2"),
-    layout=cue.ir_mul,
-    device="cuda",
-)
-
-# Euler angles (YXY convention)
-gamma = torch.tensor([0.1], device="cuda")
-beta = torch.tensor([0.2], device="cuda")
-alpha = torch.tensor([0.3], device="cuda")
-out = rot(gamma, beta, alpha, x)
-
-# Helper: encode angle for rotation
-encoded = cuet.encode_rotation_angle(angle, ell=3)  # cos/sin encoding
-
-# Helper: 3D vector to Euler angles
-beta, alpha = cuet.vector_to_euler_angles(vector)
-
-# Inversion (O3 irreps only)
-inv = cuet.Inversion(
-    cue.Irreps("O3", "4x0e + 2x1o"),
-    layout=cue.ir_mul,
-    device="cuda",
-)
-out = inv(x)
-```
-
-## Layers
-
-### BatchNorm
-
-Batch normalization for equivariant representations (adapted from e3nn).
-
-```python
-bn = cuet.layers.BatchNorm(
-    cue.Irreps("O3", "4x0e + 4x1o"),
-    layout=cue.mul_ir,
-    eps=1e-5,
-    momentum=0.1,
-    affine=True,
-)
-
-out = bn(x)  # x.shape == (batch, irreps.dim)
-```
-
-### FullyConnectedTensorProductConv
-
-Message passing layer for equivariant GNNs (DiffDock-style).
-
-```python
-conv = cuet.layers.FullyConnectedTensorProductConv(
-    in_irreps=cue.Irreps("O3", "4x0e + 4x1o"),
-    sh_irreps=cue.Irreps("O3", "0e + 1o"),
-    out_irreps=cue.Irreps("O3", "4x0e + 4x1o"),
-    mlp_channels=[16, 32, 32],
-    mlp_activation=torch.nn.ReLU(),
-    batch_norm=True,
-    layout=cue.ir_mul,
-)
-
-# graph = ((src, dst), (num_src_nodes, num_dst_nodes))
-graph = ((src, dst), (num_src_nodes, num_dst_nodes))
-
-out = conv(src_features, edge_sh, edge_emb, graph, reduce="mean")
-# out.shape == (num_dst_nodes, out_irreps.dim)
-
-# Optional: separate scalar features for efficient first-layer GEMM
-out = conv(src_features, edge_sh, edge_emb, graph,
-           src_scalars=src_scalars, dst_scalars=dst_scalars)
-```
-
-## Triangle operations (AlphaFold2-style)
-
-Require `cuequivariance_ops_torch`.
-
-```python
-# Triangle attention with pair bias
-kv_lengths = cuet.mask_to_kv_lengths(prefix_mask)
-out = cuet.triangle_attention(q, k, v, bias, scale=scale, kv_lengths=kv_lengths)
-# Arbitrary dense masks are supported through the fallback path:
-out = cuet.triangle_attention(q, k, v, bias, mask=holey_mask, scale=scale)
-# q, k, v: (B, N, H, Q/K, D), bias: (B, 1, H, Q, K)
-
-# Triangle multiplicative update
-out = cuet.triangle_multiplicative_update(
-    x,         # (B, I, J, C)
-    mask=mask, # (B, I, J)
-    precision=cuet.TriMulPrecision.DEFAULT,
-)
-
-# Attention with pair bias (strict OpenFold3/Boltz contract)
-out, _ = cuet.attention_pair_bias(
-    single_repr, pair_repr, mask, num_heads,
-    w_ln_a, b_ln_a,
-    w_proj_q, b_proj_q, w_proj_k, w_proj_v,
-    w_proj_g, w_proj_o, w_proj_z,
-    w_ln_z=w_ln_z, b_ln_z=b_ln_z,
-)
-# Optional generalized projection params are keyword-only:
-# b_proj_k, b_proj_v, w_ln_q, b_ln_q, w_ln_k, b_ln_k, b_proj_g (default None),
-# and norm_kind (default "layer_norm").
-```
-
-## ONNX and TensorRT export
-
-```python
-# ONNX export
-table = cuet.onnx_custom_translation_table()
-onnx_program = torch.onnx.export(model, inputs, custom_translation_table=table)
-
-# TensorRT plugin registration
-cuet.register_tensorrt_plugins()
-```
-
-## Complete GNN example
-
-```python
-import torch
-import cuequivariance as cue
-import cuequivariance_torch as cuet
-
 class SimpleGNN(torch.nn.Module):
-    def __init__(self, irreps_in, irreps_sh, irreps_out):
+    def __init__(self, irreps_in, irreps_out):
         super().__init__()
         self.tp = cuet.ChannelWiseTensorProduct(
-            irreps_in, irreps_sh, layout=cue.mul_ir,
-            shared_weights=False, device="cuda",
+            irreps_in, cue.Irreps("SO3", "0 + 1 + 2"), layout=cue.mul_ir,
+            shared_weights=False, internal_weights=False, method="naive",
         )
+        self.radial = torch.nn.Sequential(
+            torch.nn.Linear(1, 16), torch.nn.SiLU(),
+            torch.nn.Linear(16, self.tp.weight_numel),
+        )
+        self.sh = cuet.SphericalHarmonics([0, 1, 2], normalize=True, method="naive")
         self.linear = cuet.Linear(
-            self.tp.irreps_out, irreps_out,
-            layout=cue.mul_ir, internal_weights=True, device="cuda",
-        )
-        self.sh = cuet.SphericalHarmonics(
-            ls=[ir.l for _, ir in irreps_sh], normalize=True, device="cuda",
+            self.tp.irreps_out, irreps_out, layout=cue.mul_ir, method="naive"
         )
 
-    def forward(self, node_feats, edge_vec, edge_index, num_nodes):
-        src, dst = edge_index
-        edge_sh = self.sh(edge_vec)
-        w = torch.randn(1, self.tp.weight_numel, device=node_feats.device)
-
-        # Message: tensor product on edges with scatter to destination nodes
+    def forward(self, node_features, edge_vectors, senders, receivers, num_dst):
+        weights = self.radial(edge_vectors.norm(dim=-1, keepdim=True))
         messages = self.tp(
-            node_feats, edge_sh, weight=w,
-            indices_1=src, indices_2=None,
-            indices_out=dst, size_out=num_nodes,
+            node_features, self.sh(edge_vectors), weight=weights,
+            indices_1=senders, indices_out=receivers, size_out=num_dst,
         )
         return self.linear(messages)
 ```
 
-## Key file locations
+Move the whole module and inputs to the same dtype/device (for example `model.double()` for float64 checks). Use nonzero edge vectors when normalizing spherical harmonics. After a scalar loss/backward pass, check gradients on the radial network as well as node features; repeated forwards should agree when no stochastic layers are present.
 
-| Component | Path |
-|-----------|------|
-| `SegmentedPolynomial` | `cuequivariance_torch/primitives/segmented_polynomial.py` |
-| `uniform_1d` backend | `cuequivariance_torch/primitives/segmented_polynomial_uniform_1d.py` |
-| `naive` backend | `cuequivariance_torch/primitives/segmented_polynomial_naive.py` |
-| `fused_tp` backend | `cuequivariance_torch/primitives/segmented_polynomial_fused_tp.py` |
-| `indexed_linear` backend | `cuequivariance_torch/primitives/segmented_polynomial_indexed_linear.py` |
-| `ChannelWiseTensorProduct` | `cuequivariance_torch/operations/tp_channel_wise.py` |
-| `FullyConnectedTensorProduct` | `cuequivariance_torch/operations/tp_fully_connected.py` |
-| `Linear` | `cuequivariance_torch/operations/linear.py` |
-| `SymmetricContraction` | `cuequivariance_torch/operations/symmetric_contraction.py` |
-| `SphericalHarmonics` | `cuequivariance_torch/operations/spherical_harmonics.py` |
-| `Rotation` / `Inversion` | `cuequivariance_torch/operations/rotation.py` |
-| `BatchNorm` | `cuequivariance_torch/layers/batchnorm.py` |
-| `FullyConnectedTensorProductConv` | `cuequivariance_torch/layers/tp_conv_fully_connected.py` |
-| Triangle operations | `cuequivariance_torch/primitives/triangle.py` |
-| Layout transposition | `cuequivariance_torch/primitives/transpose.py` |
+## Other operations and layers
+
+Inspect the requested operation's installed signature/source via `inspect.signature` and `inspect.getfile`, rather than loading the entire API. These are the non-obvious contracts:
+
+| Operation | Contract |
+| --- | --- |
+| Species-indexed `Linear` | Set `weight_classes`; pass `weight_indices` of shape `(batch,)` and weights of shape `(weight_classes, weight_numel)`. |
+| `SymmetricContraction` | MACE-style; uniform multiplicities, `contraction_degree`, `num_elements`, and integer element indices in `sc(x, indices)`. |
+| `Rotation` / `Inversion` | `rot(gamma, beta, alpha, x)` uses YXY Euler angles; `inv(x)` uses O3 parity. Specify layout. Angle helpers: `encode_rotation_angle`, `vector_to_euler_angles`. |
+| `layers.BatchNorm` | Equivariant normalization; configure irreps and layout. |
+| `layers.FullyConnectedTensorProductConv` | Configure input/SH/output irreps and edge MLP; call with `(src_features, edge_sh, edge_emb, ((src, dst), (num_src, num_dst)))`. Supports `reduce="mean"` and optional `src_scalars`/`dst_scalars`. |
+
+### Triangle operations and export
+
+These paths require compatible optional GPU packages and their own shape checks. Do not install them for a CPU tensor-product request. Locate the installed `primitives/triangle.py` via `cuet.__file__`:
+
+- `triangle_attention`: Q/K/V `(B,N,H,Q_or_K,D)`, bias `(B,1,H,Q,K)`. `mask_to_kv_lengths(prefix_mask)` supplies `kv_lengths`; arbitrary dense masks use `mask=...` and the fallback.
+- `triangle_multiplicative_update`: input `(B,I,J,C)`, mask `(B,I,J)`, precision enum `cuet.TriMulPrecision`.
+- `attention_pair_bias`: OpenFold3/Boltz contract, returns `(out, auxiliary)`; projection biases and query/key normalization keywords vary by version. Inspect its signature before assembling the weights.
+- ONNX: pass `custom_translation_table=cuet.onnx_custom_translation_table()` to `torch.onnx.export`. TensorRT: `cuet.register_tensorrt_plugins()`. Validate the actual exported runtime.
+
+## Troubleshooting
+
+| Symptom | Check and recovery |
+| --- | --- |
+| Missing CUDA kernels on CPU | Pass `method="naive"` at module construction; retain the installed CPU PyTorch. |
+| `opt_einsum_fx not available` warning | Optional optimization; continue the naive reference calculation without installing it. |
+| Missing import after installation | Compare `sys.executable`, module paths, and the interpreter used with pip. Reuse the working interpreter. |
+| `ensurepip` unavailable / externally managed Python | Use a fresh environment and host `pip --python` as above; preserve existing environments and system packages. |
+| Unexpected keyword or missing descriptor method | Inspect the installed signature/version. Use its documented equivalent or explain the mismatch; avoid repeated blind API guesses. |
+| Correct shapes but wrong numerical values | Check per-block layout, output irrep order, normalization, and the shared/per-item weight convention. |
+| Scatter shape/error or wrong destination sums | Use operand index keys, integral indices, a tensor in `output_shapes`, and accumulation for repeated receivers. |
+| Missing/nonfinite gradients | Keep tensor operations in autograd; detach only the NumPy reference. Use nonzero vectors and a nonconstant loss; check every requested differentiable operand. |

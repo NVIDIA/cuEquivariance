@@ -122,6 +122,6 @@ jobs:
 
     - name: Check PyTorch skill evaluations and packaging
       run: |
-        pytest -q .github/tests/test_torch_skill_evals.py
+        pytest -q .github/tests/test_torch_skill_evals.py .github/tests/test_torch_skill_examples.py
         uv pip install hatchling
         python .github/scripts/check_skill_packaging.py --package cuequivariance_torch
