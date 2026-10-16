@@ -1,8 +1,10 @@
 # Skill Benchmark: cuequivariance-torch
 
-> **Overall verdict: NEUTRAL — One or more dimensions remain below PASS**
+> ✅ **Overall verdict: PASS — Recommended for publication**
 
-Live evaluation did not show a material gain or regression. Collect more evidence or improve the skill before making a publication decision.
+## Publication Recommendation
+
+Recommended for publication based on the completed evaluation evidence in this report.
 
 ## Evaluation Metadata
 
@@ -33,12 +35,12 @@ The three-tier evaluation checks whether the skill:
 
 | Measure | Claude Code (Baseline → Skill Uplift) | Codex (Baseline → Skill Uplift) |
 |---|---:|---:|
-| Overall | 81.8% — baseline ran, but no comparable score was available; uplift unavailable | Not available |
-| Security | 50.0% → 50.0% (±0.0 points) | Not available |
-| Correctness | 100.0% → 100.0% (±0.0 points) | Not available |
-| Discoverability | 87.2% — baseline ran, but no comparable score was available; uplift unavailable | Not available |
-| Effectiveness | 90.1% → 100.0% (+9.9 points) | Not available |
-| Efficiency | 71.9% — baseline ran, but no comparable score was available; uplift unavailable | Not available |
+| Overall | 86.5% — baseline ran, but no comparable score was available; uplift unavailable | 76.5% — baseline ran, but no comparable score was available; uplift unavailable |
+| Security | 50.0% → 83.3% (+33.3 points) | 50.0% → 50.0% (±0.0 points) |
+| Correctness | 100.0% → 100.0% (±0.0 points) | 100.0% → 100.0% (±0.0 points) |
+| Discoverability | 86.0% — baseline ran, but no comparable score was available; uplift unavailable | 83.0% — baseline ran, but no comparable score was available; uplift unavailable |
+| Effectiveness | 90.1% → 84.2% (-5.9 points) | 81.8% → 91.3% (+9.5 points) |
+| Efficiency | 78.8% — baseline ran, but no comparable score was available; uplift unavailable | 58.0% — baseline ran, but no comparable score was available; uplift unavailable |
 
 **How to read this table:** baseline is the same task attempted without the target skill. Scores are rounded to one decimal; threshold-adjacent values use additional precision so their displayed band matches the verdict. Uplift is derived from those displayed scores and shown in percentage points.
 
@@ -52,21 +54,21 @@ Actual Tier 3 execution usage is reported for every observed agent/case pair and
 
 | Agent | Dataset case | With skill | Without skill | Delta | Change | Coverage |
 |---|---|---:|---:|---:|---:|---|
-| claude-code | All cases | 7,423,526 | 6,490,723 | +932,803 | +14.37% | skill 6/6; base 6/6 |
-| claude-code | torch-001 | 1,379,936 | 1,308,078 | +71,858 | +5.49% | skill 1/1; base 1/1 |
-| claude-code | torch-002 | 1,182,955 | 603,673 | +579,282 | +95.96% | skill 1/1; base 1/1 |
-| claude-code | torch-003 | 1,161,987 | 928,849 | +233,138 | +25.10% | skill 1/1; base 1/1 |
-| claude-code | torch-004 | 1,286,524 | 1,044,323 | +242,201 | +23.19% | skill 1/1; base 1/1 |
-| claude-code | torch-005 | 2,382,097 | 2,576,008 | -193,911 | -7.53% | skill 1/1; base 1/1 |
-| claude-code | torch-006 | 30,027 | 29,792 | +235 | +0.79% | skill 1/1; base 1/1 |
-| codex | All cases | 5,264,185 | 4,068,564 | N/A | N/A | skill 5/6; base 6/6 |
-| codex | torch-001 | N/A | 1,321,564 | N/A | N/A | skill 0/1; base 1/1 |
-| codex | torch-002 | 1,651,497 | 768,903 | +882,594 | +114.79% | skill 1/1; base 1/1 |
-| codex | torch-003 | 1,103,907 | 689,022 | +414,885 | +60.21% | skill 1/1; base 1/1 |
-| codex | torch-004 | 520,123 | 425,385 | +94,738 | +22.27% | skill 1/1; base 1/1 |
-| codex | torch-005 | 1,974,911 | 850,079 | +1,124,832 | +132.32% | skill 1/1; base 1/1 |
-| codex | torch-006 | 13,747 | 13,611 | +136 | +1.00% | skill 1/1; base 1/1 |
-| ALL AGENTS | Dataset aggregate | 12,687,711 | 10,559,287 | N/A | N/A | skill 11/12; base 12/12 |
+| claude-code | All cases | 4,604,027 | 5,037,482 | -433,455 | -8.60% | skill 6/6; base 6/6 |
+| claude-code | torch-001 | 1,230,733 | 1,103,162 | +127,571 | +11.56% | skill 1/1; base 1/1 |
+| claude-code | torch-002 | 543,013 | 848,884 | -305,871 | -36.03% | skill 1/1; base 1/1 |
+| claude-code | torch-003 | 780,753 | 978,259 | -197,506 | -20.19% | skill 1/1; base 1/1 |
+| claude-code | torch-004 | 686,592 | 1,355,474 | -668,882 | -49.35% | skill 1/1; base 1/1 |
+| claude-code | torch-005 | 1,333,100 | 721,931 | +611,169 | +84.66% | skill 1/1; base 1/1 |
+| claude-code | torch-006 | 29,836 | 29,772 | +64 | +0.21% | skill 1/1; base 1/1 |
+| codex | All cases | 5,122,185 | 7,095,117 | -1,972,932 | -27.81% | skill 6/6; base 6/6 |
+| codex | torch-001 | 1,462,137 | 2,800,219 | -1,338,082 | -47.78% | skill 1/1; base 1/1 |
+| codex | torch-002 | 1,022,997 | 564,020 | +458,977 | +81.38% | skill 1/1; base 1/1 |
+| codex | torch-003 | 761,771 | 1,198,690 | -436,919 | -36.45% | skill 1/1; base 1/1 |
+| codex | torch-004 | 680,450 | 1,134,224 | -453,774 | -40.01% | skill 1/1; base 1/1 |
+| codex | torch-005 | 1,181,156 | 1,384,401 | -203,245 | -14.68% | skill 1/1; base 1/1 |
+| codex | torch-006 | 13,674 | 13,563 | +111 | +0.82% | skill 1/1; base 1/1 |
+| ALL AGENTS | Dataset aggregate | 9,726,212 | 12,132,599 | -2,406,387 | -19.83% | skill 12/12; base 12/12 |
 
 Prompt tokens include cached reads, so total tokens are `prompt + completion` (cached is not added twice). The Efficiency score uses `(prompt - cached) + completion`. N/A means the relevant trajectory counters were not available; coverage is never estimated.
 
@@ -74,21 +76,26 @@ Prompt tokens include cached reads, so total tokens are `prompt + completion` (c
 
 | Tier | Purpose | Status | Evidence |
 |---|---|---|---|
-| Tier 1 | Static validation | **PASSED WITH OBSERVATIONS** | 11 validator(s); 8 finding(s) |
+| Tier 1 | Static validation | **PASSED** | 11 validator(s); 0 finding(s) |
 | Tier 2 | Semantic deduplication | **PASSED** | 2 validator(s); 0 finding(s) |
-| Tier 3 | Live agent evaluation | **NEUTRAL** | 2 agent(s); 6 task(s) |
+| Tier 3 | Live agent evaluation | **PASS** | 2 agent(s); 6 task(s) |
 
 ## Findings and Observations
 
 <details>
 <summary>Show detailed findings and successful checks</summary>
 
-- **MEDIUM** QUALITY/quality_correctness: SKILL_SPEC recommended field missing: 'metadata.tags' (`skills/cuequivariance-torch/SKILL.md`)
-- **LOW** QUALITY/quality_discoverability: Description very long (363 chars, recommend 50-150) (`skills/cuequivariance-torch/SKILL.md`)
-- **LOW** QUALITY/quality_discoverability: No '## Purpose' section (`skills/cuequivariance-torch/SKILL.md`)
-- **LOW** QUALITY/quality_reliability: No mention of error handling or validation (`skills/cuequivariance-torch/SKILL.md`)
-- **LOW** QUALITY/quality_reliability: No prerequisites/requirements documented (`skills/cuequivariance-torch/SKILL.md`)
-- 3 additional finding(s) are available in the full evaluation artifacts.
+- Schema & Repository Governance: Found skill manifest: SKILL.md
+- Semantic Version Validation: No semantic version label present; resource will use commit-hash history (opting back out of an existing label is allowed)
+- Security Scan: No security vulnerabilities detected (secrets, API keys, credentials)
+- PII Scan: Scanning 2 files for PII
+- Code Integrity & Hygiene: Checking 1 markdown files for dead links
+- Unicode Smuggling Detection: No invisible Unicode characters detected in 2 file(s)
+- QUALITY: Score: 100.0/100 (Grade: A)
+- SCRIPT_LINT: No Python scripts found in scripts/
+- Context Deduplication: Collected 1 file(s)
+- Inter-Skill Deduplication: Parsed skill 'cuequivariance-torch': 151 char description
+- AGENT_EVAL: Tier 3 evaluation complete: verdict PASS; best agent claude-code
 
 </details>
 

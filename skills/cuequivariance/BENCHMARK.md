@@ -1,10 +1,8 @@
 # Skill Benchmark: cuequivariance
 
-> ✅ **Overall verdict: PASS — Recommended for publication**
+> **Overall verdict: NEUTRAL — One or more dimensions remain below PASS**
 
-## Publication Recommendation
-
-Recommended for publication based on the completed evaluation evidence in this report.
+Live evaluation did not show a material gain or regression. Collect more evidence or improve the skill before making a publication decision.
 
 ## Evaluation Metadata
 
@@ -35,12 +33,12 @@ The three-tier evaluation checks whether the skill:
 
 | Measure | Claude Code (Baseline → Skill Uplift) | Codex (Baseline → Skill Uplift) |
 |---|---:|---:|
-| Overall | 86.4% — baseline ran, but no comparable score was available; uplift unavailable | 87.0% — baseline ran, but no comparable score was available; uplift unavailable |
-| Security | 33.3% → 83.3% (+50.0 points) | 66.7% → 83.3% (+16.6 points) |
-| Correctness | 100.0% → 100.0% (±0.0 points) | 96.7% → 100.0% (+3.3 points) |
-| Discoverability | 84.0% — baseline ran, but no comparable score was available; uplift unavailable | 85.0% — baseline ran, but no comparable score was available; uplift unavailable |
-| Effectiveness | 97.5% → 96.7% (-0.8 points) | 90.0% → 94.2% (+4.2 points) |
-| Efficiency | 68.2% — baseline ran, but no comparable score was available; uplift unavailable | 72.5% — baseline ran, but no comparable score was available; uplift unavailable |
+| Overall | 86.3% — baseline ran, but no comparable score was available; uplift unavailable | 82.9% — baseline ran, but no comparable score was available; uplift unavailable |
+| Security | 100.0% → 75.0% (-25.0 points) | 83.3% → 83.3% (±0.0 points) |
+| Correctness | 100.0% → 100.0% (±0.0 points) | 100.0% → 96.7% (-3.3 points) |
+| Discoverability | 89.0% — baseline ran, but no comparable score was available; uplift unavailable | 83.0% — baseline ran, but no comparable score was available; uplift unavailable |
+| Effectiveness | 95.4% → 95.8% (+0.4 points) | 88.8% → 80.0% (-8.8 points) |
+| Efficiency | 71.9% — baseline ran, but no comparable score was available; uplift unavailable | 71.3% — baseline ran, but no comparable score was available; uplift unavailable |
 
 **How to read this table:** baseline is the same task attempted without the target skill. Scores are rounded to one decimal; threshold-adjacent values use additional precision so their displayed band matches the verdict. Uplift is derived from those displayed scores and shown in percentage points.
 
@@ -54,21 +52,21 @@ Actual Tier 3 execution usage is reported for every observed agent/case pair and
 
 | Agent | Dataset case | With skill | Without skill | Delta | Change | Coverage |
 |---|---|---:|---:|---:|---:|---|
-| claude-code | All cases | 6,178,511 | 6,967,056 | -788,545 | -11.32% | skill 6/6; base 6/6 |
-| claude-code | core-001 | 1,116,183 | 1,092,606 | +23,577 | +2.16% | skill 1/1; base 1/1 |
-| claude-code | core-002 | 590,901 | 1,036,330 | -445,429 | -42.98% | skill 1/1; base 1/1 |
-| claude-code | core-003 | 729,662 | 1,931,071 | -1,201,409 | -62.21% | skill 1/1; base 1/1 |
-| claude-code | core-004 | 994,549 | 779,822 | +214,727 | +27.54% | skill 1/1; base 1/1 |
-| claude-code | core-005 | 2,716,801 | 2,096,799 | +620,002 | +29.57% | skill 1/1; base 1/1 |
-| claude-code | core-006 | 30,415 | 30,428 | -13 | -0.04% | skill 1/1; base 1/1 |
-| codex | All cases | 2,256,123 | 2,801,003 | -544,880 | -19.45% | skill 6/6; base 6/6 |
-| codex | core-001 | 556,778 | 590,845 | -34,067 | -5.77% | skill 1/1; base 1/1 |
-| codex | core-002 | 425,769 | 637,619 | -211,850 | -33.23% | skill 1/1; base 1/1 |
-| codex | core-003 | 657,989 | 621,907 | +36,082 | +5.80% | skill 1/1; base 1/1 |
-| codex | core-004 | 552,745 | 453,685 | +99,060 | +21.83% | skill 1/1; base 1/1 |
-| codex | core-005 | 49,004 | 467,286 | -418,282 | -89.51% | skill 1/1; base 1/1 |
-| codex | core-006 | 13,838 | 29,661 | -15,823 | -53.35% | skill 1/1; base 1/1 |
-| ALL AGENTS | Dataset aggregate | 8,434,634 | 9,768,059 | -1,333,425 | -13.65% | skill 12/12; base 12/12 |
+| claude-code | All cases | 4,494,094 | 6,764,067 | -2,269,973 | -33.56% | skill 6/6; base 6/6 |
+| claude-code | core-001 | 935,725 | 1,050,205 | -114,480 | -10.90% | skill 1/1; base 1/1 |
+| claude-code | core-002 | 558,016 | 1,212,941 | -654,925 | -53.99% | skill 1/1; base 1/1 |
+| claude-code | core-003 | 924,549 | 1,870,785 | -946,236 | -50.58% | skill 1/1; base 1/1 |
+| claude-code | core-004 | 717,396 | 1,190,142 | -472,746 | -39.72% | skill 1/1; base 1/1 |
+| claude-code | core-005 | 1,327,938 | 1,409,548 | -81,610 | -5.79% | skill 1/1; base 1/1 |
+| claude-code | core-006 | 30,470 | 30,446 | +24 | +0.08% | skill 1/1; base 1/1 |
+| codex | All cases | 2,407,936 | 3,244,738 | -836,802 | -25.79% | skill 6/6; base 6/6 |
+| codex | core-001 | 472,531 | 660,932 | -188,401 | -28.51% | skill 1/1; base 1/1 |
+| codex | core-002 | 626,920 | 924,625 | -297,705 | -32.20% | skill 1/1; base 1/1 |
+| codex | core-003 | 561,064 | 742,408 | -181,344 | -24.43% | skill 1/1; base 1/1 |
+| codex | core-004 | 644,768 | 817,679 | -172,911 | -21.15% | skill 1/1; base 1/1 |
+| codex | core-005 | 88,355 | 85,281 | +3,074 | +3.60% | skill 1/1; base 1/1 |
+| codex | core-006 | 14,298 | 13,813 | +485 | +3.51% | skill 1/1; base 1/1 |
+| ALL AGENTS | Dataset aggregate | 6,902,030 | 10,008,805 | -3,106,775 | -31.04% | skill 12/12; base 12/12 |
 
 Prompt tokens include cached reads, so total tokens are `prompt + completion` (cached is not added twice). The Efficiency score uses `(prompt - cached) + completion`. N/A means the relevant trajectory counters were not available; coverage is never estimated.
 
@@ -78,7 +76,7 @@ Prompt tokens include cached reads, so total tokens are `prompt + completion` (c
 |---|---|---|---|
 | Tier 1 | Static validation | **PASSED WITH OBSERVATIONS** | 11 validator(s); 7 finding(s) |
 | Tier 2 | Semantic deduplication | **PASSED** | 2 validator(s); 0 finding(s) |
-| Tier 3 | Live agent evaluation | **PASS** | 2 agent(s); 6 task(s) |
+| Tier 3 | Live agent evaluation | **NEUTRAL** | 2 agent(s); 6 task(s) |
 
 ## Findings and Observations
 
