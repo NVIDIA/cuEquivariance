@@ -1,13 +1,15 @@
 # Skill Benchmark: cuequivariance-jax
 
-> **Overall verdict: NEUTRAL — One or more dimensions remain below PASS**
+> ✅ **Overall verdict: PASS — Recommended for publication**
 
-Live evaluation did not show a material gain or regression. Collect more evidence or improve the skill before making a publication decision.
+## Publication Recommendation
+
+Recommended for publication based on the completed evaluation evidence in this report.
 
 ## Evaluation Metadata
 
 - Skill: `cuequivariance-jax`
-- Evaluation date: 2026-10-16
+- Evaluation date: 2026-10-18
 - Evaluator version: `1.5.6`
 - Agents: Claude Code (`aws/anthropic/bedrock-claude-opus-4-8`), Codex (`openai/openai/gpt-5.5`)
 - Tasks: 6 evaluation tasks (5 positive, 1 negative)
@@ -33,12 +35,12 @@ The three-tier evaluation checks whether the skill:
 
 | Measure | Claude Code (Baseline → Skill Uplift) | Codex (Baseline → Skill Uplift) |
 |---|---:|---:|
-| Overall | 84.8% — baseline ran, but no comparable score was available; uplift unavailable | 78.6% — baseline ran, but no comparable score was available; uplift unavailable |
-| Security | 66.7% → 66.7% (±0.0 points) | 66.7% → 50.0% (-16.7 points) |
+| Overall | 86.3% — baseline ran, but no comparable score was available; uplift unavailable | 87.2% — baseline ran, but no comparable score was available; uplift unavailable |
+| Security | 50.0% → 75.0% (+25.0 points) | 83.3% → 83.3% (±0.0 points) |
 | Correctness | 100.0% → 100.0% (±0.0 points) | 100.0% → 100.0% (±0.0 points) |
-| Discoverability | 83.0% — baseline ran, but no comparable score was available; uplift unavailable | 88.0% — baseline ran, but no comparable score was available; uplift unavailable |
-| Effectiveness | 96.3% → 100.0% (+3.7 points) | 90.4% → 92.9% (+2.5 points) |
-| Efficiency | 74.2% — baseline ran, but no comparable score was available; uplift unavailable | 62.2% — baseline ran, but no comparable score was available; uplift unavailable |
+| Discoverability | 89.6% — baseline ran, but no comparable score was available; uplift unavailable | 91.0% — baseline ran, but no comparable score was available; uplift unavailable |
+| Effectiveness | 97.9% → 87.9% (-10.0 points) | 82.9% → 92.9% (+10.0 points) |
+| Efficiency | 78.9% — baseline ran, but no comparable score was available; uplift unavailable | 68.9% — baseline ran, but no comparable score was available; uplift unavailable |
 
 **How to read this table:** baseline is the same task attempted without the target skill. Scores are rounded to one decimal; threshold-adjacent values use additional precision so their displayed band matches the verdict. Uplift is derived from those displayed scores and shown in percentage points.
 
@@ -52,21 +54,21 @@ Actual Tier 3 execution usage is reported for every observed agent/case pair and
 
 | Agent | Dataset case | With skill | Without skill | Delta | Change | Coverage |
 |---|---|---:|---:|---:|---:|---|
-| claude-code | All cases | 4,008,776 | 4,893,147 | -884,371 | -18.07% | skill 6/6; base 6/6 |
-| claude-code | jax-001 | 819,414 | 1,039,684 | -220,270 | -21.19% | skill 1/1; base 1/1 |
-| claude-code | jax-002 | 644,824 | 519,762 | +125,062 | +24.06% | skill 1/1; base 1/1 |
-| claude-code | jax-003 | 803,688 | 837,521 | -33,833 | -4.04% | skill 1/1; base 1/1 |
-| claude-code | jax-004 | 1,165,511 | 1,871,827 | -706,316 | -37.73% | skill 1/1; base 1/1 |
-| claude-code | jax-005 | 545,612 | 594,753 | -49,141 | -8.26% | skill 1/1; base 1/1 |
-| claude-code | jax-006 | 29,727 | 29,600 | +127 | +0.43% | skill 1/1; base 1/1 |
-| codex | All cases | 3,101,982 | 2,979,561 | +122,421 | +4.11% | skill 6/6; base 6/6 |
-| codex | jax-001 | 1,059,589 | 862,896 | +196,693 | +22.79% | skill 1/1; base 1/1 |
-| codex | jax-002 | 253,060 | 359,521 | -106,461 | -29.61% | skill 1/1; base 1/1 |
-| codex | jax-003 | 645,104 | 513,418 | +131,686 | +25.65% | skill 1/1; base 1/1 |
-| codex | jax-004 | 990,442 | 1,141,417 | -150,975 | -13.23% | skill 1/1; base 1/1 |
-| codex | jax-005 | 140,349 | 88,989 | +51,360 | +57.71% | skill 1/1; base 1/1 |
-| codex | jax-006 | 13,438 | 13,320 | +118 | +0.89% | skill 1/1; base 1/1 |
-| ALL AGENTS | Dataset aggregate | 7,110,758 | 7,872,708 | -761,950 | -9.68% | skill 12/12; base 12/12 |
+| claude-code | All cases | 4,947,603 | 4,390,017 | +557,586 | +12.70% | skill 6/6; base 6/6 |
+| claude-code | jax-001 | 1,583,310 | 908,185 | +675,125 | +74.34% | skill 1/1; base 1/1 |
+| claude-code | jax-002 | 692,110 | 531,175 | +160,935 | +30.30% | skill 1/1; base 1/1 |
+| claude-code | jax-003 | 1,202,926 | 819,390 | +383,536 | +46.81% | skill 1/1; base 1/1 |
+| claude-code | jax-004 | 829,453 | 1,416,254 | -586,801 | -41.43% | skill 1/1; base 1/1 |
+| claude-code | jax-005 | 610,198 | 685,455 | -75,257 | -10.98% | skill 1/1; base 1/1 |
+| claude-code | jax-006 | 29,606 | 29,558 | +48 | +0.16% | skill 1/1; base 1/1 |
+| codex | All cases | 1,936,562 | 2,876,893 | -940,331 | -32.69% | skill 6/6; base 6/6 |
+| codex | jax-001 | 310,054 | 759,473 | -449,419 | -59.18% | skill 1/1; base 1/1 |
+| codex | jax-002 | 273,170 | 469,747 | -196,577 | -41.85% | skill 1/1; base 1/1 |
+| codex | jax-003 | 673,888 | 324,300 | +349,588 | +107.80% | skill 1/1; base 1/1 |
+| codex | jax-004 | 611,120 | 1,265,573 | -654,453 | -51.71% | skill 1/1; base 1/1 |
+| codex | jax-005 | 54,698 | 44,481 | +10,217 | +22.97% | skill 1/1; base 1/1 |
+| codex | jax-006 | 13,632 | 13,319 | +313 | +2.35% | skill 1/1; base 1/1 |
+| ALL AGENTS | Dataset aggregate | 6,884,165 | 7,266,910 | -382,745 | -5.27% | skill 12/12; base 12/12 |
 
 Prompt tokens include cached reads, so total tokens are `prompt + completion` (cached is not added twice). The Efficiency score uses `(prompt - cached) + completion`. N/A means the relevant trajectory counters were not available; coverage is never estimated.
 
@@ -74,21 +76,26 @@ Prompt tokens include cached reads, so total tokens are `prompt + completion` (c
 
 | Tier | Purpose | Status | Evidence |
 |---|---|---|---|
-| Tier 1 | Static validation | **PASSED WITH OBSERVATIONS** | 11 validator(s); 7 finding(s) |
+| Tier 1 | Static validation | **PASSED** | 11 validator(s); 0 finding(s) |
 | Tier 2 | Semantic deduplication | **PASSED** | 2 validator(s); 0 finding(s) |
-| Tier 3 | Live agent evaluation | **NEUTRAL** | 2 agent(s); 6 task(s) |
+| Tier 3 | Live agent evaluation | **PASS** | 2 agent(s); 6 task(s) |
 
 ## Findings and Observations
 
 <details>
 <summary>Show detailed findings and successful checks</summary>
 
-- **MEDIUM** QUALITY/quality_correctness: SKILL_SPEC recommended field missing: 'metadata.tags' (`skills/cuequivariance-jax/SKILL.md`)
-- **LOW** QUALITY/quality_discoverability: Description very long (276 chars, recommend 50-150) (`skills/cuequivariance-jax/SKILL.md`)
-- **LOW** QUALITY/quality_discoverability: No '## Purpose' section (`skills/cuequivariance-jax/SKILL.md`)
-- **LOW** QUALITY/quality_reliability: No prerequisites/requirements documented (`skills/cuequivariance-jax/SKILL.md`)
-- **LOW** QUALITY/quality_reliability: No limitations documented (`skills/cuequivariance-jax/SKILL.md`)
-- 2 additional finding(s) are available in the full evaluation artifacts.
+- Schema & Repository Governance: Found skill manifest: SKILL.md
+- Semantic Version Validation: No semantic version label present; resource will use commit-hash history (opting back out of an existing label is allowed)
+- Security Scan: No security vulnerabilities detected (secrets, API keys, credentials)
+- PII Scan: Scanning 2 files for PII
+- Code Integrity & Hygiene: Checking 1 markdown files for dead links
+- Unicode Smuggling Detection: No invisible Unicode characters detected in 2 file(s)
+- QUALITY: Score: 100.0/100 (Grade: A)
+- SCRIPT_LINT: No Python scripts found in scripts/
+- Context Deduplication: Collected 1 file(s)
+- Inter-Skill Deduplication: Parsed skill 'cuequivariance-jax': 133 char description
+- AGENT_EVAL: Tier 3 evaluation complete: verdict PASS; best agent codex
 
 </details>
 

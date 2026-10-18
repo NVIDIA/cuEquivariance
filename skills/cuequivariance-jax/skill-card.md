@@ -1,5 +1,5 @@
 ## Description: <br>
-Execute equivariant polynomials in JAX using segmented_polynomial (naive/uniform_1d), the ir_dict workflow with IrDictPolynomial and dict[Irrep, Array], and Flax NNX layers (IrrepsLinear, SphericalHarmonics, IrrepsIndexedLinear). <br>
+Use when writing or debugging cuEquivariance JAX polynomials, irrep dictionaries, Flax NNX layers, or CPU/CUDA execution and layouts. <br>
 
 This skill is ready for commercial/non-commercial use. <br>
 
@@ -9,7 +9,7 @@ NVIDIA <br>
 ### License/Terms of Use: <br>
 Apache 2.0 <br>
 ## Use Case: <br>
-Developers and engineers use this skill when writing JAX code with cuequivariance to execute equivariant polynomials on CPU or GPU, work with dict[Irrep, Array] or RepArray data, and build Flax NNX equivariant layers for geometric neural networks such as NequIP- and MACE-style GNNs. <br>
+Developers and engineers use this skill when writing or debugging JAX code with cuequivariance to execute equivariant polynomials on CPU or GPU, work with dict[Irrep, Array] or RepArray data and layouts, and build Flax NNX equivariant layers for geometric neural networks such as NequIP- and MACE-style GNNs. <br>
 
 ### Deployment Geography for Use: <br>
 Global <br>
@@ -27,11 +27,13 @@ Mitigation: Review and scan skill before deployment. <br>
 ## Reference(s): <br>
 - [cuEquivariance documentation](https://docs.nvidia.com/cuda/cuequivariance/) <br>
 - [cuEquivariance GitHub repository](https://github.com/NVIDIA/cuEquivariance) <br>
+- [JAX installation](https://docs.jax.dev/en/latest/installation.html) <br>
+- [pip interpreter selection](https://pip.pypa.io/en/stable/topics/python-option/) <br>
 
 
 ## Skill Output: <br>
-**Output Type(s):** [Code, Analysis] <br>
-**Output Format:** [Markdown with inline Python code blocks] <br>
+**Output Type(s):** [Code, Shell commands, Analysis] <br>
+**Output Format:** [Markdown with inline Python and bash code blocks] <br>
 **Output Parameters:** [1D] <br>
 **Other Properties Related to Output:** [None] <br>
 
@@ -66,12 +68,12 @@ Underlying evaluation signals used in this run: <br>
 ## Evaluation Results: <br>
 | Measure | Claude Code (Baseline → Skill Uplift) | Codex (Baseline → Skill Uplift) |
 |---|---:|---:|
-| Overall | 84.8% — baseline ran, but no comparable score was available; uplift unavailable | 78.6% — baseline ran, but no comparable score was available; uplift unavailable |
-| Security | 66.7% → 66.7% (±0.0 points) | 66.7% → 50.0% (-16.7 points) |
+| Overall | 86.3% — baseline ran, but no comparable score was available; uplift unavailable | 87.2% — baseline ran, but no comparable score was available; uplift unavailable |
+| Security | 50.0% → 75.0% (+25.0 points) | 83.3% → 83.3% (±0.0 points) |
 | Correctness | 100.0% → 100.0% (±0.0 points) | 100.0% → 100.0% (±0.0 points) |
-| Discoverability | 83.0% — baseline ran, but no comparable score was available; uplift unavailable | 88.0% — baseline ran, but no comparable score was available; uplift unavailable |
-| Effectiveness | 96.3% → 100.0% (+3.7 points) | 90.4% → 92.9% (+2.5 points) |
-| Efficiency | 74.2% — baseline ran, but no comparable score was available; uplift unavailable | 62.2% — baseline ran, but no comparable score was available; uplift unavailable |
+| Discoverability | 89.6% — baseline ran, but no comparable score was available; uplift unavailable | 91.0% — baseline ran, but no comparable score was available; uplift unavailable |
+| Effectiveness | 97.9% → 87.9% (-10.0 points) | 82.9% → 92.9% (+10.0 points) |
+| Efficiency | 78.9% — baseline ran, but no comparable score was available; uplift unavailable | 68.9% — baseline ran, but no comparable score was available; uplift unavailable |
 
 ## Skill Version(s): <br>
 0.13.0 (source: VERSION, CHANGELOG, released 2026-10-15) <br>

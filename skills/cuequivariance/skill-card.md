@@ -66,15 +66,15 @@ Underlying evaluation signals used in this run: <br>
 ## Evaluation Results: <br>
 | Measure | Claude Code (Baseline → Skill Uplift) | Codex (Baseline → Skill Uplift) |
 |---|---:|---:|
-| Overall | 86.3% — baseline ran, but no comparable score was available; uplift unavailable | 82.9% — baseline ran, but no comparable score was available; uplift unavailable |
-| Security | 100.0% → 75.0% (-25.0 points) | 83.3% → 83.3% (±0.0 points) |
-| Correctness | 100.0% → 100.0% (±0.0 points) | 100.0% → 96.7% (-3.3 points) |
-| Discoverability | 89.0% — baseline ran, but no comparable score was available; uplift unavailable | 83.0% — baseline ran, but no comparable score was available; uplift unavailable |
-| Effectiveness | 95.4% → 95.8% (+0.4 points) | 88.8% → 80.0% (-8.8 points) |
-| Efficiency | 71.9% — baseline ran, but no comparable score was available; uplift unavailable | 71.3% — baseline ran, but no comparable score was available; uplift unavailable |
+| Overall | 88.7% — baseline ran, but no comparable score was available; uplift unavailable | 82.1% — baseline ran, but no comparable score was available; uplift unavailable |
+| Security | 50.0% → 83.3% (+33.3 points) | 83.3% → 66.7% (-16.6 points) |
+| Correctness | 100.0% → 100.0% (±0.0 points) | 100.0% → 100.0% (±0.0 points) |
+| Discoverability | 86.0% — baseline ran, but no comparable score was available; uplift unavailable | 85.0% — baseline ran, but no comparable score was available; uplift unavailable |
+| Effectiveness | 90.0% → 98.8% (+8.8 points) | 86.7% → 92.1% (+5.4 points) |
+| Efficiency | 75.6% — baseline ran, but no comparable score was available; uplift unavailable | 66.9% — baseline ran, but no comparable score was available; uplift unavailable |
 
 ## Skill Version(s): <br>
-0.13.0 (source: VERSION file, git commit a126d11 2026-10-16) <br>
+0.13.0 (source: VERSION file, git commit 531da35 2026-10-18) <br>
 
 ## Ethical Considerations: <br>
 NVIDIA believes Trustworthy AI is a shared responsibility and we have established policies and practices to enable development for a wide array of AI applications. When downloaded or used in accordance with our terms of service, developers should work with their internal team to ensure this skill meets requirements for the relevant industry and use case and addresses unforeseen product misuse. <br>

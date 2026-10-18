@@ -1,13 +1,15 @@
 # Skill Benchmark: cuequivariance
 
-> **Overall verdict: NEUTRAL — One or more dimensions remain below PASS**
+> ✅ **Overall verdict: PASS — Recommended for publication**
 
-Live evaluation did not show a material gain or regression. Collect more evidence or improve the skill before making a publication decision.
+## Publication Recommendation
+
+Recommended for publication based on the completed evaluation evidence in this report.
 
 ## Evaluation Metadata
 
 - Skill: `cuequivariance`
-- Evaluation date: 2026-10-16
+- Evaluation date: 2026-10-18
 - Evaluator version: `1.5.6`
 - Agents: Claude Code (`aws/anthropic/bedrock-claude-opus-4-8`), Codex (`openai/openai/gpt-5.5`)
 - Tasks: 6 evaluation tasks (5 positive, 1 negative)
@@ -33,12 +35,12 @@ The three-tier evaluation checks whether the skill:
 
 | Measure | Claude Code (Baseline → Skill Uplift) | Codex (Baseline → Skill Uplift) |
 |---|---:|---:|
-| Overall | 86.3% — baseline ran, but no comparable score was available; uplift unavailable | 82.9% — baseline ran, but no comparable score was available; uplift unavailable |
-| Security | 100.0% → 75.0% (-25.0 points) | 83.3% → 83.3% (±0.0 points) |
-| Correctness | 100.0% → 100.0% (±0.0 points) | 100.0% → 96.7% (-3.3 points) |
-| Discoverability | 89.0% — baseline ran, but no comparable score was available; uplift unavailable | 83.0% — baseline ran, but no comparable score was available; uplift unavailable |
-| Effectiveness | 95.4% → 95.8% (+0.4 points) | 88.8% → 80.0% (-8.8 points) |
-| Efficiency | 71.9% — baseline ran, but no comparable score was available; uplift unavailable | 71.3% — baseline ran, but no comparable score was available; uplift unavailable |
+| Overall | 88.7% — baseline ran, but no comparable score was available; uplift unavailable | 82.1% — baseline ran, but no comparable score was available; uplift unavailable |
+| Security | 50.0% → 83.3% (+33.3 points) | 83.3% → 66.7% (-16.6 points) |
+| Correctness | 100.0% → 100.0% (±0.0 points) | 100.0% → 100.0% (±0.0 points) |
+| Discoverability | 86.0% — baseline ran, but no comparable score was available; uplift unavailable | 85.0% — baseline ran, but no comparable score was available; uplift unavailable |
+| Effectiveness | 90.0% → 98.8% (+8.8 points) | 86.7% → 92.1% (+5.4 points) |
+| Efficiency | 75.6% — baseline ran, but no comparable score was available; uplift unavailable | 66.9% — baseline ran, but no comparable score was available; uplift unavailable |
 
 **How to read this table:** baseline is the same task attempted without the target skill. Scores are rounded to one decimal; threshold-adjacent values use additional precision so their displayed band matches the verdict. Uplift is derived from those displayed scores and shown in percentage points.
 
@@ -52,21 +54,21 @@ Actual Tier 3 execution usage is reported for every observed agent/case pair and
 
 | Agent | Dataset case | With skill | Without skill | Delta | Change | Coverage |
 |---|---|---:|---:|---:|---:|---|
-| claude-code | All cases | 4,494,094 | 6,764,067 | -2,269,973 | -33.56% | skill 6/6; base 6/6 |
-| claude-code | core-001 | 935,725 | 1,050,205 | -114,480 | -10.90% | skill 1/1; base 1/1 |
-| claude-code | core-002 | 558,016 | 1,212,941 | -654,925 | -53.99% | skill 1/1; base 1/1 |
-| claude-code | core-003 | 924,549 | 1,870,785 | -946,236 | -50.58% | skill 1/1; base 1/1 |
-| claude-code | core-004 | 717,396 | 1,190,142 | -472,746 | -39.72% | skill 1/1; base 1/1 |
-| claude-code | core-005 | 1,327,938 | 1,409,548 | -81,610 | -5.79% | skill 1/1; base 1/1 |
-| claude-code | core-006 | 30,470 | 30,446 | +24 | +0.08% | skill 1/1; base 1/1 |
-| codex | All cases | 2,407,936 | 3,244,738 | -836,802 | -25.79% | skill 6/6; base 6/6 |
-| codex | core-001 | 472,531 | 660,932 | -188,401 | -28.51% | skill 1/1; base 1/1 |
-| codex | core-002 | 626,920 | 924,625 | -297,705 | -32.20% | skill 1/1; base 1/1 |
-| codex | core-003 | 561,064 | 742,408 | -181,344 | -24.43% | skill 1/1; base 1/1 |
-| codex | core-004 | 644,768 | 817,679 | -172,911 | -21.15% | skill 1/1; base 1/1 |
-| codex | core-005 | 88,355 | 85,281 | +3,074 | +3.60% | skill 1/1; base 1/1 |
-| codex | core-006 | 14,298 | 13,813 | +485 | +3.51% | skill 1/1; base 1/1 |
-| ALL AGENTS | Dataset aggregate | 6,902,030 | 10,008,805 | -3,106,775 | -31.04% | skill 12/12; base 12/12 |
+| claude-code | All cases | 4,991,254 | 7,417,446 | -2,426,192 | -32.71% | skill 6/6; base 6/6 |
+| claude-code | core-001 | 1,552,225 | 1,548,257 | +3,968 | +0.26% | skill 1/1; base 1/1 |
+| claude-code | core-002 | 596,064 | 1,089,910 | -493,846 | -45.31% | skill 1/1; base 1/1 |
+| claude-code | core-003 | 872,820 | 1,146,419 | -273,599 | -23.87% | skill 1/1; base 1/1 |
+| claude-code | core-004 | 663,184 | 865,437 | -202,253 | -23.37% | skill 1/1; base 1/1 |
+| claude-code | core-005 | 1,276,221 | 2,736,942 | -1,460,721 | -53.37% | skill 1/1; base 1/1 |
+| claude-code | core-006 | 30,740 | 30,481 | +259 | +0.85% | skill 1/1; base 1/1 |
+| codex | All cases | 2,155,811 | 4,007,025 | -1,851,214 | -46.20% | skill 6/6; base 6/6 |
+| codex | core-001 | 420,443 | 845,088 | -424,645 | -50.25% | skill 1/1; base 1/1 |
+| codex | core-002 | 473,578 | 731,568 | -257,990 | -35.27% | skill 1/1; base 1/1 |
+| codex | core-003 | 436,256 | 849,609 | -413,353 | -48.65% | skill 1/1; base 1/1 |
+| codex | core-004 | 361,551 | 1,414,735 | -1,053,184 | -74.44% | skill 1/1; base 1/1 |
+| codex | core-005 | 450,019 | 152,246 | +297,773 | +195.59% | skill 1/1; base 1/1 |
+| codex | core-006 | 13,964 | 13,779 | +185 | +1.34% | skill 1/1; base 1/1 |
+| ALL AGENTS | Dataset aggregate | 7,147,065 | 11,424,471 | -4,277,406 | -37.44% | skill 12/12; base 12/12 |
 
 Prompt tokens include cached reads, so total tokens are `prompt + completion` (cached is not added twice). The Efficiency score uses `(prompt - cached) + completion`. N/A means the relevant trajectory counters were not available; coverage is never estimated.
 
@@ -76,7 +78,7 @@ Prompt tokens include cached reads, so total tokens are `prompt + completion` (c
 |---|---|---|---|
 | Tier 1 | Static validation | **PASSED WITH OBSERVATIONS** | 11 validator(s); 7 finding(s) |
 | Tier 2 | Semantic deduplication | **PASSED** | 2 validator(s); 0 finding(s) |
-| Tier 3 | Live agent evaluation | **NEUTRAL** | 2 agent(s); 6 task(s) |
+| Tier 3 | Live agent evaluation | **PASS** | 2 agent(s); 6 task(s) |
 
 ## Findings and Observations
 

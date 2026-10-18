@@ -1,15 +1,13 @@
 # Skill Benchmark: cuequivariance-torch
 
-> ✅ **Overall verdict: PASS — Recommended for publication**
+> **Overall verdict: NEUTRAL — One or more dimensions remain below PASS**
 
-## Publication Recommendation
-
-Recommended for publication based on the completed evaluation evidence in this report.
+Live evaluation did not show a material gain or regression. Collect more evidence or improve the skill before making a publication decision.
 
 ## Evaluation Metadata
 
 - Skill: `cuequivariance-torch`
-- Evaluation date: 2026-10-16
+- Evaluation date: 2026-10-18
 - Evaluator version: `1.5.6`
 - Agents: Claude Code (`aws/anthropic/bedrock-claude-opus-4-8`), Codex (`openai/openai/gpt-5.5`)
 - Tasks: 6 evaluation tasks (5 positive, 1 negative)
@@ -35,12 +33,12 @@ The three-tier evaluation checks whether the skill:
 
 | Measure | Claude Code (Baseline → Skill Uplift) | Codex (Baseline → Skill Uplift) |
 |---|---:|---:|
-| Overall | 86.5% — baseline ran, but no comparable score was available; uplift unavailable | 76.5% — baseline ran, but no comparable score was available; uplift unavailable |
-| Security | 50.0% → 83.3% (+33.3 points) | 50.0% → 50.0% (±0.0 points) |
-| Correctness | 100.0% → 100.0% (±0.0 points) | 100.0% → 100.0% (±0.0 points) |
-| Discoverability | 86.0% — baseline ran, but no comparable score was available; uplift unavailable | 83.0% — baseline ran, but no comparable score was available; uplift unavailable |
-| Effectiveness | 90.1% → 84.2% (-5.9 points) | 81.8% → 91.3% (+9.5 points) |
-| Efficiency | 78.8% — baseline ran, but no comparable score was available; uplift unavailable | 58.0% — baseline ran, but no comparable score was available; uplift unavailable |
+| Overall | 84.0% — baseline ran, but no comparable score was available; uplift unavailable | 74.9% — baseline ran, but no comparable score was available; uplift unavailable |
+| Security | 50.0% → 58.3% (+8.3 points) | 50.0% → 41.7% (-8.3 points) |
+| Correctness | 100.0% → 100.0% (±0.0 points) | 96.7% → 100.0% (+3.3 points) |
+| Discoverability | 89.0% — baseline ran, but no comparable score was available; uplift unavailable | 83.0% — baseline ran, but no comparable score was available; uplift unavailable |
+| Effectiveness | 92.2% → 92.9% (+0.7 points) | 82.4% → 91.7% (+9.3 points) |
+| Efficiency | 79.6% — baseline ran, but no comparable score was available; uplift unavailable | 58.1% — baseline ran, but no comparable score was available; uplift unavailable |
 
 **How to read this table:** baseline is the same task attempted without the target skill. Scores are rounded to one decimal; threshold-adjacent values use additional precision so their displayed band matches the verdict. Uplift is derived from those displayed scores and shown in percentage points.
 
@@ -54,21 +52,21 @@ Actual Tier 3 execution usage is reported for every observed agent/case pair and
 
 | Agent | Dataset case | With skill | Without skill | Delta | Change | Coverage |
 |---|---|---:|---:|---:|---:|---|
-| claude-code | All cases | 4,604,027 | 5,037,482 | -433,455 | -8.60% | skill 6/6; base 6/6 |
-| claude-code | torch-001 | 1,230,733 | 1,103,162 | +127,571 | +11.56% | skill 1/1; base 1/1 |
-| claude-code | torch-002 | 543,013 | 848,884 | -305,871 | -36.03% | skill 1/1; base 1/1 |
-| claude-code | torch-003 | 780,753 | 978,259 | -197,506 | -20.19% | skill 1/1; base 1/1 |
-| claude-code | torch-004 | 686,592 | 1,355,474 | -668,882 | -49.35% | skill 1/1; base 1/1 |
-| claude-code | torch-005 | 1,333,100 | 721,931 | +611,169 | +84.66% | skill 1/1; base 1/1 |
-| claude-code | torch-006 | 29,836 | 29,772 | +64 | +0.21% | skill 1/1; base 1/1 |
-| codex | All cases | 5,122,185 | 7,095,117 | -1,972,932 | -27.81% | skill 6/6; base 6/6 |
-| codex | torch-001 | 1,462,137 | 2,800,219 | -1,338,082 | -47.78% | skill 1/1; base 1/1 |
-| codex | torch-002 | 1,022,997 | 564,020 | +458,977 | +81.38% | skill 1/1; base 1/1 |
-| codex | torch-003 | 761,771 | 1,198,690 | -436,919 | -36.45% | skill 1/1; base 1/1 |
-| codex | torch-004 | 680,450 | 1,134,224 | -453,774 | -40.01% | skill 1/1; base 1/1 |
-| codex | torch-005 | 1,181,156 | 1,384,401 | -203,245 | -14.68% | skill 1/1; base 1/1 |
-| codex | torch-006 | 13,674 | 13,563 | +111 | +0.82% | skill 1/1; base 1/1 |
-| ALL AGENTS | Dataset aggregate | 9,726,212 | 12,132,599 | -2,406,387 | -19.83% | skill 12/12; base 12/12 |
+| claude-code | All cases | 4,992,274 | 6,906,967 | -1,914,693 | -27.72% | skill 6/6; base 6/6 |
+| claude-code | torch-001 | 795,386 | 1,870,442 | -1,075,056 | -57.48% | skill 1/1; base 1/1 |
+| claude-code | torch-002 | 475,055 | 947,637 | -472,582 | -49.87% | skill 1/1; base 1/1 |
+| claude-code | torch-003 | 896,363 | 1,413,656 | -517,293 | -36.59% | skill 1/1; base 1/1 |
+| claude-code | torch-004 | 912,314 | 1,249,324 | -337,010 | -26.98% | skill 1/1; base 1/1 |
+| claude-code | torch-005 | 1,883,055 | 1,396,040 | +487,015 | +34.89% | skill 1/1; base 1/1 |
+| claude-code | torch-006 | 30,101 | 29,868 | +233 | +0.78% | skill 1/1; base 1/1 |
+| codex | All cases | 5,514,111 | 7,798,241 | -2,284,130 | -29.29% | skill 6/6; base 6/6 |
+| codex | torch-001 | 1,261,467 | 1,871,775 | -610,308 | -32.61% | skill 1/1; base 1/1 |
+| codex | torch-002 | 1,070,595 | 970,046 | +100,549 | +10.37% | skill 1/1; base 1/1 |
+| codex | torch-003 | 1,172,773 | 1,222,710 | -49,937 | -4.08% | skill 1/1; base 1/1 |
+| codex | torch-004 | 556,283 | 2,789,080 | -2,232,797 | -80.05% | skill 1/1; base 1/1 |
+| codex | torch-005 | 1,439,357 | 931,065 | +508,292 | +54.59% | skill 1/1; base 1/1 |
+| codex | torch-006 | 13,636 | 13,565 | +71 | +0.52% | skill 1/1; base 1/1 |
+| ALL AGENTS | Dataset aggregate | 10,506,385 | 14,705,208 | -4,198,823 | -28.55% | skill 12/12; base 12/12 |
 
 Prompt tokens include cached reads, so total tokens are `prompt + completion` (cached is not added twice). The Efficiency score uses `(prompt - cached) + completion`. N/A means the relevant trajectory counters were not available; coverage is never estimated.
 
@@ -78,7 +76,7 @@ Prompt tokens include cached reads, so total tokens are `prompt + completion` (c
 |---|---|---|---|
 | Tier 1 | Static validation | **PASSED** | 11 validator(s); 0 finding(s) |
 | Tier 2 | Semantic deduplication | **PASSED** | 2 validator(s); 0 finding(s) |
-| Tier 3 | Live agent evaluation | **PASS** | 2 agent(s); 6 task(s) |
+| Tier 3 | Live agent evaluation | **NEUTRAL** | 2 agent(s); 6 task(s) |
 
 ## Findings and Observations
 
@@ -95,7 +93,7 @@ Prompt tokens include cached reads, so total tokens are `prompt + completion` (c
 - SCRIPT_LINT: No Python scripts found in scripts/
 - Context Deduplication: Collected 1 file(s)
 - Inter-Skill Deduplication: Parsed skill 'cuequivariance-torch': 151 char description
-- AGENT_EVAL: Tier 3 evaluation complete: verdict PASS; best agent claude-code
+- AGENT_EVAL: Tier 3 evaluation complete: verdict NEUTRAL; best agent claude-code
 
 </details>
 
