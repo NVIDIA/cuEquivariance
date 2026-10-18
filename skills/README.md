@@ -41,23 +41,34 @@ frontends rather than reusing the core skill's expected routing.
 | PyTorch | Spherical harmonics and gradcheck; linear layouts and rotation; external per-example weights; gather/scatter with repeated receivers and gradients; CPU backend fallback |
 
 `evals/config.yml` requests an isolated skill workspace and a rebuilt Harbor
-environment. SkillEvaluator installs `scripts/requirements.txt` when generating
-that environment. Those requirements pin cuEquivariance to the immutable source
-revision whose APIs were checked, and pin the JAX/Flax or CPU PyTorch versions.
+environment. In SkillEvaluator 1.5.6, Docker task generation installs
+`scripts/requirements.txt`. The `k8s-sandbox` path instead stages skill files into
+an existing sandbox; `base_image_mode: rebuild` alone does **not** install these
+dependencies there. Verify the actual interpreter and package versions in each
+arm before treating a run as an evaluation of the pinned environment. A shared
+custom evaluation image or common `harbor.pre_agent_setup` is needed when the
+sandbox does not already provide them. Provision it equally for both arms and
+establish a new baseline when changing the environment.
+
+The requirements pin cuEquivariance to the immutable source revision whose APIs
+were checked, and pin the JAX/Flax or CPU PyTorch versions.
 They do not require sibling skills or a repository checkout inside the sandbox.
 When updating the API baseline, update the pins and run the numerical checks
 before changing the assertions. The CUDA backend constraints are checked as
 guidance; these datasets do not benchmark GPU performance or validate CUDA kernels.
 
 The tests under `.github/tests/test_*_skill_evals.py` verify the mathematical and
-API expectations behind the prompts. `test_torch_skill_examples.py` also executes
-the published Torch examples and checks the GNN's determinism, equivariance, and
-gradients. These are maintenance checks, not live agent scores. To run them against
+API expectations behind the prompts. `test_jax_skill_examples.py` executes each
+published CPU example independently and checks layout conversion with duplicate
+irreps and split polynomials with additional batch axes, parity, and JIT.
+`test_torch_skill_examples.py` executes the published Torch examples and checks
+the GNN's determinism, equivariance, and gradients. These are maintenance checks,
+not live agent scores. To run them against
 a development checkout with the relevant frontend dependencies installed:
 
 ```bash
 pytest -q .github/tests/test_core_skill_evals.py
-JAX_PLATFORMS=cpu pytest -q .github/tests/test_jax_skill_evals.py
+JAX_PLATFORMS=cpu pytest -q .github/tests/test_jax_skill_evals.py .github/tests/test_jax_skill_examples.py
 pytest -q .github/tests/test_torch_skill_evals.py .github/tests/test_torch_skill_examples.py
 ```
 
@@ -79,6 +90,34 @@ skillevaluator tier3 validate skills/cuequivariance
 skillevaluator tier3 validate skills/cuequivariance-jax
 skillevaluator tier3 validate skills/cuequivariance-torch
 ```
+
+### Interpreting Tier 3 comparisons
+
+Use the exported JSON and per-trial evidence to compare revisions. The pipeline
+gate, static quality score, execution coverage, and skill uplift answer different
+questions; a green pipeline does not establish positive uplift.
+
+- Check `tier3.coverage` first. Compare the same eligible agents and models across
+  revisions. An agent excluded for `agent_process_exit` has no valid quality
+  score; a displayed zero is not a measured skill regression. Exit 137 alone
+  does not identify whether memory pressure, timeout, or another kill caused it.
+- Use the precision recorded in `tier3.quality`. With default grading in 1.5.6, gate
+  lift averages the with-skill minus baseline differences for the shared metrics
+  `security`, `accuracy`, `goal_accuracy`, and `behavior_check`. Skill execution
+  and tool productivity are N/A for baseline; token efficiency is a separate
+  diagnostic and is outside that gate calculation.
+- Pair trials by case ID. Inspect security evidence and numerical/workflow
+  checks before using aggregate recommendations. Record total and productive
+  tool calls plus uncached prompt and completion tokens to locate setup and
+  exploration overhead.
+- Hold the dataset, dependency versions, environment, agent models, evaluator,
+  thresholds, and attempt policy fixed for a skill-only comparison. Capture
+  package versions from the actual run: requirements files alone are insufficient.
+  Preserve all attempts and infrastructure failures when repeating a comparison.
+- One attempt per case is exploratory evidence. Repeat both arms before claiming
+  a small improvement is reliable; do not select only the best rerun. Keep new
+  evaluation cases in a separately identified benchmark until both revisions
+  have been measured on it.
 
 ## Packaging
 

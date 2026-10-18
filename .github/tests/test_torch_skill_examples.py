@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Run the published skill examples and check the trainable GNN's invariants."""
 
+import importlib
 import re
 from pathlib import Path
 
@@ -12,14 +13,54 @@ import cuequivariance as cue
 
 
 @pytest.fixture(scope="module")
-def skill_namespace():
+def skill_examples():
     skill = Path(__file__).resolve().parents[2] / "skills/cuequivariance-torch/SKILL.md"
+    return [
+        compile(code, f"{skill}:example-{index}", "exec")
+        for index, code in enumerate(
+            re.findall(r"```python\n(.*?)\n```", skill.read_text(), re.S)
+        )
+    ]
+
+
+@pytest.fixture(scope="module")
+def skill_namespace(skill_examples):
     namespace = {}
-    for index, code in enumerate(
-        re.findall(r"```python\n(.*?)\n```", skill.read_text(), re.S)
-    ):
-        exec(compile(code, f"{skill}:example-{index}", "exec"), namespace)
+    for code in skill_examples:
+        exec(code, namespace)
     return namespace
+
+
+@pytest.mark.parametrize(
+    "failed_module, error",
+    [
+        ("cuequivariance_torch", ModuleNotFoundError("cuEquivariance is absent")),
+        ("cuequivariance", OSError("shared library cannot be loaded")),
+        ("torch", ImportError("PyTorch cannot be imported")),
+    ],
+)
+def test_environment_probe_preserves_partial_results(
+    skill_examples, monkeypatch, failed_module, error
+):
+    modules = {
+        name: importlib.import_module(name)
+        for name in ("torch", "cuequivariance", "cuequivariance_torch")
+    }
+
+    def import_module(name):
+        if name == failed_module:
+            raise error
+        return modules[name]
+
+    monkeypatch.setattr(importlib, "import_module", import_module)
+    namespace = {}
+    exec(skill_examples[0], namespace)
+    assert namespace["available"] == {
+        name: module for name, module in modules.items() if name != failed_module
+    }
+    assert namespace["import_errors"] == {
+        failed_module: f"{type(error).__name__}: {error}"
+    }
 
 
 def test_documented_gnn_is_trainable_and_equivariant(skill_namespace):

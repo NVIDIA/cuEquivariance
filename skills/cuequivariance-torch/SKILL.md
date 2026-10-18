@@ -22,29 +22,41 @@ Required for the computation: operation, SO3/O3 irreps, layout, device, dtype, a
 1. Check the selected interpreter and imports once using the probe below. Reuse a working environment. A missing CUDA backend is usually a method-selection issue, not a reason to reinstall PyTorch.
 2. Set `method="naive"` for CPU calculations. Match module parameters, features, weights, and reference computations in device and dtype. Use float64 for small numerical and gradient checks.
 3. Specify layout and weight ownership explicitly. Derive sizes and output order from the module/descriptor; do not guess multiplicities from a filter.
-4. Build the smallest relevant computation, run it, and report the actual checks and any failure. Compare the requested forward/gradient/equivariance properties before optimizing. Avoid repeatedly inspecting unrelated modules or producing several competing implementations.
+4. Adapt the relevant example to the task and run its requested checks together. Report the interpreter, shapes, numerical error, and gradient results actually observed. Investigate a failed check before broadening the implementation.
 5. If an API differs from this guide, inspect that installed object's signature and source once. Adapt to the installed version or explain the required version; do not silently replace cuEquivariance with another library.
 
 ## Prerequisites and environment reuse
 
-Run this with the project's Python interpreter (including its existing virtual environment, if any):
+Run this with the project's Python interpreter (including its existing virtual environment, if any). Check imports independently so one missing package does not hide a working CPU PyTorch:
 
 ```python
+import importlib
 import sys
-import torch
-import cuequivariance as cue
-import cuequivariance_torch as cuet
 
 print("python:", sys.executable)
-print("torch:", torch.__version__, "CUDA build:", torch.version.cuda)
-print("CUDA available:", torch.cuda.is_available())
-print("cue:", cue.__file__)
-print("cuet:", cuet.__file__)
+available, import_errors = {}, {}
+for name in ("torch", "cuequivariance", "cuequivariance_torch"):
+    try:
+        module = importlib.import_module(name)
+        available[name] = module
+        print(name, getattr(module, "__version__", "unknown"), module.__file__)
+    except (ImportError, OSError) as error:
+        import_errors[name] = f"{type(error).__name__}: {error}"
+        print(name, import_errors[name])
+if "torch" in available:
+    torch = available["torch"]
+    print("CUDA build:", torch.version.cuda, "available:", torch.cuda.is_available())
 ```
 
-If these imports work, continue with this interpreter; CPU execution does not require CUDA kernels. When an import fails, first check whether a different project interpreter already has the dependencies. Use that same interpreter for installation and execution.
+Choose the next step from the probe:
 
-Only when dependencies are missing and installation is appropriate, create a **new** environment. An installation or backend error does not justify deleting an existing environment, replacing the user's CPU PyTorch, or bypassing system-package protection. On Linux/macOS, this fallback also works when `venv` cannot bootstrap pip through `ensurepip` (the host needs pip 22.3+):
+- All imports work: continue with this interpreter and `method="naive"` for CPU; install nothing.
+- PyTorch works but cuEquivariance is missing: use another existing project interpreter if it has both. Otherwise install only the missing cuEquivariance packages into the intended environment, honoring its version constraints. `cuequivariance-torch` is the distribution name; `cuequivariance_torch` is the import name.
+- An import reports a missing shared library or binary mismatch: use the reported package/path to diagnose compatibility. This differs from an absent package; repeated installations or a backend change may not fix it.
+
+Use the same interpreter for pip and execution. Installing cuEquivariance does not require replacing an already working CPU PyTorch. Optional CUDA/optimization warnings alone are not installation failures.
+
+If no usable project environment is available, or it cannot be modified normally, create a **new** environment when installation is appropriate. Preserve existing environments and system-package protection. On Linux/macOS, this fallback also works when `venv` cannot bootstrap pip through `ensurepip` (the host needs pip 22.3+):
 
 ```bash
 cueq_env=$(mktemp -d "${TMPDIR:-/tmp}/cueq-cpu.XXXXXX")
@@ -54,7 +66,7 @@ python3 -m pip --python "$cueq_env" install cuequivariance-torch
 "$cueq_env/bin/python" -c 'import torch, cuequivariance_torch; print(torch.__version__)'
 ```
 
-Honor project version/source constraints in these commands and keep using the new environment's Python explicitly. If pip is unavailable, use an existing manager such as `uv` or report the missing prerequisite. See [pip's interpreter selection](https://pip.pypa.io/en/stable/topics/python-option/).
+Honor project version/source constraints and keep using the new environment's Python explicitly. Stop at the first failed setup command and diagnose its error; preserve the failure output. If pip is unavailable, use an existing manager such as `uv` or report the missing prerequisite. See [pip's interpreter selection](https://pip.pypa.io/en/stable/topics/python-option/).
 
 ## Limitations and backends
 
