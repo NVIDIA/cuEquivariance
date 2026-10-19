@@ -33,12 +33,12 @@ The three-tier evaluation checks whether the skill:
 
 | Measure | Claude Code (Baseline → Skill Uplift) | Codex (Baseline → Skill Uplift) |
 |---|---:|---:|
-| Overall | 93.1% — baseline ran, but no comparable score was available; uplift unavailable | 82.0% — baseline ran, but no comparable score was available; uplift unavailable |
-| Security | 83.3% → 100.0% (+16.7 points) | 100.0% → 66.7% (-33.3 points) |
-| Correctness | 100.0% → 100.0% (±0.0 points) | 100.0% → 96.7% (-3.3 points) |
-| Discoverability | 87.0% — baseline ran, but no comparable score was available; uplift unavailable | 88.0% — baseline ran, but no comparable score was available; uplift unavailable |
-| Effectiveness | 97.9% → 96.7% (-1.2 points) | 97.9% → 92.9% (-5.0 points) |
-| Efficiency | 81.6% — baseline ran, but no comparable score was available; uplift unavailable | 65.7% — baseline ran, but no comparable score was available; uplift unavailable |
+| Overall | 92.8% — baseline ran, but no comparable score was available; uplift unavailable | 83.2% — baseline ran, but no comparable score was available; uplift unavailable |
+| Security | 83.3% → 100.0% (+16.7 points) | 50.0% → 83.3% (+33.3 points) |
+| Correctness | 100.0% → 100.0% (±0.0 points) | 100.0% → 100.0% (±0.0 points) |
+| Discoverability | 94.0% — baseline ran, but no comparable score was available; uplift unavailable | 85.0% — baseline ran, but no comparable score was available; uplift unavailable |
+| Effectiveness | 95.8% → 94.2% (-1.6 points) | 91.7% → 78.3% (-13.4 points) |
+| Efficiency | 76.1% — baseline ran, but no comparable score was available; uplift unavailable | 69.3% — baseline ran, but no comparable score was available; uplift unavailable |
 
 **How to read this table:** baseline is the same task attempted without the target skill. Scores are rounded to one decimal; threshold-adjacent values use additional precision so their displayed band matches the verdict. Uplift is derived from those displayed scores and shown in percentage points.
 
@@ -52,21 +52,21 @@ Actual Tier 3 execution usage is reported for every observed agent/case pair and
 
 | Agent | Dataset case | With skill | Without skill | Delta | Change | Coverage |
 |---|---|---:|---:|---:|---:|---|
-| claude-code | All cases | 5,437,471 | 5,353,635 | +83,836 | +1.57% | skill 6/6; base 6/6 |
-| claude-code | jax-001 | 794,408 | 1,156,143 | -361,735 | -31.29% | skill 1/1; base 1/1 |
-| claude-code | jax-002 | 1,006,269 | 471,710 | +534,559 | +113.32% | skill 1/1; base 1/1 |
-| claude-code | jax-003 | 797,985 | 611,625 | +186,360 | +30.47% | skill 1/1; base 1/1 |
-| claude-code | jax-004 | 1,596,338 | 1,666,259 | -69,921 | -4.20% | skill 1/1; base 1/1 |
-| claude-code | jax-005 | 1,212,898 | 1,418,401 | -205,503 | -14.49% | skill 1/1; base 1/1 |
-| claude-code | jax-006 | 29,573 | 29,497 | +76 | +0.26% | skill 1/1; base 1/1 |
-| codex | All cases | 1,725,111 | 3,333,306 | -1,608,195 | -48.25% | skill 6/6; base 6/6 |
-| codex | jax-001 | 309,970 | 837,967 | -527,997 | -63.01% | skill 1/1; base 1/1 |
-| codex | jax-002 | 263,600 | 398,498 | -134,898 | -33.85% | skill 1/1; base 1/1 |
-| codex | jax-003 | 263,329 | 573,627 | -310,298 | -54.09% | skill 1/1; base 1/1 |
-| codex | jax-004 | 777,827 | 1,456,163 | -678,336 | -46.58% | skill 1/1; base 1/1 |
-| codex | jax-005 | 96,998 | 53,508 | +43,490 | +81.28% | skill 1/1; base 1/1 |
-| codex | jax-006 | 13,387 | 13,543 | -156 | -1.15% | skill 1/1; base 1/1 |
-| ALL AGENTS | Dataset aggregate | 7,162,582 | 8,686,941 | -1,524,359 | -17.55% | skill 12/12; base 12/12 |
+| claude-code | All cases | 2,977,893 | 6,629,286 | -3,651,393 | -55.08% | skill 6/6; base 6/6 |
+| claude-code | jax-001 | 527,791 | 1,099,326 | -571,535 | -51.99% | skill 1/1; base 1/1 |
+| claude-code | jax-002 | 561,852 | 404,850 | +157,002 | +38.78% | skill 1/1; base 1/1 |
+| claude-code | jax-003 | 793,159 | 788,453 | +4,706 | +0.60% | skill 1/1; base 1/1 |
+| claude-code | jax-004 | 625,633 | 3,461,747 | -2,836,114 | -81.93% | skill 1/1; base 1/1 |
+| claude-code | jax-005 | 439,809 | 845,382 | -405,573 | -47.98% | skill 1/1; base 1/1 |
+| claude-code | jax-006 | 29,649 | 29,528 | +121 | +0.41% | skill 1/1; base 1/1 |
+| codex | All cases | 2,124,104 | 3,306,453 | -1,182,349 | -35.76% | skill 6/6; base 6/6 |
+| codex | jax-001 | 644,663 | 876,262 | -231,599 | -26.43% | skill 1/1; base 1/1 |
+| codex | jax-002 | 487,638 | 394,272 | +93,366 | +23.68% | skill 1/1; base 1/1 |
+| codex | jax-003 | 440,548 | 541,449 | -100,901 | -18.64% | skill 1/1; base 1/1 |
+| codex | jax-004 | 425,932 | 1,438,609 | -1,012,677 | -70.39% | skill 1/1; base 1/1 |
+| codex | jax-005 | 111,915 | 42,431 | +69,484 | +163.76% | skill 1/1; base 1/1 |
+| codex | jax-006 | 13,408 | 13,430 | -22 | -0.16% | skill 1/1; base 1/1 |
+| ALL AGENTS | Dataset aggregate | 5,101,997 | 9,935,739 | -4,833,742 | -48.65% | skill 12/12; base 12/12 |
 
 Prompt tokens include cached reads, so total tokens are `prompt + completion` (cached is not added twice). The Efficiency score uses `(prompt - cached) + completion`. N/A means the relevant trajectory counters were not available; coverage is never estimated.
 

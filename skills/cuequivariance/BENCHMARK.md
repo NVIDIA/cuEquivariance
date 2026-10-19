@@ -35,12 +35,12 @@ The three-tier evaluation checks whether the skill:
 
 | Measure | Claude Code (Baseline → Skill Uplift) | Codex (Baseline → Skill Uplift) |
 |---|---:|---:|
-| Overall | 86.9% — baseline ran, but no comparable score was available; uplift unavailable | Not available |
-| Security | 33.3% → 83.3% (+50.0 points) | Not available |
-| Correctness | 100.0% → 100.0% (±0.0 points) | Not available |
-| Discoverability | 91.0% — baseline ran, but no comparable score was available; uplift unavailable | Not available |
-| Effectiveness | 95.0% → 92.5% (-2.5 points) | Not available |
-| Efficiency | 67.7% — baseline ran, but no comparable score was available; uplift unavailable | Not available |
+| Overall | 85.5% — baseline ran, but no comparable score was available; uplift unavailable | 91.1% — baseline ran, but no comparable score was available; uplift unavailable |
+| Security | 83.3% → 83.3% (±0.0 points) | 83.3% → 100.0% (+16.7 points) |
+| Correctness | 100.0% → 100.0% (±0.0 points) | 100.0% → 100.0% (±0.0 points) |
+| Discoverability | 85.0% — baseline ran, but no comparable score was available; uplift unavailable | 84.0% — baseline ran, but no comparable score was available; uplift unavailable |
+| Effectiveness | 94.2% → 92.9% (-1.3 points) | 88.3% → 99.2% (+10.9 points) |
+| Efficiency | 66.3% — baseline ran, but no comparable score was available; uplift unavailable | 72.1% — baseline ran, but no comparable score was available; uplift unavailable |
 
 **How to read this table:** baseline is the same task attempted without the target skill. Scores are rounded to one decimal; threshold-adjacent values use additional precision so their displayed band matches the verdict. Uplift is derived from those displayed scores and shown in percentage points.
 
@@ -54,21 +54,21 @@ Actual Tier 3 execution usage is reported for every observed agent/case pair and
 
 | Agent | Dataset case | With skill | Without skill | Delta | Change | Coverage |
 |---|---|---:|---:|---:|---:|---|
-| claude-code | All cases | 4,249,937 | 8,293,717 | -4,043,780 | -48.76% | skill 6/6; base 6/6 |
-| claude-code | core-001 | 999,874 | 2,053,017 | -1,053,143 | -51.30% | skill 1/1; base 1/1 |
-| claude-code | core-002 | 729,147 | 920,821 | -191,674 | -20.82% | skill 1/1; base 1/1 |
-| claude-code | core-003 | 809,317 | 2,045,454 | -1,236,137 | -60.43% | skill 1/1; base 1/1 |
-| claude-code | core-004 | 747,604 | 774,446 | -26,842 | -3.47% | skill 1/1; base 1/1 |
-| claude-code | core-005 | 933,319 | 2,470,959 | -1,537,640 | -62.23% | skill 1/1; base 1/1 |
-| claude-code | core-006 | 30,676 | 29,020 | +1,656 | +5.71% | skill 1/1; base 1/1 |
-| codex | All cases | 1,984,253 | 2,235,151 | -250,898 | -11.23% | skill 6/6; base 6/6 |
-| codex | core-001 | 522,278 | 770,087 | -247,809 | -32.18% | skill 1/1; base 1/1 |
-| codex | core-002 | 364,871 | 318,140 | +46,731 | +14.69% | skill 1/1; base 1/1 |
-| codex | core-003 | 390,612 | 317,225 | +73,387 | +23.13% | skill 1/1; base 1/1 |
-| codex | core-004 | 448,211 | 413,494 | +34,717 | +8.40% | skill 1/1; base 1/1 |
-| codex | core-005 | 244,396 | 402,418 | -158,022 | -39.27% | skill 1/1; base 1/1 |
-| codex | core-006 | 13,885 | 13,787 | +98 | +0.71% | skill 1/1; base 1/1 |
-| ALL AGENTS | Dataset aggregate | 6,234,190 | 10,528,868 | -4,294,678 | -40.79% | skill 12/12; base 12/12 |
+| claude-code | All cases | 5,881,399 | 7,298,202 | -1,416,803 | -19.41% | skill 6/6; base 6/6 |
+| claude-code | core-001 | 956,726 | 1,188,219 | -231,493 | -19.48% | skill 1/1; base 1/1 |
+| claude-code | core-002 | 510,535 | 869,031 | -358,496 | -41.25% | skill 1/1; base 1/1 |
+| claude-code | core-003 | 710,993 | 2,235,618 | -1,524,625 | -68.20% | skill 1/1; base 1/1 |
+| claude-code | core-004 | 708,256 | 959,125 | -250,869 | -26.16% | skill 1/1; base 1/1 |
+| claude-code | core-005 | 2,964,658 | 2,015,952 | +948,706 | +47.06% | skill 1/1; base 1/1 |
+| claude-code | core-006 | 30,231 | 30,257 | -26 | -0.09% | skill 1/1; base 1/1 |
+| codex | All cases | 2,400,367 | 2,780,675 | -380,308 | -13.68% | skill 6/6; base 6/6 |
+| codex | core-001 | 720,238 | 494,550 | +225,688 | +45.64% | skill 1/1; base 1/1 |
+| codex | core-002 | 474,477 | 618,515 | -144,038 | -23.29% | skill 1/1; base 1/1 |
+| codex | core-003 | 429,875 | 645,457 | -215,582 | -33.40% | skill 1/1; base 1/1 |
+| codex | core-004 | 356,473 | 692,463 | -335,990 | -48.52% | skill 1/1; base 1/1 |
+| codex | core-005 | 405,363 | 315,871 | +89,492 | +28.33% | skill 1/1; base 1/1 |
+| codex | core-006 | 13,941 | 13,819 | +122 | +0.88% | skill 1/1; base 1/1 |
+| ALL AGENTS | Dataset aggregate | 8,281,766 | 10,078,877 | -1,797,111 | -17.83% | skill 12/12; base 12/12 |
 
 Prompt tokens include cached reads, so total tokens are `prompt + completion` (cached is not added twice). The Efficiency score uses `(prompt - cached) + completion`. N/A means the relevant trajectory counters were not available; coverage is never estimated.
 
@@ -77,7 +77,7 @@ Prompt tokens include cached reads, so total tokens are `prompt + completion` (c
 | Tier | Purpose | Status | Evidence |
 |---|---|---|---|
 | Tier 1 | Static validation | **PASSED WITH OBSERVATIONS** | 11 validator(s); 7 finding(s) |
-| Tier 2 | Semantic deduplication | **PASSED** | 2 validator(s); 0 finding(s) |
+| Tier 2 | Semantic deduplication | **PASSED WITH OBSERVATIONS** | 2 validator(s); 1 finding(s) |
 | Tier 3 | Live agent evaluation | **PASS** | 2 agent(s); 6 task(s) |
 
 ## Findings and Observations
@@ -85,12 +85,16 @@ Prompt tokens include cached reads, so total tokens are `prompt + completion` (c
 <details>
 <summary>Show detailed findings and successful checks</summary>
 
+- **HIGH** DUPLICATE/duplicate: Duplicate content found within SKILL.md:
+  "### IrDictPolynomial descriptors" in SKILL.md (lines 247-257)
+  vs "### IrDictPolynomial" in SKILL.md (lines 287-301)
+  vs "### split_polynomial_by_irreps" in SKILL.md (lines 312-322)
+  vs "# Split an operand into per-irrep pieces (for ir_dict interface)" in SKILL.md (lines 336-338) (`SKILL.md:247`)
 - **MEDIUM** QUALITY/quality_correctness: SKILL_SPEC recommended field missing: 'metadata.tags' (`skills/cuequivariance/SKILL.md`)
 - **LOW** QUALITY/quality_discoverability: Description very long (310 chars, recommend 50-150) (`skills/cuequivariance/SKILL.md`)
 - **LOW** QUALITY/quality_discoverability: No '## Purpose' section (`skills/cuequivariance/SKILL.md`)
 - **LOW** QUALITY/quality_reliability: No prerequisites/requirements documented (`skills/cuequivariance/SKILL.md`)
-- **LOW** QUALITY/quality_reliability: No limitations documented (`skills/cuequivariance/SKILL.md`)
-- 2 additional finding(s) are available in the full evaluation artifacts.
+- 3 additional finding(s) are available in the full evaluation artifacts.
 
 </details>
 

@@ -9,7 +9,7 @@ NVIDIA <br>
 ### License/Terms of Use: <br>
 Apache 2.0 <br>
 ## Use Case: <br>
-Developers and engineers use this skill when writing or debugging JAX code with cuequivariance to execute equivariant polynomials on CPU or GPU, work with dict[Irrep, Array] or RepArray data and layouts, and build Flax NNX equivariant layers for geometric neural networks such as NequIP- and MACE-style GNNs. <br>
+Developers and engineers building equivariant geometric neural networks use this skill to execute cuEquivariance descriptors with cuequivariance_jax, including segmented polynomials, irrep dictionary layouts, Flax NNX layers, and CPU or CUDA backend selection, with executable numerical checks. <br>
 
 ### Deployment Geography for Use: <br>
 Global <br>
@@ -26,16 +26,15 @@ Mitigation: Review and scan skill before deployment. <br>
 
 ## Reference(s): <br>
 - [cuEquivariance documentation](https://docs.nvidia.com/cuda/cuequivariance/) <br>
-- [cuEquivariance GitHub repository](https://github.com/NVIDIA/cuEquivariance) <br>
-- [JAX installation](https://docs.jax.dev/en/latest/installation.html) <br>
-- [pip interpreter selection](https://pip.pypa.io/en/stable/topics/python-option/) <br>
+- [pip interpreter selection (--python option)](https://pip.pypa.io/en/stable/topics/python-option/) <br>
+- [scripts/requirements.txt](scripts/requirements.txt) <br>
 
 
 ## Skill Output: <br>
 **Output Type(s):** [Code, Shell commands, Analysis] <br>
 **Output Format:** [Markdown with inline Python and bash code blocks] <br>
 **Output Parameters:** [1D] <br>
-**Other Properties Related to Output:** [None] <br>
+**Other Properties Related to Output:** [Reports observed execution results (exit status, printed shapes, errors) and identifies unrun checks.] <br>
 
 ## Evaluation Agents Used: <br>
 - Claude Code (`aws/anthropic/bedrock-claude-opus-4-8`) <br>
@@ -44,7 +43,7 @@ Mitigation: Review and scan skill before deployment. <br>
 
 
 ## Evaluation Tasks: <br>
-6 evaluation tasks (5 positive, 1 negative), 1 attempt per task, each run in an isolated sandbox pod and compared against a no-skill baseline. <br>
+6 evaluation tasks (5 positive, 1 negative), 1 attempt per task, each run in an isolated sandbox pod; evaluator version 1.5.6, evaluated 2026-10-19. Overall verdict: NEUTRAL. <br>
 
 ## Evaluation Metrics Used: <br>
 Reported benchmark dimensions: <br>
@@ -52,7 +51,7 @@ Reported benchmark dimensions: <br>
 - Correctness: Is the answer correct? Scored from the `accuracy` signal. <br>
 - Discoverability: Was the right skill loaded when needed? Scored from the `skill_execution` signal. <br>
 - Effectiveness: Did the skill help complete the task? Equal-weight mean of `goal_accuracy` and `behavior_check`. <br>
-- Efficiency: Did it avoid wasted tool calls and token usage? 50% `skill_efficiency` plus 50% `token_efficiency`. <br>
+- Efficiency: Did it avoid wasted tool calls and token usage? 50% `skill_efficiency` and 50% `token_efficiency`. <br>
 
 Underlying evaluation signals used in this run: <br>
 - `security`: Unsafe operations, secret leakage, and unauthorized access. <br>
@@ -68,15 +67,15 @@ Underlying evaluation signals used in this run: <br>
 ## Evaluation Results: <br>
 | Measure | Claude Code (Baseline → Skill Uplift) | Codex (Baseline → Skill Uplift) |
 |---|---:|---:|
-| Overall | 93.1% — baseline ran, but no comparable score was available; uplift unavailable | 82.0% — baseline ran, but no comparable score was available; uplift unavailable |
-| Security | 83.3% → 100.0% (+16.7 points) | 100.0% → 66.7% (-33.3 points) |
-| Correctness | 100.0% → 100.0% (±0.0 points) | 100.0% → 96.7% (-3.3 points) |
-| Discoverability | 87.0% — baseline ran, but no comparable score was available; uplift unavailable | 88.0% — baseline ran, but no comparable score was available; uplift unavailable |
-| Effectiveness | 97.9% → 96.7% (-1.2 points) | 97.9% → 92.9% (-5.0 points) |
-| Efficiency | 81.6% — baseline ran, but no comparable score was available; uplift unavailable | 65.7% — baseline ran, but no comparable score was available; uplift unavailable |
+| Overall | 92.8% — baseline ran, but no comparable score was available; uplift unavailable | 83.2% — baseline ran, but no comparable score was available; uplift unavailable |
+| Security | 83.3% → 100.0% (+16.7 points) | 50.0% → 83.3% (+33.3 points) |
+| Correctness | 100.0% → 100.0% (±0.0 points) | 100.0% → 100.0% (±0.0 points) |
+| Discoverability | 94.0% — baseline ran, but no comparable score was available; uplift unavailable | 85.0% — baseline ran, but no comparable score was available; uplift unavailable |
+| Effectiveness | 95.8% → 94.2% (-1.6 points) | 91.7% → 78.3% (-13.4 points) |
+| Efficiency | 76.1% — baseline ran, but no comparable score was available; uplift unavailable | 69.3% — baseline ran, but no comparable score was available; uplift unavailable |
 
 ## Skill Version(s): <br>
-0.13.0 (source: VERSION, CHANGELOG, released 2026-10-15) <br>
+af4c1c9 (source: git SHA, committed 2026-10-19) <br>
 
 ## Ethical Considerations: <br>
 NVIDIA believes Trustworthy AI is a shared responsibility and we have established policies and practices to enable development for a wide array of AI applications. When downloaded or used in accordance with our terms of service, developers should work with their internal team to ensure this skill meets requirements for the relevant industry and use case and addresses unforeseen product misuse. <br>
