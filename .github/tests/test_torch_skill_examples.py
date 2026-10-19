@@ -11,7 +11,6 @@ import torch
 
 import cuequivariance as cue
 
-
 SKILL = Path(__file__).resolve().parents[2] / "skills/cuequivariance-torch/SKILL.md"
 EXAMPLES = [
     compile(code, f"{SKILL}:example-{index}", "exec")

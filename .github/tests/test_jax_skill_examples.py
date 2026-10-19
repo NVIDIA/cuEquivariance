@@ -11,8 +11,6 @@ import numpy as np
 import pytest
 
 import cuequivariance as cue
-import cuequivariance_jax as cuex
-from cuequivariance_jax import ir_dict
 
 SKILL = Path(__file__).resolve().parents[2] / "skills/cuequivariance-jax/SKILL.md"
 EXAMPLES = [
@@ -67,22 +65,60 @@ def test_environment_probe_preserves_partial_results(monkeypatch, failed_module,
     }
 
 
-def test_layout_helper_with_duplicate_irreps_and_multiple_batch_axes():
-    to_ir_mul = run_example(3)["dict_to_ir_mul_flat"]
+@pytest.mark.parametrize("batch", [(), (2, 3)])
+def test_layout_helpers_with_duplicate_irreps(batch):
+    recipe = run_example(3)
     irreps = cue.Irreps("SO3", "2x1 + 0 + 1 + 2x2")
-    flat = jnp.arange(2 * 3 * irreps.dim).reshape(2, 3, irreps.dim)
-    regrouped = cuex.RepArray(cue.IrrepsAndLayout(irreps, cue.ir_mul), flat).regroup()
-    blocks = ir_dict.flat_to_dict(regrouped.irreps, regrouped.array, layout="ir_mul")
+    flat = jnp.arange(int(np.prod(batch)) * irreps.dim).reshape(batch + (irreps.dim,))
+    regrouped, blocks = recipe["ir_mul_to_dict"](irreps, flat)
+    assert regrouped == irreps.regroup()
     # Combine separated l=1 blocks along the channel axis, keeping every value.
     expected_vectors = np.concatenate(
         [
-            np.asarray(flat[..., :6]).reshape(2, 3, 3, 2),
-            np.asarray(flat[..., 7:10]).reshape(2, 3, 3, 1),
+            np.asarray(flat[..., :6]).reshape(batch + (3, 2)),
+            np.asarray(flat[..., 7:10]).reshape(batch + (3, 1)),
         ],
         axis=-1,
     ).swapaxes(-1, -2)
+    np.testing.assert_array_equal(blocks[cue.SO3(0)], flat[..., 6:7, None])
     np.testing.assert_array_equal(blocks[cue.SO3(1)], expected_vectors)
-    np.testing.assert_array_equal(to_ir_mul(regrouped.irreps, blocks), regrouped.array)
+    np.testing.assert_array_equal(
+        blocks[cue.SO3(2)],
+        np.asarray(flat[..., 10:]).reshape(batch + (5, 2)).swapaxes(-1, -2),
+    )
+    expected_flat = np.concatenate(
+        [
+            flat[..., 6:7],
+            expected_vectors.swapaxes(-1, -2).reshape(batch + (9,)),
+            flat[..., 10:],
+        ],
+        axis=-1,
+    )
+    np.testing.assert_array_equal(
+        recipe["dict_to_ir_mul_flat"](regrouped, blocks), expected_flat
+    )
+
+
+def test_layout_regroup_keeps_opposite_parities_separate():
+    recipe = run_example(3)
+    irreps = cue.Irreps("O3", "1o + 0e + 2x1e + 2x1o")
+    flat = jnp.arange(2 * irreps.dim).reshape(2, irreps.dim)
+    regrouped, blocks = recipe["ir_mul_to_dict"](irreps, flat)
+    assert regrouped == irreps.regroup()
+    assert set(blocks) == {cue.O3(0, 1), cue.O3(1, -1), cue.O3(1, 1)}
+    odd_vectors = np.concatenate(
+        [
+            np.asarray(flat[:, :3]).reshape(2, 3, 1),
+            np.asarray(flat[:, 10:]).reshape(2, 3, 2),
+        ],
+        axis=-1,
+    ).swapaxes(-1, -2)
+    np.testing.assert_array_equal(blocks[cue.O3(1, -1)], odd_vectors)
+    np.testing.assert_array_equal(
+        blocks[cue.O3(1, 1)],
+        np.asarray(flat[:, 4:10]).reshape(2, 3, 2).swapaxes(-1, -2),
+    )
+    np.testing.assert_array_equal(blocks[cue.O3(0, 1)], flat[:, 3:4, None])
 
 
 @pytest.mark.parametrize("batch_shapes", [((), (), ()), ((), (2, 1, 1), (1, 3, 2))])
