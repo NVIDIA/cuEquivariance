@@ -11,29 +11,29 @@ metadata:
 
 ## Purpose
 
-Execute `cuequivariance` (`cue`) descriptors with `cuequivariance_torch` (`cuet`) and PyTorch autograd: CPU references, CUDA backends, and equivariant layers. Preserve the project's framework and environment.
+Execute `cuequivariance` (`cue`) descriptors with `cuequivariance_torch` (`cuet`): CPU references, CUDA backends, equivariant layers, and autograd. Preserve the project's environment.
 
 ## Inputs
 
-Required inputs: operation, SO3/O3 irreps, layout, device, dtype, and weight ownership. Derive them from the request or code; state defaults. Graphs also need source/destination counts and indices. Optional inputs: backend, performance, or export targets.
+Required inputs: operation, SO3/O3 irreps, layout, device, dtype, and weight ownership; infer from the request or code. Graphs also need source/destination counts and indices. Optional inputs: backend, performance, export targets.
 
 ## Instructions
 
-1. Probe the selected interpreter once. Reuse working CPU PyTorch; a CUDA-kernel error on CPU calls for `method="naive"` at construction, not a new environment.
-2. Set `method="naive"` for CPU calculations. Match module parameters, features, weights, and reference computations in device and dtype. Use float64 for small numerical and gradient checks.
+1. Probe once and reuse working PyTorch. **Never recursively delete directories during setup or recovery**, including partial temporary environments; use a fresh unique path when isolation is needed.
+2. Set `method="naive"` at construction for CPU. Match parameters, features, weights, and references in device and dtype. Use float64 for small numerical and gradient checks.
 3. Specify layout and weight ownership explicitly. Derive sizes and output order from the module/descriptor; do not guess multiplicities from a filter.
-4. Run the relevant example and requested checks together. Retain exit status and printed shapes/errors/gradients. Assertions in unexecuted code do not prove a pass; report blocked checks as unrun.
-5. For an API mismatch, inspect that installed object's signature/source once. Adapt to its version or explain the requirement; preserve the requested library.
+4. Finish installation before running the saved script with the completion recipe below. A session/task ID, empty output, or a file write is not completion. Poll that session until it exits and inspect its results.
+5. For an API mismatch, inspect the installed signature/source once. Adapt or explain the requirement; preserve the requested library.
 
 ## Prerequisites and environment reuse
 
-Run this with the project's Python. Probe imports independently so one missing package does not hide working PyTorch:
+Probe imports independently with the project's Python; a missing frontend must not hide working PyTorch:
 
 ```python
 import importlib
 import sys
 
-print("python:", sys.executable)
+print("python:", sys.executable, sys.version.split()[0])
 available, import_errors = {}, {}
 for name in ("torch", "cuequivariance", "cuequivariance_torch"):
     try:
@@ -50,27 +50,50 @@ if "torch" in available:
 
 Choose the next step from the probe:
 
-- Imports work: retain this interpreter; install nothing.
-- PyTorch works but cuEquivariance is missing: install only the missing frontend/core packages when allowed. Distribution: `cuequivariance-torch`; import: `cuequivariance_torch`.
-- PyTorch is missing: check the project's configured interpreter (such as `.venv/bin/python`) before installing. If the requested existing installation is inaccessible, say so; a new environment cannot verify that installation.
-- Shared-library/binary mismatch: diagnose the reported package/path and version compatibility; this differs from an absent package.
+- Imports work: retain the interpreter; install nothing.
+- Only cuEquivariance is missing: install `cuequivariance-torch` in that interpreter; it does not require replacing PyTorch.
+- PyTorch is missing: check the project interpreter (e.g. `.venv/bin/python`). If the requested installation is inaccessible, say so; a new environment cannot verify it.
+- Binary/shared-library mismatch: diagnose the reported package/path and compatibility.
 
-Use the same interpreter for pip and execution. Honor the lockfile or supplied `scripts/requirements.txt`; keep checkout core/frontend revisions compatible. Retaining installed PyTorch takes priority over example install commands. Optional CUDA/optimization warnings are not installation failures.
+Use one interpreter for pip and execution. Honor project requirements and compatible core/frontend revisions. Retaining installed PyTorch takes priority over setup examples. Optional CUDA/optimization warnings are not failures.
 
-If isolation is needed and installation is appropriate, create a **new unique** environment. This Linux/macOS recipe bypasses `ensurepip` using host pip 22.3+:
+When isolation is needed, create a **new unique** environment. This Linux recipe uses host pip 22.3+ without `ensurepip`:
 
 ```bash
 set -e
+cueq_python=python3  # Set to the selected project interpreter's path.
 cueq_env=$(mktemp -d "${TMPDIR:-/tmp}/cueq-cpu.XXXXXX")
-python3 -m venv --without-pip "$cueq_env"
-python3 -m pip --python "$cueq_env" install torch --index-url https://download.pytorch.org/whl/cpu
-python3 -m pip --python "$cueq_env" install cuequivariance-torch
-"$cueq_env/bin/python" -c 'import sys, torch, cuequivariance_torch; print(sys.executable, torch.__version__, cuequivariance_torch.__version__)'
+"$cueq_python" -m venv --without-pip "$cueq_env"
+python3 -m pip --python "$cueq_env" install --cert "${PIP_CERT:-/etc/ssl/certs/ca-certificates.crt}" -q 'torch==2.14.1+cpu' --extra-index-url https://download.pytorch.org/whl/cpu
+python3 -m pip --python "$cueq_env" install --cert "${PIP_CERT:-/etc/ssl/certs/ca-certificates.crt}" -q cuequivariance-torch
+cueq_python="$cueq_env/bin/python"
+"$cueq_python" -c 'import sys, torch, cuequivariance_torch; assert torch.version.cuda is None; print("CPU setup complete:", sys.executable, torch.__version__, cuequivariance_torch.__version__)'
 ```
 
-For supplied requirements, replace both install commands with `python3 -m pip --python "$cueq_env" install -r /path/to/requirements.txt`. Execute with `"$cueq_env/bin/python"`; activation and embedded pip are unnecessary. Do not delete `.venv` or alter system packages to repair `ensurepip`; preserve existing directories. Without host pip, use an existing manager such as `uv`. See [pip's interpreter selection](https://pip.pypa.io/en/stable/topics/python-option/).
+For supplied requirements, replace both install commands with one using `-r` and their path. Retain `cueq_python` for execution; restore its path in new tool calls if needed. Without host pip, use an installed `uv`.
 
-On setup failure, retain the error and diagnose its cause before retrying. For an unavailable source, use a configured trusted mirror/cache; keep TLS verification enabled and avoid guessed wheel URLs. If still blocked, provide the code and name the unrun checks instead of repeating environment resets/network probes.
+Use approved `PIP_CERT` for a private CA; retain TLS verification. If downloading fails, try a configured CPU mirror/cache or report the blocker. Do not replace CPU wheels with CUDA builds. Finish installs before retrying. See [pip's certificates](https://pip.pypa.io/en/stable/topics/https-certificates/).
+
+### Complete and inspect a run
+
+Save the preamble and checks in `check.py`. Set `cueq_python` to the probe's `sys.executable`, or retain it from setup. Run **after setup exits successfully**:
+
+```bash
+set -e
+cueq_run=$(mktemp -d "${TMPDIR:-/tmp}/cueq-check.XXXXXX")
+printf 'run directory: %s\n' "$cueq_run"
+if "$cueq_python" -u check.py >"$cueq_run/output.txt" 2>&1; then
+    cueq_status=0
+else
+    cueq_status=$?
+fi
+printf '%s\n' "$cueq_status" >"$cueq_run/exit-code.txt"
+tail -n 30 "$cueq_run/output.txt"
+printf 'exit code: %s\n' "$cueq_status"
+test "$cueq_status" -eq 0
+```
+
+The exit-code file appears only when Python finishes. If the tool yields, poll its session, then inspect the file and numerical output. Deliver the script, command, observed results, and backend explanation; label unrun checks. Keep install output separate.
 
 ## Limitations and backends
 
@@ -93,7 +116,7 @@ High-level defaults vary: `SphericalHarmonics` selects `uniform_1d`, `FullyConne
 
 ## Examples
 
-Each CPU example runs independently with this preamble. Adapt its inputs while preserving layout, indexing, and gradient contracts; retain its printed results and any failure.
+Each CPU example runs independently with this preamble; preserve layout, indexing, and gradient contracts when adapting inputs.
 
 ```python
 import numpy as np
@@ -103,12 +126,14 @@ import cuequivariance_torch as cuet
 
 torch.manual_seed(0)
 dtype = torch.float64
-print("torch:", torch.__version__, "device: cpu", "dtype:", dtype, "method: naive")
+print("torch:", torch.__version__, "CUDA build:", torch.version.cuda,
+      "CUDA available:", torch.cuda.is_available(), "device: cpu", "dtype:", dtype,
+      "method: naive")
 ```
 
 ### CPU tensor product and backward
 
-Select `naive` for **both** modules on CPU. This example uses trainable internal weights and requires no CUDA packages.
+Use `naive` for **both** CPU modules. Here weights are internal trainable parameters.
 
 ```python
 irreps = cue.Irreps("SO3", "0 + 1")
@@ -188,7 +213,7 @@ print("Linear:", tuple(y.shape), "shared external weights:", tuple(w.shape),
 
 ### Channelwise product with external per-example weights
 
-The core descriptor takes `(weights, input1, input2)` and returns a list of outputs. The high-level module takes `(input1, input2, weight=...)` and returns a tensor. Matching `ir_mul` layouts avoids an extra transpose in this reference. `filter_irreps_out` filters **types**, not multiplicities: report `tp.irreps_out` and retain that actual order in references and downstream layers.
+The core descriptor takes `(weights, input1, input2)` and returns a list; the high-level module takes `(input1, input2, weight=...)` and returns a tensor. Matching `ir_mul` layouts avoids transposition. Report `tp.irreps_out` and preserve its actual order: the filter selects **types**, not multiplicities.
 
 ```python
 a, b = cue.Irreps("SO3", "3x0 + 3x1"), cue.Irreps("SO3", "0 + 1")
@@ -208,12 +233,12 @@ grads = torch.autograd.grad(y.square().sum(), (x1, x2, w))
 for g in grads:
     assert torch.isfinite(g).all() and g.abs().sum() > 0
 print("Channelwise:", tuple(y.shape), "per-item weights:", tuple(w.shape),
-      "ir_mul output order:", tp.irreps_out,
+      "filter selects types; actual ir_mul output order:", tp.irreps_out,
       "max error:", np.max(np.abs(y.detach().numpy() - reference)),
       "gradient norms:", [g.norm().item() for g in grads])
 ```
 
-For a fully connected product, specify the desired output irreps in `cuet.FullyConnectedTensorProduct(a, b, irreps_out, method="naive", dtype=dtype)`. Its default weights are internal trainable parameters. Use the same external-weight flags when the caller or an edge network owns the weights.
+`cuet.FullyConnectedTensorProduct(a, b, irreps_out, method="naive", dtype=dtype)` accepts desired output irreps. Its weights are internal by default; use the same external-weight flags for caller-owned weights.
 
 ### SegmentedPolynomial: gather and scatter
 
@@ -237,12 +262,13 @@ ref_grads = torch.autograd.grad(reference.square().sum(), (nodes, w))
 for g, ref in zip(grads, ref_grads):
     torch.testing.assert_close(g, ref)
 print("Gather/scatter:", tuple(actual.shape),
+      "input/output index dtypes:", senders.dtype, receivers.dtype,
       "forward error:", (actual - reference).detach().abs().max().item(),
       "gradient errors:", [(g - r).abs().max().item() for g, r in zip(grads, ref_grads)],
       "isolated destination:", actual[3].detach().tolist())
 ```
 
-Reuse the descriptor to build a numerical reference: its coefficients include normalization factors, so a hand-written matrix product without those factors can be wrong. For high-level channelwise gathering/scattering, use `indices_1`, `indices_2`, `indices_out`, and `size_out` instead of the primitive's dictionaries.
+Descriptor coefficients include normalization factors; retain them in references. High-level channelwise gathering/scattering uses `indices_1`, `indices_2`, `indices_out`, and `size_out` instead of dictionaries.
 
 ### Trainable message passing
 
@@ -278,7 +304,7 @@ Move the whole module and inputs to the same dtype/device (for example `model.do
 
 ## Other operations and layers
 
-Inspect the requested operation's installed signature/source via `inspect.signature` and `inspect.getfile`, rather than loading the entire API. These are the non-obvious contracts:
+Inspect the requested operation via `inspect.signature` and `inspect.getfile`. Key contracts:
 
 | Operation | Contract |
 | --- | --- |

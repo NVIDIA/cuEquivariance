@@ -254,7 +254,7 @@ e = cue.descriptors.symmetric_contraction(
 
 ### IrDictPolynomial descriptors
 
-Each `_ir_dict` variant returns an `IrDictPolynomial` whose polynomial is already split by irrep. The `input_irreps` and `output_irreps` tuples describe the operand groups.
+Each `_ir_dict` constructor returns an `IrDictPolynomial`: `.polynomial` is a `SegmentedPolynomial` already split by irrep, and `.input_irreps` / `.output_irreps` describe the operand groups. Each `(mul, ir)` block in those groups corresponds to one polynomial operand of size `mul * ir.dim`.
 
 `channelwise_tensor_product_ir_dict` always simplifies output irreps. To compare
 with its dense counterpart, pass `simplify_irreps3=True` to
@@ -269,10 +269,19 @@ desc = cue.descriptors.channelwise_tensor_product_ir_dict(
     cue.Irreps("SO3", "0 + 1"),
     cue.Irreps("SO3", "0 + 1"),
 )
-# desc.polynomial       — SegmentedPolynomial, already split by irrep
-# desc.input_irreps     — (weight_irreps, irreps1, irreps2)
-# desc.output_irreps    — (irreps_out,)
+desc.polynomial       # SegmentedPolynomial
+desc.input_irreps     # (weight_irreps, irreps1, irreps2)
+desc.output_irreps    # (irreps_out,)
 
+# Scale coefficients and inspect individual input operands
+scaled_poly = desc.polynomial * 0.5
+for i, op in enumerate(desc.polynomial.inputs):
+    print(f"Input {i}: size={op.size}, num_segments={op.num_segments}")
+```
+
+Other constructors use the same operand metadata contract:
+
+```python
 # Fully connected tensor product
 desc = cue.descriptors.fully_connected_tensor_product_ir_dict(irreps1, irreps2, irreps3)
 
@@ -292,34 +301,9 @@ desc = cue.descriptors.spherical_harmonics_ir_dict(cue.O3(1, -1), [0, 1, 2, 3])
 desc = cue.descriptors.symmetric_contraction_ir_dict(irreps_in, irreps_out, (1, 2, 3))
 ```
 
-### IrDictPolynomial
-
-`IrDictPolynomial` pairs a `SegmentedPolynomial` (already split by irrep) with the `Irreps` that describe each operand group.
-
-```python
-desc = cue.descriptors.channelwise_tensor_product_ir_dict(
-    32 * cue.Irreps("SO3", "0 + 1"),
-    cue.Irreps("SO3", "0 + 1"),
-    cue.Irreps("SO3", "0 + 1"),
-)
-
-desc.polynomial       # SegmentedPolynomial — each operand is one (mul, ir) block
-desc.input_irreps     # (weight_irreps, irreps1, irreps2)
-desc.output_irreps    # (irreps_out,)
-
-# Scale coefficients
-scaled_poly = desc.polynomial * 0.5
-
-# Access individual operand info
-for i, op in enumerate(desc.polynomial.inputs):
-    print(f"Input {i}: size={op.size}, num_segments={op.num_segments}")
-```
-
-Contract: for each `(mul, ir)` block in `input_irreps` / `output_irreps`, the corresponding polynomial operand has size `mul * ir.dim`.
-
 ### split_polynomial_by_irreps
 
-The low-level function underlying `_ir_dict` descriptors. Splits one polynomial operand at irrep boundaries:
+Use this helper to split an existing `SegmentedPolynomial` operand at irrep boundaries. Supply the operand's irreps explicitly because the bare polynomial has no representation metadata:
 
 ```python
 poly = e.polynomial  # from an EquivariantPolynomial
@@ -341,7 +325,7 @@ e.polynomial # the underlying SegmentedPolynomial
 # Preparing for uniform_1d execution (see cuequivariance_jax SKILL.md)
 e_ready = e.squeeze_modes().flatten_coefficient_modes()
 
-# Split an operand into per-irrep pieces (for ir_dict interface)
+# Split dense operands using the representation metadata already attached to e
 e_split = e.split_operand_by_irrep(1).split_operand_by_irrep(-1)
 
 # Scale all coefficients

@@ -1,9 +1,43 @@
-# Dependency versions below are exercised by the CPU contract checks.
-# Build the task environment with scripts/requirements.txt; do not assume
-# the shared Harbor base image contains these scientific packages.
+# Prepare identical CPU dependencies for both arms before agent execution.
 schema_version: 1
 harbor:
   base_image_mode: rebuild
+  runtime_env:
+    VIRTUAL_ENV: /workspace/.venv
+    PATH: /workspace/.venv/bin:/tmp/agent-home/.local/bin:/home/agent/.local/bin:/usr/local/share/npm-global/bin:/opt/openhands-venv/bin:/usr/local/bin:/usr/bin:/bin
+  pre_agent_setup:
+    - |
+      cueq_root="${CUEQ_EVAL_ROOT:-/workspace}"
+      cueq_env="$cueq_root/.venv"
+      if [ ! -e "$cueq_env" ]; then
+        cueq_new=$(mktemp -d "$cueq_root/.cueq-env.XXXXXX")
+        python3 -m venv --system-site-packages --without-pip "$cueq_new"
+        ln -s "$cueq_new" "$cueq_env"
+        python3 -m pip --python "$cueq_env" install --cert "${PIP_CERT:-/etc/ssl/certs/ca-certificates.crt}" -q \
+          'torch==2.14.1+cpu' --extra-index-url https://download.pytorch.org/whl/cpu
+        python3 -m pip --python "$cueq_env" install --cert "${PIP_CERT:-/etc/ssl/certs/ca-certificates.crt}" -q \
+          'cuequivariance==0.13.0' 'cuequivariance-torch==0.13.0'
+      fi
+      "$cueq_env/bin/python" - <<'PY'
+      import importlib.metadata as metadata
+      import sys
+      import torch
+      import cuequivariance_torch as cuet
+
+      for package, expected in {
+          "cuequivariance": "0.13.0", "cuequivariance-torch": "0.13.0",
+          "torch": "2.14.1+cpu",
+      }.items():
+          assert metadata.version(package) == expected, (package, metadata.version(package))
+      assert torch.version.cuda is None, torch.__version__
+      layer = cuet.SphericalHarmonics([0, 1], normalize=False, method="naive")
+      x = torch.ones((1, 3), dtype=torch.float64, requires_grad=True)
+      y = layer(x)
+      assert y.shape == (1, 4) and bool(torch.isfinite(y).all())
+      y.square().sum().backward()
+      assert x.grad is not None and bool(torch.isfinite(x.grad).all())
+      print("CPU environment ready:", sys.executable, sys.version.split()[0], torch.__version__)
+      PY
 skill_workspace:
   mode: isolated
 grading:

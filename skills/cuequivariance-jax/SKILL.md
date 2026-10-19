@@ -22,7 +22,7 @@ Required inputs: operation, SO3/O3 irreps, layout, batch shapes, dtype, device, 
 1. Probe the project interpreter once and reuse working packages. **Environment setup/recovery must not recursively delete directories**, including temporary environments. Use a fresh unique path when isolation is needed.
 2. Select `method="naive"` for CPU; Flax is needed only for NNX. High-level dictionary blocks are `(..., mul, ir.dim)`; uniform CUDA arrays differ.
 3. Adapt one matching recipe into a script. Build descriptors outside transformed functions, broadcast leading input axes, and enable x64 **before array creation** for float64 checks.
-4. Run the script and requested checks together. Collect completion of any running session; retain exit status and printed shapes/errors. Report observed results and identify unrun checks. Assertions in unexecuted code are not a pass.
+4. Finish installation before running the saved script with the completion recipe below. A running session/task ID, empty output, or a file write is not a completed check. Poll the same session until it exits; then read its results before reporting success.
 5. Investigate a concrete failure using its error and the affected installed API. Rerun affected checks after a fix. Once the requested checks pass, finish; avoid repeated probes, unrelated examples, or exploration of other backends for a CPU reference.
 
 ## Prerequisites and environment recovery
@@ -47,21 +47,43 @@ if "jax" in available:
     print("devices:", available["jax"].devices())
 ```
 
-Reuse working packages and install missing CPU dependencies when appropriate. Honor the project's lockfile or supplied `scripts/requirements.txt` and compatible core/frontend revisions. JAX 0.11.1 / Flax 0.12.10 require **Python >=3.12**. Imports alone do not verify primitive compatibility: cuEquivariance 0.13.0 imports with JAX 0.12.0 but fails polynomial execution with a `segmented_polynomial_dce` argument-count error. The standalone setup below uses a tested combination; project requirements take precedence.
+Reuse working packages; install only missing dependencies when needed. Honor the project's lockfile or supplied `scripts/requirements.txt` and compatible core/frontend revisions. JAX 0.11.1 / Flax 0.12.10 require **Python >=3.12**: select a compatible interpreter for those pins. The standalone combination below also supports Python 3.11; it does not replace project pins. Imports alone do not establish compatibility: cuEquivariance 0.13.0 with JAX 0.12.0 fails polynomial execution with a `segmented_polynomial_dce` argument-count error.
 
 For isolation, keep the unique directory returned by `mktemp`; reuse it for reruns. This Linux recipe uses host pip 22.3+ and bypasses `ensurepip`:
 
 ```bash
 set -e
-cueq_python=python3.12  # Or the selected compatible interpreter's path.
+cueq_python=python3  # Set to the selected project interpreter's path.
 cueq_jax_env=$(mktemp -d "${TMPDIR:-/tmp}/cueq-jax.XXXXXX")
 "$cueq_python" -m venv --without-pip "$cueq_jax_env"
-python3 -m pip --python "$cueq_jax_env" install \
-    "jax[cpu]==0.11.1" "cuequivariance==0.13.0" "cuequivariance-jax==0.13.0"
-JAX_PLATFORMS=cpu "$cueq_jax_env/bin/python" -c 'import jax, cuequivariance_jax; print(jax.devices())'
+python3 -m pip --python "$cueq_jax_env" install --cert "${PIP_CERT:-/etc/ssl/certs/ca-certificates.crt}" -q \
+    "jax==0.10.2" "cuequivariance==0.13.0" "cuequivariance-jax==0.13.0"
+cueq_python="$cueq_jax_env/bin/python"
+JAX_PLATFORMS=cpu "$cueq_python" -c 'import jax, cuequivariance_jax; print("setup complete:", jax.__version__, cuequivariance_jax.__version__, jax.devices())'
 ```
 
-Replace the package list with `-r` and the requirements path when prescribed; otherwise add `flax==0.12.10` only for NNX. Run with `"$cueq_jax_env/bin/python"`, including the relevant numerical recipe after the import check. If host pip is unavailable, use an installed `uv`. Diagnose failures before retrying; preserve environments/system packages. Use trusted mirrors/caches with TLS verification enabled. If blocked, report unrun checks. See [pip's interpreter selection](https://pip.pypa.io/en/stable/topics/python-option/).
+Replace the package list with `-r` and the requirements path when prescribed; otherwise add `flax==0.12.7` to the same install command only for NNX. Keep this interpreter for execution; shell variables may need restoring in a new tool call. Without host pip, use an installed `uv`. The pip command uses the Linux system CA bundle; for a private CA use the environment's approved `PIP_CERT` bundle. Retain TLS verification. Diagnose the actual error before retrying; never reset directories or switch versions while an install is still running. If no compatible interpreter or trusted package source is available, report the blocker and unrun checks. See [pip's certificates](https://pip.pypa.io/en/stable/topics/https-certificates/).
+
+### Complete and inspect a run
+
+Save the preamble and relevant checks in `check.py`. Set `cueq_python` to the probe's `sys.executable`, or retain it from setup. Run **after setup exits successfully**; a fresh directory records output and status:
+
+```bash
+set -e
+cueq_run=$(mktemp -d "${TMPDIR:-/tmp}/cueq-check.XXXXXX")
+printf 'run directory: %s\n' "$cueq_run"
+if JAX_PLATFORMS=cpu "$cueq_python" -u check.py >"$cueq_run/output.txt" 2>&1; then
+    cueq_status=0
+else
+    cueq_status=$?
+fi
+printf '%s\n' "$cueq_status" >"$cueq_run/exit-code.txt"
+tail -n 30 "$cueq_run/output.txt"
+printf 'exit code: %s\n' "$cueq_status"
+test "$cueq_status" -eq 0
+```
+
+If the tool yields, keep polling its session; the exit-code file is written only after Python finishes. Inspect that file and the numerical output. Empty output is not evidence that assertions ran. Deliver the script, actual command, and observed checks; label anything unrun. Keep setup output separate from the numerical results.
 
 ## Limitations and backend selection
 
@@ -153,7 +175,8 @@ restored_blocks = ir_dict.flat_to_dict(irreps, flat_mul, layout="mul_ir")
 for ir in blocks:
     np.testing.assert_array_equal(restored_blocks[ir], blocks[ir])
 np.testing.assert_array_equal(dict_to_ir_mul_flat(irreps, restored_blocks), flat_ir)
-print("exact ir_mul/mul_ir round trip:", {str(ir): v.shape for ir, v in blocks.items()})
+print("regrouped unique irrep keys; exact ir_mul/mul_ir round trip:",
+      {str(ir): v.shape for ir, v in blocks.items()})
 ```
 
 `ir_dict.assert_mul_ir_dict` checks block conventions. `mul_ir_dict(irreps, data)` broadcasts a template to keys without inferring feature dimensions.

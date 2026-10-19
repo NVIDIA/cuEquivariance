@@ -1,6 +1,6 @@
 # CPU evaluation baseline for the APIs documented in this skill.
-# Pin the source revision because main can contain APIs newer than PyPI.
-cuequivariance @ https://github.com/NVIDIA/cuEquivariance/archive/046edf7e2ee9e9fb7868e6c32c787d9049d79ebe.tar.gz#subdirectory=cuequivariance
-cuequivariance-jax @ https://github.com/NVIDIA/cuEquivariance/archive/046edf7e2ee9e9fb7868e6c32c787d9049d79ebe.tar.gz#subdirectory=cuequivariance_jax
-jax==0.11.1
-flax==0.12.10
+# Match evals/config.yml and the tested Python 3.11-compatible release stack.
+cuequivariance==0.13.0
+cuequivariance-jax==0.13.0
+jax==0.10.2
+flax==0.12.7
