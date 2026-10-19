@@ -61,8 +61,9 @@ The tests under `.github/tests/test_*_skill_evals.py` verify the mathematical an
 API expectations behind the prompts. `test_jax_skill_examples.py` executes each
 published CPU example independently and checks layout conversion with duplicate
 irreps and split polynomials with additional batch axes, parity, and JIT.
-`test_torch_skill_examples.py` executes the published Torch examples and checks
-the GNN's determinism, equivariance, and gradients. These are maintenance checks,
+`test_torch_skill_examples.py` executes each published CPU recipe independently,
+including tensor-product backward, and checks the GNN's determinism,
+equivariance, and gradients. These are maintenance checks,
 not live agent scores. To run them against
 a development checkout with the relevant frontend dependencies installed:
 

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Run the published skill examples and check the trainable GNN's invariants."""
+"""Run each published recipe independently and check the trainable GNN."""
 
 import importlib
 import re
@@ -12,23 +12,20 @@ import torch
 import cuequivariance as cue
 
 
-@pytest.fixture(scope="module")
-def skill_examples():
-    skill = Path(__file__).resolve().parents[2] / "skills/cuequivariance-torch/SKILL.md"
-    return [
-        compile(code, f"{skill}:example-{index}", "exec")
-        for index, code in enumerate(
-            re.findall(r"```python\n(.*?)\n```", skill.read_text(), re.S)
-        )
-    ]
+SKILL = Path(__file__).resolve().parents[2] / "skills/cuequivariance-torch/SKILL.md"
+EXAMPLES = [
+    compile(code, f"{SKILL}:example-{index}", "exec")
+    for index, code in enumerate(
+        re.findall(r"```python\n(.*?)\n```", SKILL.read_text(), re.S)
+    )
+]
 
 
-@pytest.fixture(scope="module")
-def skill_namespace(skill_examples):
+@pytest.mark.parametrize("index", range(2, len(EXAMPLES) - 1))
+def test_published_cpu_example(index):
     namespace = {}
-    for code in skill_examples:
-        exec(code, namespace)
-    return namespace
+    exec(EXAMPLES[1], namespace)
+    exec(EXAMPLES[index], namespace)
 
 
 @pytest.mark.parametrize(
@@ -39,9 +36,7 @@ def skill_namespace(skill_examples):
         ("torch", ImportError("PyTorch cannot be imported")),
     ],
 )
-def test_environment_probe_preserves_partial_results(
-    skill_examples, monkeypatch, failed_module, error
-):
+def test_environment_probe_preserves_partial_results(monkeypatch, failed_module, error):
     modules = {
         name: importlib.import_module(name)
         for name in ("torch", "cuequivariance", "cuequivariance_torch")
@@ -54,7 +49,7 @@ def test_environment_probe_preserves_partial_results(
 
     monkeypatch.setattr(importlib, "import_module", import_module)
     namespace = {}
-    exec(skill_examples[0], namespace)
+    exec(EXAMPLES[0], namespace)
     assert namespace["available"] == {
         name: module for name, module in modules.items() if name != failed_module
     }
@@ -63,11 +58,14 @@ def test_environment_probe_preserves_partial_results(
     }
 
 
-def test_documented_gnn_is_trainable_and_equivariant(skill_namespace):
+def test_documented_gnn_is_trainable_and_equivariant():
+    namespace = {}
+    exec(EXAMPLES[1], namespace)
+    exec(EXAMPLES[-1], namespace)
     torch.manual_seed(41)
     irreps_in = cue.Irreps("SO3", "2x0+2x1")
     irreps_out = cue.Irreps("SO3", "3x0+1")
-    model = skill_namespace["SimpleGNN"](irreps_in, irreps_out).double()
+    model = namespace["SimpleGNN"](irreps_in, irreps_out).double()
     features = torch.randn(5, irreps_in.dim, dtype=torch.float64, requires_grad=True)
     vectors = torch.randn(6, 3, dtype=torch.float64, requires_grad=True)
     senders = torch.tensor([0, 1, 3, 0, 1, 2])

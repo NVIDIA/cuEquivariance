@@ -11,23 +11,23 @@ metadata:
 
 ## Purpose
 
-Use `cuequivariance_torch` (`cuet`) to execute `cuequivariance` (`cue`) descriptors with PyTorch autograd. This guide covers CPU reference calculations, CUDA backend selection, and equivariant layers. Use the project's existing framework and environment.
+Execute `cuequivariance` (`cue`) descriptors with `cuequivariance_torch` (`cuet`) and PyTorch autograd: CPU references, CUDA backends, and equivariant layers. Preserve the project's framework and environment.
 
 ## Inputs
 
-Required for the computation: operation, SO3/O3 irreps, layout, device, dtype, and weight ownership. Derive these from the request or existing code and state any defaults. Graph operations also require source/destination counts and node/edge indexing. Optional inputs include a preferred backend or performance/export targets. Preserve the user's project constraints and installed API.
+Required inputs: operation, SO3/O3 irreps, layout, device, dtype, and weight ownership. Derive them from the request or code; state defaults. Graphs also need source/destination counts and indices. Optional inputs: backend, performance, or export targets.
 
 ## Instructions
 
-1. Check the selected interpreter and imports once using the probe below. Reuse a working environment. A missing CUDA backend is usually a method-selection issue, not a reason to reinstall PyTorch.
+1. Probe the selected interpreter once. Reuse working CPU PyTorch; a CUDA-kernel error on CPU calls for `method="naive"` at construction, not a new environment.
 2. Set `method="naive"` for CPU calculations. Match module parameters, features, weights, and reference computations in device and dtype. Use float64 for small numerical and gradient checks.
 3. Specify layout and weight ownership explicitly. Derive sizes and output order from the module/descriptor; do not guess multiplicities from a filter.
-4. Adapt the relevant example to the task and run its requested checks together. Report the interpreter, shapes, numerical error, and gradient results actually observed. Investigate a failed check before broadening the implementation.
-5. If an API differs from this guide, inspect that installed object's signature and source once. Adapt to the installed version or explain the required version; do not silently replace cuEquivariance with another library.
+4. Run the relevant example and requested checks together. Retain exit status and printed shapes/errors/gradients. Assertions in unexecuted code do not prove a pass; report blocked checks as unrun.
+5. For an API mismatch, inspect that installed object's signature/source once. Adapt to its version or explain the requirement; preserve the requested library.
 
 ## Prerequisites and environment reuse
 
-Run this with the project's Python interpreter (including its existing virtual environment, if any). Check imports independently so one missing package does not hide a working CPU PyTorch:
+Run this with the project's Python. Probe imports independently so one missing package does not hide working PyTorch:
 
 ```python
 import importlib
@@ -50,23 +50,27 @@ if "torch" in available:
 
 Choose the next step from the probe:
 
-- All imports work: continue with this interpreter and `method="naive"` for CPU; install nothing.
-- PyTorch works but cuEquivariance is missing: use another existing project interpreter if it has both. Otherwise install only the missing cuEquivariance packages into the intended environment, honoring its version constraints. `cuequivariance-torch` is the distribution name; `cuequivariance_torch` is the import name.
-- An import reports a missing shared library or binary mismatch: use the reported package/path to diagnose compatibility. This differs from an absent package; repeated installations or a backend change may not fix it.
+- Imports work: retain this interpreter; install nothing.
+- PyTorch works but cuEquivariance is missing: install only the missing frontend/core packages when allowed. Distribution: `cuequivariance-torch`; import: `cuequivariance_torch`.
+- PyTorch is missing: check the project's configured interpreter (such as `.venv/bin/python`) before installing. If the requested existing installation is inaccessible, say so; a new environment cannot verify that installation.
+- Shared-library/binary mismatch: diagnose the reported package/path and version compatibility; this differs from an absent package.
 
-Use the same interpreter for pip and execution. Installing cuEquivariance does not require replacing an already working CPU PyTorch. Optional CUDA/optimization warnings alone are not installation failures.
+Use the same interpreter for pip and execution. Honor the lockfile or supplied `scripts/requirements.txt`; keep checkout core/frontend revisions compatible. Retaining installed PyTorch takes priority over example install commands. Optional CUDA/optimization warnings are not installation failures.
 
-If no usable project environment is available, or it cannot be modified normally, create a **new** environment when installation is appropriate. Preserve existing environments and system-package protection. On Linux/macOS, this fallback also works when `venv` cannot bootstrap pip through `ensurepip` (the host needs pip 22.3+):
+If isolation is needed and installation is appropriate, create a **new unique** environment. This Linux/macOS recipe bypasses `ensurepip` using host pip 22.3+:
 
 ```bash
+set -e
 cueq_env=$(mktemp -d "${TMPDIR:-/tmp}/cueq-cpu.XXXXXX")
 python3 -m venv --without-pip "$cueq_env"
 python3 -m pip --python "$cueq_env" install torch --index-url https://download.pytorch.org/whl/cpu
 python3 -m pip --python "$cueq_env" install cuequivariance-torch
-"$cueq_env/bin/python" -c 'import torch, cuequivariance_torch; print(torch.__version__)'
+"$cueq_env/bin/python" -c 'import sys, torch, cuequivariance_torch; print(sys.executable, torch.__version__, cuequivariance_torch.__version__)'
 ```
 
-Honor project version/source constraints and keep using the new environment's Python explicitly. Stop at the first failed setup command and diagnose its error; preserve the failure output. If pip is unavailable, use an existing manager such as `uv` or report the missing prerequisite. See [pip's interpreter selection](https://pip.pypa.io/en/stable/topics/python-option/).
+For supplied requirements, replace both install commands with `python3 -m pip --python "$cueq_env" install -r /path/to/requirements.txt`. Execute with `"$cueq_env/bin/python"`; activation and embedded pip are unnecessary. Do not delete `.venv` or alter system packages to repair `ensurepip`; preserve existing directories. Without host pip, use an existing manager such as `uv`. See [pip's interpreter selection](https://pip.pypa.io/en/stable/topics/python-option/).
+
+On setup failure, retain the error and diagnose its cause before retrying. For an unavailable source, use a configured trusted mirror/cache; keep TLS verification enabled and avoid guessed wheel URLs. If still blocked, provide the code and name the unrun checks instead of repeating environment resets/network probes.
 
 ## Limitations and backends
 
@@ -89,7 +93,7 @@ High-level defaults vary: `SphericalHarmonics` selects `uniform_1d`, `FullyConne
 
 ## Examples
 
-The CPU examples below share these imports. Replace the small representations and tensors with the task's inputs; keep the layout, indexing, and gradient contracts.
+Each CPU example runs independently with this preamble. Adapt its inputs while preserving layout, indexing, and gradient contracts; retain its printed results and any failure.
 
 ```python
 import numpy as np
@@ -99,6 +103,31 @@ import cuequivariance_torch as cuet
 
 torch.manual_seed(0)
 dtype = torch.float64
+print("torch:", torch.__version__, "device: cpu", "dtype:", dtype, "method: naive")
+```
+
+### CPU tensor product and backward
+
+Select `naive` for **both** modules on CPU. This example uses trainable internal weights and requires no CUDA packages.
+
+```python
+irreps = cue.Irreps("SO3", "0 + 1")
+sh = cuet.SphericalHarmonics([0, 1], normalize=False, method="naive")
+tp = cuet.FullyConnectedTensorProduct(
+    irreps, irreps, irreps, layout=cue.mul_ir, method="naive", dtype=dtype,
+)
+features = torch.randn(2, irreps.dim, dtype=dtype, requires_grad=True)
+vectors = torch.tensor([[0.3, -0.7, 1.1], [1.2, 0.4, -0.2]],
+                       dtype=dtype, requires_grad=True)
+result = tp(features, sh(vectors))
+assert result.device.type == "cpu" and result.shape == (2, irreps.dim)
+result.square().sum().backward()
+gradient_norms = {}
+for name, tensor in [("features", features), ("vectors", vectors), *tp.named_parameters()]:
+    assert tensor.grad is not None and torch.isfinite(tensor.grad).all()
+    assert tensor.grad.abs().sum() > 0
+    gradient_norms[name] = tensor.grad.norm().item()
+print("CPU tensor product:", tuple(result.shape), "gradient norms:", gradient_norms)
 ```
 
 ### Spherical harmonics and a NumPy reference
@@ -108,14 +137,18 @@ dtype = torch.float64
 ```python
 ls = [0, 1, 2]
 sh = cuet.SphericalHarmonics(ls, normalize=False, method="naive")
-vectors = torch.randn(2, 3, dtype=dtype, requires_grad=True)
+vectors = torch.tensor([[0.3, -0.7, 1.1], [1.2, 0.4, -0.2]],
+                       dtype=dtype, requires_grad=True)
 values = sh(vectors)
 descriptor = cue.descriptors.spherical_harmonics(cue.SO3(1), ls)
-np.testing.assert_allclose(
-    values.detach().numpy(), descriptor(vectors.detach().numpy())[0], atol=1e-12
-)
+reference = descriptor(vectors.detach().numpy())[0]
+np.testing.assert_allclose(values.detach().numpy(), reference, atol=1e-12)
 assert values.shape == (2, sum(2 * l + 1 for l in ls))
-assert torch.autograd.gradcheck(sh, (vectors,))
+gradcheck_ok = torch.autograd.gradcheck(sh, (vectors,))
+assert gradcheck_ok
+print("Spherical harmonics:", tuple(values.shape), "normalize: False",
+      "max error:", np.max(np.abs(values.detach().numpy() - reference)),
+      "gradcheck:", gradcheck_ok)
 ```
 
 ### Linear: layout conversion and rotations
@@ -125,7 +158,7 @@ Use identical explicit weights for a layout comparison. For row-vector features,
 ```python
 irreps_in = cue.Irreps("SO3", "3x0 + 2x1")
 irreps_out = cue.Irreps("SO3", "2x0 + 4x1")
-options = dict(internal_weights=False, method="naive", dtype=dtype)
+options = dict(internal_weights=False, shared_weights=True, method="naive", dtype=dtype)
 linear = cuet.Linear(irreps_in, irreps_out, layout=cue.mul_ir, **options)
 linear_ir = cuet.Linear(irreps_in, irreps_out, layout=cue.ir_mul, **options)
 to_ir = cuet.TransposeIrrepsLayout(
@@ -137,18 +170,25 @@ to_mul = cuet.TransposeIrrepsLayout(
 x = torch.randn(2, irreps_in.dim, dtype=dtype, requires_grad=True)
 w = torch.randn(1, linear.weight_numel, dtype=dtype, requires_grad=True)
 y = linear(x, w)
-torch.testing.assert_close(y, to_mul(linear_ir(to_ir(x), w)))
+y_ir = to_mul(linear_ir(to_ir(x), w))
+torch.testing.assert_close(y, y_ir)
 rotation = np.array([0.2, -0.3, 0.1])
 din, dout = [torch.from_numpy(cue.IrrepsAndLayout(r, cue.mul_ir).exp_map(rotation, []))
              for r in (irreps_in, irreps_out)]
-torch.testing.assert_close(linear(x @ din.T, w), y @ dout.T)
-for g in torch.autograd.grad(y.square().sum(), (x, w)):
+rotated, expected_rotated = linear(x @ din.T, w), y @ dout.T
+torch.testing.assert_close(rotated, expected_rotated)
+grads = torch.autograd.grad(y.square().sum(), (x, w))
+for g in grads:
     assert torch.isfinite(g).all() and g.abs().sum() > 0
+print("Linear:", tuple(y.shape), "shared external weights:", tuple(w.shape),
+      "layout error:", (y - y_ir).detach().abs().max().item(),
+      "rotation error:", (rotated - expected_rotated).detach().abs().max().item(),
+      "gradient norms:", [g.norm().item() for g in grads])
 ```
 
 ### Channelwise product with external per-example weights
 
-The core descriptor takes `(weights, input1, input2)` and returns a list of outputs. The high-level module takes `(input1, input2, weight=...)` and returns a tensor. Matching `ir_mul` layouts avoids an extra transpose in this reference.
+The core descriptor takes `(weights, input1, input2)` and returns a list of outputs. The high-level module takes `(input1, input2, weight=...)` and returns a tensor. Matching `ir_mul` layouts avoids an extra transpose in this reference. `filter_irreps_out` filters **types**, not multiplicities: report `tp.irreps_out` and retain that actual order in references and downstream layers.
 
 ```python
 a, b = cue.Irreps("SO3", "3x0 + 3x1"), cue.Irreps("SO3", "0 + 1")
@@ -164,8 +204,13 @@ descriptor = cue.descriptors.channelwise_tensor_product(a, b, keep)
 reference = descriptor(*(t.detach().numpy() for t in (w, x1, x2)))[0]
 np.testing.assert_allclose(y.detach().numpy(), reference, atol=1e-12)
 assert y.shape == (2, tp.irreps_out.dim)
-for g in torch.autograd.grad(y.square().sum(), (x1, x2, w)):
+grads = torch.autograd.grad(y.square().sum(), (x1, x2, w))
+for g in grads:
     assert torch.isfinite(g).all() and g.abs().sum() > 0
+print("Channelwise:", tuple(y.shape), "per-item weights:", tuple(w.shape),
+      "ir_mul output order:", tp.irreps_out,
+      "max error:", np.max(np.abs(y.detach().numpy() - reference)),
+      "gradient norms:", [g.norm().item() for g in grads])
 ```
 
 For a fully connected product, specify the desired output irreps in `cuet.FullyConnectedTensorProduct(a, b, irreps_out, method="naive", dtype=dtype)`. Its default weights are internal trainable parameters. Use the same external-weight flags when the caller or an edge network owns the weights.
@@ -191,6 +236,10 @@ grads = torch.autograd.grad(actual.square().sum(), (nodes, w))
 ref_grads = torch.autograd.grad(reference.square().sum(), (nodes, w))
 for g, ref in zip(grads, ref_grads):
     torch.testing.assert_close(g, ref)
+print("Gather/scatter:", tuple(actual.shape),
+      "forward error:", (actual - reference).detach().abs().max().item(),
+      "gradient errors:", [(g - r).abs().max().item() for g, r in zip(grads, ref_grads)],
+      "isolated destination:", actual[3].detach().tolist())
 ```
 
 Reuse the descriptor to build a numerical reference: its coefficients include normalization factors, so a hand-written matrix product without those factors can be wrong. For high-level channelwise gathering/scattering, use `indices_1`, `indices_2`, `indices_out`, and `size_out` instead of the primitive's dictionaries.
@@ -255,7 +304,6 @@ These paths require compatible optional GPU packages and their own shape checks.
 | Missing CUDA kernels on CPU | Pass `method="naive"` at module construction; retain the installed CPU PyTorch. |
 | `opt_einsum_fx not available` warning | Optional optimization; continue the naive reference calculation without installing it. |
 | Missing import after installation | Compare `sys.executable`, module paths, and the interpreter used with pip. Reuse the working interpreter. |
-| `ensurepip` unavailable / externally managed Python | Use a fresh environment and host `pip --python` as above; preserve existing environments and system packages. |
 | Unexpected keyword or missing descriptor method | Inspect the installed signature/version. Use its documented equivalent or explain the mismatch; avoid repeated blind API guesses. |
 | Correct shapes but wrong numerical values | Check per-block layout, output irrep order, normalization, and the shared/per-item weight convention. |
 | Scatter shape/error or wrong destination sums | Use operand index keys, integral indices, a tensor in `output_shapes`, and accumulation for repeated receivers. |
