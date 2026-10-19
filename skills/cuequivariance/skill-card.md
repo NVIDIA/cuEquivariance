@@ -66,15 +66,15 @@ Underlying evaluation signals used in this run: <br>
 ## Evaluation Results: <br>
 | Measure | Claude Code (Baseline → Skill Uplift) | Codex (Baseline → Skill Uplift) |
 |---|---:|---:|
-| Overall | 88.7% — baseline ran, but no comparable score was available; uplift unavailable | 82.1% — baseline ran, but no comparable score was available; uplift unavailable |
-| Security | 50.0% → 83.3% (+33.3 points) | 83.3% → 66.7% (-16.6 points) |
-| Correctness | 100.0% → 100.0% (±0.0 points) | 100.0% → 100.0% (±0.0 points) |
-| Discoverability | 86.0% — baseline ran, but no comparable score was available; uplift unavailable | 85.0% — baseline ran, but no comparable score was available; uplift unavailable |
-| Effectiveness | 90.0% → 98.8% (+8.8 points) | 86.7% → 92.1% (+5.4 points) |
-| Efficiency | 75.6% — baseline ran, but no comparable score was available; uplift unavailable | 66.9% — baseline ran, but no comparable score was available; uplift unavailable |
+| Overall | 86.9% — baseline ran, but no comparable score was available; uplift unavailable | Not available |
+| Security | 33.3% → 83.3% (+50.0 points) | Not available |
+| Correctness | 100.0% → 100.0% (±0.0 points) | Not available |
+| Discoverability | 91.0% — baseline ran, but no comparable score was available; uplift unavailable | Not available |
+| Effectiveness | 95.0% → 92.5% (-2.5 points) | Not available |
+| Efficiency | 67.7% — baseline ran, but no comparable score was available; uplift unavailable | Not available |
 
 ## Skill Version(s): <br>
-0.13.0 (source: VERSION file, git commit 531da35 2026-10-18) <br>
+0.13.0 (source: VERSION file, CHANGELOG released 2026-10-15; git commit 800e98a) <br>
 
 ## Ethical Considerations: <br>
 NVIDIA believes Trustworthy AI is a shared responsibility and we have established policies and practices to enable development for a wide array of AI applications. When downloaded or used in accordance with our terms of service, developers should work with their internal team to ensure this skill meets requirements for the relevant industry and use case and addresses unforeseen product misuse. <br>
