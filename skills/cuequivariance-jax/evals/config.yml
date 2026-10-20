@@ -9,17 +9,25 @@ harbor:
     JAX_PLATFORMS: cpu
   pre_agent_setup:
     - |
+      set -eu
       cueq_root="${CUEQ_EVAL_ROOT:-/workspace}"
       cueq_env="$cueq_root/.venv"
-      if [ ! -e "$cueq_env" ]; then
-        cueq_new=$(mktemp -d "$cueq_root/.cueq-env.XXXXXX")
-        python3 -m venv --system-site-packages --without-pip "$cueq_new"
-        ln -s "$cueq_new" "$cueq_env"
-        python3 -m pip --python "$cueq_env" install --cert "${PIP_CERT:-/etc/ssl/certs/ca-certificates.crt}" -q \
+      cueq_publish=false
+      if [ ! -e "$cueq_env" ] && [ ! -L "$cueq_env" ]; then
+        cueq_host_python=$(command -v python3)
+        cueq_env=$(mktemp -d "$cueq_root/.cueq-env.XXXXXX")
+        cueq_publish=true
+        "$cueq_host_python" -m venv --system-site-packages --without-pip "$cueq_env"
+        printf 'Installing CPU JAX dependencies into %s\n' "$cueq_env"
+        "$cueq_host_python" -m pip --python "$cueq_env" install \
+          --cert "${PIP_CERT:-/etc/ssl/certs/ca-certificates.crt}" \
+          --disable-pip-version-check --no-input --only-binary=:all: --no-compile \
+          --progress-bar off \
           'cuequivariance==0.13.0' 'cuequivariance-jax==0.13.0' \
           'jax==0.10.2' 'flax==0.12.7'
       fi
-      JAX_PLATFORMS=cpu "$cueq_env/bin/python" - <<'PY'
+      printf 'Checking CPU environment: %s\n' "$cueq_env"
+      JAX_PLATFORMS=cpu "$cueq_env/bin/python" -u - <<'PY'
       import importlib.metadata as metadata
       import sys
       import jax
@@ -43,6 +51,11 @@ harbor:
       assert callable(nnx.IrrepsLinear)
       print("CPU environment ready:", sys.executable, sys.version.split()[0], jax.devices())
       PY
+      # Publish only after installation and the primitive compatibility check.
+      # Preserve failed environments for diagnosis; a retry uses a fresh path.
+      if [ "$cueq_publish" = true ]; then
+        ln -sT "$cueq_env" "$cueq_root/.venv"
+      fi
 skill_workspace:
   mode: isolated
 grading:

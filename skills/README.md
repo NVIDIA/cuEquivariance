@@ -50,7 +50,22 @@ custom evaluation image or common `harbor.pre_agent_setup` is needed when the
 sandbox does not already provide them. Provision it equally for both arms and
 establish a new baseline when changing the environment.
 
-The requirements pin cuEquivariance to the immutable source revision whose APIs
+The JAX and PyTorch setup commands publish `/workspace/.venv` only after the
+pinned packages pass a CPU smoke check. Failed environments remain at their
+unique `.cueq-env.*` paths for diagnosis; the next attempt creates a fresh one.
+An existing `.venv`, including a broken symlink, is preserved and must pass the
+check without being replaced. Setup uses binary wheels, skips bytecode
+compilation, and fetches only the PyTorch wheel from the CPU index. A second
+install resolves its dependencies and cuEquivariance from the normal index,
+avoiding dependency-metadata incompatibilities with older host pip versions.
+Both arms use the same setup and package pins.
+
+These are repository-side setup improvements, not a change to SkillEvaluator's
+healthcheck timeout. A successful local setup does not establish that the shared
+Astra sandbox will finish within its budget. Inspect the live preflight result
+before interpreting a missing Torch score as a skill-quality failure.
+
+The requirements pin the cuEquivariance release or source revision whose APIs
 were checked, and pin the JAX/Flax or CPU PyTorch versions.
 They do not require sibling skills or a repository checkout inside the sandbox.
 When updating the API baseline, update the pins and run the numerical checks
