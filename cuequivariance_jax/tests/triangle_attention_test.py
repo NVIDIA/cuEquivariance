@@ -68,6 +68,65 @@ def require_platform(platform: str):
         pytest.skip("This test requires a CUDA device.")
 
 
+@pytest.mark.parametrize("with_mask", [True, False])
+def test_fast_reference_inference(with_mask):
+    q, k, v, bias, mask, scale = create_test_data("cpu")
+    if not with_mask:
+        mask = None
+    expected = cuex.triangle_attention(q, k, v, bias, mask, scale)
+    forward = jax.jit(
+        lambda q, k, v, bias: cuex.triangle_attention(
+            q, k, v, bias, mask, scale, fast=True
+        )
+    )
+    for actual, reference in zip(forward(q, k, v, bias), expected, strict=True):
+        np.testing.assert_allclose(actual, reference, rtol=1e-5, atol=1e-6)
+
+
+@pytest.mark.parametrize("grad_input", range(4), ids=["q", "k", "v", "bias"])
+@pytest.mark.parametrize("compiled", [False, True])
+def test_fast_rejects_differentiation(grad_input, compiled):
+    q, k, v, bias, mask, scale = create_test_data("cpu")
+
+    def loss(q, k, v, bias):
+        return cuex.triangle_attention(q, k, v, bias, mask, scale, fast=True)[0].sum()
+
+    gradient = jax.grad(loss, argnums=grad_input)
+    if compiled:
+        gradient = jax.jit(gradient)
+    with pytest.raises(ValueError, match="fast=True is inference-only"):
+        gradient(q, k, v, bias)
+
+
+@pytest.mark.parametrize("fast", [None, 1, "fast", jnp.array(True)])
+def test_triangle_attention_requires_static_precision(fast):
+    q, k, v, bias, mask, scale = create_test_data("cpu")
+    with pytest.raises(ValueError, match="fast must be a static bool"):
+        cuex.triangle_attention(q, k, v, bias, mask, scale, fast=fast)
+
+
+@pytest.mark.parametrize("fast", [False, True])
+def test_cuda_forward_precision_plumbing(monkeypatch, fast):
+    module = importlib.import_module("cuequivariance_jax.triangle._triangle_attention")
+    q, k, v, bias, mask, scale = create_test_data("cpu")
+    received = []
+    sentinel = object()
+
+    def forward(*args, **kwargs):
+        received.append((args, kwargs))
+        return sentinel
+
+    monkeypatch.setattr(module, "HAS_CUE_OPS_JAX", True)
+    monkeypatch.setattr(module, "triangle_attention_cuda_fwd", forward, raising=False)
+    assert (
+        module.triangle_attention_fwd_impl(
+            "cuda", q, k, v, bias, mask, scale=scale, fast=fast
+        )
+        is sentinel
+    )
+    assert received[0][1] == ({"fast": True} if fast else {})
+
+
 # Test configurations
 SHAPE_CONFIGS = [
     (2, 4, 2, 8, 6, 32),  # Default
@@ -203,7 +262,7 @@ def test_mask_none_with_ops_jax_before_mask_none_support(monkeypatch):
     monkeypatch.setattr(
         module,
         "triangle_attention_custom_vjp",
-        lambda q, k, v, bias, mask, scale, precision: received.append(mask),
+        lambda q, k, v, bias, mask, scale, precision, fast: received.append(mask),
     )
     q, k, v, bias, _, scale = create_test_data("cpu")
 

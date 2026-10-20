@@ -22,6 +22,29 @@ import torch
 import cuequivariance_torch as cuet
 
 
+@pytest.mark.parametrize("fast", [False, True])
+def test_triangle_attention_forwards_precision(monkeypatch, fast):
+    backend = types.ModuleType("cuequivariance_ops_torch")
+    q = torch.ones((1, 1, 1, 8, 8))
+    calls = []
+
+    def forward(*args, **kwargs):
+        calls.append((args, kwargs))
+        return q
+
+    backend.triangle_attention = forward
+    monkeypatch.setitem(sys.modules, "cuequivariance_ops_torch", backend)
+    assert cuet.triangle_attention(q, q, q, q, fast=fast) is q
+    assert calls[0][1] == {"kv_lengths": None, **({"fast": True} if fast else {})}
+
+
+@pytest.mark.parametrize("fast", [None, 1, "fast", torch.tensor(True)])
+def test_triangle_attention_requires_static_precision(fast):
+    q = torch.ones((1, 1, 1, 8, 8))
+    with pytest.raises(ValueError, match="fast must be a static bool"):
+        cuet.triangle_attention(q, q, q, q, fast=fast)
+
+
 def test_triangle_attention():
     if torch.cuda.is_available():
         device = torch.device("cuda")

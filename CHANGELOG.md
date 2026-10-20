@@ -1,5 +1,15 @@
 ## Latest Changes
 
+## 0.14.0 (unreleased)
+
+### Added
+
+- [Torch/JAX] Triangle Attention exposes a static `fast=False` precision option for the Rubin sm107a forward route. `fast=True` selects BF16 exponentials and is inference-only; use the default Accurate mode for training. Both modes require matching 0.14 backend packages for the new Rubin route.
+
+### Notes
+
+- [Torch/JAX] On the Rubin sm107a Triangle Attention route, an empty Boolean-mask row returns zero output and LSE/MAX of `-1e9`, rather than the zero auxiliary values returned by the previous sm100f route. Returned LSE uses natural logarithms in both precision modes. Torch length-only empty rows retain zero output/LSE/MAX.
+
 ## 0.13.0 (2026-10-15)
 
 ### Added

@@ -45,6 +45,8 @@ def triangle_attention(
     mask: jax.Array | None,  # [B, N, 1, 1, S_kv] boolean
     scale: float,
     precision: jax.lax.Precision | None = None,
+    *,
+    fast: bool = False,
 ):
     r"""triangle attention
 
@@ -60,10 +62,22 @@ def triangle_attention(
             ``None`` support.
         scale: Scaling factor for the dot product.
         precision: Precision for the computation (default is None).
+        fast: Static precision choice for the Rubin sm107a forward route, with
+            BF16 inputs and head dimension 16, 32, 64, or 128 at the default scale.
+            ``False`` uses FP32 exponentials; ``True`` uses BF16 exponentials.
+            Other routes ignore the arithmetic choice. ``True`` is inference-only
+            and raises ``ValueError`` under differentiation; use ``False`` for
+            training. FP64 forward validation uses output ``atol=rtol=0.03`` for
+            Fast and ``0.01`` for Accurate on the actual kernel inputs, including
+            bias rounded to BF16. The Fast LSE diagnostic compares ``lse / ln(2)``
+            with ``atol=rtol=0.01``. Requires matching 0.14 backend packages when
+            ``True``.
 
     Returns:
         A three-element list containing the attention output, log-sum-exp, and
-        maximum value.
+        maximum value. On the Rubin sm107a route, an empty Boolean-mask row
+        returns zero output and ``lse == max == -1e9``. LSE uses natural
+        logarithms in both precision modes.
 
     .. math::
 
@@ -87,10 +101,12 @@ def triangle_attention(
         The kernel provides optimal performance for a "padding mask" consisting in
         (all True, followed by all False) in the last dimension.
     """
+    if not isinstance(fast, bool):
+        raise ValueError("triangle_attention: fast must be a static bool")
     if mask is None and HAS_CUE_OPS_JAX and not TRIANGLE_ATTENTION_ACCEPTS_NO_MASK:
         mask = jnp.ones((*k.shape[:2], 1, 1, k.shape[3]), dtype=jnp.bool_)
     return triangle_attention_custom_vjp(
-        q, k, v, bias, mask, scale=scale, precision=precision
+        q, k, v, bias, mask, scale=scale, precision=precision, fast=fast
     )
 
 
@@ -181,12 +197,17 @@ def triangle_attention_fwd_impl(
     *mask_operands: jax.Array,  # [B, N, 1, 1, S_kv] boolean, absent for no mask
     scale: float,
     precision: jax.lax.Precision | None = None,
+    fast: bool = False,
 ) -> tuple[jax.Array, jax.Array, jax.Array]:
     mask = mask_operands[0] if mask_operands else None
     if platform == "cuda":
         assert HAS_CUE_OPS_JAX, (
             "Please install cuequivariance_ops_jax for CUDA support."
         )
+        if fast:
+            return triangle_attention_cuda_fwd(
+                q, k, v, mask, bias, scale, precision, fast=True
+            )
         return triangle_attention_cuda_fwd(q, k, v, mask, bias, scale, precision)
     else:
         return triangle_attention_jax_fwd(q, k, v, bias, mask, scale, precision)
@@ -273,7 +294,7 @@ def _mask_operands(mask: jax.Array | None) -> tuple[jax.Array, ...]:
     return () if mask is None else (mask,)
 
 
-@partial(custom_vjp, nondiff_argnums=(5, 6))
+@partial(custom_vjp, nondiff_argnums=(5, 6, 7))
 def triangle_attention_custom_vjp(
     q: jax.Array,  # [B, N, H, S_qo, D]
     k: jax.Array,  # [B, N, H, S_kv, D]
@@ -282,15 +303,37 @@ def triangle_attention_custom_vjp(
     mask: jax.Array | None,  # [B, N, 1, 1, S_kv] boolean
     scale: float,
     precision: jax.lax.Precision | None = None,
+    fast: bool = False,
 ):
     return fwd_p.bind(
-        q, k, v, bias, *_mask_operands(mask), scale=scale, precision=precision
+        q,
+        k,
+        v,
+        bias,
+        *_mask_operands(mask),
+        scale=scale,
+        precision=precision,
+        fast=fast,
     )
 
 
-def triangle_attention_custom_vjp_fwd(q, k, v, bias, mask, scale, precision=None):
+def triangle_attention_custom_vjp_fwd(
+    q, k, v, bias, mask, scale, precision=None, fast=False
+):
+    if fast:
+        raise ValueError(
+            "triangle_attention: fast=True is inference-only; use fast=False "
+            "for differentiation"
+        )
     a, lse, amax = fwd_p.bind(
-        q, k, v, bias, *_mask_operands(mask), scale=scale, precision=precision
+        q,
+        k,
+        v,
+        bias,
+        *_mask_operands(mask),
+        scale=scale,
+        precision=precision,
+        fast=fast,
     )
     residuals = (a, lse, q, k, v, bias, mask)
     # Match the primal output's pytree structure: `triangle_attention_custom_vjp`
@@ -300,7 +343,7 @@ def triangle_attention_custom_vjp_fwd(q, k, v, bias, mask, scale, precision=None
     return [a, lse, amax], residuals
 
 
-def triangle_attention_custom_vjp_bwd(scale, precision, residuals, cotangents):
+def triangle_attention_custom_vjp_bwd(scale, precision, fast, residuals, cotangents):
     a, lse, q, k, v, bias, mask = residuals
     da, dlse, damax = cotangents
 
