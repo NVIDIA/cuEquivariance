@@ -28,7 +28,9 @@ how to find code in a checkout or an installed package.
 
 ## Evaluation coverage
 
-Each dataset contains five positive cases and one unrelated negative case.
+Each regression dataset (`evals/evals.json`) contains five positive cases and one
+unrelated negative case. The JAX and PyTorch skills also have a separate
+`evals/challenges.json` capability dataset; the original six cases are unchanged.
 The core cases were adapted from the BioNeMo agent toolkit's cuEquivariance
 evaluation ideas; they use this repository's APIs and contain no references to
 BioNeMo-only skill resources. The JAX and PyTorch cases exercise their respective
@@ -84,8 +86,8 @@ a development checkout with the relevant frontend dependencies installed:
 
 ```bash
 pytest -q .github/tests/test_core_skill_evals.py
-JAX_PLATFORMS=cpu pytest -q .github/tests/test_jax_skill_evals.py .github/tests/test_jax_skill_examples.py
-pytest -q .github/tests/test_torch_skill_evals.py .github/tests/test_torch_skill_examples.py
+JAX_PLATFORMS=cpu pytest -q .github/tests/test_jax_skill_evals.py .github/tests/test_jax_skill_examples.py .github/tests/test_jax_skill_challenges.py .github/tests/test_skill_challenge_packaging.py
+pytest -q .github/tests/test_torch_skill_evals.py .github/tests/test_torch_skill_examples.py .github/tests/test_torch_skill_challenges.py
 ```
 
 To verify the pinned evaluation environment in a separate Python 3.12 environment:
@@ -106,6 +108,87 @@ skillevaluator tier3 validate skills/cuequivariance
 skillevaluator tier3 validate skills/cuequivariance-jax
 skillevaluator tier3 validate skills/cuequivariance-torch
 ```
+
+### Challenge-v1 capability pilot
+
+The challenge datasets contain two positive integration tasks and one nearby
+negative task per frontend. Their IDs deliberately differ from the regression
+IDs so results from the two datasets cannot be paired accidentally.
+
+| Case suffix | Required outcome |
+| --- | --- |
+| `challenge-layout-v1` | Migrate original O3 `ir_mul` buffers with separated duplicate blocks and both parities into dictionaries, reconstruct the original order, and retain gradients, batch axes and transformation behavior. JAX also requires JIT; Torch includes noncontiguous tensors. |
+| `challenge-graph-v1` | Compose radial weights, normalized harmonics, a channelwise product, destination accumulation and a projection. Match an independent NumPy edge-loop reference before and after a training update, retain gradients through every parameter and both floating inputs, and handle relabeling, edge permutations and isolated destinations. |
+| `challenge-routing-v1` | Repair an ordinary JAX/Torch regression-loss broadcasting bug without invoking cuEquivariance or its skill. |
+
+Prompts specify the public interface, mathematics, constraints and observable
+outcomes. They leave the frontend APIs and implementation strategy to the agent.
+Every task writes an importable `/workspace/solution.py`; execution claims remain
+subject to the ordinary trajectory checks.
+
+`.github/evals/cueq_challenges.py` independently executes the submitted artifact
+in a bounded subprocess using the prepared CPU interpreter. The positive
+oracles use original block slicing and core NumPy descriptors rather than the
+submitted frontend forward. Checks include multiple data seeds, independent
+forward values, finite differences, rotations, O3 inversion where applicable,
+graph resizing and permutations, and a real parameter update.
+It emits a binary `numerical_success` custom metric: all required numerical
+checks must pass. A missing file, exception, detached gradient or timeout fails.
+The nearby negative additionally checks the loss values and prediction gradients;
+the ACES routing check detects skill activation beyond imports in the submission.
+
+The maintainer references (`.github/evals/reference_*_challenges.py`) are outside
+all skill directories and are never included in the pilot. Regression tests run
+the verifier against those references and deliberate defects: overwritten
+duplicate irreps, wrong layouts, parity merging, incorrectly shared edge data,
+detached vectors, mean instead of sum aggregation, and the original MSE
+broadcasting bug. These tests validate the benchmark and verifier, not agent lift.
+
+Prepare a fresh pilot with Python, PyYAML and SkillEvaluator 1.5.6 available:
+
+```bash
+python .github/scripts/prepare_skill_challenges.py --export-harbor
+```
+
+This creates a unique directory under `.venv/` and prints a manifest location
+and two evaluation commands. `--backend jax` or `--backend torch` selects one
+frontend. `--output PATH` selects a new output directory; existing directories
+are refused. Without `--export-harbor`, preparation needs only Python and PyYAML.
+
+The staged skills retain the exact canonical `SKILL.md`, requirements and
+environment setup. Only the selected dataset and grading mode change:
+`aces_plus_custom` adds artifact verification while retaining the default ACES
+metrics and quality gate. **`numerical_success` does not replace ACES's overall
+score or change its gate.** Read both the numerical result and the normal
+trajectory assessment; neither should be inferred from the other.
+
+The export validates both conditions, identical prompts/verifiers, and the
+absence of eval metadata, grader code and reference solutions in the agent's
+runtime bundle. This requires the builder's private evaluator-source support;
+older builders are rejected. Do not use `--copy-repo`: the maintenance checkout
+contains the reference answers.
+
+The manifest records skill, dataset, configuration and verifier digests. Its
+commands pin the models from the 2026-10-20 comparison:
+`claude-code=aws/anthropic/bedrock-claude-opus-4-8` and
+`codex=openai/openai/gpt-5.5`. They request baseline plus skill, three attempts
+per case and no early stop on success: 36 executions per frontend, 72 for both.
+Confirm those models are still available in the authenticated environment;
+changing a model requires a new baseline with that same model.
+The preparation command only stages and validates; it does not launch agents.
+Before running the printed commands in the authenticated CI/runtime environment:
+
+```bash
+skillevaluator tier3 doctor --env-mode k8s-sandbox --agents claude-code,codex
+```
+
+Keep all attempts, infrastructure failures and trial artifacts. Fix the skill
+text only after this first paired pilot, then measure both revisions on the
+same frozen challenge dataset and environment. Reserve additional numerical
+variants for later validation. Do not compare challenge lift directly with the
+earlier six-case regression lift, or interpret local reference passes as evidence
+of agent improvement. The ordinary NVSkills workflow continues to discover
+`evals/evals.json`; promotion of the new benchmark follows the pilot.
 
 ### Interpreting Tier 3 comparisons
 

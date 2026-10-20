@@ -72,7 +72,7 @@ jobs:
       env:
         JAX_PLATFORMS: cpu
       run: |
-        pytest -q .github/tests/test_jax_skill_evals.py .github/tests/test_jax_skill_examples.py .github/tests/test_skill_execution.py .github/tests/test_skill_eval_setup.py
+        pytest -q .github/tests/test_jax_skill_evals.py .github/tests/test_jax_skill_examples.py .github/tests/test_jax_skill_challenges.py .github/tests/test_skill_challenge_packaging.py .github/tests/test_skill_execution.py .github/tests/test_skill_eval_setup.py
         uv pip install hatchling
         python .github/scripts/check_skill_packaging.py --package cuequivariance_jax
 
@@ -122,6 +122,6 @@ jobs:
 
     - name: Check PyTorch skill evaluations and packaging
       run: |
-        pytest -q .github/tests/test_torch_skill_evals.py .github/tests/test_torch_skill_examples.py
+        pytest -q .github/tests/test_torch_skill_evals.py .github/tests/test_torch_skill_examples.py .github/tests/test_torch_skill_challenges.py
         uv pip install hatchling
         python .github/scripts/check_skill_packaging.py --package cuequivariance_torch
