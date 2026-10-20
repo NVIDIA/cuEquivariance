@@ -82,6 +82,7 @@ def triangle_attention(
     return_aux: bool = False,
     *,
     kv_lengths: Optional[torch.Tensor] = None,
+    fast: bool = False,
 ) -> torch.Tensor | Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     r"""
     Triangle Attention
@@ -108,7 +109,9 @@ def triangle_attention(
             the Blackwell sm100f length fast path.
         scale (float, optional): Float scale for q (s in the equation). If None, value 1/sqrt(d) is used.
         return_aux (bool): If True, two auxiliary tensors are returned along with the result.
-            Defaults to False.
+            Defaults to False. On supported Rubin GPUs, an empty Boolean-mask row
+            returns zero output and ``lse == max == -1e9``; length-only empty rows
+            retain zero output/LSE/MAX. Returned LSE uses natural logarithms.
         kv_lengths (torch.Tensor, optional): int32 tensor of shape (B, N, 1, 1, 1)
             containing each row's effective K length. This represents a right-padded /
             prefix mask: positions ``j < kv_lengths[b, n]`` are valid and later positions
@@ -116,6 +119,17 @@ def triangle_attention(
             Blackwell cu13 builds, ``kv_lengths`` selects the sm100f length fast path.
             Each length must be in ``[0, K]``; values greater than ``K`` are clamped
             to ``K`` (the row then attends the full key sequence).
+        fast (bool): Static precision choice for supported Rubin forward calls,
+            with BF16 inputs and head dimension 16, 32, 64, or 128 at the default
+            scale. ``False`` uses FP32 exponentials; ``True`` uses BF16 exponentials.
+            Other routes ignore the arithmetic choice. ``True`` is inference-only:
+            q/k/v/bias must not require gradients, even inside ``torch.no_grad()``.
+            Detach inputs or use ``False`` for training. FP64 forward validation
+            uses output ``atol=rtol=0.03`` for Fast and ``0.01`` for Accurate on
+            the actual kernel inputs, including bias rounded to BF16. The Fast
+            LSE diagnostic compares ``lse / ln(2)`` with ``atol=rtol=0.01``;
+            returned LSE remains natural log. Requires matching 0.14 backend
+            packages when ``True``.
 
     Note:
         - B: batch size
@@ -188,6 +202,8 @@ def triangle_attention(
         torch.Size([1, 1, 2, 128, 128])
     """
 
+    if not isinstance(fast, bool):
+        raise ValueError("triangle_attention: fast must be a static bool")
     if mask is not None and kv_lengths is not None:
         raise ValueError(
             "triangle_attention: pass either `mask` or `kv_lengths`, not both. "
@@ -202,6 +218,10 @@ def triangle_attention(
             "Error importing triangle_attention from cuequivariance_ops_torch."
         )
     else:
+        if fast:
+            return f(
+                q, k, v, bias, mask, scale, return_aux, kv_lengths=kv_lengths, fast=True
+            )
         return f(q, k, v, bias, mask, scale, return_aux, kv_lengths=kv_lengths)
 
 

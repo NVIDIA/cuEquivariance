@@ -1,5 +1,15 @@
 ## Latest Changes
 
+## 0.14.0 (unreleased)
+
+### Added
+
+- [Torch/JAX] Triangle Attention exposes a static `fast=False` precision option on supported Rubin GPUs. `fast=True` selects BF16 exponentials and is inference-only; use the default Accurate mode for training. Pair with the matching 0.14 ops packages.
+
+### Notes
+
+- [Torch/JAX] On supported Rubin GPUs, an empty Boolean-mask row in Triangle Attention returns zero output and LSE/MAX of `-1e9`, rather than the previous zero auxiliary values. Returned LSE uses natural logarithms in both precision modes. Torch length-only empty rows retain zero output/LSE/MAX.
+
 ## 0.13.0 (2026-10-15)
 
 ### Added
