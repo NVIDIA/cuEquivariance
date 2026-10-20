@@ -62,7 +62,7 @@ def triangle_attention(
             ``None`` support.
         scale: Scaling factor for the dot product.
         precision: Precision for the computation (default is None).
-        fast: Static precision choice for the Rubin sm107a forward route, with
+        fast: Static precision choice for supported Rubin forward calls, with
             BF16 inputs and head dimension 16, 32, 64, or 128 at the default scale.
             ``False`` uses FP32 exponentials; ``True`` uses BF16 exponentials.
             Other routes ignore the arithmetic choice. ``True`` is inference-only
@@ -75,7 +75,7 @@ def triangle_attention(
 
     Returns:
         A three-element list containing the attention output, log-sum-exp, and
-        maximum value. On the Rubin sm107a route, an empty Boolean-mask row
+        maximum value. On supported Rubin GPUs, an empty Boolean-mask row
         returns zero output and ``lse == max == -1e9``. LSE uses natural
         logarithms in both precision modes.
 

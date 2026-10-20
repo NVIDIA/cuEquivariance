@@ -109,7 +109,7 @@ def triangle_attention(
             the Blackwell sm100f length fast path.
         scale (float, optional): Float scale for q (s in the equation). If None, value 1/sqrt(d) is used.
         return_aux (bool): If True, two auxiliary tensors are returned along with the result.
-            Defaults to False. On the Rubin sm107a route, an empty Boolean-mask row
+            Defaults to False. On supported Rubin GPUs, an empty Boolean-mask row
             returns zero output and ``lse == max == -1e9``; length-only empty rows
             retain zero output/LSE/MAX. Returned LSE uses natural logarithms.
         kv_lengths (torch.Tensor, optional): int32 tensor of shape (B, N, 1, 1, 1)
@@ -119,7 +119,7 @@ def triangle_attention(
             Blackwell cu13 builds, ``kv_lengths`` selects the sm100f length fast path.
             Each length must be in ``[0, K]``; values greater than ``K`` are clamped
             to ``K`` (the row then attends the full key sequence).
-        fast (bool): Static precision choice for the Rubin sm107a forward route,
+        fast (bool): Static precision choice for supported Rubin forward calls,
             with BF16 inputs and head dimension 16, 32, 64, or 128 at the default
             scale. ``False`` uses FP32 exponentials; ``True`` uses BF16 exponentials.
             Other routes ignore the arithmetic choice. ``True`` is inference-only:
