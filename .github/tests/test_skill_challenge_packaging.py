@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import tomllib
 import yaml
 from challenge_checks import EVALS, grader
 
@@ -48,6 +49,27 @@ def test_pilot_keeps_skill_and_environment_fixed_and_excludes_answers(tmp_path):
         assert "--skip-baseline" not in record["command"]
         for agent, model in manifest["agent_models"].items():
             assert f"{agent}={model}" in record["command"]
+        if backend == "torch":
+            assert (staged / "evals/setup_cpu.sh").read_bytes() == (
+                source / "evals/setup_cpu.sh"
+            ).read_bytes()
+            tasks = staged / "evals/harbor"
+            assert {p.name for p in tasks.iterdir() if p.is_dir()} == {
+                e["id"] for e in entries
+            }
+            dataset = tomllib.loads((tasks / "dataset.toml").read_text())
+            assert {t["name"] for t in dataset["tasks"]} == {
+                f"nvidia/{e['id']}" for e in entries
+            }
+            for entry in entries:
+                task = tasks / entry["id"]
+                assert (task / "instruction.md").read_text() == entry["prompt"] + "\n"
+                data = tomllib.loads((task / "task.toml").read_text())
+                assert data["environment"]["healthcheck"]["timeout_sec"] == 600
+            assert record["setup_digest"] == preparer.digest(
+                staged / "evals/setup_cpu.sh"
+            )
+            assert record["native_task_digests"]
     for path, content in original.items():
         assert path.read_bytes() == content
     with pytest.raises(FileExistsError):

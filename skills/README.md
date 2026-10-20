@@ -47,10 +47,10 @@ environment. In SkillEvaluator 1.5.6, Docker task generation installs
 `scripts/requirements.txt`. The `k8s-sandbox` path instead stages skill files into
 an existing sandbox; `base_image_mode: rebuild` alone does **not** install these
 dependencies there. Verify the actual interpreter and package versions in each
-arm before treating a run as an evaluation of the pinned environment. A shared
-custom evaluation image or common `harbor.pre_agent_setup` is needed when the
-sandbox does not already provide them. Provision it equally for both arms and
-establish a new baseline when changing the environment.
+arm before treating a run as an evaluation of the pinned environment. Provision
+dependencies equally for both arms and establish a new baseline when changing
+the environment. JAX uses `harbor.pre_agent_setup`; Torch uses the native Harbor
+environment healthcheck described below.
 
 The JAX and PyTorch setup commands publish `/workspace/.venv` only after the
 pinned packages pass a CPU smoke check. Failed environments remain at their
@@ -62,10 +62,29 @@ install resolves its dependencies and cuEquivariance from the normal index,
 avoiding dependency-metadata incompatibilities with older host pip versions.
 Both arms use the same setup and package pins.
 
-These are repository-side setup improvements, not a change to SkillEvaluator's
-healthcheck timeout. A successful local setup does not establish that the shared
-Astra sandbox will finish within its budget. Inspect the live preflight result
-before interpreting a missing Torch score as a skill-quality failure.
+SkillEvaluator 1.5.6 hardcodes 120 seconds for generated `pre_agent_setup`
+healthchecks. Torch selects `harbor.task_source: native_harbor` so its repo-owned
+`evals/harbor/*/task.toml` files can give installation and the smoke check
+600 seconds. This uses the unmodified evaluator's supported native-task path.
+The agent and verifier budgets remain 300 and 180 seconds, respectively, and
+grading remains `aces_default`. Both arms still run the same six prompts from
+`evals/evals.json`. Setup failures remain failures, and Harbor collects
+`/workspace/cueq-setup.log` as a task artifact for diagnosis.
+
+`evals/setup_cpu.sh` is the canonical Torch bootstrap script. Its contents and
+the prompts are embedded in the native tasks so setup also runs in the baseline,
+where the skill itself is absent. After changing the script or dataset, refresh
+and check the generated files:
+
+```bash
+python .github/scripts/prepare_skill_eval_tasks.py
+python .github/scripts/prepare_skill_eval_tasks.py --check
+```
+
+The setup regression tests check synchronization and that capturing logs does
+not hide a failing exit status. A successful local setup does not establish that
+the shared Astra sandbox is healthy; inspect the live preflight result before
+interpreting a missing Torch score as a skill-quality failure.
 
 The requirements pin the cuEquivariance release or source revision whose APIs
 were checked, and pin the JAX/Flax or CPU PyTorch versions.
@@ -161,6 +180,9 @@ environment setup. Only the selected dataset and grading mode change:
 metrics and quality gate. **`numerical_success` does not replace ACES's overall
 score or change its gate.** Read both the numerical result and the normal
 trajectory assessment; neither should be inferred from the other.
+The Torch pilot renders native tasks from its challenge IDs and prompts and
+uses the same 600-second setup budget. Its manifest also records the bootstrap
+script and native task file digests.
 
 The export validates both conditions, identical prompts/verifiers, and the
 absence of eval metadata, grader code and reference solutions in the agent's

@@ -12,6 +12,7 @@ import argparse
 import hashlib
 import inspect
 import json
+import runpy
 import shlex
 import shutil
 import tempfile
@@ -54,7 +55,10 @@ def prepare(destination, backends, *, export_harbor=False):
     destination = Path(destination).resolve()
     destination.mkdir(parents=True, exist_ok=False)
     if export_harbor:
-        from skillevaluator.tier3.harbor.adapter import generate_harbor_tasks
+        from skillevaluator.tier3.harbor.adapter import (
+            generate_harbor_tasks,
+            stage_native_harbor_tasks,
+        )
 
         if (
             "evaluator_skill_path"
@@ -90,6 +94,14 @@ def prepare(destination, backends, *, export_harbor=False):
         config = yaml.safe_load((source / "evals/config.yml").read_text())
         config["grading"]["mode"] = "aces_plus_custom"
         (evals / "config.yml").write_text(yaml.safe_dump(config, sort_keys=False))
+        native = config["harbor"].get("task_source") == "native_harbor"
+        if native:
+            shutil.copy2(source / "evals/setup_cpu.sh", evals / "setup_cpu.sh")
+            # Render the challenge IDs/prompts, never copy regression tasks.
+            builder = runpy.run_path(
+                str(ROOT / ".github/scripts/prepare_skill_eval_tasks.py")
+            )
+            builder["write_tasks"](staged)
         command = [
             "skillevaluator",
             "tier3",
@@ -125,11 +137,19 @@ def prepare(destination, backends, *, export_harbor=False):
             ],
             "command": command,
         }
+        if native:
+            record["setup_digest"] = digest(evals / "setup_cpu.sh")
+            record["native_task_digests"] = {
+                str(p.relative_to(evals / "harbor")): digest(p)
+                for p in sorted((evals / "harbor").rglob("*"))
+                if p.is_file()
+            }
         if export_harbor:
             tasks_by_arm = {}
+            emit_tasks = stage_native_harbor_tasks if native else generate_harbor_tasks
             for arm, with_skill in (("with_skill", True), ("baseline", False)):
                 task_root = destination / "harbor" / backend / arm
-                tasks = generate_harbor_tasks(
+                tasks = emit_tasks(
                     staged,
                     task_root,
                     evaluator_skill_path=staged,
@@ -138,7 +158,7 @@ def prepare(destination, backends, *, export_harbor=False):
                     grading_mode="aces_plus_custom",
                     env_mode="astra-sandbox",
                     runtime_env=config["harbor"]["runtime_env"],
-                    pre_agent_setup=config["harbor"]["pre_agent_setup"],
+                    pre_agent_setup=config["harbor"].get("pre_agent_setup"),
                     agent_workdir="/workspace",
                     copy_repo=False,
                     repo_context_exclude_paths=[ROOT / ".github/evals"],
