@@ -58,8 +58,11 @@ with (root / "calls.jsonl").open("a") as log:
     log.write(json.dumps({
         "stage": stage, "args": args, "published": (root / ".venv").is_symlink()
     }) + "\\n")
-if os.environ.get("CUEQ_FAIL_STAGE") == stage:
-    print("injected " + stage + " failure", file=sys.stderr)
+failure = os.environ.get("CUEQ_FAIL_STAGE")
+if failure == stage or (
+    failure == "dependencies" and stage == "install" and "--no-deps" not in args
+):
+    print("injected " + failure + " failure", file=sys.stderr)
     sys.exit(23)
 if stage == "smoke":
     print("CPU environment ready")
@@ -166,6 +169,33 @@ def test_pre_agent_setup_preserves_existing_incompatible_environment(
     assert not list(tmp_path.glob(".cueq-env.*"))
 
 
+@pytest.mark.parametrize(
+    ("failure", "reported_stage"),
+    [
+        ("venv", "create_environment"),
+        ("install", "install_cpu_torch"),
+        ("dependencies", "install_dependencies"),
+        ("smoke", "smoke_check"),
+    ],
+)
+def test_torch_setup_identifies_the_failed_stage(
+    tmp_path, setup_sandbox, failure, reported_stage
+):
+    result = subprocess.run(
+        ["bash", "-c", setup_command("torch")],
+        env={**setup_sandbox, "CUEQ_FAIL_STAGE": failure},
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 23
+    assert f"injected {failure} failure" in result.stderr
+    assert result.stderr.rstrip().endswith(
+        f"CUEQ_SETUP_FAILED stage={reported_stage} exit_code=23"
+    )
+    assert not os.path.lexists(tmp_path / ".venv")
+
+
 def test_native_torch_tasks_keep_regression_prompts_and_setup_budget():
     skill = ROOT / "skills/cuequivariance-torch"
     BUILDER["write_tasks"](skill, check=True)
@@ -196,7 +226,8 @@ def test_native_torch_tasks_keep_regression_prompts_and_setup_budget():
 
 
 @pytest.mark.parametrize("status", [0, 23])
-def test_native_setup_retains_output_and_exit_status(tmp_path, status):
+@pytest.mark.parametrize("logging_fails", [False, True])
+def test_native_setup_retains_output_and_exit_status(tmp_path, status, logging_fails):
     evals = tmp_path / "evals"
     evals.mkdir()
     (evals / "evals.json").write_text(
@@ -208,14 +239,82 @@ def test_native_setup_retains_output_and_exit_status(tmp_path, status):
     files = BUILDER["task_files"](tmp_path)
     data = tomllib.loads(files[Path("smoke/task.toml")])
     command = data["environment"]["healthcheck"]["command"]
+    # A previous successful attempt must not hide the next attempt's failure.
+    status_file = tmp_path / "cueq-setup.status"
+    status_file.write_text("0\n")
+    log_file = tmp_path / "cueq-setup.log"
+    if logging_fails:
+        log_file.mkdir()
+    env = {**os.environ, "CUEQ_EVAL_ROOT": str(tmp_path)}
     result = subprocess.run(
         shlex.split(command),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    expected_status = status or (1 if logging_fails else 0)
+    assert result.returncode == expected_status
+    assert "installer output" in result.stdout
+    assert "installer diagnostic" in result.stdout
+    if not logging_fails:
+        assert log_file.read_text() == result.stdout
+    assert status_file.read_text() == f"{expected_status}\n"
+
+    (hook,) = data["verifier"]["collect"]
+    diagnostics = subprocess.run(
+        shlex.split(hook["command"]),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    # Harbor logs the stdout/stderr of a nonzero collection hook even when the
+    # healthcheck failed before agent execution. Success produces no warning.
+    assert diagnostics.returncode == expected_status
+    if expected_status:
+        assert (
+            f"CUEQ_SETUP_DIAGNOSTICS exit_code={expected_status}" in diagnostics.stderr
+        )
+        if logging_fails:
+            assert "No setup log was produced" in diagnostics.stderr
+        else:
+            assert "installer diagnostic" in diagnostics.stderr
+    else:
+        assert not diagnostics.stdout and not diagnostics.stderr
+
+
+@pytest.mark.parametrize("saved_status", [None, "125\n", "invalid\n"])
+def test_setup_diagnostics_handle_missing_or_incomplete_status(tmp_path, saved_status):
+    if saved_status is not None:
+        (tmp_path / "cueq-setup.status").write_text(saved_status)
+    result = subprocess.run(
+        shlex.split(BUILDER["SETUP_DIAGNOSTICS_COMMAND"]),
         env={**os.environ, "CUEQ_EVAL_ROOT": str(tmp_path)},
         capture_output=True,
         text=True,
         timeout=10,
     )
-    assert result.returncode == status
-    assert "installer output" in result.stdout
-    assert "installer diagnostic" in result.stdout
-    assert (tmp_path / "cueq-setup.log").read_text() == result.stdout
+    assert result.returncode == 125
+    assert "CUEQ_SETUP_DIAGNOSTICS exit_code=125" in result.stderr
+    assert "No setup log was produced" in result.stderr
+
+
+def test_setup_diagnostics_keep_the_error_at_the_end_of_long_logs(tmp_path):
+    (tmp_path / "cueq-setup.status").write_text("23\n")
+    (tmp_path / "cueq-setup.log").write_text(
+        "irrelevant download progress\n" * 1000
+        + "ERROR: injected dependency failure\n"
+        + "CUEQ_SETUP_FAILED stage=install_dependencies exit_code=23\n"
+    )
+    result = subprocess.run(
+        shlex.split(BUILDER["SETUP_DIAGNOSTICS_COMMAND"]),
+        env={**os.environ, "CUEQ_EVAL_ROOT": str(tmp_path)},
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == 23
+    assert "ERROR: injected dependency failure" in result.stderr
+    assert "CUEQ_SETUP_FAILED stage=install_dependencies exit_code=23" in result.stderr
+    assert len(result.stderr.splitlines()) <= 13

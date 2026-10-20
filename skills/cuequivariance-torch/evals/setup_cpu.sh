@@ -1,15 +1,28 @@
 #!/usr/bin/env bash
 set -euo pipefail
+cueq_stage=initialize
+cueq_report_failure() {
+  cueq_exit=$?
+  if [ "$cueq_exit" -ne 0 ]; then
+    printf 'CUEQ_SETUP_FAILED stage=%s exit_code=%s\n' "$cueq_stage" "$cueq_exit" >&2
+  fi
+}
+trap cueq_report_failure EXIT
+
 cueq_root="${CUEQ_EVAL_ROOT:-/workspace}"
 cueq_env="$cueq_root/.venv"
 cueq_publish=false
 if [ ! -e "$cueq_env" ] && [ ! -L "$cueq_env" ]; then
+  cueq_stage=select_interpreter
   cueq_host_python=$(command -v python3)
+  cueq_stage=create_environment
   cueq_env=$(mktemp -d "$cueq_root/.cueq-env.XXXXXX")
   cueq_publish=true
+  printf 'Creating CPU environment: %s (host Python: %s)\n' "$cueq_env" "$cueq_host_python"
   "$cueq_host_python" -m venv --system-site-packages --without-pip "$cueq_env"
   # Reduce setup time: wheels only,
   # no bytecode compilation, and no PyPI lookup for the CPU Torch build.
+  cueq_stage=install_cpu_torch
   printf 'Installing CPU PyTorch into %s\n' "$cueq_env"
   "$cueq_host_python" -m pip --python "$cueq_env" install \
     --cert "${PIP_CERT:-/etc/ssl/certs/ca-certificates.crt}" \
@@ -17,6 +30,7 @@ if [ ! -e "$cueq_env" ] && [ ! -L "$cueq_env" ]; then
     --progress-bar off --no-deps 'torch==2.14.1+cpu' --index-url https://download.pytorch.org/whl/cpu
   # Resolve Torch's dependencies on the normal index. Older host pip
   # rejects some dependency metadata on the PyTorch index.
+  cueq_stage=install_dependencies
   printf 'Installing Torch dependencies and cuEquivariance into %s\n' "$cueq_env"
   "$cueq_host_python" -m pip --python "$cueq_env" install \
     --cert "${PIP_CERT:-/etc/ssl/certs/ca-certificates.crt}" \
@@ -24,10 +38,13 @@ if [ ! -e "$cueq_env" ] && [ ! -L "$cueq_env" ]; then
     --progress-bar off \
     'torch==2.14.1+cpu' 'cuequivariance==0.13.0' 'cuequivariance-torch==0.13.0'
 fi
+cueq_stage=smoke_check
 printf 'Checking CPU environment: %s\n' "$cueq_env"
 "$cueq_env/bin/python" -u - <<'PY'
 import importlib.metadata as metadata
 import sys
+
+print("Smoke check runtime:", sys.executable, sys.version.split()[0], flush=True)
 import torch
 import cuequivariance_torch as cuet
 
@@ -48,5 +65,6 @@ PY
 # A failed install or smoke check must not leave .venv pointing at a
 # partial environment. Preserve it for diagnosis and retry in a fresh path.
 if [ "$cueq_publish" = true ]; then
+  cueq_stage=publish_environment
   ln -sT "$cueq_env" "$cueq_root/.venv"
 fi
