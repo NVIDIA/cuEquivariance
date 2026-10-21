@@ -1,0 +1,6 @@
+# CPU evaluation baseline for the APIs documented in this skill.
+# Match evals/config.yml; keep the CPU-only wheel build explicit.
+cuequivariance==0.13.0
+cuequivariance-torch==0.13.0
+--extra-index-url=https://download.pytorch.org/whl/cpu
+torch==2.14.1+cpu
