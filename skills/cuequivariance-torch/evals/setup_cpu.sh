@@ -20,14 +20,15 @@ if [ ! -e "$cueq_env" ] && [ ! -L "$cueq_env" ]; then
   cueq_publish=true
   printf 'Creating CPU environment: %s (host Python: %s)\n' "$cueq_env" "$cueq_host_python"
   "$cueq_host_python" -m venv --system-site-packages --without-pip "$cueq_env"
-  # Reduce setup time: wheels only,
-  # no bytecode compilation, and no PyPI lookup for the CPU Torch build.
+  # Let pip select the pinned CPU wheel from PyTorch's alternate index.
+  # Keep HTTPS verification and resolve dependencies on the normal index below.
   cueq_stage=install_cpu_torch
   printf 'Installing CPU PyTorch into %s\n' "$cueq_env"
   "$cueq_host_python" -m pip --python "$cueq_env" install \
     --cert "${PIP_CERT:-/etc/ssl/certs/ca-certificates.crt}" \
     --disable-pip-version-check --no-input --only-binary=:all: --no-compile \
-    --progress-bar off --no-deps 'torch==2.14.1+cpu' --index-url https://download.pytorch.org/whl/cpu
+    --progress-bar off --no-deps 'torch==2.14.1+cpu' \
+    --index-url https://download-r2.pytorch.org/whl/cpu
   # Resolve Torch's dependencies on the normal index. Older host pip
   # rejects some dependency metadata on the PyTorch index.
   cueq_stage=install_dependencies

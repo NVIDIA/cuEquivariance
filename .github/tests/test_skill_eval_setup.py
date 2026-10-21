@@ -196,6 +196,45 @@ def test_torch_setup_identifies_the_failed_stage(
     assert not os.path.lexists(tmp_path / ".venv")
 
 
+@pytest.mark.parametrize("certificate", [None, "/custom/trusted-ca.pem"])
+def test_cpu_torch_uses_alternate_index_and_preserves_certificate_verification(
+    tmp_path, setup_sandbox, certificate
+):
+    env = dict(setup_sandbox)
+    env.pop("PIP_CERT", None)
+    if certificate is not None:
+        env["PIP_CERT"] = certificate
+    result = subprocess.run(
+        ["bash", "-c", setup_command("torch")],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
+    installs = [
+        call["args"]
+        for line in (tmp_path / "calls.jsonl").read_text().splitlines()
+        if (call := json.loads(line))["stage"] == "install"
+    ]
+    wheel, dependencies = installs
+    assert wheel[wheel.index("--index-url") + 1] == (
+        "https://download-r2.pytorch.org/whl/cpu"
+    )
+    assert "torch==2.14.1+cpu" in wheel
+    assert "--no-deps" in wheel and "--no-index" not in wheel
+    for args in installs:
+        assert args[args.index("--cert") + 1] == (
+            certificate or "/etc/ssl/certs/ca-certificates.crt"
+        )
+        assert "--trusted-host" not in args
+    assert "torch==2.14.1+cpu" in dependencies
+    assert "cuequivariance-torch==0.13.0" in dependencies
+    assert "--no-index" not in dependencies and "--no-deps" not in dependencies
+    assert "--index-url" not in dependencies
+    assert (tmp_path / ".venv").is_symlink()
+
+
 def test_native_torch_tasks_keep_regression_prompts_and_setup_budget():
     skill = ROOT / "skills/cuequivariance-torch"
     BUILDER["write_tasks"](skill, check=True)

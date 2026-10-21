@@ -56,9 +56,13 @@ The JAX and PyTorch setup commands publish `/workspace/.venv` only after the
 pinned packages pass a CPU smoke check. Failed environments remain at their
 unique `.cueq-env.*` paths for diagnosis; the next attempt creates a fresh one.
 An existing `.venv`, including a broken symlink, is preserved and must pass the
-check without being replaced. Setup uses binary wheels, skips bytecode
-compilation, and fetches only the PyTorch wheel from the CPU index. A second
-install resolves its dependencies and cuEquivariance from the normal index,
+check without being replaced. Setup uses binary wheels and skips bytecode
+compilation. Torch installs its pinned CPU build with `--no-deps` from
+[PyTorch's alternate CPU index](https://download-r2.pytorch.org/whl/cpu/torch/).
+Pip selects the compatible wheel for the host interpreter and architecture.
+This avoids the original index host that failed certificate verification in
+Astra while retaining HTTPS verification and the configured `PIP_CERT` bundle.
+A second install resolves Torch's dependencies and cuEquivariance from the normal index,
 avoiding dependency-metadata incompatibilities with older host pip versions.
 Both arms use the same setup and package pins.
 
