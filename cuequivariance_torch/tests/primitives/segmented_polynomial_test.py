@@ -514,6 +514,94 @@ def test_segmented_polynomial_indexed_linear(
     )
 
 
+def _small_indexed_linear_polynomial():
+    pytest.importorskip(
+        "cuequivariance_ops_torch", reason="indexed_linear requires CUDA ops"
+    )
+    irreps = cue.Irreps("O3", "2x0e + 1x1o")
+    return cue.descriptors.linear(irreps, irreps).polynomial
+
+
+def test_indexed_linear_input_validation():
+    polynomial = _small_indexed_linear_polynomial()
+    with pytest.warns(UserWarning, match="does not support explicit `math_dtype`"):
+        module = cuet.SegmentedPolynomial(
+            polynomial, method="indexed_linear", math_dtype=torch.float64
+        )
+
+    assert module.method == "indexed_linear"
+    weights = torch.randn(2, polynomial.inputs[0].size)
+    features = torch.randn(3, polynomial.inputs[1].size)
+
+    with pytest.raises(ValueError, match="Input 0 has no dimensions"):
+        module([torch.tensor(1.0), features])
+
+    with pytest.raises(ValueError, match="expected shape"):
+        module([torch.randn(2, polynomial.inputs[0].size + 1), features])
+
+    with pytest.raises(AssertionError, match="non-sorted indices"):
+        module([weights, features], input_indices={0: torch.tensor([1, 0])})
+
+    with pytest.raises(AssertionError, match="output shapes must be provided"):
+        module(
+            [weights, features],
+            input_indices={1: torch.tensor([0, 1])},
+            output_indices={0: torch.tensor([0])},
+        )
+
+
+def test_indexed_linear_gather_scatter_matches_naive():
+    if not torch.cuda.is_available():
+        pytest.skip("CUDA is not available")
+
+    device = torch.device("cuda:0")
+    polynomial = _small_indexed_linear_polynomial()
+    indexed = cuet.SegmentedPolynomial(polynomial, method="indexed_linear").to(device)
+    assert indexed.method == "indexed_linear"
+    reference = cuet.SegmentedPolynomial(polynomial, method="naive").to(device)
+    tolerances = tol_dict[(torch.float32, torch.float32)]
+
+    weights = torch.randn(1, polynomial.inputs[0].size, device=device)
+    features = torch.randn(4, polynomial.inputs[1].size, device=device)
+    weight_indices = torch.zeros(5, dtype=torch.long, device=device)
+    source_indices = torch.tensor([2, 0, 1, 1, 3], dtype=torch.long, device=device)
+    receiver_indices = torch.tensor([2, 0, 2, 1, 0], dtype=torch.long, device=device)
+    edge_output_shape = torch.empty(
+        5, polynomial.outputs[0].size, dtype=torch.float32, device=device
+    )
+
+    def assert_matches(inputs, input_indices, output_shapes, output_indices):
+        actual = indexed(
+            inputs,
+            input_indices=input_indices,
+            output_shapes=output_shapes,
+            output_indices=output_indices,
+        )
+        expected = reference(
+            inputs,
+            input_indices=input_indices,
+            output_shapes=output_shapes,
+            output_indices=output_indices,
+        )
+        torch.testing.assert_close(actual[0], expected[0], **tolerances)
+
+    # Gather source features for each edge, then add edge outputs at receivers.
+    assert_matches(
+        [weights, features],
+        {0: weight_indices, 1: source_indices},
+        {0: edge_output_shape},
+        {0: receiver_indices},
+    )
+
+    # A shared feature produces one row that is replicated before a repeated scatter.
+    assert_matches(
+        [weights, features[:1]],
+        {0: torch.zeros(1, dtype=torch.long, device=device)},
+        {0: torch.empty(1, polynomial.outputs[0].size, device=device)},
+        {0: torch.zeros(4, dtype=torch.long, device=device)},
+    )
+
+
 if __name__ == "__main__":
     import pytest
 

@@ -303,3 +303,94 @@ def test_channel_wise_indexing():
     torch.testing.assert_close(
         outputs[True][2], outputs[False][2], atol=1e-5, rtol=1e-5
     )
+
+
+def test_channel_wise_dispatch_and_forward_edges():
+    with pytest.warns(UserWarning, match="Segments are not the same shape"):
+        nonuniform = cuet.ChannelWiseTensorProduct(*irreps[1], internal_weights=False)
+    assert nonuniform.method == "naive"
+
+    with pytest.warns(DeprecationWarning, match="deprecated"):
+        with pytest.raises(ValueError, match="uniform_1d"):
+            cuet.ChannelWiseTensorProduct(*irreps[1], use_fallback=False)
+
+    with pytest.raises(ValueError, match="uniform_1d"):
+        cuet.ChannelWiseTensorProduct(*irreps[1], method="uniform_1d")
+
+    with pytest.raises(ValueError, match="Internal weights should be shared"):
+        cuet.ChannelWiseTensorProduct(
+            *irreps[0],
+            internal_weights=True,
+            shared_weights=False,
+            method="naive",
+        )
+
+    irreps1, irreps2, irreps_out = irreps[0]
+    module = cuet.ChannelWiseTensorProduct(
+        irreps1,
+        irreps2,
+        irreps_out,
+        internal_weights=False,
+        method="naive",
+        layout=cue.ir_mul,
+        device=device,
+    )
+    assert module.method == "naive"
+    assert "weight_numel=" in repr(module)
+
+    x1 = (
+        torch.arange(4 * irreps1.dim, dtype=torch.float32, device=device).reshape(
+            4, irreps1.dim
+        )
+        / 17
+    )
+    x2 = (
+        torch.arange(5 * irreps2.dim, dtype=torch.float32, device=device).reshape(
+            5, irreps2.dim
+        )
+        / 13
+    )
+    weight = (
+        torch.arange(module.weight_numel, dtype=torch.float32, device=device).reshape(
+            1, module.weight_numel
+        )
+        / 11
+        + 0.5
+    )
+    indices_1 = torch.tensor([3, 0, 2, 1], device=device)
+    indices_2 = torch.tensor([2, 4, 1, 0], device=device)
+    indices_out = torch.tensor([1, 1, 0, 2], device=device)
+
+    gathered = module(x1[indices_1], x2[indices_2], weight)
+    expected = torch.zeros(
+        3, module.irreps_out.dim, dtype=gathered.dtype, device=device
+    )
+    expected.index_add_(0, indices_out, gathered)
+    actual = module(
+        x1,
+        x2,
+        weight,
+        indices_1=indices_1,
+        indices_2=indices_2,
+        indices_out=indices_out,
+        size_out=3,
+    )
+    assert actual.device == device
+    torch.testing.assert_close(actual, expected)
+
+    with pytest.raises(ValueError, match="size_out should be provided"):
+        module(x1, x2, weight, indices_out=indices_out)
+    with pytest.raises(ValueError, match="Internal weights are not used"):
+        module(x1, x2)
+
+    internal = cuet.ChannelWiseTensorProduct(
+        irreps1,
+        irreps2,
+        irreps_out,
+        internal_weights=True,
+        method="naive",
+        layout=cue.ir_mul,
+        device=device,
+    )
+    with pytest.raises(ValueError, match="Internal weights are used"):
+        internal(x1, x2, weight=weight)
