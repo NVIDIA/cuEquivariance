@@ -15,6 +15,7 @@
 
 import os
 
+import cuequivariance_jax.triangle._sigmoid_gated_dual_gemm as sgdg_module
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -1038,3 +1039,167 @@ def test_sigmoid_gated_dual_gemm_vmap_backward():
     validate_output(grad_x, (B, M, K), "vmap transpose grad_x")
     validate_output(grad_w1, (B, N, K), "vmap transpose grad_w1")
     validate_output(grad_w2, (B, N, K), "vmap transpose grad_w2")
+
+
+def test_sigmoid_gated_dual_gemm_autotuning_helpers():
+    input_options = {
+        "M": 8,
+        "N": 64,
+        "K": 32,
+        "dtype_input": jnp.float32,
+        "two_inputs": False,
+        "precision": Precision.TF32,
+    }
+    forward_inputs = sgdg_module._generate_inputs(**input_options, include_grad=False)
+    backward_inputs = sgdg_module._generate_inputs(**input_options, include_grad=True)
+
+    assert forward_inputs["x1"].shape == (8, 32)
+    assert forward_inputs["w1"].shape == (64, 32)
+    assert forward_inputs["mask"].shape == (8,)
+    assert "grad_out" not in forward_inputs
+    assert backward_inputs["grad_out"].shape == (8, 64)
+    np.testing.assert_array_equal(
+        forward_inputs["x1"],
+        sgdg_module._generate_inputs(**input_options, include_grad=False)["x1"],
+    )
+
+    precision_keys = {
+        Precision.DEFAULT: "default",
+        Precision.TF32: "tf32",
+        Precision.TF32x3: "tf32x3",
+        Precision.IEEE: "ieee",
+    }
+    for precision, suffix in precision_keys.items():
+        key = sgdg_module._to_key(32, 128, 64, ["float32"] * 5, True, precision)
+        assert key.endswith(f"_True_False_False_{suffix}")
+
+    single_input_key = sgdg_module._to_key(
+        32, 128, 64, ["float32"] * 5, False, Precision.TF32
+    )
+    assert "_None_" in single_input_key
+
+    arrays = {
+        "x1": jnp.zeros((8, 32), dtype=jnp.bfloat16),
+        "x2": jnp.zeros((8, 32), dtype=jnp.bfloat16),
+        "w1": jnp.zeros((64, 32), dtype=jnp.bfloat16),
+        "w2": jnp.zeros((64, 32), dtype=jnp.bfloat16),
+        "b1": jnp.zeros((64,), dtype=jnp.bfloat16),
+        "b2": jnp.zeros((64,), dtype=jnp.bfloat16),
+        "mask": jnp.ones((8,), dtype=jnp.bfloat16),
+    }
+    input_key = sgdg_module._input_to_key(
+        **arrays, two_inputs=False, precision=Precision.IEEE
+    )
+    config_key = sgdg_module._config_to_key(
+        M=8,
+        N=64,
+        K=32,
+        dtype_input=jnp.bfloat16,
+        two_inputs=False,
+        precision=Precision.IEEE,
+        include_grad=False,
+    )
+    assert input_key == config_key
+    assert "torch.float16" in config_key
+
+    candidates = [
+        {"name": "bad_n", "TILE_N": 48, "TILE_K": 16},
+        {"name": "bad_k", "TILE_N": 64, "TILE_K": 24},
+        {"name": "valid", "TILE_N": 64, "TILE_K": 16},
+        {"name": "untiled"},
+    ]
+    expected = candidates[2:]
+    assert sgdg_module._prune_configs(candidates, M=8, N=64, K=32) == expected
+    assert (
+        sgdg_module._prune_configs(
+            candidates,
+            x1=jnp.zeros((8, 32), dtype=jnp.float32),
+            w1=jnp.zeros((64, 32), dtype=jnp.float32),
+        )
+        == expected
+    )
+
+    tracer_result = []
+
+    def prune_traced_shapes(x1, w1):
+        tracer_result[:] = sgdg_module._prune_configs(candidates, x1=x1, w1=w1)
+        return jnp.asarray(len(tracer_result))
+
+    jax.make_jaxpr(prune_traced_shapes)(
+        jnp.zeros((8, 32), dtype=jnp.float32),
+        jnp.zeros((64, 32), dtype=jnp.float32),
+    )
+    assert tracer_result == expected
+    assert sgdg_module._prune_configs(candidates) is candidates
+
+
+def test_sigmoid_gated_dual_gemm_autotuning_fallbacks(monkeypatch):
+    def raise_import_error(*args, **kwargs):
+        raise ImportError("optional benchmark dependency is unavailable")
+
+    monkeypatch.setattr(sgdg_module, "measure_clock_ticks", raise_import_error)
+    assert sgdg_module.run_bench(lambda: None, {}) == 1.0
+
+    for message in ("shared memory limit", "unexpected benchmark error"):
+
+        def raise_runtime_error(*args, **kwargs):
+            raise RuntimeError(message)
+
+        monkeypatch.setattr(sgdg_module, "measure_clock_ticks", raise_runtime_error)
+        assert np.isinf(sgdg_module.run_bench(lambda: None, {}))
+
+    values = jnp.asarray([1.0, 2.0])
+    received = {}
+
+    def inspect_decoy_input(x, scale):
+        received["x"] = x
+        assert scale == 3
+
+    sgdg_module.run_decoy(inspect_decoy_input, {"x": values, "scale": 3})
+    np.testing.assert_array_equal(received["x"], jnp.zeros_like(values))
+
+    def invalid_decoy(**kwargs):
+        raise ValueError("invalid tile configuration")
+
+    with pytest.raises(ValueError, match="invalid tile configuration"):
+        sgdg_module.run_decoy(invalid_decoy, {"x": values})
+
+
+def test_sigmoid_gated_dual_gemm_wrappers_require_triton(monkeypatch):
+    monkeypatch.setattr(sgdg_module, "HAS_TRITON", False)
+    array = jnp.zeros((1, 1), dtype=jnp.float32)
+
+    with pytest.raises(ImportError, match="triton is required for GPU implementation"):
+        sgdg_module.fused_sigmoid_gated_dual_gemm_forward_kernel_wrapper(
+            array,
+            array,
+            array,
+            array,
+            array,
+            array,
+            array,
+            two_inputs=False,
+            transpose_out=False,
+            precision=Precision.DEFAULT,
+            has_b1=False,
+            has_b2=False,
+            has_mask=False,
+        )
+
+    with pytest.raises(ImportError, match="triton is required for GPU implementation"):
+        sgdg_module.fused_sigmoid_gated_dual_gemm_backward_pregemm_kernel_wrapper(
+            array,
+            array,
+            array,
+            array,
+            array,
+            array,
+            array,
+            array,
+            False,
+            False,
+            Precision.DEFAULT,
+            False,
+            False,
+            False,
+        )
