@@ -597,3 +597,419 @@ def test_slice_by_size():
         d.slice_by_size[::2, :]  # step size not supported
     with pytest.raises(TypeError, match="Invalid slice type"):
         d.slice_by_size[0, [1]]  # invalid slice type
+
+
+def test_descriptor_metadata_and_path_queries():
+    empty = cue.SegmentedTensorProduct.from_subscripts("i,i")
+    assert empty.indices.shape == (0, 2)
+    assert empty.coefficients_are_stackable
+    assert empty.stacked_coefficients.shape == (0,)
+    assert "No paths." in empty.to_text()
+
+    with pytest.raises(ValueError, match="not contracted"):
+        cue.SegmentedTensorProduct.from_subscripts("i,j").assert_valid()
+
+    d = cue.SegmentedTensorProduct.from_subscripts("i,j+ij")
+    d.add_segments(0, [(2,), (2,), (3,)])
+    d.add_segments(1, [(3,), (3,)])
+    d.add_path(0, 0, c=make_coeffs((2, 3)))
+    d.add_path(1, 1, c=make_coeffs((2, 3)))
+    d.add_path(2, 0, c=make_coeffs((3, 3)))
+    d.assert_valid()
+
+    np.testing.assert_array_equal(d.indices, [[0, 0], [1, 1], [2, 0]])
+    assert d.get_path_dimensions_dict(2) == {"i": 3, "j": 3}
+    assert d.get_path_dim(d.paths[0], "i") == 2
+    assert d.get_path_dim(0, "absent") == 0
+    assert d.get_path_dim(0, "absent", returns_set=True) == set()
+    assert d.segment_slice(0, 1) == slice(2, 4)
+    assert d.segment_slice(0, d.paths[1]) == slice(2, 4)
+    assert d.get_segment_shape(1, 1) == (3,)
+    assert d.get_segment_shape(1, d.paths[1]) == (3,)
+    assert d.all_segments_are_used()
+    np.testing.assert_array_equal(d.compressed_path_segment(0), [0, 1, 2, 3])
+    np.testing.assert_array_equal(d.sort_paths(1).compressed_path_segment(1), [0, 2, 3])
+
+    assert not d.coefficients_are_stackable
+    assert "Path coefficients:\n" in d.to_text()
+    assert "Path coefficients:" not in d.to_text(coefficient_formatter=None)
+    d.add_segment(1, (4,))
+    assert not d.all_segments_are_used()
+
+    assert empty < d
+    assert not (d == object())
+    with pytest.raises(TypeError):
+        _ = d < object()
+
+    optimal_cost = d.flop(0)
+    assert d.flop(0, algorithm="naive") >= optimal_cost
+    assert d.flop(0, batch_size=3) == 3 * optimal_cost
+    with pytest.raises(ValueError, match="unknown algorithm"):
+        d.flop(0, algorithm="unknown")
+
+    d.add_path(0, 0, c=make_coeffs((2, 3)))
+    with pytest.raises(ValueError, match="Paths must be sorted"):
+        d.compressed_path_segment(0)
+
+
+def test_insert_path_segment_forms_and_validation():
+    d = cue.SegmentedTensorProduct.from_subscripts("i,j+ij")
+    d.add_segment(0, (2,))
+    d.add_segment(1, (3,))
+    d.add_path(0, 0, c=np.ones((2, 3)))
+
+    d.insert_path(0, (2,), {"j": 3}, c=2 * np.ones((2, 3)))
+    d.insert_path(
+        -1,
+        -1,
+        -1,
+        c=3 * np.ones((2, 3)),
+        dims={"i": 2, "j": 3, "unused": 10},
+    )
+    d.add_path(None, None, c=4 * np.ones((2, 3)))
+    d.assert_valid()
+    assert [path.indices for path in d.paths] == [
+        (1, 1),
+        (0, 0),
+        (1, 1),
+        (2, 2),
+    ]
+
+    fused = d.fuse_paths_with_same_indices()
+    assert fused.num_paths == 3
+    assert fused.paths[0].indices == (1, 1)
+    np.testing.assert_allclose(fused.paths[0].coefficients, 5 * np.ones((2, 3)))
+    fused.assert_valid()
+
+    with pytest.raises(ValueError, match="expected 2 indices"):
+        d.insert_path(0, 0, c=np.ones((2, 3)))
+    with pytest.raises(ValueError, match="expected 2 dimensions"):
+        d.insert_path(0, 0, 0, c=np.ones(2))
+    with pytest.raises(ValueError, match="expected a segment index"):
+        d.insert_path(0, [0], 0, c=np.ones((2, 3)))
+    with pytest.raises(ValueError, match="Ambiguous dimensions"):
+        d.insert_path(0, (4,), 0, c=np.ones((2, 3)))
+
+    missing_mode = cue.SegmentedTensorProduct.from_subscripts("ui,uj+ij")
+    with pytest.raises(ValueError, match="expected a dimension for each subscripts"):
+        missing_mode.add_path(None, None, c=np.ones((2, 3)))
+    with pytest.raises(ValueError, match="path_index to be between"):
+        d.insert_path(d.num_paths + 1, 0, 0, c=np.ones((2, 3)))
+
+
+def test_mode_extensions_and_coefficient_mode_split():
+    d = cue.SegmentedTensorProduct.from_subscripts("i,j+ij")
+    d.add_path(None, None, c=make_coeffs((2, 3)))
+
+    appended = d.append_modes_to_all_operands("b", {"b": 4})
+    appended.assert_valid()
+    assert appended.subscripts == "ib,jb+ij"
+    assert appended.operands[0][0] == (2, 4)
+    assert appended.operands[1][0] == (3, 4)
+    with pytest.raises(ValueError, match="disjoint"):
+        d.append_modes_to_all_operands("i", {"i": 2})
+    with pytest.raises(ValueError, match="dimensions for all new modes"):
+        d.append_modes_to_all_operands("b", {})
+    with pytest.raises(ValueError, match="impossible to introduce new modes"):
+        d.add_or_transpose_modes("i,j+ijk", dims={"k": 2})
+    with pytest.raises(ValueError, match="single lowercase letter"):
+        d.split_mode("IU", 2)
+
+    split_source = cue.SegmentedTensorProduct.from_subscripts("ua,ub+abu")
+    split_source.add_path(None, None, c=make_coeffs((2, 3, 4)), dims={"u": 4})
+    split_source.assert_valid()
+    x = np.arange(8, dtype=float) + 1
+    split = split_source.split_mode("u", 2)
+    split.assert_valid()
+    assert split.num_paths == 2
+    assert [path.coefficients.shape for path in split.paths] == [(2, 3, 2)] * 2
+    np.testing.assert_allclose(
+        cue.segmented_polynomials.compute_last_operand(split_source, x),
+        cue.segmented_polynomials.compute_last_operand(split, x),
+    )
+
+
+def test_rename_and_consolidate_mode_boundaries():
+    ambiguous = cue.SegmentedTensorProduct.from_subscripts("a,a")
+    with pytest.raises(ValueError, match="non-ambiguous mapping"):
+        ambiguous.add_or_rename_modes("uv,uv")
+
+    d = cue.SegmentedTensorProduct.from_subscripts("i,j+ij")
+    with pytest.raises(ValueError, match="all segment modes"):
+        d.add_or_rename_modes("ib,jb+ij", mapping={})
+    with pytest.raises(ValueError, match="all mapped modes"):
+        d.add_or_rename_modes("ib,jb+ij", mapping={"i": "x", "j": "y"})
+
+    for coefficients in ("a", "b"):
+        descriptor = cue.SegmentedTensorProduct.from_subscripts(f"ab,ab+{coefficients}")
+        assert descriptor.consolidate_modes() == descriptor
+
+    partial = cue.SegmentedTensorProduct.from_subscripts("ab,ac+bc")
+    assert partial.consolidate_modes("z") == partial
+    with pytest.raises(ValueError, match="contiguous"):
+        partial.consolidate_modes("ab")
+
+    coefficient_pair = cue.SegmentedTensorProduct.from_subscripts("ab,ab+a")
+    with pytest.raises(ValueError, match="both a and b"):
+        coefficient_pair.consolidate_modes("ab")
+
+
+def test_coefficient_rounding_transform_guards_and_size_slice_edges():
+    d = cue.SegmentedTensorProduct.from_subscripts("i,j+ij")
+    coefficients = np.array([[0.3333, 0.7], [-0.7, 0.5]])
+    d.add_path(None, None, c=coefficients)
+    rational = d.round_coefficients_to_rational(10)
+    sqrt_rational = d.round_coefficients_to_sqrt_rational(10)
+    np.testing.assert_allclose(
+        rational.paths[0].coefficients,
+        [[1 / 3, 7 / 10], [-7 / 10, 1 / 2]],
+    )
+    np.testing.assert_allclose(
+        sqrt_rational.paths[0].coefficients,
+        [[1 / 3, np.sqrt(1 / 2)], [-np.sqrt(1 / 2), 1 / 2]],
+    )
+    np.testing.assert_allclose(d.paths[0].coefficients, coefficients)
+
+    non_scalar = cue.SegmentedTensorProduct.from_subscripts("ui,uj+ij")
+    non_scalar.add_path(None, None, c=np.ones((2, 2)), dims={"u": 2})
+    with pytest.raises(NotImplementedError, match="sorting non scalar coefficients"):
+        non_scalar.sort_indices_for_identical_operands((0, 1))
+    with pytest.raises(
+        NotImplementedError, match="symmetrizing non scalar coefficients"
+    ):
+        non_scalar.symmetrize_operands((0, 1))
+    with pytest.raises(ValueError, match="lowercase single letter modes"):
+        non_scalar.flatten_modes("I")
+
+    size_source = cue.SegmentedTensorProduct.from_subscripts("i,j+ij")
+    size_source.add_segments(0, [(2,), (6,), (12,)])
+    size_source.add_segments(1, [(3,), (4,)])
+    size_source.add_path(2, 0, c=make_coeffs((12, 3)))
+    tail = size_source.slice_by_size[-2:, :]
+    tail.assert_valid()
+    assert tail.operands[0].segments == ((12,),)
+    assert [path.indices for path in tail.paths] == [(0, 0)]
+
+    with pytest.raises(ValueError, match="Expected a slice or int for each operand"):
+        size_source.slice_by_segment[:]
+    with pytest.raises(ValueError, match="Expected a slice or int for each operand"):
+        size_source.slice_by_size[:]
+
+
+def test_descriptor_metadata_and_path_edges():
+    empty = cue.SegmentedTensorProduct.from_subscripts("i,j+ij")
+    empty.add_segment(0, (2,))
+    empty.add_segment(1, (3,))
+    np.testing.assert_array_equal(empty.indices, np.empty((0, 2), dtype=int))
+    assert not empty.all_segments_are_used()
+    assert "No paths." in empty.to_text()
+    assert empty.__eq__(object()) is NotImplemented
+    assert empty.__lt__(object()) is NotImplemented
+
+    d = cue.SegmentedTensorProduct.from_subscripts("i,j+ij")
+    d.add_segments(0, [(2,), (3,)])
+    d.add_segments(1, [(4,), (5,)])
+    d.add_path(0, 0, c=make_coeffs((2, 4)))
+    d.add_path(1, 1, c=make_coeffs((3, 5)))
+    d.assert_valid()
+
+    assert empty < d
+    assert not d.coefficients_are_stackable
+    assert d.all_segments_are_used()
+    assert d.get_path_dimensions_dict(1) == {"i": 3, "j": 5}
+    assert d.get_path_dim(1, "i") == 3
+    assert (d.segment_slice(0, 1).start, d.segment_slice(0, 1).stop) == (2, 5)
+    assert d.get_segment_shape(1, 1) == (5,)
+    np.testing.assert_array_equal(d.compressed_path_segment(0), [0, 1, 2])
+
+    formatted = d.to_text(lambda value: f"{value:.1f}")
+    assert "Path coefficients:\n" in formatted
+    assert "Path coefficients:" not in d.to_text(None)
+    assert d.flop(1, algorithm="naive") > 0
+    assert d.flop(1, algorithm="optimal") > 0
+    assert d.flop(1, batch_size=2, algorithm="naive") == 2 * d.flop(
+        1, algorithm="naive"
+    )
+    with pytest.raises(ValueError, match="unknown algorithm"):
+        d.flop(1, algorithm="invalid")
+
+    unsorted = cue.SegmentedTensorProduct.from_subscripts("i,j+ij")
+    unsorted.add_segments(0, [(2,), (3,)])
+    unsorted.add_segments(1, [(4,), (5,)])
+    unsorted.add_path(1, 1, c=make_coeffs((3, 5)))
+    unsorted.add_path(0, 0, c=make_coeffs((2, 4)))
+    with pytest.raises(ValueError, match="Paths must be sorted"):
+        unsorted.compressed_path_segment(0)
+
+    duplicate = cue.SegmentedTensorProduct.from_subscripts("i,j+ij")
+    duplicate.add_segment(0, (2,))
+    duplicate.add_segment(1, (3,))
+    duplicate.add_path(0, 0, c=np.ones((2, 3)))
+    duplicate.add_path(0, 0, c=2 * np.ones((2, 3)))
+    fused = duplicate.fuse_paths_with_same_indices()
+    assert fused.indices.tolist() == [[0, 0]]
+    np.testing.assert_array_equal(fused.paths[0].coefficients, 3 * np.ones((2, 3)))
+
+
+def test_path_insertion_and_append_mode_edges():
+    invalid = cue.SegmentedTensorProduct.from_subscripts("i,j")
+    with pytest.raises(ValueError, match="not contracted"):
+        invalid.assert_valid()
+
+    d = cue.SegmentedTensorProduct.from_subscripts("i,i")
+    with pytest.raises(ValueError, match="expected 2 indices"):
+        d.insert_path(0, 0, c=1.0)
+    with pytest.raises(ValueError, match="expected 0 dimensions"):
+        d.insert_path(0, None, None, c=np.ones((2,)))
+    with pytest.raises(ValueError, match="expected a dimension for each"):
+        d.add_path(None, None, c=1.0)
+    with pytest.raises(ValueError, match="expected a segment index"):
+        d.add_path("bad", None, c=1.0)
+    with pytest.raises(ValueError, match="between"):
+        d.insert_path(4, None, None, c=1.0)
+
+    d.add_path(None, None, c=1.0, dims={"i": 2})
+    inserted = d.insert_path(-1, 0, 0, c=2.0)
+    assert inserted == 1
+    assert d.paths[-1].coefficients.item() == 2.0
+
+    mapped = cue.SegmentedTensorProduct.from_subscripts("i,j+ij")
+    mapped.add_path({"i": 2}, {"j": 3}, c=make_coeffs((2, 3)))
+    mapped.assert_valid()
+    assert mapped.operands[0][0] == (2,)
+    assert mapped.operands[1][0] == (3,)
+
+    inferred = cue.SegmentedTensorProduct.from_subscripts("i,j+ij")
+    inferred.add_path(None, None, c=make_coeffs((2, 3)))
+    inferred.assert_valid()
+    assert inferred.operands[0][0] == (2,)
+    assert inferred.operands[1][0] == (3,)
+
+    with pytest.raises(ValueError, match="disjoint"):
+        d.append_modes_to_all_operands("i", {"i": 2})
+    with pytest.raises(ValueError, match="dimensions"):
+        d.append_modes_to_all_operands("a", {})
+    extended = d.append_modes_to_all_operands("a", {"a": 3})
+    assert extended.subscripts == "ia,ia"
+    assert extended.operands[0][0] == (2, 3)
+
+
+def test_mode_mapping_and_consolidation_edges():
+    d = cue.SegmentedTensorProduct.from_subscripts("i,j+ij")
+    d.add_path(None, None, c=make_coeffs((2, 3)))
+    with pytest.raises(ValueError, match="contain all the modes"):
+        d.add_or_rename_modes("i+ij")
+    with pytest.raises(ValueError, match="non-ambiguous"):
+        cue.SegmentedTensorProduct.from_subscripts("a,a").add_or_rename_modes("uv,vu")
+    with pytest.raises(ValueError, match="all segment modes"):
+        d.add_or_rename_modes("xb,yb+xy", mapping={"i": "x"})
+    with pytest.raises(ValueError, match="mapped modes"):
+        d.add_or_rename_modes("xb,yb+xy", mapping={"i": "z", "j": "y"})
+    with pytest.raises(ValueError, match="impossible to introduce new modes"):
+        d.add_or_transpose_modes("i,j+ijk", dims={"k": 2})
+    with pytest.raises(ValueError, match="lowercase single letter"):
+        d.flatten_modes("A")
+
+    plain = cue.SegmentedTensorProduct.from_subscripts("uv,uv")
+    plain.add_segment(0, (2, 3))
+    plain.add_segment(1, (2, 3))
+    plain.add_path(0, 0, c=1.0)
+    assert plain.consolidate_modes().subscripts == "u,u"
+
+    coefficient_modes = cue.SegmentedTensorProduct.from_subscripts("uv,uv+uv")
+    coefficient_modes.add_segment(0, (2, 3))
+    coefficient_modes.add_segment(1, (2, 3))
+    coefficient_modes.add_path(0, 0, c=make_coeffs((2, 3)))
+    consolidated = coefficient_modes.consolidate_modes()
+    assert consolidated.subscripts == "u,u+u"
+    np.testing.assert_array_equal(consolidated.paths[0].coefficients, make_coeffs((6,)))
+
+    unmatched_operands = cue.SegmentedTensorProduct.from_subscripts("uv,u,v")
+    unmatched_operands.add_segment(0, (2, 3))
+    unmatched_operands.add_segment(1, (2,))
+    unmatched_operands.add_segment(2, (3,))
+    unmatched_operands.add_path(0, 0, 0, c=1.0)
+    assert unmatched_operands.consolidate_modes() == unmatched_operands
+
+    coefficient_v = cue.SegmentedTensorProduct.from_subscripts("uv,uv+v")
+    coefficient_v.add_segment(0, (2, 3))
+    coefficient_v.add_segment(1, (2, 3))
+    coefficient_v.add_path(0, 0, c=np.ones((3,)))
+    assert coefficient_v.consolidate_modes() == coefficient_v
+
+    coefficient_u = cue.SegmentedTensorProduct.from_subscripts("uv,uv+u")
+    coefficient_u.add_segment(0, (2, 3))
+    coefficient_u.add_segment(1, (2, 3))
+    coefficient_u.add_path(0, 0, c=np.ones((2,)))
+    assert coefficient_u.consolidate_modes() == coefficient_u
+
+    with pytest.raises(ValueError, match="contiguous"):
+        cue.SegmentedTensorProduct.from_subscripts("iu,iu").consolidate_modes("ui")
+
+    coefficient_only_u = cue.SegmentedTensorProduct.from_subscripts("ui,ui+u")
+    coefficient_only_u.add_segment(0, (3, 2))
+    coefficient_only_u.add_segment(1, (3, 2))
+    coefficient_only_u.add_path(0, 0, c=np.ones((3,)))
+    with pytest.raises(ValueError, match="both u and i"):
+        coefficient_only_u.consolidate_modes("ui")
+    with pytest.raises(NotImplementedError, match="non scalar coefficients"):
+        coefficient_only_u.sort_indices_for_identical_operands((0, 1))
+    with pytest.raises(NotImplementedError, match="non scalar coefficients"):
+        coefficient_only_u.symmetrize_operands((0, 1))
+
+    untouched_operand = cue.SegmentedTensorProduct.from_subscripts("uv,uv,w+w")
+    untouched_operand.add_segment(0, (2, 3))
+    untouched_operand.add_segment(1, (2, 3))
+    untouched_operand.add_segment(2, (4,))
+    untouched_operand.add_path(0, 0, 0, c=np.ones((4,)))
+    assert untouched_operand.consolidate_modes("uv").subscripts == "u,u,w+w"
+
+
+def test_split_coefficient_mode_and_rounding_edges():
+    with pytest.raises(ValueError, match="single lowercase letter"):
+        cue.SegmentedTensorProduct.from_subscripts("u,u,v+vu").split_mode("UV", 2)
+
+    coefficients = make_coeffs((2, 4))
+    d = cue.SegmentedTensorProduct.from_subscripts("u,u,v+vu")
+    d.add_segment(2, (2,))
+    d.add_path(None, None, 0, c=coefficients)
+    split = d.split_mode("u", 2)
+    assert split.subscripts == d.subscripts
+    assert split.num_paths == 2
+    split.assert_valid()
+    assert [path.indices for path in split.paths] == [(0, 0, 0), (1, 1, 0)]
+    np.testing.assert_array_equal(
+        np.concatenate([path.coefficients for path in split.paths], axis=1),
+        coefficients,
+    )
+
+    round_input = cue.SegmentedTensorProduct.from_subscripts("i,j+ij")
+    round_input.add_segment(0, (1,))
+    round_input.add_segment(1, (1,))
+    round_input.add_path(0, 0, c=np.array([[0.25]]))
+    rational = round_input.round_coefficients_to_rational(32)
+    sqrt_rational = round_input.round_coefficients_to_sqrt_rational(32)
+    modified = round_input.modify_coefficients(lambda c: 2 * c)
+    assert rational is not round_input
+    assert sqrt_rational is not round_input
+    np.testing.assert_allclose(rational.paths[0].coefficients, [[0.25]])
+    np.testing.assert_allclose(sqrt_rational.paths[0].coefficients, [[0.25]])
+    np.testing.assert_allclose(modified.paths[0].coefficients, [[0.5]])
+    np.testing.assert_allclose(round_input.paths[0].coefficients, [[0.25]])
+
+
+def test_single_operand_slicing_and_coefficient_transform_edges():
+    d = cue.SegmentedTensorProduct.from_subscripts("i+i")
+    d.add_segments(0, [(2,), (3,)])
+    d.add_path(0, c=np.full((2,), 0.5))
+    d.add_path(1, c=np.full((3,), 1.0))
+
+    by_segment = d.slice_by_segment[:]
+    assert by_segment.operands[0].segments == ((2,), (3,))
+    assert by_segment.indices.tolist() == [[0], [1]]
+
+    by_size = d.slice_by_size[0:2]
+    assert by_size.operands[0].segments == ((2,),)
+    assert by_size.indices.tolist() == [[0]]
+    with pytest.raises(ValueError, match="Step sizes other than 1"):
+        d.slice_by_size[::2]

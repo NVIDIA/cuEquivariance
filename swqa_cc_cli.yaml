@@ -1,0 +1,30 @@
+# Host workflow: GPU .venv and CPU .venv/cpu; core CPU plus JAX/PyTorch CPU/GPU.
+# Build evidence: .github/actions/setup-cuequivariance{,-jax,-torch}/action.yml.
+# CUDA ops packages: README.md. Full tests: .github/workflows/nightly-tests.yml.
+# Local adaptations: isolated venvs, focused selectors, combined branch coverage.
+schema_version: 1
+
+focused_test:
+  argv: [python3, cc_agent/workflow.py, focused]
+focused_test_selection:
+  environment_variable: SWQA_PYTEST_SELECTORS
+
+# No separate cached build; the CLI falls back to this editable install.
+authoritative_build:
+  argv: [python3, cc_agent/workflow.py, build]
+authoritative_test:
+  argv: [python3, cc_agent/workflow.py, test]
+authoritative_coverage:
+  argv: [python3, cc_agent/workflow.py, coverage]
+
+report:
+  path: .venv/coverage.xml
+allowed_edit_paths:
+  - cuequivariance/tests
+  - cuequivariance_jax/tests
+  - cuequivariance_torch/tests
+environment_allowlist:
+  - PATH
+  - HOME
+  - CUDA_VISIBLE_DEVICES
+  - LD_LIBRARY_PATH
