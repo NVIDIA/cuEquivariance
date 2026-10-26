@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import numpy as np
+import pytest
 from cuequivariance.etc import linalg
 
 
@@ -44,3 +45,49 @@ def test_round_to_sqrt_rational():
 def test_limit_denominator():
     np.testing.assert_equal(linalg.limit_denominator(1, 7, 7), [1, 7])
     np.testing.assert_equal(linalg.limit_denominator(4, 7 * 5, 7), [1, 7])
+
+
+def test_round_to_rational_complex():
+    x = np.array([0.75 + 1e-13 + 1j * (0.5 + 1e-13)])
+    np.testing.assert_equal(linalg.round_to_rational(x), [0.75 + 0.5j])
+
+
+def test_permutation_cycles_and_sign():
+    permutation = (1, 0, 3, 4, 2, 5)
+
+    assert linalg.perm_to_cycles(permutation) == {(0, 1), (2, 3, 4)}
+    assert linalg.perm_sign(permutation) == -1
+
+
+def test_sparsify_matrix_already_sparse():
+    matrix = np.array([[1.0, 1.0, 0.0], [1.0, 0.0, 1.0]])
+
+    sparse, transform, graph = linalg.sparsify_matrix(matrix)
+
+    np.testing.assert_array_equal(sparse, matrix)
+    np.testing.assert_array_equal(transform, np.eye(2))
+    assert set(graph.edges) == {(0, 1)}
+
+
+def test_sparsify_matrix_rejects_unknown_row_result(monkeypatch):
+    monkeypatch.setattr(linalg, "sparsify_rows", lambda *_args: object())
+
+    with pytest.raises(ValueError, match="Unknown result type"):
+        linalg.sparsify_matrix(np.eye(2))
+
+
+@pytest.mark.parametrize(
+    "matrix,expected_nonzero",
+    [
+        ([[1.0, 0.0, 0.0], [0.0, 2.0, 0.0]], 2),
+        ([[1.0, 1.0, 0.0], [1.0, 0.0, 1.0]], 4),
+        ([[1.0, 1.0, 0.0], [1.0, 1.0, 1.0]], 3),
+    ],
+)
+def test_sparsify_matrix_preserves_row_span(matrix, expected_nonzero):
+    matrix = np.asarray(matrix)
+    original = matrix.copy()
+    sparse, transform, _ = linalg.sparsify_matrix(matrix)
+    np.testing.assert_allclose(transform @ original, sparse)
+    assert np.linalg.matrix_rank(transform) == 2
+    assert np.count_nonzero(sparse) == expected_nonzero
