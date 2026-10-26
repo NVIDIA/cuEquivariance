@@ -179,43 +179,94 @@ def test_equivariant_polynomial_wrappers_and_stack():
     poly = cue.descriptors.linear(irreps, irreps)
     equivalent = cue.descriptors.linear(irreps, irreps)
     scaled = 2.0 * poly
-
     assert poly == equivalent
     assert hash(poly) == hash(equivalent)
-    assert repr(poly)
-    assert poly < scaled or scaled < poly
-    assert scaled == poly * 2.0
+    assert scaled != poly
+    assert not poly < poly
+    assert (poly < scaled) != (scaled < poly)
+    assert "2x0" in repr(poly)
     assert poly.used_inputs() == [True, True]
     assert poly.used_outputs() == [True]
     assert poly.used_operands() == [True, True, True]
-    assert poly.flop(batch_size=3) > 0
-    assert poly.memory([1, 1, 1]) == sum(rep.dim for rep in poly.operands)
+    # Cost convention: four multiply-adds (8) and two output rescalings (2).
+    assert poly.flop() == 10
+    assert poly.flop(batch_size=3) == 30
+    assert poly.memory([2, 3, 5]) == 2 * 4 + 3 * 2 + 5 * 2
 
     weights = np.array([1.0, 2.0, 3.0, 4.0])
-    values = np.array([2.0, -1.0])
-    expected = poly(weights, values)[0]
-    transformed = [
-        poly.apply_fn(lambda operation, stp: (operation, stp)),
-        poly.fuse_stps(),
-        poly.consolidate(),
-        poly.flatten_modes(["i"]),
-        poly.canonicalize_subscripts(),
-        poly.squeeze_modes(),
-        poly.split_mode("i", 1),
-        poly.flatten_coefficient_modes(),
-        poly.symmetrize_for_identical_operands(),
-        poly.unsymmetrize_for_identical_operands(),
-    ]
-    for equivalent_poly in transformed:
-        np.testing.assert_allclose(equivalent_poly(weights, values)[0], expected)
+    other_weights = np.array([-2.0, 5.0, 1.0, -3.0])
+    values = np.array([2.0, -0.5])
+    expected = np.array([0.5, 2.0]) / np.sqrt(2)
+    np.testing.assert_allclose(poly(weights, values)[0], expected)
+    np.testing.assert_allclose(scaled(weights, values)[0], 2 * expected)
+    np.testing.assert_allclose((poly * 2.0)(weights, values)[0], 2 * expected)
 
-    stacked = cue.EquivariantPolynomial.stack(
-        [poly, poly], stacked=[True, False, False]
-    )
-    assert stacked.num_operands == poly.num_operands
-    assert stacked.inputs[0].dim == 2 * poly.inputs[0].dim
+    stacked = cue.EquivariantPolynomial.stack([poly, poly], [True, False, False])
+    assert stacked.inputs[0].dim == 8
     assert stacked.inputs[1] == poly.inputs[1]
+    assert stacked.outputs == poly.outputs
+    # Shared outputs add the two independent matrix products, not concatenate them.
+    expected_other = np.array([-4.5, 11.5]) / np.sqrt(2)
+    [actual] = stacked(np.concatenate([weights, other_weights]), values)
+    assert actual.shape == (2,)
+    np.testing.assert_allclose(actual, expected + expected_other)
 
+
+def test_equivariant_polynomial_filtering_and_derivatives():
+    scalar = cue.Irreps("SO3", "1x0")
+    poly = cue.descriptors.linear(scalar, scalar)
+    weights = np.array([3.0])
+    values = np.array([-2.0])
+    unused_value = np.array([17.0])
+
+    with_unused = _add_unused_scalar_input(poly)
+    assert with_unused.used_inputs() == [True, True, False]
+    assert with_unused.used_outputs() == [True]
+    assert with_unused.used_operands() == [True, True, False, True]
+
+    np.testing.assert_allclose(poly(weights, values)[0], [-6.0])
+    for unused in (unused_value, np.array([-23.0])):
+        np.testing.assert_allclose(with_unused(weights, values, unused)[0], [-6.0])
+    dropped = with_unused.filter_drop_unused_operands()
+    assert dropped.inputs == poly.inputs
+    np.testing.assert_allclose(dropped(weights, values)[0], [-6.0])
+
+    kept = with_unused.filter_keep_operands([True, True, False, True])
+    np.testing.assert_allclose(kept(weights, values)[0], [-6.0])
+    assert with_unused.filter_keep_outputs([False]).num_outputs == 0
+
+    compute_none = with_unused.compute_only([False])
+    [zero_output] = compute_none(weights, values, unused_value)
+    assert zero_output.shape == (1,)
+    np.testing.assert_array_equal(zero_output, [0.0])
+
+    weight_tangent = np.array([0.5])
+    value_tangent = np.array([4.0])
+    jvp, _ = poly.jvp([True, True])
+    [jvp_result] = jvp(weights, values, weight_tangent, value_tangent)
+    expected_jvp = np.array([11.0])
+    np.testing.assert_allclose(jvp_result, expected_jvp)
+
+    cotangent = np.array([1.5])
+    transpose_weight, _ = poly.transpose([True, False], [True])
+    [weight_gradient] = transpose_weight(values, cotangent)
+    expected_weight_gradient = np.array([-3.0])
+    np.testing.assert_allclose(weight_gradient, expected_weight_gradient)
+
+    transpose_value, _ = poly.transpose([False, True], [True])
+    [value_gradient] = transpose_value(weights, cotangent)
+    expected_value_gradient = np.array([4.5])
+    np.testing.assert_allclose(value_gradient, expected_value_gradient)
+
+    backward, _ = poly.backward([True, True], [True])
+    weight_gradient, value_gradient = backward(weights, values, cotangent)
+    np.testing.assert_allclose(weight_gradient, expected_weight_gradient)
+    np.testing.assert_allclose(value_gradient, expected_value_gradient)
+
+
+def test_equivariant_polynomial_rejects_invalid_operands():
+    irreps = cue.Irreps("SO3", "2x0")
+    poly = cue.descriptors.linear(irreps, irreps)
     with pytest.raises(ValueError, match="Number of inputs"):
         cue.EquivariantPolynomial(poly.inputs[:-1], poly.outputs, poly.polynomial)
     with pytest.raises(ValueError, match="Number of outputs"):
@@ -240,53 +291,120 @@ def test_equivariant_polynomial_wrappers_and_stack():
         )
 
 
-def test_equivariant_polynomial_filtering_and_derivatives():
-    scalar = cue.Irreps("SO3", "1x0")
+@pytest.mark.parametrize(
+    "method",
+    [
+        "fuse_stps",
+        "consolidate",
+        "flatten_modes",
+        "canonicalize_subscripts",
+        "squeeze_modes",
+        "split_mode",
+        "apply_fn",
+    ],
+)
+def test_equivariant_polynomial_transforms_change_structure(method):
+    irreps = cue.Irreps("SO3", "2x0")
+    base = cue.descriptors.linear(irreps, irreps)
+    poly = cue.EquivariantPolynomial(
+        base.inputs,
+        base.outputs,
+        cue.SegmentedPolynomial(
+            base.polynomial.inputs,
+            base.polynomial.outputs,
+            list(base.polynomial.operations) * 2,
+        ),
+    )
+    expected = 2 * np.array([0.5, 2.0]) / np.sqrt(2)
+    if method == "split_mode":
+        poly = poly.squeeze_modes()
+        transformed = poly.split_mode("u", 1)
+        assert sum(d.num_paths for _, d in transformed.polynomial.operations) == 4
+    elif method == "flatten_modes":
+        transformed = poly.flatten_modes(["i"])
+        assert all(
+            "i" not in d.subscripts for _, d in transformed.polynomial.operations
+        )
+    elif method == "apply_fn":
+        transformed = poly.apply_fn(lambda operation, stp: (operation, stp * 3))
+        expected *= 3
+    else:
+        transformed = getattr(poly, method)()
+    assert transformed.polynomial != poly.polynomial
+    if method in ("fuse_stps", "consolidate"):
+        assert len(transformed.polynomial.operations) == 1
+    np.testing.assert_allclose(
+        transformed(np.array([1.0, 2.0, 3.0, 4.0]), np.array([2.0, -0.5]))[0], expected
+    )
+
+
+def test_equivariant_polynomial_flattens_coefficient_modes():
+    d = cue.SegmentedTensorProduct.from_subscripts("u,v+uv")
+    coefficients = np.array([[1.0, 2.0], [3.0, -4.0]])
+    d.add_path(None, None, c=coefficients)
+    rep = cue.IrrepsAndLayout(cue.Irreps("SO3", "2x0"), cue.ir_mul)
+    poly = cue.EquivariantPolynomial(
+        [rep], [rep], cue.SegmentedPolynomial.eval_last_operand(d)
+    )
+    flattened = poly.flatten_coefficient_modes()
+    assert flattened.polynomial != poly.polynomial
+    assert all(
+        not stp.coefficient_subscripts for _, stp in flattened.polynomial.operations
+    )
+    np.testing.assert_allclose(flattened(np.array([2.0, -0.5]))[0], [0.5, 6.0])
+
+
+@pytest.mark.parametrize(
+    "method",
+    ["symmetrize_for_identical_operands", "unsymmetrize_for_identical_operands"],
+)
+def test_equivariant_polynomial_repeated_operands_symmetry(method):
+    d = cue.SegmentedTensorProduct.from_subscripts("i,j,k+ijk")
+    d.add_path(None, None, None, c=np.arange(1.0, 5.0).reshape(2, 2, 1))
+    d = d.flatten_coefficient_modes()
+    rep = cue.IrrepsAndLayout(cue.Irreps("SO3", "2x0"), cue.ir_mul)
+    scalar = cue.IrrepsAndLayout(cue.Irreps("SO3", "0"), cue.ir_mul)
+    poly = cue.EquivariantPolynomial(
+        [rep],
+        [scalar],
+        cue.SegmentedPolynomial(
+            [d.operands[0]], [d.operands[-1]], [(cue.Operation([0, 0, 1]), d)]
+        ),
+    )
+    transformed = getattr(poly, method)()
+    assert transformed.polynomial != poly.polynomial
+    # x.T @ [[1,2],[3,4]] @ x at x=[2, .5] is 4+2+3+1=10.
+    np.testing.assert_allclose(poly(np.array([2.0, 0.5]))[0], [10.0])
+    np.testing.assert_allclose(transformed(np.array([2.0, 0.5]))[0], [10.0])
+
+
+@pytest.mark.parametrize(
+    "mask,tangent,expected", [([True, False], 0.5, -1.0), ([False, True], 4.0, 12.0)]
+)
+def test_equivariant_polynomial_partial_tangents(mask, tangent, expected):
+    scalar = cue.Irreps("SO3", "0")
     poly = cue.descriptors.linear(scalar, scalar)
-    weights = np.array([3.0])
-    values = np.array([-2.0])
-    unused_value = np.array([17.0])
+    derivative, mapping = poly.jvp(mask)
+    mapped_inputs, mapped_outputs = mapping((poly.inputs, poly.outputs))
+    assert tuple(mapped_inputs) == derivative.inputs
+    assert tuple(mapped_outputs) == derivative.outputs
+    [actual] = derivative(np.array([3.0]), np.array([-2.0]), np.array([tangent]))
+    np.testing.assert_allclose(actual, [expected])
 
-    with_unused = _add_unused_scalar_input(poly)
-    assert with_unused.used_inputs() == [True, True, False]
-    assert with_unused.used_outputs() == [True]
-    assert with_unused.used_operands() == [True, True, False, True]
 
-    dropped = with_unused.filter_drop_unused_operands()
-    assert dropped.inputs == poly.inputs
-    np.testing.assert_allclose(
-        dropped(weights, values)[0], with_unused(weights, values, unused_value)[0]
+def test_equivariant_polynomial_cubic_derivative():
+    d = cue.SegmentedTensorProduct.from_subscripts("i,i,i,i")
+    d.add_path(None, None, None, None, c=1.0, dims={"i": 1})
+    scalar = cue.IrrepsAndLayout(cue.Irreps("SO3", "0"), cue.ir_mul)
+    poly = cue.EquivariantPolynomial(
+        [scalar],
+        [scalar],
+        cue.SegmentedPolynomial(
+            [d.operands[0]], [d.operands[-1]], [(cue.Operation([0, 0, 0, 1]), d)]
+        ),
     )
-
-    kept = with_unused.filter_keep_operands([True, True, False, True])
-    np.testing.assert_allclose(
-        kept(weights, values)[0], with_unused(weights, values, unused_value)[0]
-    )
-    assert with_unused.filter_keep_outputs([False]).num_outputs == 0
-
-    compute_none = with_unused.compute_only([False])
-    [zero_output] = compute_none(weights, values, unused_value)
-    np.testing.assert_array_equal(zero_output, np.zeros_like(zero_output))
-
-    weight_tangent = np.array([0.5])
-    value_tangent = np.array([4.0])
-    jvp, _ = poly.jvp([True, True])
-    [jvp_result] = jvp(weights, values, weight_tangent, value_tangent)
-    expected_jvp = poly(weight_tangent, values)[0] + poly(weights, value_tangent)[0]
-    np.testing.assert_allclose(jvp_result, expected_jvp)
-
-    cotangent = np.array([1.5])
-    transpose_weight, _ = poly.transpose([True, False], [True])
-    [weight_gradient] = transpose_weight(values, cotangent)
-    expected_weight_gradient = poly(np.ones_like(weights), values)[0] * cotangent[0]
-    np.testing.assert_allclose(weight_gradient, expected_weight_gradient)
-
-    transpose_value, _ = poly.transpose([False, True], [True])
-    [value_gradient] = transpose_value(weights, cotangent)
-    expected_value_gradient = poly(weights, np.ones_like(values))[0] * cotangent[0]
-    np.testing.assert_allclose(value_gradient, expected_value_gradient)
-
-    backward, _ = poly.backward([True, True], [True])
-    weight_gradient, value_gradient = backward(weights, values, cotangent)
-    np.testing.assert_allclose(weight_gradient, expected_weight_gradient)
-    np.testing.assert_allclose(value_gradient, expected_value_gradient)
+    np.testing.assert_allclose(poly(np.array([2.0]))[0], [8.0])
+    derivative, _ = poly.jvp([True])
+    np.testing.assert_allclose(derivative(np.array([2.0]), np.array([0.5]))[0], [6.0])
+    backward, _ = poly.backward([True], [True])
+    np.testing.assert_allclose(backward(np.array([2.0]), np.array([1.5]))[0], [18.0])

@@ -83,13 +83,14 @@ def _load_isolated_triton_utils():
 def test_triton_utils_cache_directory_fallbacks(monkeypatch, tmp_path):
     cache_dir = tmp_path / ".triton" / "cache"
     monkeypatch.setattr(triton_utils.os.path, "expanduser", lambda _: str(tmp_path))
-    monkeypatch.setattr(triton_utils.os, "makedirs", lambda *args, **kwargs: None)
 
     empty_cache = SimpleNamespace(cache=SimpleNamespace(dir=""))
     monkeypatch.setattr(triton_utils.triton_cache, "knobs", empty_cache, raising=False)
     module = _load_isolated_triton_utils()
     assert module.cache_dir == str(cache_dir)
     assert empty_cache.cache.dir == str(cache_dir)
+    assert cache_dir.is_dir()
+    cache_dir.rmdir()
 
     class BrokenCacheKnobs:
         @property
@@ -101,6 +102,7 @@ def test_triton_utils_cache_directory_fallbacks(monkeypatch, tmp_path):
     )
     module = _load_isolated_triton_utils()
     assert module.cache_dir == str(cache_dir)
+    assert cache_dir.is_dir()
 
 
 def test_triton_utils_tolerates_missing_triton_version_attribute(monkeypatch):

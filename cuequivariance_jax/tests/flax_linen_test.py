@@ -33,7 +33,7 @@ def _layer_norm_input(layout):
             [[3.0, 0.0], [4.0, 0.0], [0.0, 0.0]],
         ]
     )
-    scalar = jnp.array([[[0.0, 0.0]], [[3.0, 4.0]]])
+    scalar = jnp.array([[[0.0, 0.0]], [[6.0, 8.0]]])
 
     if layout == cue.mul_ir:
         vector = jnp.swapaxes(vector, -1, -2)
@@ -43,20 +43,18 @@ def _layer_norm_input(layout):
 
 
 def _apply_layer_norm(layer_norm_type, input_, epsilon):
-    try:
+    if hasattr(layer_norm_type, "init"):
         layer_norm = layer_norm_type(epsilon=epsilon)
-    except TypeError:
-        layer_norm = layer_norm_type()
-        layer_norm.epsilon = epsilon
-
-    if hasattr(layer_norm, "init"):
         variables = layer_norm.init(jax.random.key(0), input_)
         return layer_norm.apply(variables, input_)
+    layer_norm = layer_norm_type()
+    layer_norm.epsilon = epsilon
     return layer_norm(input_)
 
 
 def _assert_normalized(output, input_, layout, epsilon):
     denominator = jnp.sqrt(jnp.array(12.5, dtype=input_.dtype)) + epsilon
+    scalar_denominator = jnp.sqrt(jnp.array(50.0, dtype=input_.dtype)) + epsilon
     expected_vector = (
         jnp.array(
             [
@@ -66,7 +64,7 @@ def _assert_normalized(output, input_, layout, epsilon):
         )
         / denominator
     )
-    expected_scalar = jnp.array([[[0.0, 0.0]], [[3.0, 4.0]]]) / denominator
+    expected_scalar = jnp.array([[[0.0, 0.0]], [[6.0, 8.0]]]) / scalar_denominator
     if layout == cue.mul_ir:
         expected_vector = jnp.swapaxes(expected_vector, -1, -2)
         expected_scalar = jnp.swapaxes(expected_scalar, -1, -2)
@@ -121,3 +119,19 @@ def test_layer_norm_import_falls_back_when_flax_linen_is_unavailable(monkeypatch
     output = _apply_layer_norm(fallback_module.LayerNorm, input_, epsilon)
 
     _assert_normalized(output, input_, layout, epsilon)
+
+
+@pytest.mark.parametrize("layout", [cue.ir_mul, cue.mul_ir])
+def test_layer_norm_zero_input_has_finite_gradient(layout):
+    input_ = _layer_norm_input(layout)
+    zeros = jnp.zeros_like(input_.array)
+
+    def forward(array):
+        return _apply_layer_norm(
+            LayerNorm, cuex.RepArray(input_.irreps, array, layout), 0.0
+        ).array
+
+    np.testing.assert_array_equal(forward(zeros), np.zeros(input_.shape))
+    gradient = jax.grad(lambda array: jnp.sum(forward(array)))(zeros)
+    assert jnp.all(jnp.isfinite(gradient))
+    np.testing.assert_allclose(gradient, jnp.ones_like(gradient))

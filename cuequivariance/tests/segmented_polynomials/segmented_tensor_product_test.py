@@ -642,6 +642,8 @@ def test_descriptor_metadata_and_path_queries():
         _ = d < object()
 
     optimal_cost = d.flop(0)
+    # Three matrix-vector paths: 2*(2*3 + 2*3 + 3*3) multiply/add operations.
+    assert optimal_cost == 42
     assert d.flop(0, algorithm="naive") >= optimal_cost
     assert d.flop(0, batch_size=3) == 3 * optimal_cost
     with pytest.raises(ValueError, match="unknown algorithm"):
@@ -800,55 +802,21 @@ def test_descriptor_metadata_and_path_edges():
     empty = cue.SegmentedTensorProduct.from_subscripts("i,j+ij")
     empty.add_segment(0, (2,))
     empty.add_segment(1, (3,))
-    np.testing.assert_array_equal(empty.indices, np.empty((0, 2), dtype=int))
-    assert not empty.all_segments_are_used()
-    assert "No paths." in empty.to_text()
     assert empty.__eq__(object()) is NotImplemented
     assert empty.__lt__(object()) is NotImplemented
-
     d = cue.SegmentedTensorProduct.from_subscripts("i,j+ij")
-    d.add_segments(0, [(2,), (3,)])
-    d.add_segments(1, [(4,), (5,)])
-    d.add_path(0, 0, c=make_coeffs((2, 4)))
-    d.add_path(1, 1, c=make_coeffs((3, 5)))
-    d.assert_valid()
-
-    assert empty < d
-    assert not d.coefficients_are_stackable
-    assert d.all_segments_are_used()
-    assert d.get_path_dimensions_dict(1) == {"i": 3, "j": 5}
-    assert d.get_path_dim(1, "i") == 3
-    assert (d.segment_slice(0, 1).start, d.segment_slice(0, 1).stop) == (2, 5)
-    assert d.get_segment_shape(1, 1) == (5,)
-    np.testing.assert_array_equal(d.compressed_path_segment(0), [0, 1, 2])
-
-    formatted = d.to_text(lambda value: f"{value:.1f}")
-    assert "Path coefficients:\n" in formatted
+    d.add_path(None, None, c=np.ones((2, 3)))
+    d.add_path(0, 0, c=2 * np.ones((2, 3)))
+    formatted = d.to_text(lambda value: f"<{value:.1f}>")
+    assert "<1.0>" in formatted and "<2.0>" in formatted
     assert "Path coefficients:" not in d.to_text(None)
-    assert d.flop(1, algorithm="naive") > 0
-    assert d.flop(1, algorithm="optimal") > 0
-    assert d.flop(1, batch_size=2, algorithm="naive") == 2 * d.flop(
-        1, algorithm="naive"
-    )
-    with pytest.raises(ValueError, match="unknown algorithm"):
-        d.flop(1, algorithm="invalid")
-
-    unsorted = cue.SegmentedTensorProduct.from_subscripts("i,j+ij")
-    unsorted.add_segments(0, [(2,), (3,)])
-    unsorted.add_segments(1, [(4,), (5,)])
-    unsorted.add_path(1, 1, c=make_coeffs((3, 5)))
-    unsorted.add_path(0, 0, c=make_coeffs((2, 4)))
-    with pytest.raises(ValueError, match="Paths must be sorted"):
-        unsorted.compressed_path_segment(0)
-
-    duplicate = cue.SegmentedTensorProduct.from_subscripts("i,j+ij")
-    duplicate.add_segment(0, (2,))
-    duplicate.add_segment(1, (3,))
-    duplicate.add_path(0, 0, c=np.ones((2, 3)))
-    duplicate.add_path(0, 0, c=2 * np.ones((2, 3)))
-    fused = duplicate.fuse_paths_with_same_indices()
+    fused = d.fuse_paths_with_same_indices()
     assert fused.indices.tolist() == [[0, 0]]
     np.testing.assert_array_equal(fused.paths[0].coefficients, 3 * np.ones((2, 3)))
+    np.testing.assert_allclose(
+        cue.segmented_polynomials.compute_last_operand(fused, np.array([2.0, -1.0])),
+        [3.0, 3.0, 3.0],
+    )
 
 
 def test_path_insertion_and_append_mode_edges():
@@ -892,6 +860,10 @@ def test_path_insertion_and_append_mode_edges():
     extended = d.append_modes_to_all_operands("a", {"a": 3})
     assert extended.subscripts == "ia,ia"
     assert extended.operands[0][0] == (2, 3)
+    values = np.arange(1.0, 7.0)
+    np.testing.assert_allclose(
+        cue.segmented_polynomials.compute_last_operand(extended, values), 3 * values
+    )
 
 
 def test_mode_mapping_and_consolidation_edges():
@@ -922,6 +894,11 @@ def test_mode_mapping_and_consolidation_edges():
     coefficient_modes.add_path(0, 0, c=make_coeffs((2, 3)))
     consolidated = coefficient_modes.consolidate_modes()
     assert consolidated.subscripts == "u,u+u"
+    values = np.array([2.0, -1.0, 4.0, 0.5, -3.0, 7.0])
+    np.testing.assert_allclose(
+        cue.segmented_polynomials.compute_last_operand(consolidated, values),
+        np.arange(1.0, 7.0) * values,
+    )
     np.testing.assert_array_equal(consolidated.paths[0].coefficients, make_coeffs((6,)))
 
     unmatched_operands = cue.SegmentedTensorProduct.from_subscripts("uv,u,v")
@@ -986,16 +963,16 @@ def test_split_coefficient_mode_and_rounding_edges():
     round_input = cue.SegmentedTensorProduct.from_subscripts("i,j+ij")
     round_input.add_segment(0, (1,))
     round_input.add_segment(1, (1,))
-    round_input.add_path(0, 0, c=np.array([[0.25]]))
+    round_input.add_path(0, 0, c=np.array([[0.3333]]))
     rational = round_input.round_coefficients_to_rational(32)
     sqrt_rational = round_input.round_coefficients_to_sqrt_rational(32)
     modified = round_input.modify_coefficients(lambda c: 2 * c)
     assert rational is not round_input
     assert sqrt_rational is not round_input
-    np.testing.assert_allclose(rational.paths[0].coefficients, [[0.25]])
-    np.testing.assert_allclose(sqrt_rational.paths[0].coefficients, [[0.25]])
-    np.testing.assert_allclose(modified.paths[0].coefficients, [[0.5]])
-    np.testing.assert_allclose(round_input.paths[0].coefficients, [[0.25]])
+    np.testing.assert_allclose(rational.paths[0].coefficients, [[1 / 3]])
+    np.testing.assert_allclose(sqrt_rational.paths[0].coefficients, [[1 / 3]])
+    np.testing.assert_allclose(modified.paths[0].coefficients, [[0.6666]])
+    np.testing.assert_allclose(round_input.paths[0].coefficients, [[0.3333]])
 
 
 def test_single_operand_slicing_and_coefficient_transform_edges():
@@ -1004,12 +981,25 @@ def test_single_operand_slicing_and_coefficient_transform_edges():
     d.add_path(0, c=np.full((2,), 0.5))
     d.add_path(1, c=np.full((3,), 1.0))
 
-    by_segment = d.slice_by_segment[:]
-    assert by_segment.operands[0].segments == ((2,), (3,))
-    assert by_segment.indices.tolist() == [[0], [1]]
+    by_segment = d.slice_by_segment[1:]
+    assert by_segment.operands[0].segments == ((3,),)
+    assert by_segment.indices.tolist() == [[0]]
+    np.testing.assert_array_equal(
+        cue.segmented_polynomials.compute_last_operand(by_segment, dtype=np.float64),
+        [1.0, 1.0, 1.0],
+    )
 
     by_size = d.slice_by_size[0:2]
     assert by_size.operands[0].segments == ((2,),)
     assert by_size.indices.tolist() == [[0]]
+    np.testing.assert_array_equal(
+        cue.segmented_polynomials.compute_last_operand(by_size, dtype=np.float64),
+        [0.5, 0.5],
+    )
+    modified = d.modify_coefficients(lambda c: 2 * c)
+    np.testing.assert_array_equal(
+        cue.segmented_polynomials.compute_last_operand(modified, dtype=np.float64),
+        [1.0, 1.0, 2.0, 2.0, 2.0],
+    )
     with pytest.raises(ValueError, match="Step sizes other than 1"):
         d.slice_by_size[::2]

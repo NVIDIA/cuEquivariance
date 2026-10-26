@@ -121,6 +121,8 @@ def test_array_layout_simplify_merge_sort_and_filter():
 @pytest.mark.parametrize("operation", ["keep", "drop"])
 def test_filter_rejects_invalid_normalized_irreps(monkeypatch, operation):
     array = cue.NumpyIrrepsArray(cue.Irreps("SU2", "0 + 1"), np.arange(4), cue.mul_ir)
+    with pytest.raises(ValueError):
+        array.filter(**{operation: "not-an-irrep"})
     monkeypatch.setattr(numpy_irreps_array, "into_list_of_irrep", lambda *_: [object()])
 
     with pytest.raises(ValueError, match=f"Invalid `{operation}`"):

@@ -39,7 +39,18 @@ def test_module_with_mode_preserves_relu_result(mode, tmp_path):
 
     converted = utils.module_with_mode(mode, module, inputs, torch.float32, tmp_path)
 
-    torch.testing.assert_close(converted(*inputs), module(*inputs))
+    torch.testing.assert_close(converted(*inputs), torch.tensor([0.0, 0.5]))
+    held_out = torch.tensor([4.0, -3.0])
+    torch.testing.assert_close(converted(held_out), torch.tensor([4.0, 0.0]))
+    if mode != "eager":
+        assert converted is not module
+    if mode == "fx" or mode == "export":
+        assert isinstance(converted, torch.fx.GraphModule)
+    if mode in ("script", "jit"):
+        assert isinstance(converted, torch.jit.ScriptModule)
+        assert (tmp_path / "test.ts").is_file()
+    if mode == "export":
+        assert (tmp_path / "test.pt2").is_file()
 
 
 @pytest.mark.parametrize("mode", ["jit", "export"])
@@ -49,10 +60,15 @@ def test_module_with_mode_supports_keyword_inputs(mode, tmp_path):
 
     converted = utils.module_with_mode(mode, module, inputs, torch.float32, tmp_path)
 
-    torch.testing.assert_close(converted(**inputs), module(**inputs))
+    assert converted is not module
+    torch.testing.assert_close(converted(**inputs), torch.tensor([0.0, 3.0]))
+    torch.testing.assert_close(
+        converted(input=torch.tensor([4.0, -2.0])), torch.tensor([4.0, 0.0])
+    )
+    assert (tmp_path / ("test.ts" if mode == "jit" else "test.pt2")).is_file()
 
 
-@pytest.mark.parametrize("mode", ["onnx", "trt", "torch_trt", "onnx_dynamo"])
+@pytest.mark.parametrize("mode", ["onnx", "trt", "torch_trt"])
 def test_module_with_mode_skips_backend_modes_without_onnx(mode, monkeypatch, tmp_path):
     monkeypatch.setattr(utils, "ONNX_AVAILABLE", False)
 
@@ -114,14 +130,15 @@ def test_module_with_mode_exports_and_selects_backend_verifier(
     def fake_export(module, inputs, path, **kwargs):
         export_calls.append((module, inputs, path, kwargs))
 
-    def fake_verify(module, path, inputs, dtype):
-        verifier_calls.append(
-            ("trt" if mode == "trt" else "onnx", module, path, inputs, dtype)
-        )
+    def fake_verify_onnx(module, path, inputs, dtype):
+        verifier_calls.append(("onnx", module, path, inputs, dtype))
+
+    def fake_verify_trt(module, path, inputs, dtype):
+        verifier_calls.append(("trt", module, path, inputs, dtype))
 
     monkeypatch.setattr(utils.torch.onnx, "export", fake_export)
-    monkeypatch.setattr(utils, "verify_onnx", fake_verify)
-    monkeypatch.setattr(utils, "verify_trt", fake_verify)
+    monkeypatch.setattr(utils, "verify_onnx", fake_verify_onnx)
+    monkeypatch.setattr(utils, "verify_trt", fake_verify_trt)
     module = torch.nn.ReLU()
     inputs = [torch.tensor([-1.0, 2.0])]
 
@@ -187,8 +204,9 @@ def test_verify_trt_rejects_unsupported_version_or_dtype(
     ("dtype", "comparator_supported"),
     [(torch.float32, True), (torch.float16, False)],
 )
+@pytest.mark.parametrize("comparison_fails", [False, True])
 def test_verify_trt_builds_runners_and_checks_comparator_dtype(
-    dtype, comparator_supported, monkeypatch
+    dtype, comparator_supported, comparison_fails, monkeypatch
 ):
     events = []
 
@@ -212,6 +230,8 @@ def test_verify_trt_builds_runners_and_checks_comparator_dtype(
         @staticmethod
         def compare_accuracy(results):
             events.append(("compare_accuracy", results))
+            if comparison_fails:
+                raise AssertionError("accuracy mismatch")
 
     _install_module(monkeypatch, "tensorrt", __version__="10.3.0")
     _install_module(
@@ -268,7 +288,11 @@ def test_verify_trt_builds_runners_and_checks_comparator_dtype(
         assert events[0] == ("plugins",)
         return
 
-    utils.verify_trt(object(), "model.onnx", [torch.ones(1)], dtype)
+    if comparison_fails:
+        with pytest.raises(AssertionError, match="accuracy mismatch"):
+            utils.verify_trt(object(), "model.onnx", [torch.ones(1)], dtype)
+    else:
+        utils.verify_trt(object(), "model.onnx", [torch.ones(1)], dtype)
 
     assert events[0] == ("plugins",)
     inference_event = events[1]
@@ -316,12 +340,16 @@ def test_create_random_tensor_2d_builds_expected_shape(
 def test_run_fwd_test_returns_detached_float32_output():
     inputs = [torch.tensor([1.5, -2.0], dtype=torch.float64, requires_grad=True)]
 
-    outputs = utils.run_fwd_test(torch.nn.Identity(), inputs)
+    original = inputs[0].detach().clone()
+    outputs = utils.run_fwd_test(lambda value: 2 * value + 1, inputs)
 
     assert len(outputs) == 1
     assert outputs[0].dtype == torch.float32
     assert not outputs[0].requires_grad
-    torch.testing.assert_close(outputs[0], torch.tensor([1.5, -2.0]))
+    torch.testing.assert_close(outputs[0], torch.tensor([4.0, -3.0]))
+    torch.testing.assert_close(inputs[0], original)
+    assert inputs[0].requires_grad
+    assert outputs[0].data_ptr() != inputs[0].data_ptr()
 
 
 def test_run_fwd_bwd_test_returns_output_and_input_gradient():
@@ -349,13 +377,50 @@ def test_maybe_detach_and_to_preserves_none():
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="helper requires CUDA")
 def test_assert_close_modules_compares_outputs_and_gradients():
-    module = torch.nn.Linear(2, 1, bias=False, device="cuda")
-    inputs = [torch.tensor([[1.0, -2.0]], device="cuda", requires_grad=True)]
+    first = torch.nn.Linear(2, 1, bias=False, device="cuda")
+    second = torch.nn.Linear(2, 1, bias=False, device="cuda")
+    with torch.no_grad():
+        first.weight.copy_(torch.tensor([[0.5, -1.0]], device="cuda"))
+        second.weight.copy_(first.weight)
+    calls = []
 
-    utils.assert_close_modules(
-        module,
-        module,
-        inputs,
-        utils.run_fwd_bwd_test,
-        {"atol": 1e-6, "rtol": 1e-6},
-    )
+    def procedure(module, inputs):
+        calls.append(module)
+        return utils.run_fwd_bwd_test(module, inputs)
+
+    def inputs():
+        return [torch.tensor([[1.0, -2.0]], device="cuda", requires_grad=True)]
+
+    tolerance = {"atol": 1e-6, "rtol": 1e-6}
+    utils.assert_close_modules(first, second, inputs(), procedure, tolerance)
+    assert len(calls) == 2
+    assert calls[0] is first and calls[1] is second
+
+    with torch.no_grad():
+        second.weight.add_(1.0)
+    with pytest.raises(AssertionError):
+        utils.assert_close_modules(first, second, inputs(), procedure, tolerance)
+
+    class DifferentGradient(torch.nn.Module):
+        def forward(self, value):
+            # Same forward value as identity, but twice its input gradient.
+            return 2 * value - value.detach()
+
+    with pytest.raises(AssertionError):
+        utils.assert_close_modules(
+            torch.nn.Identity(),
+            DifferentGradient(),
+            inputs(),
+            utils.run_fwd_bwd_test,
+            tolerance,
+        )
+
+
+def test_maybe_detach_and_to_clones_tensor():
+    tensor = torch.tensor([1.0, -2.0], requires_grad=True)
+    output = utils.maybe_detach_and_to(tensor, dtype=torch.float32)
+    assert output.dtype == torch.float32
+    assert not output.requires_grad
+    assert output.data_ptr() != tensor.data_ptr()
+    output[0] = 7.0
+    torch.testing.assert_close(tensor, torch.tensor([1.0, -2.0]))

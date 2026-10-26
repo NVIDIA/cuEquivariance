@@ -60,6 +60,8 @@ def test_reduced_tensor_product_frontends_and_validation():
     assert formula_basis.layout == cue.ir_mul
     assert formula_basis.irreps == cue.Irreps("O3", "0e + 2e")
     assert formula_basis.shape == (3, 3, 6)
+    flat = formula_basis.array.reshape(9, 6)
+    np.testing.assert_allclose(flat.T @ flat, np.eye(6), atol=1e-8)
     np.testing.assert_allclose(
         formula_basis.array, formula_basis.array.swapaxes(0, 1), atol=1e-8
     )
@@ -74,6 +76,8 @@ def test_reduced_tensor_product_frontends_and_validation():
     )
     assert antisymmetric.irreps == cue.Irreps("O3", "1e")
     assert antisymmetric.shape == (3, 3, 3)
+    flat = antisymmetric.array.reshape(9, 3)
+    np.testing.assert_allclose(flat.T @ flat, np.eye(3), atol=1e-8)
     np.testing.assert_allclose(
         antisymmetric.array + antisymmetric.array.swapaxes(0, 1), 0, atol=1e-8
     )

@@ -1100,7 +1100,26 @@ def test_sigmoid_gated_dual_gemm_autotuning_helpers():
         include_grad=False,
     )
     assert input_key == config_key
-    assert "torch.float16" in config_key
+    # Do not freeze the internal bf16/fp16 cache-alias policy here.
+    # Independent shape and precision changes must still distinguish tuning keys.
+    assert config_key != sgdg_module._config_to_key(
+        M=16,
+        N=64,
+        K=32,
+        dtype_input=jnp.bfloat16,
+        two_inputs=False,
+        precision=Precision.IEEE,
+        include_grad=False,
+    )
+    assert config_key != sgdg_module._config_to_key(
+        M=8,
+        N=64,
+        K=32,
+        dtype_input=jnp.bfloat16,
+        two_inputs=False,
+        precision=Precision.TF32,
+        include_grad=False,
+    )
 
     candidates = [
         {"name": "bad_n", "TILE_N": 48, "TILE_K": 16},

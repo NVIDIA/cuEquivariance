@@ -59,6 +59,10 @@ def test_sequence_constructor_and_repeated_input_helpers():
     assert etp.stp_operand(1) == ds[0].operands[1]
     assert etp.stp_operand(2) == ds[0].operands[-1]
     assert etp.all_same_segment_shape()
+    # P(a,b)=a*(b*b+b+1), so P(2,3)=26.
+    np.testing.assert_allclose(
+        _evaluate_etp(etp, np.array([2.0]), np.array([3.0])), [26.0]
+    )
     assert etp.memory_cost((2, 3, 4), (4, 8, 16)) == 96
     assert etp.flop_cost(3) == 3 * etp.flop_cost(1)
 
@@ -78,9 +82,16 @@ def test_sequence_constructor_and_repeated_input_helpers():
         backward, order = etp.backward(0)
         assert order == (2, 1, 0)
         assert backward.operands == tuple(operands[i] for i in order)
+        np.testing.assert_allclose(
+            _evaluate_etp(backward, np.array([1.5]), np.array([3.0])), [19.5]
+        )
         backward, order = etp.backward(1)
         assert order == (2, 0, 1, 1)
         assert backward.operands == tuple(operands[i] for i in order)
+        np.testing.assert_allclose(
+            _evaluate_etp(backward, np.array([1.5]), np.array([2.0]), np.array([3.0])),
+            [21.0],
+        )
 
 
 def test_single_descriptor_permutation_and_stacking():
@@ -103,9 +114,12 @@ def test_single_descriptor_permutation_and_stacking():
         assert moved.operands == (distinct_reps[2], distinct_reps[1], distinct_reps[0])
 
         stacked = cue.EquivariantTensorProduct.stack(
-            [etp, etp], stacked=[True, False, True]
+            [etp, 2 * etp], stacked=[True, False, True]
         )
         assert [operand.dim for operand in stacked.operands] == [2, 1, 2]
+        np.testing.assert_allclose(
+            _evaluate_etp(stacked, np.array([2.0, 5.0]), np.array([3.0])), [6.0, 30.0]
+        )
         assert stacked.d.num_paths == 2
         assert {(path.indices[0], path.indices[-1]) for path in stacked.d.paths} == {
             (0, 0),
@@ -124,6 +138,14 @@ def test_change_layout_transposes_non_scalar_modes():
         mul_ir = etp.change_layout(cue.mul_ir)
         assert mul_ir.d.subscripts == "ai,ai"
         assert all(operand.layout == cue.mul_ir for operand in mul_ir.operands)
+        assert [operand.segments for operand in mul_ir.d.operands] == [
+            ((2, 3),),
+            ((2, 3),),
+        ]
+        np.testing.assert_allclose(
+            _evaluate_etp(mul_ir, np.array([1.0, 3.0, 5.0, 2.0, 4.0, 6.0])),
+            [1.0, 3.0, 5.0, 2.0, 4.0, 6.0],
+        )
         ir_mul = mul_ir.change_layout(cue.ir_mul)
         assert ir_mul.d.subscripts == "ia,ia"
         assert all(operand.layout == cue.ir_mul for operand in ir_mul.operands)
@@ -204,3 +226,26 @@ def test_sequence_constructor_requires_shared_segment_definitions():
             [repeated_common, same_inputs_different_outputs],
             [two_scalars, two_scalars, two_scalars],
         )
+
+
+def _evaluate_etp(etp, *inputs):
+    return sum(
+        cue.segmented_polynomials.compute_last_operand(
+            stp, *(inputs[bid] for bid in etp.map_operands(stp.num_operands)[:-1])
+        )
+        for stp in etp.ds
+    )
+
+
+def test_tensor_product_permutation_preserves_anisotropic_values():
+    coefficients = np.arange(1.0, 25.0).reshape(2, 3, 4)
+    d = _one_path_stp("i,j,k+ijk", (2,), (3,), (4,), coefficients=coefficients)
+    etp = _make_etp(d, [_scalar_rep(2), _scalar_rep(3), _scalar_rep(4)])
+    left, right = np.array([2.0, -0.5]), np.array([1.0, -2.0, 3.0])
+    expected = np.einsum("i,j,ijk->k", left, right, coefficients)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        permuted = etp.permute_operands((1, 0, 2))
+    assert [rep.dim for rep in permuted.operands] == [3, 2, 4]
+    np.testing.assert_allclose(_evaluate_etp(etp, left, right), expected)
+    np.testing.assert_allclose(_evaluate_etp(permuted, right, left), expected)

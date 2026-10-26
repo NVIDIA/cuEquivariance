@@ -59,6 +59,7 @@ def test_mlp_activation_dispatch(
 
 
 def test_optional_flax_import_fallback(monkeypatch):
+    """Import-only fallback contract; an executable MLP still requires Flax."""
     real_import = builtins.__import__
 
     def import_without_flax(name, globals=None, locals=None, fromlist=(), level=0):

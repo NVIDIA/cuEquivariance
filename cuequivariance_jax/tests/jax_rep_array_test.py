@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import jax.numpy as jnp
+import numpy as np
 import pytest
 
 import cuequivariance as cue
@@ -64,6 +65,10 @@ def test_rep_array_constructor_indexing_and_addition_edges():
         non_irreps.rep(1)
 
     scalars = cuex.RepArray("2x0", jnp.array([2.0, 3.0]))
+    other = cuex.RepArray("2x0", jnp.array([5.0, -1.0]))
+    summed = scalars + other
+    assert summed.reps == scalars.reps and summed.layout == scalars.layout
+    np.testing.assert_allclose(summed.array, [7.0, 2.0])
     assert scalars + 0 is scalars
     assert 0 + scalars is scalars
     assert jnp.array_equal((-scalars).array, jnp.array([-2.0, -3.0]))
@@ -100,6 +105,8 @@ def test_irreps_array_layout_and_empty_operation_edges():
         transformed = vector.transform(jnp.zeros((3,)))
         assert transformed.layout == layout
         assert jnp.allclose(transformed.array, vector.array)
+        rotated = vector.transform(jnp.array([np.pi, 0.0, 0.0]))
+        np.testing.assert_allclose(rotated.array, [1.0, -2.0, -3.0], atol=1e-6)
 
     tensor = cuex.RepArray({0: cue.SO3(1)}, jnp.eye(3))
     assert jnp.allclose(tensor.transform(jnp.zeros((3,))).array, tensor.array)
@@ -149,3 +156,15 @@ def test_from_segments_and_slice_by_mul_validation_edges():
             _ = array.slice_by_mul[1]
         with pytest.raises(NotImplementedError, match="does not support strides"):
             _ = array.slice_by_mul[::2]
+
+
+@cue.assume("SO3", cue.ir_mul)
+def test_rep_array_non_scalar_layout_and_simplification_values():
+    array = cuex.RepArray("2x1", jnp.arange(1.0, 7.0))
+    np.testing.assert_array_equal(
+        array.change_layout(cue.mul_ir).array, [1.0, 3.0, 5.0, 2.0, 4.0, 6.0]
+    )
+    split = cuex.RepArray("1 + 1", jnp.arange(1.0, 7.0))
+    merged = split.simplify()
+    assert merged.irreps == cue.Irreps("2x1")
+    np.testing.assert_array_equal(merged.array, [1.0, 4.0, 2.0, 5.0, 3.0, 6.0])

@@ -74,3 +74,20 @@ def test_sparsify_matrix_rejects_unknown_row_result(monkeypatch):
 
     with pytest.raises(ValueError, match="Unknown result type"):
         linalg.sparsify_matrix(np.eye(2))
+
+
+@pytest.mark.parametrize(
+    "matrix,expected_nonzero",
+    [
+        ([[1.0, 0.0, 0.0], [0.0, 2.0, 0.0]], 2),
+        ([[1.0, 1.0, 0.0], [1.0, 0.0, 1.0]], 4),
+        ([[1.0, 1.0, 0.0], [1.0, 1.0, 1.0]], 3),
+    ],
+)
+def test_sparsify_matrix_preserves_row_span(matrix, expected_nonzero):
+    matrix = np.asarray(matrix)
+    original = matrix.copy()
+    sparse, transform, _ = linalg.sparsify_matrix(matrix)
+    np.testing.assert_allclose(transform @ original, sparse)
+    assert np.linalg.matrix_rank(transform) == 2
+    assert np.count_nonzero(sparse) == expected_nonzero
