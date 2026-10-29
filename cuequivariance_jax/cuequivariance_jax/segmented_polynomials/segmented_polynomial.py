@@ -730,8 +730,12 @@ def segmented_polynomial_batching(
 
 def segmented_polynomial_dce(
     used_outputs: list[bool],
-    eqn: jax.extend.core.JaxprEqn,
+    *args,
 ) -> tuple[list[bool], jax.extend.core.JaxprEqn | None]:
+    # jax >= 0.12 calls DCE rules as (used_outputs, live_ins, eqn), older jax as
+    # (used_outputs, eqn). live_ins only concerns Ref inputs, which this primitive
+    # never takes, so it is ignored.
+    eqn: jax.extend.core.JaxprEqn = args[-1]
     assert len(used_outputs) == len(eqn.outvars)
 
     polynomial: cue.SegmentedPolynomial = eqn.params["polynomial"]
