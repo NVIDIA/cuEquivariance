@@ -1,5 +1,9 @@
 ## Latest Changes
 
+### Bug Fixes
+
+- [JAX] Fixed a failure with JAX 0.12: every call through `cuex.segmented_polynomial` raised `TypeError: segmented_polynomial_dce() takes 2 positional arguments but 3 were given`, in eager mode and under `jax.jit`, `jax.grad` and `jax.vmap`. This also broke the functions and layers built on it, such as `cuex.equivariant_polynomial` and `cuex.spherical_harmonics`. ([#316](https://github.com/NVIDIA/cuEquivariance/pull/316))
+
 ## 0.13.0 (2026-10-15)
 
 ### Added
