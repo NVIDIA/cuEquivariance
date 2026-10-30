@@ -41,6 +41,7 @@ from cuequivariance_jax.segmented_polynomials.utils import (
     sanitize_multi_index,
 )
 from jax.interpreters import ad, batching, mlir, partial_eval, xla
+from packaging import version
 
 import cuequivariance as cue
 import cuequivariance_jax as cuex  # noqa: F401
@@ -730,12 +731,8 @@ def segmented_polynomial_batching(
 
 def segmented_polynomial_dce(
     used_outputs: list[bool],
-    *args,
+    eqn: jax.extend.core.JaxprEqn,
 ) -> tuple[list[bool], jax.extend.core.JaxprEqn | None]:
-    # jax >= 0.12 calls DCE rules as (used_outputs, live_ins, eqn), older jax as
-    # (used_outputs, eqn). live_ins only concerns Ref inputs, which this primitive
-    # never takes, so it is ignored.
-    eqn: jax.extend.core.JaxprEqn = args[-1]
     assert len(used_outputs) == len(eqn.outvars)
 
     polynomial: cue.SegmentedPolynomial = eqn.params["polynomial"]
@@ -781,6 +778,16 @@ def segmented_polynomial_dce(
     return used_inputs + used_indices, new_eqn
 
 
+def segmented_polynomial_dce_jax_0_12(
+    used_outputs: list[bool],
+    live_ins: list[bool],
+    eqn: jax.extend.core.JaxprEqn,
+) -> tuple[list[bool], jax.extend.core.JaxprEqn | None]:
+    # jax >= 0.12 calls DCE rules as (used_outputs, live_ins, eqn). live_ins only
+    # concerns Ref inputs, which this primitive never takes, so it is ignored.
+    return segmented_polynomial_dce(used_outputs, eqn)
+
+
 segmented_polynomial_p.def_abstract_eval(segmented_polynomial_abstract_eval)
 segmented_polynomial_p.def_impl(partial(xla.apply_primitive, segmented_polynomial_p))
 mlir.register_lowering(
@@ -802,4 +809,7 @@ mlir.register_lowering(
 ad.primitive_jvps[segmented_polynomial_p] = segmented_polynomial_jvp
 ad.primitive_transposes[segmented_polynomial_p] = segmented_polynomial_transpose
 batching.primitive_batchers[segmented_polynomial_p] = segmented_polynomial_batching
-partial_eval.dce_rules[segmented_polynomial_p] = segmented_polynomial_dce
+if version.parse(jax.__version__) >= version.parse("0.12.0"):
+    partial_eval.dce_rules[segmented_polynomial_p] = segmented_polynomial_dce_jax_0_12
+else:
+    partial_eval.dce_rules[segmented_polynomial_p] = segmented_polynomial_dce
