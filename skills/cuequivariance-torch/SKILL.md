@@ -57,20 +57,20 @@ Choose the next step from the probe:
 
 Use one interpreter for pip and execution. Honor project requirements and compatible core/frontend revisions. Retaining installed PyTorch takes priority over setup examples. Optional CUDA/optimization warnings are not failures.
 
-When isolation is needed, create a **new unique** environment. This Linux recipe uses host pip 22.3+ without `ensurepip`:
+For isolation, create a **new unique** environment. From this skill's directory, use host pip 22.3+ and the bundled [hashed CPU wheels](scripts/torch-cpu-wheels.txt), then [requirements](scripts/requirements.txt):
 
 ```bash
 set -e
 cueq_python=python3  # Set to the selected project interpreter's path.
 cueq_env=$(mktemp -d "${TMPDIR:-/tmp}/cueq-cpu.XXXXXX")
 "$cueq_python" -m venv --without-pip "$cueq_env"
-python3 -m pip --python "$cueq_env" install --cert "${PIP_CERT:-/etc/ssl/certs/ca-certificates.crt}" -q 'torch==2.14.1+cpu' --extra-index-url https://download.pytorch.org/whl/cpu
-python3 -m pip --python "$cueq_env" install --cert "${PIP_CERT:-/etc/ssl/certs/ca-certificates.crt}" -q cuequivariance-torch
+python3 -m pip --python "$cueq_env" install --cert "${PIP_CERT:-/etc/ssl/certs/ca-certificates.crt}" -q --no-deps -r scripts/torch-cpu-wheels.txt
+python3 -m pip --python "$cueq_env" install --cert "${PIP_CERT:-/etc/ssl/certs/ca-certificates.crt}" -q -r scripts/requirements.txt
 cueq_python="$cueq_env/bin/python"
 "$cueq_python" -c 'import sys, torch, cuequivariance_torch; assert torch.version.cuda is None; print("CPU setup complete:", sys.executable, torch.__version__, cuequivariance_torch.__version__)'
 ```
 
-For supplied requirements, replace both install commands with one using `-r` and their path. Retain `cueq_python` for execution; restore its path in new tool calls if needed. Without host pip, use an installed `uv`.
+Retain `cueq_python` for execution. For other platforms, use project setup. Without host pip, use installed `uv` with these requirements.
 
 Use approved `PIP_CERT` for a private CA; retain TLS verification. If downloading fails, try a configured CPU mirror/cache or report the blocker. Do not replace CPU wheels with CUDA builds. Finish installs before retrying. See [pip's certificates](https://pip.pypa.io/en/stable/topics/https-certificates/).
 
