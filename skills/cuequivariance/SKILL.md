@@ -1,14 +1,15 @@
 ---
 name: cuequivariance
-description: Define custom groups (Irrep subclasses), build segmented tensor products with CG coefficients, create equivariant polynomials and IrDictPolynomials, and use built-in descriptors (linear, tensor products, spherical harmonics). Use when working with cuequivariance group theory, irreps, or segmented polynomials.
+description: Use when defining cuEquivariance groups and irreps, building equivariant tensor products, or validating segmented polynomials with NumPy.
 license: Apache-2.0
 metadata:
   author: Mario Geiger <mgeiger@nvidia.com>
+  tags: [equivariance, group-theory, tensor-products]
 ---
 
 # cuequivariance: Groups, Irreps, and Segmented Polynomials
 
-## Overview
+## Purpose
 
 `cuequivariance` (imported as `cue`) provides two core abstractions:
 
@@ -16,6 +17,14 @@ metadata:
 2. **Segmented polynomials**: `SegmentedTensorProduct` describes tensor contractions over segments of varying shape, linked by `Path` objects carrying Clebsch-Gordan coefficients. `SegmentedPolynomial` wraps multiple STPs into a polynomial with named inputs/outputs. Two higher-level wrappers attach group representations:
    - `EquivariantPolynomial` — dense operands with `IrrepsAndLayout` metadata
    - `IrDictPolynomial` — operands already split by irrep, with per-group `Irreps` metadata for the `dict[Irrep, Array]` workflow
+
+## Inputs
+
+Required inputs: requested operation, group, input irreps and multiplicities, output irrep types, layout, batch shapes, dtype, and weight ownership. Take explicit user requirements first, then existing project definitions; state defaults for unspecified values. Derive operand sizes and output block order from the descriptor. For custom groups, also establish the selection rules, generators, and Clebsch-Gordan coefficients. Optional inputs include test rotations and a framework backend.
+
+## Prerequisites
+
+Use Python 3.10+ with `cuequivariance` and its NumPy, SciPy, opt_einsum, SymPy, and NetworkX dependencies. Reuse the project's interpreter and lockfile. If setup is needed outside an existing project, the bundled [CPU requirements](scripts/requirements.txt) pin the source revision used by these examples; install them with that interpreter's pip. Core NumPy execution requires no GPU stack or API credentials. Check the installed version and API availability before using `IrDictPolynomial` with an older package.
 
 ## Instructions
 
@@ -26,6 +35,21 @@ metadata:
 5. Convert `mul_ir` and `ir_mul` by transposing the multiplicity and representation axes **within each irrep block**. A flat reshape alone changes the represented features.
 
 Source paths below are relative to the `cuequivariance/` project inside a source checkout. When using this skill separately, inspect the installed package with `cue.__file__` or consult https://github.com/NVIDIA/cuEquivariance. The repository is not required for the examples.
+
+## Limitations
+
+- Core descriptors and NumPy evaluation do not provide JAX or PyTorch execution kernels; use the corresponding frontend for framework execution and gradients.
+- Custom-group mathematics must be checked independently. A valid complex representation does not establish support in a particular CUDA kernel.
+- `IrDictPolynomial` describes split operands; it does not convert high-level dictionaries into the ordered arrays accepted by its underlying polynomial. Preserve the descriptor's metadata and layout when assembling those arrays.
+
+## Troubleshooting
+
+| Symptom | Check and correction |
+| --- | --- |
+| Import fails or an API is absent | Check the interpreter, installed version, and module location. Use the project's compatible dependencies or the bundled requirements when setting up a standalone environment. |
+| Operand size or output shape is wrong | Compare each array with the descriptor's input/output dimensions; include the weights operand first when present. |
+| Values disagree after a layout conversion | Transpose multiplicity and representation axes within each irrep block before flattening; keep output data in the descriptor's block order. |
+| Custom-group equivariance fails | Check selection rules, generator relations, and CG covariance on a small NumPy example before changing execution backends. |
 
 ## Examples
 
