@@ -31,6 +31,12 @@ jobs:
       run: |
         pytest --doctest-modules -x -m "not slow" cuequivariance
 
+    - name: Check core skill evaluations and packaging
+      run: |
+        pytest -q .github/tests/test_core_skill_evals.py
+        uv pip install hatchling
+        python .github/scripts/check_skill_packaging.py --package cuequivariance
+
     - name: Downgrade numpy
       if: matrix.python-version == '3.10'
       run: |
@@ -61,6 +67,14 @@ jobs:
     - name: Test with pytest
       run: |
         XLA_PYTHON_CLIENT_PREALLOCATE=false pytest --doctest-modules -x -m "not slow" cuequivariance_jax
+
+    - name: Check JAX skill evaluations and packaging
+      env:
+        JAX_PLATFORMS: cpu
+      run: |
+        pytest -q .github/tests/test_jax_skill_evals.py .github/tests/test_jax_skill_examples.py .github/tests/test_jax_skill_challenges.py .github/tests/test_skill_challenge_packaging.py .github/tests/test_skill_execution.py .github/tests/test_skill_eval_setup.py
+        uv pip install hatchling
+        python .github/scripts/check_skill_packaging.py --package cuequivariance_jax
 
 
   cuequivariance-jax-no-flax:
@@ -105,3 +119,9 @@ jobs:
     - name: Test with pytest
       run: |
         pytest --doctest-modules -x -m "not slow" cuequivariance_torch
+
+    - name: Check PyTorch skill evaluations and packaging
+      run: |
+        pytest -q .github/tests/test_torch_skill_evals.py .github/tests/test_torch_skill_examples.py .github/tests/test_torch_skill_challenges.py
+        uv pip install hatchling
+        python .github/scripts/check_skill_packaging.py --package cuequivariance_torch

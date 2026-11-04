@@ -21,6 +21,20 @@ pip install cuequivariance-ops-jax-cu12   # or -cu13
 pip install cuequivariance-ops-torch-cu12 # or -cu13
 ```
 
+## Agent skills
+
+The repository provides three independent agent skills:
+
+- [cuequivariance](skills/cuequivariance/SKILL.md): group theory, descriptors, and NumPy execution.
+- [cuequivariance-jax](skills/cuequivariance-jax/SKILL.md): JAX execution and Flax NNX layers.
+- [cuequivariance-torch](skills/cuequivariance-torch/SKILL.md): PyTorch operations and layers.
+
+Installed Python packages also expose these instructions through
+`python -m cuequivariance skill`, `python -m cuequivariance_jax skill`, and
+`python -m cuequivariance_torch skill`.
+See [skill maintenance and validation](skills/README.md) for source layout,
+evaluation coverage, packaging checks, and NVSkills CI onboarding.
+
 ## License
 
 All files hosted in this repository are subject to the Apache 2.0 license.
@@ -28,4 +42,3 @@ All files hosted in this repository are subject to the Apache 2.0 license.
 ## Disclaimer
 
 cuEquivariance is in a Beta state. Beta products may not be fully functional, may contain errors or design flaws, and may be changed at any time without notice. We appreciate your feedback to improve and iterate on our Beta products.
-

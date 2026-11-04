@@ -33,6 +33,8 @@ jobs:
 
     - name: Replace symlinks with actual files
       run: |
+        # Includes package SKILL.md links into the canonical skills/ tree.
+        # Keep this before building: sdists must carry regular resource files.
         find . -type l -exec sh -c 'cp --remove-destination "$(readlink -f "$1")" "$1"' _ {} \;
 
     - name: Build & Publish cuequivariance
