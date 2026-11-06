@@ -1,0 +1,61 @@
+name: Build Documentation Release Artifact
+
+# Builds the Sphinx site at a release tag and attaches it to the GitHub release
+# as cuequivariance-docs-<version>.zip. The zip is the artifact handed to the
+# CUDA documentation portal (docs.nvidia.com/cuda/cuequivariance) after each
+# release. It is also kept as a workflow artifact for 90 days.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build (for example v0.13.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build_release_docs:
+    runs-on: ubuntu-latest
+    env:
+      DOCS_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DOCS_TAG }}
+
+      - uses: ./.github/actions/setup-python-uv
+        with:
+          python-version: "3.13"
+
+      - uses: ./.github/actions/setup-docs
+
+      - name: Build sphinx
+        run: |
+          sphinx-build -b html docs docs/public
+
+      - name: Zip the site
+        id: zip
+        run: |
+          version="${DOCS_TAG#v}"
+          name="cuequivariance-docs-${version}.zip"
+          (cd docs/public && zip -q -r "../../${name}" .)
+          echo "name=${name}" >> "$GITHUB_OUTPUT"
+          ls -la "${name}"
+
+      - name: Keep as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.zip.outputs.name }}
+          path: ${{ steps.zip.outputs.name }}
+          retention-days: 90
+
+      - name: Attach to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${DOCS_TAG}" "${{ steps.zip.outputs.name }}" --clobber
