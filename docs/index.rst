@@ -20,8 +20,9 @@ cuEquivariance is an NVIDIA Python library of GPU-accelerated building blocks fo
 geometric deep learning. It covers two areas: **equivariant tensor products** for
 models that respect the symmetries of three-dimensional space, and **triangle
 operations** for the pair-representation blocks of biomolecular structure
-prediction. Both have PyTorch and JAX frontends and share one set of prebuilt CUDA
-kernel wheels.
+prediction. The tensor products, the triangle multiplicative update and triangle
+attention have PyTorch and JAX frontends; attention with pair bias is PyTorch only.
+All of them share one set of prebuilt CUDA kernel wheels.
 
 .. grid:: 1 1 2 2
    :gutter: 3
@@ -51,10 +52,10 @@ kernel wheels.
 
       * Triangle multiplicative update
       * Triangle attention
-      * Attention with pair bias
+      * Attention with pair bias (PyTorch only)
 
       +++
-      Drop-in replacements for the PyTorch and JAX reference blocks.
+      Drop-in replacements for the reference blocks.
 
 The frontends are open source under the Apache 2.0 license on `GitHub
 <https://github.com/NVIDIA/cuEquivariance>`_. The CUDA kernels ship as prebuilt
@@ -65,16 +66,17 @@ What's new in 0.13
 
 Released 2026-10-15. Highlights:
 
-* **Optimized triangle multiplicative update kernels** for PyTorch on H100 SXM, H200,
-  GH200, B200 and RTX PRO 6000 Blackwell, for inference and training, at the pair
-  and hidden widths used by production structure prediction models (128/128,
-  256/256, 384/256 and 512/512). CUDA 13 wheels only.
+* **Optimized triangle multiplicative update kernels** for PyTorch: inference on
+  H100 SXM, H200, GH200, B200 and RTX PRO 6000 Blackwell, and training on all of
+  those except RTX PRO 6000, at the pair and hidden widths used by production
+  structure prediction models (128/128, 256/256, 384/256 and 512/512). CUDA 13
+  wheels only.
 * ``cuex.triangle_attention`` accepts ``mask=None`` for unmasked attention, as the
   PyTorch frontend does.
 * From 0.12: attention pair bias with RMSNorm, expanded H100 and H200 training
   coverage, and the pair-update to attention-bias inference handoff.
 * From 0.11: a dictionary-based JAX interface for organizing features by
-  representation type, and MACE examples for Flax NNX and Equinox.
+  representation type, and a MACE example for Equinox.
 
 The full list of changes, the exact supported shapes and the known issues are in
 the :doc:`changelog` and the `GitHub release notes
@@ -110,8 +112,7 @@ wheel that matches your CUDA version. The ``-cu13`` wheels contain kernels that 
 
 **Requirements.** Linux x86_64 or aarch64 for the ``cuequivariance-ops-*`` wheels.
 Python 3.10 to 3.14. PyTorch 2.11, 2.12 or 2.13 for the ``cuequivariance-ops-torch``
-wheels (the pure-Python parts of ``cuequivariance-torch`` work from PyTorch 2.4).
-JAX 0.8.1 or newer for ``cuequivariance-jax``.
+wheels. JAX 0.9.1 or newer for ``cuequivariance-jax``.
 
 Supported operations and hardware
 ---------------------------------
@@ -132,7 +133,7 @@ per shape and data type are in the :doc:`changelog`.
      - PyTorch, JAX
      - All supported GPUs: descriptor-driven CUDA kernels, including the fused
        tensor product and the uniform 1d kernels.
-     - Kernel methods ``uniform_1d``, ``fused_tp`` and ``indexed_linear``, with
+     - Kernel methods ``uniform_1d``, ``fused_tp`` (PyTorch only) and ``indexed_linear``, with
        the math precision selectable through ``math_dtype`` (FP32 or FP64).
        NumPy execution in the core package.
    * - Tensor product layers
@@ -145,19 +146,21 @@ per shape and data type are in the :doc:`changelog`.
      - PyTorch: inference on H100 SXM, H200, GH200, B200, RTX PRO 6000 Blackwell;
        training on H100 SXM, H200, GH200, B200. Pair/hidden widths 128/128,
        256/256, 384/256, 512/512.
-     - BF16. CUDA 13 wheels. Other GPUs and JAX use the generic implementation.
+     - BF16. CUDA 13 wheels. Other GPUs, the CUDA 12 wheels and JAX use the 0.12
+       implementation.
    * - Triangle attention
      - PyTorch, JAX
      - Native kernels on B200 / B300 (SM100f) and RTX PRO 6000 Blackwell (sm120f);
        generic kernel on H100, H200, A100, L40.
-     - BF16, FP16; FP32/TF32 for small head dimensions. ``kv_lengths`` selects the
-       right-padded fast path on Blackwell. Forward and backward.
+     - BF16, FP16; FP32/TF32 for small head dimensions. ``kv_lengths`` (PyTorch)
+       selects the right-padded fast path on Blackwell; JAX selects it from the
+       mask. Forward and backward.
    * - Attention pair bias
      - PyTorch
      - Inference on H100, H200, B200, B300, RTX PRO 6000 Blackwell, A100; training
-       on H100, H200.
-     - LayerNorm or RMSNorm. Pair widths 128, 256 and 384; 4 to 16 heads; head
-       dimension 8 to 64.
+       on H100, H200, B200, B300.
+     - LayerNorm or RMSNorm. Pair widths 128 and 256 (384 on specific RMSNorm
+       routes); 4 to 16 heads; head dimension 8 to 64.
 
 Getting started
 ---------------
@@ -266,8 +269,8 @@ reference PyTorch or JAX implementation:
 * **Triangle attention**
   (:func:`cuet.triangle_attention <cuequivariance_torch.triangle_attention>`,
   :func:`cuex.triangle_attention <cuequivariance_jax.triangle_attention>`): attention
-  along the rows of the pair representation with a per-head bias, a Boolean mask or
-  right-padded ``kv_lengths``.
+  along the rows of the pair representation with a per-head bias and a Boolean mask
+  or, in PyTorch, right-padded ``kv_lengths``.
 * **Attention pair bias**
   (:func:`cuet.attention_pair_bias <cuequivariance_torch.attention_pair_bias>`):
   attention over the single representation biased by a projection of the pair
@@ -278,9 +281,9 @@ Forward and backward are supported, so the operations serve inference and
 training. The recommended way to run them is ``torch.compile(model,
 mode="reduce-overhead")`` after a few warm-up iterations; under compile, the
 kernel selection costs nothing per call. Calls on shapes or GPUs without a
-specialized kernel run the generic implementation, so every supported shape works
-on every supported GPU. The supported shapes, precision rules and switches for
-each release are listed in the :doc:`changelog`.
+specialized kernel run the generic implementation. The supported shapes, precision
+rules, switches and known issues for each release are listed in the
+:doc:`changelog`.
 
 Agent skills
 ------------
