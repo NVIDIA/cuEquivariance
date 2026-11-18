@@ -1,0 +1,100 @@
+name: Build Documentation Release Artifact
+
+# Builds the Sphinx site at a release tag and attaches it to the GitHub release
+# as cuequivariance-docs-<version>.zip. The zip is the artifact handed to the
+# CUDA documentation portal (docs.nvidia.com/cuda/cuequivariance) after each
+# release. It is also kept as a workflow artifact for 90 days.
+#
+# Two jobs: `build` checks out the tag without credentials and only reads the
+# repository; `publish` has write access, downloads the artifact and uploads it
+# to the release. The build does not run when the tag has no GitHub release.
+#
+# Manual runs (workflow_dispatch) build the tag you give with that tag's own
+# .github/actions, so they support v0.12.0 and newer. Older tags are not
+# supported: v0.10.0 and v0.11.1 install an unpinned jax and v0.8.0 has no
+# .github/actions directory.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build (for example v0.13.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-release-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  DOCS_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      zip_name: ${{ steps.zip.outputs.name }}
+      artifact: ${{ steps.zip.outputs.artifact }}
+    steps:
+      - name: Check that the release exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release view "${DOCS_TAG}" --json tagName --jq .tagName
+
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ env.DOCS_TAG }}
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-python-uv
+        with:
+          python-version: "3.13"
+
+      - uses: ./.github/actions/setup-docs
+
+      - name: Build sphinx
+        run: |
+          sphinx-build -b html -d "$RUNNER_TEMP/doctrees" docs docs/public
+
+      - name: Zip the site
+        id: zip
+        run: |
+          version="${DOCS_TAG#v}"
+          artifact="cuequivariance-docs-${version}"
+          name="${artifact}.zip"
+          (cd docs/public && zip -q -r "../../${name}" . -x '.buildinfo')
+          echo "name=${name}" >> "$GITHUB_OUTPUT"
+          echo "artifact=${artifact}" >> "$GITHUB_OUTPUT"
+          ls -la "${name}"
+
+      - name: Keep as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.zip.outputs.artifact }}
+          path: ${{ steps.zip.outputs.name }}
+          retention-days: 90
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact }}
+
+      - name: Attach to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ZIP_NAME: ${{ needs.build.outputs.zip_name }}
+        run: |
+          gh release upload "${DOCS_TAG}" "${ZIP_NAME}" --clobber
