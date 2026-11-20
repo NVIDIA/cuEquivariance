@@ -12,6 +12,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import copy
+import pickle
 from typing import Dict, List, Optional
 
 import pytest
@@ -512,6 +514,40 @@ def test_segmented_polynomial_indexed_linear(
         indexing,
         tmp_path,
     )
+
+
+@pytest.mark.parametrize(
+    "method", ["naive", "uniform_1d", "fused_tp", "indexed_linear"]
+)
+@pytest.mark.parametrize("copy_fn", ["deepcopy", "pickle"])
+def test_segmented_polynomial_copy_keeps_device(method, copy_fn):
+    if not torch.cuda.is_available():
+        pytest.skip("CUDA is not available")
+
+    if method == "indexed_linear":
+        polynomial = cue.descriptors.linear(
+            cue.Irreps("O3", "16x0e + 16x1o"), cue.Irreps("O3", "16x0e + 16x1o")
+        ).polynomial
+        indexing = {"input": ("first", "indexed"), "output": ("all", "batch")}
+        math_dtype = None
+    else:
+        _, polynomial = SEGMENTED_POLYNOMIALS[0]
+        indexing = SHORT_INDEXING[0]
+        math_dtype = torch.float32
+
+    m = cuet.SegmentedPolynomial(polynomial, method=method, math_dtype=math_dtype).to(
+        global_device
+    )
+    if copy_fn == "deepcopy":
+        m_copy = copy.deepcopy(m)
+    else:
+        m_copy = pickle.loads(pickle.dumps(m))
+
+    assert [(n, b.device, b.dtype) for n, b in m_copy.named_buffers()] == [
+        (n, b.device, b.dtype) for n, b in m.named_buffers()
+    ]
+    inp = make_inputs(polynomial, torch.float32, indexing, 5, global_device)
+    assert_close_recursive(m_copy(**clone_input(inp)), m(**inp), tol_dict={})
 
 
 if __name__ == "__main__":
