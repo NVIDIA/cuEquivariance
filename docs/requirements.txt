@@ -10,3 +10,4 @@ jupyter-sphinx
 e3nn
 flax
 graphviz
+sphinx-design
