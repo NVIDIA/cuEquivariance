@@ -46,6 +46,7 @@ release = version
 
 extensions = [
     "myst_parser",
+    "sphinx_design",
     "jupyter_sphinx",
     "sphinx.ext.autodoc",
     "sphinx.ext.intersphinx",
