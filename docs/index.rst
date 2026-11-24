@@ -173,6 +173,229 @@ per shape and data type are in the :doc:`changelog`.
      - LayerNorm or RMSNorm. Pair widths 128 and 256 (384 on specific RMSNorm
        routes); 4 to 16 heads; head dimension 8 to 64.
 
+Triangle multiplicative update: supported ranges
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In 0.14, the optimized TriMul inference kernels cover continuous ranges of batch size B
+and sequence length N, not a fixed list of shapes. Each cell gives the range of N that
+is covered for every B in that column, with and without projection bias, in the incoming
+and outgoing directions. The largest N is the largest value with B × N² × D below
+2\ :sup:`30`; smaller batch sizes inside a column can use slightly longer sequences.
+Shapes outside the ranges, including B above 32, use the 0.12 implementation.
+
+.. dropdown:: H100 SXM, H200, GH200 480GB
+
+   .. list-table::
+      :header-rows: 1
+
+      * - C / D
+        - B = 1
+        - B = 2
+        - B = 3–4
+        - B = 5–8
+        - B = 9–16
+        - B = 17–32
+      * - 128 / 128
+        - 128–2896
+        - 128–2047
+        - 128–1448
+        - 128–1023
+        - 128–724
+        - 128–511
+      * - 256 / 256
+        - 128–2047
+        - 128–1448
+        - 128–1023
+        - 128–724
+        - 128–511
+        - 128–362
+      * - 384 / 256
+        - 128–2047
+        - 128–1448
+        - 128–1023
+        - 128–724
+        - 128–512
+        - 128–362
+      * - 384 / 384
+        - 128–1672
+        - 128–1182
+        - 128–836
+        - 128–591
+        - 128–418
+        - 128–295
+      * - 512 / 512
+        - 128–1448
+        - 128–1023
+        - 128–724
+        - 128–511
+        - 128–362
+        - 128–255
+
+.. dropdown:: B200
+
+   .. list-table::
+      :header-rows: 1
+
+      * - C / D
+        - B = 1
+        - B = 2
+        - B = 3–4
+        - B = 5–8
+        - B = 9–16
+        - B = 17–32
+      * - 128 / 128
+        - 32–2896
+        - 32–2047
+        - 32–1448
+        - 128–1023
+        - 128–724
+        - 128–511
+      * - 256 / 256
+        - 32–2047
+        - 32–1448
+        - 32–1023
+        - 128–724
+        - 128–511
+        - 128–362
+      * - 384 / 256
+        - 32–2047
+        - 32–1448
+        - 32–1024
+        - 128–724
+        - 128–512
+        - 128–362
+      * - 384 / 384
+        - 128–1672
+        - 128–1182
+        - 128–836
+        - 128–591
+        - 128–418
+        - 128–295
+      * - 512 / 512
+        - 32–1448
+        - 32–1023
+        - 32–724
+        - 128–512
+        - 128–362
+        - 128–255
+
+.. dropdown:: B300 SXM, GB300
+
+   .. list-table::
+      :header-rows: 1
+
+      * - C / D
+        - B = 1
+        - B = 2
+        - B = 3–4
+        - B = 5–8
+        - B = 9–16
+        - B = 17–32
+      * - 128 / 128
+        - 128–2896
+        - 128–2047
+        - 128–1448
+        - 128–1023
+        - 128–724
+        - 128–511
+      * - 256 / 256
+        - 128–2047
+        - 128–1448
+        - 128–1023
+        - 128–724
+        - 128–511
+        - 128–362
+      * - 384 / 256
+        - 128–2047
+        - 128–1448
+        - 128–1023
+        - 128–724
+        - 128–511
+        - 128–362
+      * - 384 / 384
+        - 128–1672
+        - 128–1182
+        - 128–836
+        - 128–591
+        - 128–418
+        - 128–295
+      * - 512 / 512
+        - 128–1448
+        - 128–1023
+        - 128–724
+        - 128–511
+        - 128–362
+        - 128–255
+
+.. dropdown:: RTX PRO 6000 Blackwell (Server and Workstation Edition)
+
+   .. list-table::
+      :header-rows: 1
+
+      * - C / D
+        - B = 1
+        - B = 2
+        - B = 3–4
+        - B = 5–8
+        - B = 9–16
+        - B = 17–32
+      * - 128 / 128
+        - 128–2896
+        - 128–2047
+        - 128–1448
+        - 128–1023
+        - 128–724
+        - 128–511
+      * - 256 / 256
+        - 128–2047
+        - 128–1448
+        - 128–1023
+        - 128–724
+        - 128–511
+        - 128–362
+      * - 384 / 256
+        - 128–2047
+        - 128–1448
+        - 128–1023
+        - 128–724
+        - 128–511
+        - 128–362
+      * - 384 / 384
+        - 128–1672
+        - 128–1182
+        - 128–836
+        - 128–591
+        - 128–418
+        - 128–295
+      * - 512 / 512
+        - 128–1448
+        - 128–1023
+        - 128–724
+        - 128–511
+        - 128–362
+        - 128–255
+
+.. dropdown:: Vera Rubin
+
+   .. list-table::
+      :header-rows: 1
+
+      * - C / D
+        - Sequence lengths N at B = 1
+      * - 128 / 128
+        - 32–15,231
+      * - 256 / 256
+        - 32–10,776
+      * - 384 / 256
+        - 32–9,843
+      * - 512 / 512
+        - 32–7,624 (7,615 if N is not a multiple of 8)
+
+   384/384 is not optimized on Vera Rubin. There is no fixed upper limit on the sequence
+   length: GPU memory sets the largest N, and the table gives the largest N that ran on
+   a VR200 at B = 1. With larger batch sizes, the largest N decreases approximately as
+   1/√B.
+
 Getting started
 ---------------
 
