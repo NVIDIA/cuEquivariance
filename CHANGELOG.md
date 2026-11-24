@@ -1,8 +1,57 @@
 ## Latest Changes
 
+## 0.14.0 (2026-11-25)
+
+### Added
+
+- [Torch] **Optimized Triangle Multiplicative Update kernels now cover ranges of shapes.** In 0.13, the optimized inference kernels ran only on a fixed list of exact shapes. In 0.14, each pair width / hidden width class has one kernel that covers a continuous range of batch sizes and sequence lengths. See "Coverage extension" below.
+  - Inference (no-grad calls) on H100 SXM, H200, GH200 480GB, B200, B300 SXM, GB300 and RTX PRO 6000 Blackwell (Server and Workstation Edition).
+  - Pair width C and hidden width D: 128/128, 256/256, 384/256, 384/384 and 512/512, with and without projection bias.
+  - Requires a BF16 pair representation and BF16 parameters.
+  - Range: sequence length N from 128 and batch size B up to 32, up to a size limit that depends on the class. On B200, short sequences (N from 32) are also covered for B up to 4. Shapes outside the range use the 0.12 implementation.
+  - Every shape that used an optimized kernel in 0.13 still uses one in 0.14.
+  - The kernels ship prebuilt in the wheel. They need no JIT compilation at run time.
+- [Torch] **B300 and GB300:** first release with optimized TriMul kernels for these GPUs (inference, all five classes above).
+- [Torch] **Vera Rubin:** optimized `cuet.triangle_multiplicative_update` inference for 128/128, 256/256, 384/256 and 512/512 (see "Coverage extension").
+- [Torch/JAX] **Vera Rubin:** new optimized Triangle Attention forward kernels (`cuet.triangle_attention`, `cuex.triangle_attention`).
+  - BF16 inputs and BF16 bias, head dimension 16, 32, 64 or 128, with the default scale (1/√head dimension).
+  - Key sequence length: a multiple of 8; above 64 for head dimensions 16, 32 and 64.
+  - With or without a mask.
+  - Other calls, and the backward pass, use the existing Blackwell kernels, as in 0.13.
+- [Torch/JAX] Triangle Attention on RTX PRO 6000 Blackwell: faster forward kernels for head dimensions 16 to 128.
+
+### Coverage extension
+
+0.14 extends the optimized TriMul inference kernels from about 100 fixed shapes per GPU to continuous ranges of batch size and sequence length: about 80,000 batch/length combinations per GPU. Every shape that was optimized in 0.13 is still optimized in 0.14. B300, GB300 and Vera Rubin had no optimized TriMul kernels in 0.13. The coverage figure and the exact ranges for each GPU, including Vera Rubin, are in the GitHub release notes for 0.14.0 and on the documentation landing page.
+
 ### Bug Fixes
 
+- [Torch/JAX] Triangle Attention: inputs with more than 2³¹ elements (for example, training at batch 4, sequence length 2048, head dimension 128) could give wrong outputs or gradients, or fail with an illegal memory access. With PyTorch, inputs with a row stride of 2²¹ elements or more (padded rows, or the sequence dimension stored outermost) had the same problem. This affected all GPUs. The kernels now compute these addresses in 64 bits. Very large inputs can still run out of GPU memory. Speed is unchanged.
 - [JAX] Fixed a failure with JAX 0.12: every call through `cuex.segmented_polynomial` raised `TypeError: segmented_polynomial_dce() takes 2 positional arguments but 3 were given`, in eager mode and under `jax.jit`, `jax.grad` and `jax.vmap`. This also broke the functions and layers built on it, such as `cuex.equivariant_polynomial` and `cuex.spherical_harmonics`. ([#316](https://github.com/NVIDIA/cuEquivariance/pull/316))
+
+### Breaking Changes
+
+- None.
+
+### Notes
+
+- **Supported PyTorch versions:** 2.11, 2.12, 2.13 and 2.14 with the CUDA 13 wheels; 2.11, 2.12 and 2.13 with the CUDA 12 wheels.
+- **Inference only.** The new TriMul coverage applies to inference calls (no grad). Training is unchanged from 0.13: only the listed training shapes on H100 SXM, H200, GH200 and B200 use the optimized kernels.
+- **Mixed precision.** Under `bf16-mixed` autocast with FP32 weights, TriMul does not use the optimized kernels and runs the 0.12 implementation. To use the optimized kernels, use BF16 weights or pass `precision="bfloat16"`. We plan to fix this in 0.15.
+- **Vera Rubin:** use the CUDA 13 wheels (built with CUDA 13.4.1). Bring your own Rubin-compatible container and PyTorch, and install the wheel in it.
+- **GB200:** not yet supported by the optimized TriMul kernels; GB200 calls use the 0.12 implementation. Support is coming in a future release.
+- **Other GPUs without optimized TriMul kernels** use the 0.12 implementation: H100 PCIe, H100 NVL, H200 NVL, GH200 120GB, RTX PRO 6000 Blackwell Max-Q Workstation Edition, A100, L40(S) and other GPUs not listed above.
+- **Sequence lengths below 128.** On H100 SXM, H200, GH200 480GB, B300 SXM, GB300 and RTX PRO 6000, TriMul calls with N below 128 use the 0.12 implementation, except the exact short shapes that were already optimized in 0.13. On B200 (batch size up to 4) and Vera Rubin, the optimized kernels start at N = 32. If your sequence length is just below 128, you can pad the pair representation to N = 128 and pass a mask that is 0 on the padded positions: the results for the real positions are the same (up to rounding), and the call uses the optimized kernel. On our benchmark at N = 98, this was 1.04–1.09× faster than the 0.12 implementation. For much shorter sequences, padding adds more work than it saves.
+- **`torch.compile` with varying sequence lengths.** Dynamic shapes are supported. A new sequence length inside the same range reuses the compiled graph. Moving to another range, or to the 0.12 implementation, compiles one more graph, one time only. Because one graph now serves a whole range, the 0.13 per-rank compile-limit issue no longer applies to normal workloads.
+- **CUDA graphs** (`mode="reduce-overhead"` or manual capture) record one graph per input shape, and each graph keeps its own memory. If you use CUDA graphs with many sequence lengths, we recommend that you pad the lengths to a small set of sizes, for example multiples of 32 or 64. If your lengths are fully variable and you do not pad them, use `torch.compile` without CUDA graphs.
+
+### Known issues
+
+- **CUDA 12 wheels on B300 / GB300.** The CUDA 12 wheels have no native B300 code and use slower fallback paths on these GPUs. Install the CUDA 13 wheels on B300 and GB300. We plan to fix this in a future release.
+- **A few TriMul shapes are slightly slower than in 0.13** (about 0.9–0.95×), where one kernel now covers a range that 0.13 served with shape-specific kernels. Examples: H100 SXM, 128/128 without bias, B=4, N=512; RTX PRO 6000, some 384/256 shapes such as B=5, N=560; B200, some short-sequence shapes.
+- **Eager host time on B300 / GB300, 384/256.** In eager mode at N up to 256, each call has about 25–30 µs of extra host time. Under CUDA graphs this cost does not apply. We plan to fix this in a future release.
+- **CUDA graph memory on B300 / GB300, 384/256 without bias:** each live CUDA graph keeps about 220 MiB of scratch memory at B=1, N=384.
+- **Known issues from 0.13.0 that still apply:** exported models use the 0.12 implementation; eager-mode routing cost; second backward and double backward in training; exclusive GPU use for some optimized kernels; FP32 TriMul on GPUs with about 100 KB shared memory per block; short-sequence training on B200. See the 0.13.0 notes.
 
 ## 0.13.0 (2026-10-15)
 
