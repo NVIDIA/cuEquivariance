@@ -85,8 +85,9 @@ Released 2026-11-25. Highlights:
   H200, GH200 and B200, and ``mask=None`` in ``cuex.triangle_attention``.
 
 The full list of changes, the exact supported shapes and the known issues are in
-the :doc:`changelog` and the `GitHub release notes
-<https://github.com/NVIDIA/cuEquivariance/releases>`_.
+the :doc:`changelog` and the `0.14.0 GitHub release notes
+<https://github.com/NVIDIA/cuEquivariance/releases/tag/v0.14.0>`_ (all releases:
+`GitHub releases <https://github.com/NVIDIA/cuEquivariance/releases>`_).
 
 Installation
 ------------
