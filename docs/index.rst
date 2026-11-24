@@ -48,7 +48,7 @@ All of them share one set of prebuilt CUDA kernel wheels.
       :link-type: ref
 
       Fused kernels for the pair-representation blocks of structure prediction
-      models such as AlphaFold 3, Boltz-2 and RFdiffusion.
+      models such as AlphaFold 3.
 
       * Triangle multiplicative update
       * Triangle attention
@@ -61,22 +61,28 @@ The frontends are open source under the Apache 2.0 license on `GitHub
 <https://github.com/NVIDIA/cuEquivariance>`_. The CUDA kernels ship as prebuilt
 ``cuequivariance-ops-*`` wheels for CUDA 12 and CUDA 13.
 
-What's new in 0.13
+What's new in 0.14
 ------------------
 
-Released 2026-10-15. Highlights:
+Released 2026-11-25. Highlights:
 
-* **Optimized triangle multiplicative update kernels** for PyTorch: inference on
-  H100 SXM, H200, GH200, B200 and RTX PRO 6000 Blackwell, and training on all of
-  those except RTX PRO 6000, at the pair and hidden widths used by production
-  structure prediction models (128/128, 256/256, 384/256 and 512/512). CUDA 13
-  wheels only.
-* ``cuex.triangle_attention`` accepts ``mask=None`` for unmasked attention, as the
-  PyTorch frontend does.
-* From 0.12: attention pair bias with RMSNorm, expanded H100 and H200 training
-  coverage, and the pair-update to attention-bias inference handoff.
-* From 0.11: a dictionary-based JAX interface for organizing features by
-  representation type, and a MACE example for Equinox.
+* **Triangle multiplicative update kernels for ranges of shapes.** In 0.13, the
+  optimized PyTorch inference kernels ran only on a fixed list of exact shapes. In
+  0.14, each pair/hidden width class has a kernel that covers a continuous range of
+  batch sizes and sequence lengths: about 80,000 batch/length combinations per GPU,
+  instead of about 100 fixed shapes. Every shape that was optimized in 0.13 is still
+  optimized. Width classes 128/128, 256/256, 384/256, 384/384 and 512/512, with and
+  without projection bias. The kernels ship prebuilt in the CUDA 13 wheels.
+* **New GPUs for the optimized triangle multiplicative update:** B300 SXM, GB300
+  and Vera Rubin.
+* **Triangle attention on Vera Rubin:** new optimized forward kernels for PyTorch
+  and JAX (BF16, head dimension 16, 32, 64 or 128).
+* **Triangle attention on RTX PRO 6000 Blackwell:** faster forward kernels for head
+  dimensions 16 to 128.
+* **Fix:** triangle attention on inputs with more than 2\ :sup:`31` elements no
+  longer gives wrong results or fails with an illegal memory access.
+* From 0.13: optimized triangle multiplicative update training kernels on H100 SXM,
+  H200, GH200 and B200, and ``mask=None`` in ``cuex.triangle_attention``.
 
 The full list of changes, the exact supported shapes and the known issues are in
 the :doc:`changelog` and the `GitHub release notes
@@ -111,14 +117,15 @@ wheel that matches your CUDA version. The ``-cu13`` wheels contain kernels that 
          pip install cuequivariance
 
 **Requirements.** Linux x86_64 or aarch64 for the ``cuequivariance-ops-*`` wheels.
-Python 3.10 to 3.14. PyTorch 2.11, 2.12 or 2.13 for the ``cuequivariance-ops-torch``
-wheels. JAX 0.9.1 or newer for ``cuequivariance-jax``.
+Python 3.10 to 3.14. PyTorch 2.11 to 2.14 for the ``cuequivariance-ops-torch-cu13``
+wheels, and 2.11 to 2.13 for ``-cu12``. JAX 0.9.1 or newer for ``cuequivariance-jax``.
+On B300, GB300 and Vera Rubin, use the ``-cu13`` wheels.
 
 Supported operations and hardware
 ---------------------------------
 
 Every operation has a generic implementation that runs on any supported NVIDIA GPU.
-The table lists where an operation also has a specialized kernel in 0.13.0. Details
+The table lists where an operation also has a specialized kernel in 0.14.0. Details
 per shape and data type are in the :doc:`changelog`.
 
 .. list-table::
@@ -143,15 +150,19 @@ per shape and data type are in the :doc:`changelog`.
      - PyTorch ``nn.Module`` classes; JAX functions and Flax NNX layers.
    * - Triangle multiplicative update
      - PyTorch, JAX
-     - PyTorch: inference on H100 SXM, H200, GH200, B200, RTX PRO 6000 Blackwell;
-       training on H100 SXM, H200, GH200, B200. Pair/hidden widths 128/128,
-       256/256, 384/256, 512/512.
-     - BF16. CUDA 13 wheels. Other GPUs, the CUDA 12 wheels and JAX use the 0.12
-       implementation.
+     - PyTorch inference on H100 SXM, H200, GH200 480GB, B200, B300 SXM, GB300 and
+       RTX PRO 6000 Blackwell (Server and Workstation Edition): pair/hidden widths
+       128/128, 256/256, 384/256, 384/384 and 512/512, for ranges of batch size
+       (up to 32) and sequence length (from 128). Vera Rubin: 128/128, 256/256,
+       384/256 and 512/512. Training on H100 SXM, H200, GH200 and B200 at listed
+       shapes.
+     - BF16 pair representation and BF16 parameters. CUDA 13 wheels. Other shapes,
+       other GPUs, the CUDA 12 wheels and JAX use the 0.12 implementation.
    * - Triangle attention
      - PyTorch, JAX
-     - Native kernels on B200 / B300 (SM100f) and RTX PRO 6000 Blackwell (sm120f);
-       generic kernel on H100, H200, A100, L40.
+     - Native kernels on B200 / B300 (SM100f), RTX PRO 6000 Blackwell (sm120f) and
+       Vera Rubin (forward, BF16, head dimension 16 to 128); generic kernel on H100,
+       H200, A100, L40.
      - BF16, FP16; FP32/TF32 for small head dimensions. ``kv_lengths`` (PyTorch)
        selects the right-padded fast path on Blackwell; JAX selects it from the
        mask. Forward and backward.
@@ -280,8 +291,10 @@ reference PyTorch or JAX implementation:
 Forward and backward are supported, so the operations serve inference and
 training. The recommended way to run them is ``torch.compile(model,
 mode="reduce-overhead")`` after a few warm-up iterations; under compile, the
-kernel selection costs nothing per call. Calls on shapes or GPUs without a
-specialized kernel run the generic implementation. The supported shapes, precision
+kernel selection costs nothing per call. With varying sequence lengths, one
+compiled graph serves a whole range of lengths; with CUDA graphs, pad the lengths to
+a small set of sizes. Calls on shapes or GPUs without a specialized kernel run the
+generic implementation. The supported shapes, precision
 rules, switches and known issues for each release are listed in the
 :doc:`changelog`.
 
