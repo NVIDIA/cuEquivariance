@@ -6,7 +6,7 @@ Equivariance is the mathematical formalization of the concept of "respecting sym
 
 ## Documentation
 
-Please refer to the project documentation for more information [https://docs.nvidia.com/cuda/cuequivariance/](https://docs.nvidia.com/cuda/cuequivariance/).
+Please refer to the project documentation for more information [https://nvidia.github.io/cuEquivariance/](https://nvidia.github.io/cuEquivariance/).
 
 ## Installation
 
