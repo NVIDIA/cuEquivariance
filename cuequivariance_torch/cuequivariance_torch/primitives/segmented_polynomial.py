@@ -235,15 +235,22 @@ class SegmentedPolynomial(nn.Module):
         self.method = method
 
     def __reduce__(self):
+        # Record the buffers' device with an empty tensor rather than a
+        # torch.device so that it follows torch.load's map_location.
+        buffer = next(self.buffers(), None)
+        device = None if buffer is None else torch.empty(0, device=buffer.device)
         return (
-            SegmentedPolynomial,
+            _rebuild_segmented_polynomial,
             (
-                self._polynomial_orig,
-                self.method,
-                self._math_dtype_orig,
-                self._output_dtype_map_orig,
-                "segmented_polynomial",
-                self.options,
+                (
+                    self._polynomial_orig,
+                    self.method,
+                    self._math_dtype_orig,
+                    self._output_dtype_map_orig,
+                    "segmented_polynomial",
+                    self.options,
+                ),
+                device,
             ),
         )
 
@@ -370,3 +377,10 @@ class SegmentedPolynomial(nn.Module):
                     )
 
         return self.m(inputs, input_indices, output_shapes, output_indices)
+
+
+def _rebuild_segmented_polynomial(args, device: Optional[torch.Tensor]):
+    module = SegmentedPolynomial(*args)
+    if device is not None:
+        module.to(device.device)
+    return module
