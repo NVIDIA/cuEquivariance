@@ -1,6 +1,6 @@
 ## Latest Changes
 
-## 0.14.0 (2026-11-25)
+## 0.14.0 (2026-11-24)
 
 ### Added
 
@@ -19,10 +19,11 @@
   - With or without a mask.
   - Other calls, and the backward pass, use the existing Blackwell kernels, as in 0.13.
 - [Torch/JAX] Triangle Attention on RTX PRO 6000 Blackwell: faster forward kernels for head dimensions 16 to 128.
+- [Torch] PyTorch 2.14 support with the CUDA 13 wheels.
 
 ### Coverage extension
 
-0.14 extends the optimized TriMul inference kernels from about 100 fixed shapes per GPU to continuous ranges of batch size and sequence length: about 80,000 batch/length combinations per GPU. Every shape that was optimized in 0.13 is still optimized in 0.14. B300, GB300 and Vera Rubin had no optimized TriMul kernels in 0.13. The coverage figure and the exact ranges for each GPU, including Vera Rubin, are in the [GitHub release notes for 0.14.0](https://github.com/NVIDIA/cuEquivariance/releases/tag/v0.14.0) and on the [documentation landing page](https://nvidia.github.io/cuEquivariance/).
+0.14 extends the optimized TriMul inference kernels from about 100 fixed shapes per GPU to about 80,000 batch/length combinations per GPU, now enabling a continuous range of batch size and sequence length. Every shape that was optimized in 0.13 is still optimized in 0.14. B300, GB300 and Vera Rubin had no optimized TriMul kernels in 0.13. The coverage figure and the exact ranges for each GPU, including Vera Rubin, are in the [GitHub release notes for 0.14.0](https://github.com/NVIDIA/cuEquivariance/releases/tag/v0.14.0) and on the [documentation landing page](https://nvidia.github.io/cuEquivariance/).
 
 ### Bug Fixes
 

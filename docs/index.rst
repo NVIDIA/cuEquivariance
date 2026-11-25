@@ -64,7 +64,7 @@ The frontends are open source under the Apache 2.0 license on `GitHub
 What's new in 0.14
 ------------------
 
-Released 2026-11-25. Highlights:
+Released 2026-11-24. Highlights:
 
 * **Triangle multiplicative update kernels for ranges of shapes.** In 0.13, the
   optimized PyTorch inference kernels ran only on a fixed list of exact shapes. In
