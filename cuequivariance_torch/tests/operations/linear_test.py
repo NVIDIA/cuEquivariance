@@ -52,7 +52,7 @@ def test_linear_fwd(
         shared_weights=shared_weights,
         device=device,
         dtype=torch.float64,
-        use_fallback=False,
+        method="fused_tp",
     )
 
     torch.manual_seed(0)
@@ -63,7 +63,7 @@ def test_linear_fwd(
         shared_weights=shared_weights,
         device=device,
         dtype=torch.float64,
-        use_fallback=True,
+        method="naive",
     )
     x = torch.randn(10, irreps_in.dim, dtype=torch.float64).cuda()
 
@@ -113,7 +113,7 @@ def test_linear_bwd_bwd(
         shared_weights=shared_weights,
         device=device,
         dtype=torch.float64,
-        use_fallback=False,
+        method="fused_tp",
     )
 
     torch.manual_seed(0)
@@ -124,7 +124,7 @@ def test_linear_bwd_bwd(
         shared_weights=shared_weights,
         device=device,
         dtype=torch.float64,
-        use_fallback=True,
+        method="naive",
     )
 
     x = torch.randn(10, irreps_in.dim, dtype=torch.float64, requires_grad=True).cuda()
@@ -207,14 +207,14 @@ export_modes = ["compile", "script", "jit"]
 @pytest.mark.parametrize("layout", [cue.mul_ir, cue.ir_mul])
 @pytest.mark.parametrize("shared_weights", [True, False])
 @pytest.mark.parametrize("mode", export_modes)
-@pytest.mark.parametrize("use_fallback", [True, False])
+@pytest.mark.parametrize("method", ["naive", "fused_tp"])
 def test_export(
     irreps_in: cue.Irreps,
     irreps_out: cue.Irreps,
     layout: cue.IrrepsLayout,
     shared_weights: bool,
     mode: str,
-    use_fallback: bool,
+    method: str,
     tmp_path: str,
 ):
     if not torch.cuda.is_available():
@@ -224,9 +224,9 @@ def test_export(
     if mode == "jit":
         pytest.skip("Skipping slow JIT compilation test")
 
-    # Skip redundant combinations - test only one layout with fallback=True
-    if use_fallback is True and layout == cue.ir_mul:
-        pytest.skip("Skipping redundant layout test with fallback=True")
+    # Skip redundant combinations - test only one layout with the naive method
+    if method == "naive" and layout == cue.ir_mul:
+        pytest.skip("Skipping redundant layout test with the naive method")
 
     # Skip compile mode entirely for speed - consistently takes time
     # if mode == "compile":
@@ -236,9 +236,9 @@ def test_export(
     # if mode == "script":
     #     pytest.skip("Skipping script mode for speed")
 
-    # Skip use_fallback=False for speed - only test fallback
-    if use_fallback is False:
-        pytest.skip("Skipping use_fallback=False for speed")
+    # Skip fused_tp for speed - only test naive
+    if method != "naive":
+        pytest.skip("Skipping fused_tp for speed")
 
     # Skip shared_weights=False for speed
     if shared_weights is False:
@@ -256,7 +256,7 @@ def test_export(
         shared_weights=shared_weights,
         device=device,
         dtype=torch.float32,
-        use_fallback=use_fallback,
+        method=method,
     )
 
     x = torch.randn(10, irreps_in.dim, dtype=torch.float32).cuda()

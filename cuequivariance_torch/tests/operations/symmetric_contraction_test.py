@@ -112,7 +112,7 @@ def test_mace_compatibility():
         device=device,
         dtype=torch.float32,
         math_dtype=torch.float64,
-        use_fallback=not torch.cuda.is_available(),
+        method=None if torch.cuda.is_available() else "naive",
     )
     n_sc.weight.data = from64(
         (2, 164 // mul, mul),

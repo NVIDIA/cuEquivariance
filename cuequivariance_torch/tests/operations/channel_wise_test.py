@@ -40,7 +40,7 @@ irreps = [
 
 @pytest.mark.parametrize("irreps1, irreps2, irreps3", irreps)
 @pytest.mark.parametrize("layout", [cue.ir_mul, cue.mul_ir])
-@pytest.mark.parametrize("use_fallback", [False, True])
+@pytest.mark.parametrize("method", ["uniform_1d", "naive"])
 @pytest.mark.parametrize("batch", [1, 32])
 @pytest.mark.parametrize("math_dtype", [None, torch.float32, "float64"])
 def test_channel_wise_fwd(
@@ -48,14 +48,14 @@ def test_channel_wise_fwd(
     irreps2: cue.Irreps,
     irreps3: cue.Irreps,
     layout: cue.IrrepsLayout,
-    use_fallback: bool,
+    method: str,
     batch: int,
     math_dtype: str | torch.dtype | None,
 ):
-    if use_fallback is False and not torch.cuda.is_available():
+    if method != "naive" and not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
 
-    if not use_fallback and irreps2 == cue.Irreps("O3", "1o + 2e"):
+    if method != "naive" and irreps2 == cue.Irreps("O3", "1o + 2e"):
         pytest.skip("This method does not work for non-uniform irreps.")
 
     m1 = cuet.ChannelWiseTensorProduct(
@@ -68,7 +68,7 @@ def test_channel_wise_fwd(
         device=device,
         dtype=torch.float64,
         math_dtype=math_dtype,
-        use_fallback=use_fallback,
+        method=method,
     )
     x1 = torch.randn(batch, irreps1.dim, dtype=torch.float64).to(device)
     x2 = torch.randn(batch, irreps2.dim, dtype=torch.float64).to(device)
@@ -97,7 +97,7 @@ export_modes = ["compile", "script", "jit"]
 @pytest.mark.parametrize("irreps1, irreps2, irreps3", irreps[:1])
 @pytest.mark.parametrize("layout", [cue.ir_mul, cue.mul_ir])
 @pytest.mark.parametrize("internal_weights", [False, True])
-@pytest.mark.parametrize("use_fallback", [False, True])
+@pytest.mark.parametrize("method", ["uniform_1d", "naive"])
 @pytest.mark.parametrize("batch", [1, 32][:1])
 @pytest.mark.parametrize("mode", export_modes)
 def test_export(
@@ -106,13 +106,13 @@ def test_export(
     irreps3: cue.Irreps,
     layout: cue.IrrepsLayout,
     internal_weights: bool,
-    use_fallback: bool,
+    method: str,
     batch: int,
     mode: str,
     tmp_path: str,
 ):
     dtype = torch.float32
-    if use_fallback is False and not torch.cuda.is_available():
+    if method != "naive" and not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
 
     # Skip JIT mode as it's slow
@@ -123,9 +123,9 @@ def test_export(
     if batch == 1:
         pytest.skip("Skipping batch=1 test for speed")
 
-    # Skip redundant layout combinations with fallback=True
-    if use_fallback is True or layout == cue.ir_mul:
-        pytest.skip("Skipping redundant layout test with fallback=True")
+    # Skip redundant layout combinations with the naive method
+    if method == "naive" or layout == cue.ir_mul:
+        pytest.skip("Skipping redundant layout test with the naive method")
 
     # Skip compile mode entirely for speed - it's consistently slow (2+ seconds)
     # if mode == "compile":
@@ -152,7 +152,7 @@ def test_export(
         layout=layout,
         device=device,
         dtype=dtype,
-        use_fallback=use_fallback,
+        method=method,
     )
     x1 = torch.randn(batch, irreps1.dim, dtype=dtype).to(device)
     x2 = torch.randn(batch, irreps2.dim, dtype=dtype).to(device)
@@ -190,7 +190,7 @@ def test_channel_wise_bwd_bwd(irreps: cue.Irreps):
     )
 
     outputs = {}
-    for use_fallback in [True, False]:
+    for method in ["naive", "uniform_1d"]:
         m = cuet.ChannelWiseTensorProduct(
             irreps1,
             irreps2,
@@ -200,7 +200,7 @@ def test_channel_wise_bwd_bwd(irreps: cue.Irreps):
             layout=cue.ir_mul,
             device="cuda",
             dtype=torch.float64,
-            use_fallback=use_fallback,
+            method=method,
         )
 
         torch.manual_seed(0)
@@ -215,16 +215,16 @@ def test_channel_wise_bwd_bwd(irreps: cue.Irreps):
             grad1.pow(2).sum() + grad2.pow(2).sum() + grad3.pow(2).sum(),
             (x1, x2, w),
         )
-        outputs[use_fallback] = (ggrad1, ggrad2, ggrad3)
+        outputs[method] = (ggrad1, ggrad2, ggrad3)
 
     torch.testing.assert_close(
-        outputs[True][0], outputs[False][0], atol=1e-5, rtol=1e-5
+        outputs["naive"][0], outputs["uniform_1d"][0], atol=1e-5, rtol=1e-5
     )
     torch.testing.assert_close(
-        outputs[True][1], outputs[False][1], atol=1e-5, rtol=1e-5
+        outputs["naive"][1], outputs["uniform_1d"][1], atol=1e-5, rtol=1e-5
     )
     torch.testing.assert_close(
-        outputs[True][2], outputs[False][2], atol=1e-5, rtol=1e-5
+        outputs["naive"][2], outputs["uniform_1d"][2], atol=1e-5, rtol=1e-5
     )
 
 
@@ -245,7 +245,7 @@ def test_channel_wise_indexing():
     indices = torch.randint(0, 10, (32,), device=device, dtype=torch.int64)
 
     outputs = {}
-    for use_fallback in [True, False]:
+    for method in ["naive", "uniform_1d"]:
         m = cuet.ChannelWiseTensorProduct(
             irreps1,
             irreps2,
@@ -255,7 +255,7 @@ def test_channel_wise_indexing():
             layout=cue.ir_mul,
             device="cuda",
             dtype=torch.float64,
-            use_fallback=use_fallback,
+            method=method,
         )
 
         torch.manual_seed(0)
@@ -274,7 +274,7 @@ def test_channel_wise_indexing():
             grad1.pow(2).sum() + grad2.pow(2).sum() + grad3.pow(2).sum(),
             (x1, x2, w),
         )
-        outputs[use_fallback] = (ggrad1, ggrad2, ggrad3)
+        outputs[method] = (ggrad1, ggrad2, ggrad3)
 
         out_edge = m(x1[indices], x2, w)
         out = torch.zeros(
@@ -295,11 +295,11 @@ def test_channel_wise_indexing():
         torch.testing.assert_close(Iggrad3, ggrad3, atol=1e-5, rtol=1e-5)
 
     torch.testing.assert_close(
-        outputs[True][0], outputs[False][0], atol=1e-5, rtol=1e-5
+        outputs["naive"][0], outputs["uniform_1d"][0], atol=1e-5, rtol=1e-5
     )
     torch.testing.assert_close(
-        outputs[True][1], outputs[False][1], atol=1e-5, rtol=1e-5
+        outputs["naive"][1], outputs["uniform_1d"][1], atol=1e-5, rtol=1e-5
     )
     torch.testing.assert_close(
-        outputs[True][2], outputs[False][2], atol=1e-5, rtol=1e-5
+        outputs["naive"][2], outputs["uniform_1d"][2], atol=1e-5, rtol=1e-5
     )

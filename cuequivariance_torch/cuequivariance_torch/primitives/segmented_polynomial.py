@@ -34,12 +34,34 @@ from cuequivariance_torch.primitives.segmented_polynomial_uniform_1d import (
 
 import cuequivariance as cue
 
+CUE_OPS_ERROR = None
 try:
     import cuequivariance_ops_torch  # noqa: F401
 
     HAS_CUE_OPS = True
-except ImportError:
+except ImportError as e:
     HAS_CUE_OPS = False
+    CUE_OPS_ERROR = e
+
+
+def default_method(preferred: str) -> str:
+    """Method for a caller that did not choose one: ``preferred`` if the backend is usable, else ``"naive"``."""
+    if HAS_CUE_OPS:
+        return preferred
+    warnings.warn(
+        f"cuequivariance_ops_torch is not available ({CUE_OPS_ERROR}). "
+        "Falling back to naive implementation."
+    )
+    return "naive"
+
+
+def require_backend(method: str) -> None:
+    """Raise if ``method`` was chosen by the caller and the backend is not usable."""
+    if not HAS_CUE_OPS:
+        raise ImportError(
+            f"method={method!r} requires cuequivariance_ops_torch, which is not available. "
+            "Pass method='naive' to run without it."
+        ) from CUE_OPS_ERROR
 
 
 class SegmentedPolynomial(nn.Module):
@@ -54,6 +76,9 @@ class SegmentedPolynomial(nn.Module):
             - ``"uniform_1d"``: Uses a CUDA implementation for polynomials with a single uniform mode.
             - ``"fused_tp"``: Uses a CUDA implementation for polynomials with 3- and 4-operand contractions.
             - ``"indexed_linear"``: Uses a CUDA implementation for linear layers with indexed weights.
+
+            The CUDA methods need ``cuequivariance_ops_torch``. Passing one of them when it is
+            not available raises ``ImportError``.
 
         math_dtype: Optional data type for computational operations.
             If specified, internal buffers will be of this dtype,
@@ -170,7 +195,7 @@ class SegmentedPolynomial(nn.Module):
                 "• 'fused_tp' - A more general CUDA implementation, supporting many 3 and 4 operands contractions.\n"
                 "• 'indexed_linear' - A CUDA implementation for linear layers with indexed weights.\n"
             )
-            method = "uniform_1d"
+            method = default_method("uniform_1d")
 
         if not isinstance(polynomial, cue.SegmentedPolynomial):
             raise ValueError(
@@ -178,58 +203,25 @@ class SegmentedPolynomial(nn.Module):
                 "Did you forget to call `.polynomial` on the descriptor?",
             )
 
-        if method != "naive" and not HAS_CUE_OPS:
-            method = "naive"
-            warnings.warn(
-                "cuequivariance_ops_torch is not available. Falling back to naive implementation."
-            )
+        if method != "naive":
+            require_backend(method)
 
         if method == "uniform_1d":
-            try:
-                self.m = SegmentedPolynomialFromUniform1dJit(
-                    polynomial, math_dtype, output_dtype_map, name, self.options
-                )
-            except ImportError:
-                method = "naive"
-                warnings.warn(
-                    "uniform_1d backend is not available. "
-                    "Falling back to naive implementation."
-                )
-                self.m = SegmentedPolynomialNaive(
-                    polynomial, math_dtype, output_dtype_map, name
-                )
+            self.m = SegmentedPolynomialFromUniform1dJit(
+                polynomial, math_dtype, output_dtype_map, name, self.options
+            )
         elif method == "naive":
             self.m = SegmentedPolynomialNaive(
                 polynomial, math_dtype, output_dtype_map, name
             )
         elif method == "fused_tp":
-            try:
-                self.m = SegmentedPolynomialFusedTP(
-                    polynomial, math_dtype, output_dtype_map, name
-                )
-            except ImportError:
-                method = "naive"
-                warnings.warn(
-                    "fused_tp backend is not available. "
-                    "Falling back to naive implementation."
-                )
-                self.m = SegmentedPolynomialNaive(
-                    polynomial, math_dtype, output_dtype_map, name
-                )
+            self.m = SegmentedPolynomialFusedTP(
+                polynomial, math_dtype, output_dtype_map, name
+            )
         elif method == "indexed_linear":
-            try:
-                self.m = SegmentedPolynomialIndexedLinear(
-                    polynomial, math_dtype, output_dtype_map, name
-                )
-            except ImportError:
-                method = "naive"
-                warnings.warn(
-                    "indexed_linear backend is not available. "
-                    "Falling back to naive implementation."
-                )
-                self.m = SegmentedPolynomialNaive(
-                    polynomial, math_dtype, output_dtype_map, name
-                )
+            self.m = SegmentedPolynomialIndexedLinear(
+                polynomial, math_dtype, output_dtype_map, name
+            )
         else:
             raise ValueError(f"Invalid method: {method}")
         self.method = method

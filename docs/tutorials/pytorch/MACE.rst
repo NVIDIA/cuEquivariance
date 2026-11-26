@@ -557,14 +557,14 @@ For more information abou buildingt the descriptor itself, you can refer to the 
         source=cue.mul_ir,
         target=cue.ir_mul,
         device=device,
-        use_fallback=device=="cpu",
+        method="naive" if device == "cpu" else None,
     )(node_feats)
     cue_edge_attrs = cuet.TransposeIrrepsLayout(
         irreps_in2,
         source=cue.mul_ir,
         target=cue.ir_mul,
         device=device,
-        use_fallback=device=="cpu",
+        method="naive" if device == "cpu" else None,
     )(edge_attrs)
     
     # Performing the TP
@@ -582,7 +582,7 @@ For more information abou buildingt the descriptor itself, you can refer to the 
         source=cue.ir_mul,
         target=cue.mul_ir,
         device=device,
-        use_fallback=device=="cpu",
+        method="naive" if device == "cpu" else None,
     )(cue_message[0])
     # Comparing the result
     print("Results match:", torch.allclose(message, cue_message_transp, atol=1e-5))
@@ -617,7 +617,7 @@ Alternatively, we can use the premade function for this particular tensor produc
         source=cue.ir_mul,
         target=cue.mul_ir,
         device=device,
-        use_fallback=device=="cpu",
+        method="naive" if device == "cpu" else None,
     )(cue_cw_message)
     
     # Comparing the results
@@ -752,7 +752,7 @@ We also need to use the `O3_e3nn` group for compatibility, but the standard `"O3
         source=cue.ir_mul,
         target=cue.mul_ir,
         device=device,
-        use_fallback=device=="cpu",
+        method="naive" if device == "cpu" else None,
     )(cue_out_feats)
     # Comparing the result
     print("Results match:", torch.allclose(out_feats, cue_out_feats_transp, atol=1e-5))
@@ -845,7 +845,7 @@ And the equivalent cuEquivariance code:
         source=cue.mul_ir,
         target=cue.ir_mul,
         device=device,
-        use_fallback=device=="cpu",
+        method="naive" if device == "cpu" else None,
     )(in_feats)
     
     cue_out_feats = cue_lin(cue_in_feats, weight=lin.weight.unsqueeze(0))
@@ -858,7 +858,7 @@ And the equivalent cuEquivariance code:
         source=cue.ir_mul,
         target=cue.mul_ir,
         device=device,
-        use_fallback=device=="cpu",
+        method="naive" if device == "cpu" else None,
     )(cue_out_feats)
     # Comparing the result
     print("Results match:", torch.allclose(out_feats, cue_out_feats_transp, atol=1e-5))
@@ -975,7 +975,7 @@ While the first can work in any setting, the second can only be used when the at
         source=cue.mul_ir,
         target=cue.ir_mul,
         device=device,
-        use_fallback=device=="cpu",
+        method="naive" if device == "cpu" else None,
     )(in_feats)
     
     # Rearranging the weights by hand
@@ -992,7 +992,7 @@ While the first can work in any setting, the second can only be used when the at
         source=cue.ir_mul,
         target=cue.mul_ir,
         device=device,
-        use_fallback=device=="cpu",
+        method="naive" if device == "cpu" else None,
     )(cue_out_feats)
     # Comparing the result
     print("Results match:", torch.allclose(out_feats, cue_out_feats_transp, atol=1e-3))
@@ -1008,7 +1008,7 @@ While the first can work in any setting, the second can only be used when the at
         source=cue.ir_mul,
         target=cue.mul_ir,
         device=device,
-        use_fallback=device=="cpu",
+        method="naive" if device == "cpu" else None,
     )(cue_out_feats)
     # Comparing the result
     print("Results match:", torch.allclose(out_feats, cue_out_feats_transp, atol=1e-3))
