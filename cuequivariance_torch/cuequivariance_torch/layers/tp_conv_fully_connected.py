@@ -56,9 +56,10 @@ class FullyConnectedTensorProductConv(nn.Module):
         mlp_channels (Sequence of int, optional): A sequence of integers defining the number of neurons in each layer in MLP before the output layer. If None, no MLP will be added. The input layer contains edge embeddings and node scalar features. Defaults to None.
         mlp_activation (``nn.Module`` or Sequence of ``nn.Module``, optional): A sequence of functions to be applied in between linear layers in MLP, e.g., ``nn.Sequential(nn.ReLU(), nn.Dropout(0.4))``. Defaults to ``nn.GELU()``.
         layout (IrrepsLayout, optional): The layout of the input and output irreps. Default is ``cue.mul_ir`` which is the layout corresponding to e3nn.
-        use_fallback (bool, optional): If `None` (default), a CUDA kernel will be used if available.
-                If `False`, a CUDA kernel will be used, and an exception is raised if it's not available.
-                If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
+        method (str, optional): The method to use for the tensor product, by default "fused_tp" (using a CUDA kernel)
+            if ``cuequivariance_ops_torch`` is available, otherwise "naive" (using a PyTorch implementation).
+            A CUDA method that is passed explicitly raises ``ImportError``
+            if ``cuequivariance_ops_torch`` is not available.
 
     Examples:
         >>> in_irreps = cue.Irreps("O3", "4x0e + 4x1o")
@@ -104,7 +105,7 @@ class FullyConnectedTensorProductConv(nn.Module):
         mlp_channels: Optional[Sequence[int]] = None,
         mlp_activation: Union[nn.Module, Sequence[nn.Module], None] = nn.GELU(),
         layout: cue.IrrepsLayout = None,  # e3nn_compat_mode
-        use_fallback: Optional[bool] = None,
+        method: Optional[str] = None,
     ):
         super().__init__()
 
@@ -124,7 +125,7 @@ class FullyConnectedTensorProductConv(nn.Module):
             out_irreps,
             layout=self.layout,
             shared_weights=False,
-            use_fallback=use_fallback,
+            method=method,
         )
 
         self.batch_norm = (

@@ -12,7 +12,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import warnings
 from typing import Dict, Optional
 
 import torch
@@ -46,9 +45,8 @@ class Linear(torch.nn.Module):
         math_dtype (torch.dtype or string, optional): The dtype to use for the math operations, by default it follows the dtype of the input tensors,
             if possible, or the torch default dtype (see SegmentedPolynomial for more details).
         method (str, optional): The method to use for the linear layer, by default "naive" (using a PyTorch implementation).
-        use_fallback (bool, optional, deprecated): Whether to use a "fallback" implementation, now maps to method:
-            If `True` or `None` (default), the "naive" method is used.
-            If `False`, the "fused_tp" method is used.
+            A CUDA method that is passed explicitly raises ``ImportError``
+            if ``cuequivariance_ops_torch`` is not available.
     """
 
     def __init__(
@@ -65,7 +63,6 @@ class Linear(torch.nn.Module):
         device: Optional[torch.device] = None,
         dtype: Optional[torch.dtype] = None,
         math_dtype: Optional[str | torch.dtype] = None,
-        use_fallback: Optional[bool] = None,
         method: Optional[str] = None,
     ):
         super().__init__()
@@ -99,13 +96,15 @@ class Linear(torch.nn.Module):
         else:
             self.weight = None
 
+        transpose_method = "naive" if method == "naive" else None
+
         layout_in = default_layout(layout_in or layout)
         self.transpose_in = cuet.TransposeIrrepsLayout(
             e.inputs[1].irreps,
             source=layout_in,
             target=e.inputs[1].layout,
             device=device,
-            use_fallback=use_fallback,
+            method=transpose_method,
         )
 
         layout_out = default_layout(layout_out or layout)
@@ -114,21 +113,10 @@ class Linear(torch.nn.Module):
             source=e.outputs[0].layout,
             target=layout_out,
             device=device,
-            use_fallback=use_fallback,
+            method=transpose_method,
         )
 
-        if method is None:
-            if use_fallback is None:
-                # No warning here as it's the default behavior
-                self.method = "naive"
-            else:
-                warnings.warn(
-                    "`use_fallback` is deprecated, please use `method` instead",
-                    DeprecationWarning,
-                )
-                self.method = "naive" if use_fallback else "fused_tp"
-        else:
-            self.method = method
+        self.method = "naive" if method is None else method
 
         # For fused_tp we have to specify the math_dtype
         if self.method == "fused_tp" and math_dtype is None:

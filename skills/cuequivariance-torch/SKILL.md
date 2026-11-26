@@ -109,7 +109,7 @@ High-level defaults vary: `SphericalHarmonics` selects `uniform_1d`, `FullyConne
 ## Layouts and weights
 
 - `cue.mul_ir` is the high-level default, compatible with e3nn: each block is `(multiplicity, irrep_dimension)`. Core descriptors commonly use `cue.ir_mul`: `(irrep_dimension, multiplicity)`. Check each descriptor operand's `.layout`.
-- Convert **each irrep block**, not the whole flattened tensor with a reshape. `cuet.TransposeIrrepsLayout(irreps, source=..., target=..., use_fallback=True)` performs the blockwise conversion using PyTorch.
+- Convert **each irrep block**, not the whole flattened tensor with a reshape. `cuet.TransposeIrrepsLayout(irreps, source=..., target=..., method="naive")` performs the blockwise conversion using PyTorch.
 - For externally supplied weights set `internal_weights=False`. Shared weights have shape `(1, module.weight_numel)`; distinct weights per item have shape `(batch, module.weight_numel)` and require `shared_weights=False`. A gathered graph operation uses the **edge count** for this batch dimension.
 - `filter_irreps_out` selects allowed irrep types, not a requested output representation with prescribed multiplicities. Read `module.irreps_out`; preserve its actual order when constructing the next layer or reference.
 - For training, create learned parameters or an edge-weight network in `__init__`. Do not draw new random weights inside `forward()`.
@@ -187,10 +187,10 @@ options = dict(internal_weights=False, shared_weights=True, method="naive", dtyp
 linear = cuet.Linear(irreps_in, irreps_out, layout=cue.mul_ir, **options)
 linear_ir = cuet.Linear(irreps_in, irreps_out, layout=cue.ir_mul, **options)
 to_ir = cuet.TransposeIrrepsLayout(
-    irreps_in, source=cue.mul_ir, target=cue.ir_mul, use_fallback=True
+    irreps_in, source=cue.mul_ir, target=cue.ir_mul, method="naive"
 )
 to_mul = cuet.TransposeIrrepsLayout(
-    irreps_out, source=cue.ir_mul, target=cue.mul_ir, use_fallback=True
+    irreps_out, source=cue.ir_mul, target=cue.mul_ir, method="naive"
 )
 x = torch.randn(2, irreps_in.dim, dtype=dtype, requires_grad=True)
 w = torch.randn(1, linear.weight_numel, dtype=dtype, requires_grad=True)

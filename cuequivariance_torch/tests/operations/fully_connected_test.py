@@ -42,21 +42,21 @@ irreps = [
 
 @pytest.mark.parametrize("irreps1, irreps2, irreps3", irreps)
 @pytest.mark.parametrize("layout", [cue.ir_mul, cue.mul_ir])
-@pytest.mark.parametrize("use_fallback", [False, True])
+@pytest.mark.parametrize("method", ["fused_tp", "naive"])
 @pytest.mark.parametrize("math_dtype", [None, torch.float32, "float64"])
 def test_fully_connected(
     irreps1: cue.Irreps,
     irreps2: cue.Irreps,
     irreps3: cue.Irreps,
     layout: cue.IrrepsLayout,
-    use_fallback: bool,
+    method: str,
     math_dtype: str | torch.dtype | None,
 ):
-    if use_fallback is False and not torch.cuda.is_available():
+    if method != "naive" and not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
 
-    if use_fallback is False and math_dtype is torch.float32:
-        pytest.skip("Skipping float32 test for fallback=False (fused_tp)")
+    if method == "fused_tp" and math_dtype is torch.float32:
+        pytest.skip("Skipping float32 test for fused_tp")
 
     m1 = cuet.FullyConnectedTensorProduct(
         irreps1,
@@ -68,7 +68,7 @@ def test_fully_connected(
         device=device,
         dtype=torch.float64,
         math_dtype=math_dtype,
-        use_fallback=use_fallback,
+        method=method,
     )
 
     x1 = torch.randn(32, irreps1.dim, dtype=torch.float64).to(device)
@@ -99,7 +99,7 @@ def test_fully_connected(
 @pytest.mark.parametrize("irreps1, irreps2, irreps3", irreps)
 @pytest.mark.parametrize("layout", [cue.ir_mul, cue.mul_ir])
 @pytest.mark.parametrize("internal_weights", [False, True])
-@pytest.mark.parametrize("use_fallback", [False, True])
+@pytest.mark.parametrize("method", ["fused_tp", "naive"])
 @pytest.mark.parametrize("mode", export_modes)
 def test_export(
     irreps1: cue.Irreps,
@@ -107,20 +107,20 @@ def test_export(
     irreps3: cue.Irreps,
     layout: cue.IrrepsLayout,
     internal_weights: bool,
-    use_fallback: bool,
+    method: str,
     mode: str,
     tmp_path: str,
 ):
-    if use_fallback is False and not torch.cuda.is_available():
+    if method != "naive" and not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
 
     # Skip JIT mode as it's slow
     if mode == "jit":
         pytest.skip("Skipping slow JIT compilation test")
 
-    # Skip redundant layout combinations with fallback=True
-    if use_fallback is True and layout == cue.ir_mul:
-        pytest.skip("Skipping redundant layout test with fallback=True")
+    # Skip redundant layout combinations with the naive method
+    if method == "naive" and layout == cue.ir_mul:
+        pytest.skip("Skipping redundant layout test with the naive method")
 
     # Skip compile mode entirely for speed - it's consistently slow (1+ seconds)
     if mode == "compile":
@@ -130,9 +130,9 @@ def test_export(
     if mode == "script":
         pytest.skip("Skipping script mode for speed")
 
-    # Skip use_fallback=False for speed - only test fallback
-    if use_fallback is False:
-        pytest.skip("Skipping use_fallback=False for speed")
+    # Skip fused_tp for speed - only test naive
+    if method != "naive":
+        pytest.skip("Skipping fused_tp for speed")
 
     # Skip internal_weights=True for speed
     if internal_weights is True:
@@ -148,7 +148,7 @@ def test_export(
         layout=layout,
         device=device,
         dtype=dtype,
-        use_fallback=use_fallback,
+        method=method,
     )
 
     x1 = torch.randn(32, irreps1.dim, dtype=dtype).to(device)

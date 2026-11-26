@@ -30,9 +30,9 @@ device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("
     [(torch.float64, 1e-5), (torch.float32, 1e-4)],
 )
 @pytest.mark.parametrize("ell", [0, 1, 2, 3])
-@pytest.mark.parametrize("use_fallback", [False, True])
-def test_spherical_harmonics_equivariance(use_fallback: bool, ell: int, dtype, tol):
-    if use_fallback is False and not torch.cuda.is_available():
+@pytest.mark.parametrize("method", ["uniform_1d", "naive"])
+def test_spherical_harmonics_equivariance(method: str, ell: int, dtype, tol):
+    if method != "naive" and not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
 
     vec = torch.randn(3, dtype=dtype, device=device)
@@ -40,7 +40,7 @@ def test_spherical_harmonics_equivariance(use_fallback: bool, ell: int, dtype, t
     angle = np.random.rand()
     scale = 1.3
 
-    m = cuet.SphericalHarmonics([ell], False, device=device, use_fallback=use_fallback)
+    m = cuet.SphericalHarmonics([ell], False, device=device, method=method)
 
     yl = m(vec.unsqueeze(0)).squeeze(0)
 
@@ -61,12 +61,12 @@ if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:
 
 @pytest.mark.parametrize("dtype", data_types)
 @pytest.mark.parametrize("ls", [[0], [1], [2], [0, 1], [0, 1, 2]])
-@pytest.mark.parametrize("use_fallback", [False, True])
-def test_spherical_harmonics_full(dtype, ls: list[int], use_fallback: bool):
-    if use_fallback is False and not torch.cuda.is_available():
+@pytest.mark.parametrize("method", ["uniform_1d", "naive"])
+def test_spherical_harmonics_full(dtype, ls: list[int], method: str):
+    if method != "naive" and not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
 
-    m = cuet.SphericalHarmonics(ls, False, use_fallback=use_fallback, device=device)
+    m = cuet.SphericalHarmonics(ls, False, method=method, device=device)
 
     vec = torch.randn(10, 3, device=device, dtype=dtype)
     yl = m(vec)
@@ -79,18 +79,18 @@ export_modes = ["compile", "script", "jit"]
 
 @pytest.mark.parametrize("dtype", data_types)
 @pytest.mark.parametrize("ls", [[0], [1], [2], [0, 1], [0, 1, 2]])
-@pytest.mark.parametrize("use_fallback", [False, True])
+@pytest.mark.parametrize("method", ["uniform_1d", "naive"])
 @pytest.mark.parametrize("mode", export_modes)
-def test_export(dtype, ls: list[int], use_fallback: bool, mode: str, tmp_path: str):
-    if use_fallback is False and not torch.cuda.is_available():
+def test_export(dtype, ls: list[int], method: str, mode: str, tmp_path: str):
+    if method != "naive" and not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
 
     # Skip JIT mode as it's slow
     if mode == "jit":
         pytest.skip("Skipping slow JIT compilation test")
 
-    # Skip float16/bfloat16 with fallback=False to reduce test matrix
-    if not use_fallback and dtype in [torch.float16, torch.bfloat16]:
+    # Skip float16/bfloat16 with uniform_1d to reduce test matrix
+    if method != "naive" and dtype in [torch.float16, torch.bfloat16]:
         pytest.skip("Skipping fp16/bf16 tests with CUDA backend")
 
     # Skip high degree spherical harmonics with multiple ls for speed
@@ -105,9 +105,9 @@ def test_export(dtype, ls: list[int], use_fallback: bool, mode: str, tmp_path: s
     if mode == "script":
         pytest.skip("Skipping script mode for speed")
 
-    # Skip use_fallback=False for speed - only test fallback
-    if use_fallback is False:
-        pytest.skip("Skipping use_fallback=False for speed")
+    # Skip uniform_1d for speed - only test naive
+    if method != "naive":
+        pytest.skip("Skipping uniform_1d for speed")
 
     # Skip complex ls combinations - only test simple ones
     if len(ls) > 1:
@@ -120,7 +120,7 @@ def test_export(dtype, ls: list[int], use_fallback: bool, mode: str, tmp_path: s
     tol = 1e-5
     if dtype in [torch.float16, torch.bfloat16]:
         tol = 1e-2
-    m = cuet.SphericalHarmonics(ls, False, use_fallback=use_fallback, device=device)
+    m = cuet.SphericalHarmonics(ls, False, method=method, device=device)
 
     vec = torch.randn(10, 3, device=device, dtype=dtype)
     inputs = (vec,)

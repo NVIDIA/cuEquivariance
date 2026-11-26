@@ -27,9 +27,9 @@ if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:
     dtypes += [torch.float16, torch.bfloat16]
 
 
-@pytest.mark.parametrize("use_fallback", [False, True])
+@pytest.mark.parametrize("method", ["segmented_transpose", "naive"])
 @pytest.mark.parametrize("dtype", dtypes)
-def test_transpose(use_fallback: bool, dtype: torch.dtype):
+def test_transpose(method: str, dtype: torch.dtype):
     """
     1 2 3       1 4
     4 5 6       2 5
@@ -38,7 +38,7 @@ def test_transpose(use_fallback: bool, dtype: torch.dtype):
     10 11       10 12
     12 13       11 13
     """
-    if use_fallback is False and not torch.cuda.is_available():
+    if method != "naive" and not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
 
     x = torch.tensor(
@@ -49,21 +49,21 @@ def test_transpose(use_fallback: bool, dtype: torch.dtype):
         [[1.0, 4.0, 2.0, 5.0, 3.0, 6.0, 10, 12, 11, 13]], dtype=dtype, device=device
     )
 
-    m = cuet.TransposeSegments(segments, device, use_fallback=use_fallback)
+    m = cuet.TransposeSegments(segments, device, method=method)
     torch.testing.assert_close(m(x), xt)
 
 
-@pytest.mark.parametrize("use_fallback", [False, True])
+@pytest.mark.parametrize("method", ["segmented_transpose", "naive"])
 @pytest.mark.parametrize("dtype", dtypes)
-def test_transpose_empty_tensor(use_fallback: bool, dtype: torch.dtype):
-    if use_fallback is False and not torch.cuda.is_available():
+def test_transpose_empty_tensor(method: str, dtype: torch.dtype):
+    if method != "naive" and not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
 
     x = torch.zeros((0, 10), dtype=dtype, device=device)
     segments = [(2, 3), (2, 2)]
     xt = torch.zeros((0, 10), dtype=dtype, device=device)
 
-    m = cuet.TransposeSegments(segments, device, use_fallback=use_fallback)
+    m = cuet.TransposeSegments(segments, device, method=method)
     torch.testing.assert_close(m(x), xt)
 
 
@@ -71,9 +71,9 @@ export_modes = ["compile", "script", "jit"]
 
 
 @pytest.mark.parametrize("mode", export_modes)
-@pytest.mark.parametrize("use_fallback", [True, False])
-def test_export(mode, use_fallback, tmp_path):
-    if not use_fallback and not torch.cuda.is_available():
+@pytest.mark.parametrize("method", ["naive", "segmented_transpose"])
+def test_export(mode, method, tmp_path):
+    if method != "naive" and not torch.cuda.is_available():
         pytest.skip("CUDA is not available")
 
     dtype = torch.float32
@@ -81,7 +81,7 @@ def test_export(mode, use_fallback, tmp_path):
         [[1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 10, 11, 12, 13]], dtype=dtype, device=device
     )
     segments = [(2, 3), (2, 2)]
-    m = cuet.TransposeSegments(segments, device, use_fallback=use_fallback)
+    m = cuet.TransposeSegments(segments, device, method=method)
     out1 = m(x)
     m = module_with_mode(mode, m, (x,), dtype, tmp_path)
     out2 = m(x)

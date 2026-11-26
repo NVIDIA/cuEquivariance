@@ -16,6 +16,7 @@ from typing import Optional
 
 import torch
 import torch.fx
+from cuequivariance_torch.primitives import segmented_polynomial
 
 import cuequivariance as cue
 
@@ -27,6 +28,11 @@ class TransposeIrrepsLayout(torch.nn.Module):
         irreps (Irreps): The irreps of the tensor.
         source (IrrepsLayout): The source layout.
         target (IrrepsLayout): The target layout.
+        device (torch.device, optional): The device to use for the operation.
+        method (str, optional): The implementation to use. By default a CUDA kernel is used if
+            ``cuequivariance_ops_torch`` and CUDA are available, otherwise a PyTorch implementation.
+            ``"naive"`` always uses the PyTorch implementation. ``"segmented_transpose"`` always uses
+            the CUDA kernel and raises ``ImportError`` if ``cuequivariance_ops_torch`` is not available.
     """
 
     def __init__(
@@ -36,7 +42,7 @@ class TransposeIrrepsLayout(torch.nn.Module):
         source: cue.IrrepsLayout,
         target: cue.IrrepsLayout,
         device: Optional[torch.device] = None,
-        use_fallback: Optional[bool] = None,
+        method: Optional[str] = None,
     ):
         super().__init__()
 
@@ -44,13 +50,13 @@ class TransposeIrrepsLayout(torch.nn.Module):
             self.f = TransposeSegments(
                 [(mul, ir.dim) for mul, ir in irreps],
                 device=device,
-                use_fallback=use_fallback,
+                method=method,
             )
         elif (source, target) == (cue.ir_mul, cue.mul_ir):
             self.f = TransposeSegments(
                 [(ir.dim, mul) for mul, ir in irreps],
                 device=device,
-                use_fallback=use_fallback,
+                method=method,
             )
         else:
             self.f = torch.nn.Identity()
@@ -69,9 +75,6 @@ class TransposeIrrepsLayout(torch.nn.Module):
 
         Args:
             x (torch.Tensor): The input tensor.
-            use_fallback (bool, optional): If `None` (default), a CUDA kernel will be used if available.
-                If `False`, a CUDA kernel will be attempted, falling back to PyTorch if not available.
-                If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
 
         Returns:
             torch.Tensor: The transposed tensor.
@@ -85,22 +88,23 @@ class TransposeSegments(torch.nn.Module):
         self,
         segments: list[tuple[int, int]],
         device: Optional[torch.device] = None,
-        use_fallback: Optional[bool] = None,
+        method: Optional[str] = None,
     ):
         super().__init__()
+
+        if method not in (None, "naive", "segmented_transpose"):
+            raise ValueError(f"Invalid method: {method}")
 
         info = _transpose_info(segments, device=device)
         self.f = None
 
         if info is not None:
-            if use_fallback is False or use_fallback is None:
-                try:
-                    import cuequivariance_ops_torch  # noqa: F401
-                except ImportError:
-                    pass
-                else:
-                    if torch.cuda.is_available():
-                        self.f = _transpose(info).to(device=device)
+            if method == "segmented_transpose":
+                segmented_polynomial.require_backend(method)
+                self.f = _transpose(info).to(device=device)
+            elif method is None:
+                if segmented_polynomial.HAS_CUE_OPS and torch.cuda.is_available():
+                    self.f = _transpose(info).to(device=device)
 
             if self.f is None:
                 self.f = _transpose_segments_fx(segments).to(device=device)
@@ -112,16 +116,12 @@ class TransposeSegments(torch.nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Perform the transposition of the input tensor using either a CUDA kernel or a PyTorch fallback.
+        Perform the transposition of the input tensor using either a CUDA kernel or a PyTorch implementation.
 
         Parameters
         ----------
         x : torch.Tensor
             The input tensor to be transposed.
-        use_fallback : Optional[bool], optional
-            If `None` (default), a CUDA kernel will be used if available.
-            If `False`, a CUDA kernel will be attempted, falling back to PyTorch if not available.
-            If `True`, a PyTorch fallback method is used regardless of CUDA kernel availability.
 
         Returns
         -------

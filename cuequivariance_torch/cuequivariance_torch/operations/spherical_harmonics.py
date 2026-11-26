@@ -12,11 +12,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import warnings
 from typing import Optional
 
 import torch
 import torch.nn as nn
+from cuequivariance_torch.primitives.segmented_polynomial import default_method
 
 import cuequivariance as cue
 import cuequivariance_torch as cuet
@@ -32,7 +32,6 @@ class SphericalHarmonics(nn.Module):
         normalize: bool = True,
         device: Optional[torch.device] = None,
         math_dtype: Optional[str | torch.dtype] = None,
-        use_fallback: Optional[bool] = None,
         method: Optional[str] = None,
     ):
         """
@@ -42,10 +41,10 @@ class SphericalHarmonics(nn.Module):
             device (torch.device, optional): The device to use for the operation.
             math_dtype (torch.dtype or string, optional): The dtype to use for the operation, by default it follows the dtype of the input tensors,
                 if possible, or the torch default dtype (see SegmentedPolynomial for more details).
-            method (str, optional): The method to use for the operation, by default "uniform_1d" (using a CUDA kernel).
-            use_fallback (bool, optional, deprecated): Whether to use a "fallback" implementation, now maps to method:
-                If `True` the "naive" method is used.
-                If `False` or None (default) the "uniform_1d" method is used.
+            method (str, optional): The method to use for the operation, by default "uniform_1d" (using a CUDA kernel)
+                if ``cuequivariance_ops_torch`` is available, otherwise "naive" (using a PyTorch implementation).
+                A CUDA method that is passed explicitly raises ``ImportError`` if ``cuequivariance_ops_torch``
+                is not available.
         """
         super().__init__()
         self.ls = ls if isinstance(ls, list) else [ls]
@@ -54,18 +53,7 @@ class SphericalHarmonics(nn.Module):
 
         e = descriptors.spherical_harmonics(cue.SO3(1), self.ls)
 
-        if method is None:
-            if use_fallback is None:
-                # No warning here as it's the default behavior
-                self.method = "uniform_1d"
-            else:
-                warnings.warn(
-                    "`use_fallback` is deprecated, please use `method` instead",
-                    DeprecationWarning,
-                )
-                self.method = "naive" if use_fallback else "uniform_1d"
-        else:
-            self.method = method
+        self.method = default_method("uniform_1d") if method is None else method
 
         self.f = cuet.SegmentedPolynomial(
             e.polynomial,
