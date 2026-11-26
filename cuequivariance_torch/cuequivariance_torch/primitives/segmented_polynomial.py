@@ -45,7 +45,7 @@ except ImportError as e:
 
 
 def default_method(preferred: str) -> str:
-    """Method for a caller that did not choose one: ``preferred`` if the backend is usable, else ``"naive"``."""
+    """Method for a caller that did not choose one: ``preferred`` if ``cuequivariance_ops_torch`` imports, else ``"naive"``."""
     if HAS_CUE_OPS:
         return preferred
     warnings.warn(
@@ -56,7 +56,7 @@ def default_method(preferred: str) -> str:
 
 
 def require_backend(method: str) -> None:
-    """Raise if ``method`` was chosen by the caller and the backend is not usable."""
+    """Raise if the caller chose ``method`` and ``cuequivariance_ops_torch`` does not import."""
     if not HAS_CUE_OPS:
         raise ImportError(
             f"method={method!r} requires cuequivariance_ops_torch, which is not available. "
@@ -77,8 +77,8 @@ class SegmentedPolynomial(nn.Module):
             - ``"fused_tp"``: Uses a CUDA implementation for polynomials with 3- and 4-operand contractions.
             - ``"indexed_linear"``: Uses a CUDA implementation for linear layers with indexed weights.
 
-            The CUDA methods need ``cuequivariance_ops_torch``. Passing one of them when it is
-            not available raises ``ImportError``.
+            The CUDA methods need ``cuequivariance_ops_torch``. Passing one of them when it
+            cannot be imported raises ``ImportError``.
 
         math_dtype: Optional data type for computational operations.
             If specified, internal buffers will be of this dtype,

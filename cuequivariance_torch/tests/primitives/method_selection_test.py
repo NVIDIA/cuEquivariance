@@ -14,7 +14,10 @@
 # limitations under the License.
 import pytest
 import torch
-from cuequivariance_torch.primitives import segmented_polynomial
+from cuequivariance_torch.primitives import (
+    segmented_polynomial,
+    segmented_polynomial_uniform_1d,
+)
 
 import cuequivariance as cue
 import cuequivariance_torch as cuet
@@ -42,6 +45,13 @@ def test_stated_cuda_method_raises(no_backend, method):
 def test_stated_cuda_method_raises_in_layer(no_backend):
     with pytest.raises(ImportError, match="requires cuequivariance_ops_torch"):
         cuet.SphericalHarmonics([0, 1, 2], method="uniform_1d")
+
+
+def test_unstated_method_raises_when_the_selected_implementation_fails(monkeypatch):
+    monkeypatch.setattr(segmented_polynomial, "HAS_CUE_OPS", True)
+    monkeypatch.setattr(segmented_polynomial_uniform_1d, "uniform_1d", None)
+    with pytest.raises(ImportError, match="uniform_1d"):
+        cuet.SphericalHarmonics([0, 1, 2])
 
 
 def test_naive_method_needs_no_backend(no_backend):

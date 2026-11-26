@@ -548,7 +548,7 @@ For more information abou buildingt the descriptor itself, you can refer to the 
     # The TP itself:
     cue_tp = cuet.SegmentedPolynomial(
         e.polynomial,
-        method="uniform_1d"
+        method="uniform_1d" if device == "cuda" else "naive"
     ).to(device)
     
     # Transposing inputs layout:

@@ -2,7 +2,8 @@
 
 ### Breaking Changes
 
-- [Torch] A CUDA method that is passed explicitly (`method="uniform_1d"`, `"fused_tp"` or `"indexed_linear"`) now raises `ImportError` when `cuequivariance_ops_torch` is not available. It used to fall back to `"naive"` with a warning. When `method` is not passed, the layers still fall back to `"naive"` with a warning.
+- [Torch] A CUDA method that is passed explicitly (`method="uniform_1d"`, `"fused_tp"` or `"indexed_linear"`) now raises `ImportError` when `cuequivariance_ops_torch` cannot be imported. It used to fall back to `"naive"` with a warning. When `method` is not passed, the layers still fall back to `"naive"` with a warning in that case.
+- [Torch] If `cuequivariance_ops_torch` imports but the selected CUDA implementation then fails to load, the error is raised, also when `method` is not passed. It used to be replaced by `"naive"` with a warning.
 - [Torch] Removed the `use_fallback` argument from `cuet.ChannelWiseTensorProduct`, `cuet.FullyConnectedTensorProduct`, `cuet.Linear`, `cuet.SymmetricContraction`, `cuet.SphericalHarmonics`, `cuet.Rotation`, `cuet.Inversion`, `cuet.TransposeIrrepsLayout`, `cuet.TransposeSegments` and `cuet.layers.FullyConnectedTensorProductConv`. Use `method` instead: `use_fallback=True` becomes `method="naive"`, and `use_fallback=False` becomes the CUDA method of the layer (`"uniform_1d"`, `"fused_tp"`, or `"segmented_transpose"` for the transpose layers).
 - [Torch] `method="naive"` on a layer now also selects the PyTorch implementation of its layout transpositions, as `use_fallback=True` did.
 

@@ -67,8 +67,11 @@ For "Uniform 1D" polynomials (all segments are same-sized 1D vectors), use ``met
         operations=[(cue.Operation([0, 1, 2]), stp)]
     )
 
-    # Initialize model with uniform_1d method
-    model = cuet.SegmentedPolynomial(sp, method="uniform_1d")
+    # Initialize model with uniform_1d method on a GPU
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model = cuet.SegmentedPolynomial(
+        sp, method="uniform_1d" if device == "cuda" else "naive"
+    )
 
     # Execute with batched inputs
     batch_size = 10
